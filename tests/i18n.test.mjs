@@ -1,0 +1,40 @@
+// node --test tests/  (i18n.js imports nothing from Herdr)
+import test from "node:test";
+import assert from "node:assert/strict";
+import { LANGUAGES, LANGUAGE_LABELS, STRINGS, t } from "../mods/bellwether/i18n.js";
+import { MESSAGES_EN } from "../mods/bellwether/quotes.js";
+
+const tokens = (text) => new Set([...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
+
+test("five languages with their own names", () => {
+  assert.deepEqual(LANGUAGES, ["en", "zh-TW", "zh-CN", "ja", "ko"]);
+  assert.deepEqual(LANGUAGE_LABELS, { en: "English", "zh-TW": "繁中", "zh-CN": "简中", ja: "日本語", ko: "한국어" });
+  assert.deepEqual(Object.keys(STRINGS).sort(), [...LANGUAGES].sort());
+});
+
+test("every language has every key", () => {
+  const keys = Object.keys(STRINGS.en).sort();
+  for (const code of Object.keys(MESSAGES_EN)) assert.ok(keys.includes(code), code);
+  for (const lang of LANGUAGES) assert.deepEqual(Object.keys(STRINGS[lang]).sort(), keys, lang);
+});
+
+test("placeholders match", () => {
+  for (const lang of LANGUAGES) {
+    for (const [key, text] of Object.entries(STRINGS.en)) {
+      assert.deepEqual(tokens(STRINGS[lang][key]), tokens(text), `${lang} ${key}`);
+    }
+  }
+});
+
+test("every text is filled in and other languages are translated", () => {
+  for (const lang of LANGUAGES) {
+    for (const [key, text] of Object.entries(STRINGS[lang])) assert.ok(text.trim().length > 0, `${lang} ${key}`);
+  }
+  for (const lang of LANGUAGES.slice(1)) assert.notEqual(STRINGS[lang]["notice.added"], STRINGS.en["notice.added"], lang);
+});
+
+test("falls back to English", () => {
+  assert.equal(t("ja", "no.such"), "no.such");
+  assert.equal(t("xx", "notice.added", { symbol: "AAPL" }), "Added AAPL.");
+  assert.equal(t("zh-TW", "notice.added", { symbol: "AAPL" }).includes("AAPL"), true);
+});

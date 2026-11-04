@@ -141,17 +141,23 @@ export function formatChange(value) {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** A quote from an earlier local day gets its date, so a closed market never reads as today's. */
-export function formatStaleDate(timestamp, now) {
+/**
+ * A quote from an earlier local day gets its date, so a closed market never reads as today's:
+ * "Oct 31" in English, "10/31" in the other languages.
+ */
+export function formatStaleDate(timestamp, now, lang = "en") {
   const quoted = new Date(timestamp);
   const today = new Date(now);
   if (quoted.getFullYear() === today.getFullYear() && quoted.getMonth() === today.getMonth()
     && quoted.getDate() === today.getDate()) return "";
-  return `${MONTHS[quoted.getMonth()]} ${quoted.getDate()}`;
+  return lang === "en" ? `${MONTHS[quoted.getMonth()]} ${quoted.getDate()}` : `${quoted.getMonth() + 1}/${quoted.getDate()}`;
 }
 
-/** Local wall-clock time, 24-hour: "15:04". */
-export function formatTime(timestamp) {
+const two = (n) => String(n).padStart(2, "0");
+
+/** Local wall-clock time, 24-hour: "15:04", or "15:04:05" with seconds. */
+export function formatTime(timestamp, seconds = false) {
   const date = new Date(timestamp);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const time = `${two(date.getHours())}:${two(date.getMinutes())}`;
+  return seconds ? `${time}:${two(date.getSeconds())}` : time;
 }

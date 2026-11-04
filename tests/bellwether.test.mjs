@@ -63,6 +63,16 @@ test("formats without Intl", () => {
   assert.equal(formatStaleDate(new Date(2026, 9, 31, 16).getTime(), now), "Oct 31");
 });
 
+test("dates by language, times in 24 hours", () => {
+  const now = new Date(2026, 10, 2, 12).getTime();
+  const oct31 = new Date(2026, 9, 31, 16).getTime();
+  assert.equal(formatStaleDate(oct31, now, "en"), "Oct 31");
+  for (const lang of ["zh-TW", "zh-CN", "ja", "ko"]) assert.equal(formatStaleDate(oct31, now, lang), "10/31", lang);
+  assert.equal(formatStaleDate(new Date(2026, 10, 2, 9).getTime(), now, "zh-TW"), "");
+  assert.equal(formatTime(new Date(2026, 10, 2, 21, 5, 7).getTime()), "21:05");
+  assert.equal(formatTime(new Date(2026, 10, 2, 9, 5, 7).getTime(), true), "09:05:07");
+});
+
 test("reads saved preferences defensively", () => {
   assert.deepEqual(readPreferences(undefined), { version: 1, symbols: STARTER_SYMBOLS, paused: false });
   assert.deepEqual(readPreferences({ version: 1, symbols: [], paused: false }), { version: 1, symbols: [], paused: false });

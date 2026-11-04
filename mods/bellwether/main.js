@@ -10,7 +10,8 @@ import {
   QuoteError, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime,
   isCryptoPair, marketSession,
 } from "./quotes.js";
-import { t as translate } from "./i18n.js";
+import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
+import { SETTINGS_KEY, readSettings, upIsRed } from "./settings.js";
 
 // Yahoo cooldown messages, shown in the `blocked` color.
 const RATE_LIMITED = ["yahoo.retryAfter", "yahoo.retriesDelayed"];
@@ -21,7 +22,7 @@ const ICON = "mods/bellwether/icon.svg";
 export default class Bellwether extends View {
   init(_props, cx) {
     const given = props() ?? {};
-    this.lang = "en";
+    this.readSettings();
     if (given.detail) {
       this.detail = given.detail;
       this.overlay = given.overlay;
@@ -32,12 +33,7 @@ export default class Bellwether extends View {
     // `{ code, params }` or null, translated when drawn.
     this.notice = null;
     this.error = null;
-    this.inputFocused = false;
-    this.input = InputState.new({ placeholder: this.tx("input.placeholder") });
-    this.input.on("change", () => { this.typed = this.input.value(); });
-    this.input.on("submit", (_e, cx) => this.add(cx));
-    this.input.on("focus", (_e, cx) => { this.inputFocused = true; cx.notify(); });
-    this.input.on("blur", (_e, cx) => { this.inputFocused = false; cx.notify(); });
+    this.makeInput();
 
     this.watch = new Watchlist({
       load: () => shared(WATCHLIST_KEY),
@@ -69,6 +65,37 @@ export default class Bellwether extends View {
     this.watch?.stop();
   }
 
+  // Shared by every copy; the language is the person's choice, never the market's or the system's.
+  readSettings() {
+    this.settings = readSettings(shared(SETTINGS_KEY));
+    this.lang = this.settings.language;
+  }
+
+  saveSettings(change) {
+    setShared(SETTINGS_KEY, { ...readSettings(shared(SETTINGS_KEY)), ...change });
+    this.readSettings();
+  }
+
+  // The input's placeholder is fixed when it is made, so a new language needs a new input
+  // (made in init or an event handler, never in render).
+  makeInput() {
+    this.input?.release();
+    this.inputLang = this.lang;
+    this.inputFocused = false;
+    this.input = InputState.new({ placeholder: this.tx("input.placeholder"), value: this.typed });
+    this.input.on("change", () => { this.typed = this.input.value(); });
+    this.input.on("submit", (_e, cx) => this.add(cx));
+    this.input.on("focus", (_e, cx) => { this.inputFocused = true; cx.notify(); });
+    this.input.on("blur", (_e, cx) => { this.inputFocused = false; cx.notify(); });
+  }
+
+  chooseLanguage(cx, language) {
+    this.act(cx, () => {
+      this.saveSettings({ language, languagePromptDismissed: true });
+      if (this.inputLang !== this.lang) this.makeInput();
+    });
+  }
+
   // The text for `key` in this copy's language.
   tx(key, params) {
     return translate(this.lang, key, params);
@@ -83,19 +110,22 @@ export default class Bellwether extends View {
     this.error = null;
     try { this.notice = action() ?? null; } catch (cause) {
       this.notice = null;
-      // An Error that is not a QuoteError has no code: its message stands in as the key.
-      this.error = cause instanceof QuoteError ? { code: cause.code, params: cause.params }
-        : { code: cause instanceof Error ? cause.message : "error.save", params: {} };
+      // Anything but a bad symbol is the store failing.
+      this.error = cause instanceof QuoteError ? { code: cause.code, params: cause.params } : { code: "error.save", params: {} };
     }
     cx.notify();
   }
 
   add(cx) {
     this.act(cx, () => {
-      const message = this.watch.add(this.typed);
+      const notice = this.watch.add(this.typed);
       this.input.set_value("");
       this.typed = "";
-      return message;
+      // A first add answers the language prompt too: it stays English.
+      if (notice.code === "notice.added" && !this.settings.languagePromptDismissed) {
+        this.saveSettings({ languagePromptDismissed: true });
+      }
+      return notice;
     });
   }
 
@@ -114,6 +144,7 @@ export default class Bellwether extends View {
 
   render() {
     const t = theme();
+    this.readSettings();
     if (this.detail) return this.detailView(t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
@@ -123,8 +154,11 @@ export default class Bellwether extends View {
     return this.size && this.size.height < BAND_HEIGHT ? this.band(root, t) : this.panel(root, t);
   }
 
+  // Red-up or green-up, by the color setting (automatic: red-up in every language but English).
   changeColor(t, change) {
-    return change === null || change === undefined ? t.dim : change >= 0 ? t.ansi2 : t.ansi1;
+    if (change === null || change === undefined) return t.dim;
+    const [up, down] = upIsRed(this.settings) ? [t.ansi1, t.ansi2] : [t.ansi2, t.ansi1];
+    return change >= 0 ? up : down;
   }
 
   // The day's line, scaled to its box; the previous close is a dashed rule.
@@ -176,6 +210,21 @@ export default class Bellwether extends View {
       .on_click((_e, cx) => onClick(cx)).child(label);
   }
 
+  // Until answered: `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`. A label switches and
+  // dismisses; × only dismisses, and sits beside the labels, not inside one.
+  languagePrompt(t) {
+    const link = (id, label, onClick) => div().id(id).flex_none().text_color(t.muted).cursor_pointer()
+      .hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => onClick(cx)).child(label);
+    const choices = LANGUAGES.flatMap((language, i) => [
+      ...(i ? [div().flex_none().text_color(t.dim).child("·")] : []),
+      link(`bw-lang-${language}`, LANGUAGE_LABELS[language], (cx) => this.chooseLanguage(cx, language)),
+    ]);
+    return h_flex().items_center().gap(6).text_size(11.5)
+      .child(div().flex_none().text_color(t.dim).child(this.tx("prompt.language")))
+      .child(h_flex().flex_1().min_w(0).items_center().gap(5).overflow_hidden().children(choices))
+      .child(link("bw-lang-dismiss", "×", (cx) => this.act(cx, () => this.saveSettings({ languagePromptDismissed: true }))));
+  }
+
   panel(root, t) {
     const w = this.watch;
     const { paused, symbols } = w.preferences;
@@ -200,6 +249,7 @@ export default class Bellwether extends View {
         .child(div().text_size(11.5).text_color(statusColor).child(status)));
 
     const field = v_flex().flex_none().px(12).pt(10).gap(6)
+      .when(!this.settings.languagePromptDismissed, (el) => el.child(this.languagePrompt(t)))
       .child(Input.new(this.input).h(30).px(8).rounded(6).border_1()
         .border_color(this.inputFocused ? t.accent : t.input).bg(t.background).text_size(12).text_color(t.foreground))
       .when(Boolean(this.error), (el) => el.child(div().text_size(11.5).text_color(t.ansi1).child(this.say(this.error))))
@@ -210,7 +260,7 @@ export default class Bellwether extends View {
     const rows = symbols.map((symbol) => {
       const quote = w.quotes[symbol];
       const failed = w.errors[symbol];
-      const stale = quote ? formatStaleDate(quote.timestamp, now) : "";
+      const stale = quote ? formatStaleDate(quote.timestamp, now, this.lang) : "";
       const meta = quote ? [quote.name, stale && this.tx("quote.asOf", { date: stale }),
         quote.delaySeconds ? this.tx("quote.delay", { minutes: Math.ceil(quote.delaySeconds / 60) }) : ""]
         .filter(Boolean).join(" · ") : "";
@@ -257,8 +307,8 @@ export default class Bellwether extends View {
     const session = marketSession(q, now);
     const sessionColor = session === "open" || session === "24h" ? t.ansi2 : session === "closed" ? t.dim : t.working;
     const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
-    const stale = formatStaleDate(q.timestamp, now);
-    const asOf = [this.tx("quote.asOf", { date: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp)}` }),
+    const stale = formatStaleDate(q.timestamp, now, this.lang);
+    const asOf = [this.tx("quote.asOf", { date: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}` }),
       q.delaySeconds ? this.tx("quote.delay", { minutes: Math.ceil(q.delaySeconds / 60) }) : "",
       this.tx(isCryptoPair(q.symbol) ? "detail.sourceCrypto" : "detail.sourceStock")].filter(Boolean).join(" · ");
     const stat = (label, price) => v_flex().flex_1().gap(2)
