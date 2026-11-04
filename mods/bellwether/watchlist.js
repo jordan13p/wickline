@@ -8,6 +8,9 @@ import { yahoo } from "./providers/yahoo.js";
 export const WATCHLIST_KEY = "bellwether.watchlist.v1";
 export const INTERVAL_MS = 60_000;
 
+const notice = (code, params = {}) => ({ code, params });
+const coded = (error) => notice(error.code, error.params);
+
 export function readPreferences(value) {
   // Nothing saved yet: a starter list, until the first edit saves the person's own.
   if (value === undefined || value === null) return { version: 1, symbols: [...STARTER_SYMBOLS], paused: false };
@@ -39,8 +42,9 @@ export class Watchlist {
     this.intervalMs = intervalMs;
     this.preferences = readPreferences(host.load());
     this.quotes = {};
+    // By symbol, and for the whole round: `{ code, params }` for the view to translate.
     this.errors = {};
-    this.message = "";
+    this.message = null;
     this.loading = false;
     this.retryAt = 0;
     this.rateFailures = 0;
@@ -52,7 +56,8 @@ export class Watchlist {
     this.wake = null;
   }
 
-  // Edits are synchronous (the store is Herdr's shared state) and return a short notice.
+  // Edits are synchronous (the store is Herdr's shared state) and return a short notice,
+  // `{ code, params }`, for the view to translate.
   edit(change) {
     const preferences = readPreferences(this.host.load());
     const message = change(preferences);
@@ -67,24 +72,24 @@ export class Watchlist {
   add(input) {
     const symbol = normalizeSymbol(input);
     return this.edit((p) => {
-      if (p.symbols.includes(symbol)) return `${symbol} is already on your watchlist.`;
+      if (p.symbols.includes(symbol)) return notice("notice.duplicate", { symbol });
       p.symbols.push(symbol);
-      return `Added ${symbol}.`;
+      return notice("notice.added", { symbol });
     });
   }
 
   remove(symbol) {
     return this.edit((p) => {
-      if (!p.symbols.includes(symbol)) return `${symbol} is not on your watchlist.`;
+      if (!p.symbols.includes(symbol)) return notice("notice.notListed", { symbol });
       p.symbols = p.symbols.filter((s) => s !== symbol);
-      return `Removed ${symbol}.`;
+      return notice("notice.removed", { symbol });
     });
   }
 
   pause(paused) {
     return this.edit((p) => {
       p.paused = paused;
-      return paused ? "Automatic refresh paused." : "Automatic refresh resumed.";
+      return notice(paused ? "notice.paused" : "notice.resumed");
     });
   }
 
@@ -152,7 +157,7 @@ export class Watchlist {
     const current = () => !this.stopped && revision === this.revision;
     const symbols = this.preferences.symbols;
     this.loading = true;
-    this.message = "";
+    this.message = null;
     this.host.changed();
     try {
       // Each quote batch comes with the line requests for its pairs.
@@ -167,7 +172,7 @@ export class Watchlist {
       if (!requests.length || !current()) return;
       if (this.host.now() < this.retryAt) {
         // Pairs keep their cadence through a Yahoo cooldown; stocks wait it out.
-        this.message = `Yahoo rate limited requests. Retry after ${Math.ceil((this.retryAt - this.host.now()) / 1000)}s.`;
+        this.message = notice("yahoo.retryAfter", { seconds: Math.ceil((this.retryAt - this.host.now()) / 1000) });
         return;
       }
       const spacing = yahoo.spacingMs(requests.length, this.intervalMs);
@@ -184,14 +189,13 @@ export class Watchlist {
           this.quotes[symbol] = result.quotes[symbol];
           delete this.errors[symbol];
         } else {
-          this.errors[symbol] = error.message;
+          this.errors[symbol] = coded(error);
           if (error.retryAfterMs !== undefined) {
             this.rateFailures++;
             const backoff = Math.min(900_000, 60_000 * 2 ** Math.min(this.rateFailures - 1, 4));
             this.retryAt = this.host.now() + Math.max(backoff, error.retryAfterMs);
-            this.message = "Yahoo rate limited requests. Automatic retries are delayed.";
-            const deferred = new QuoteError("yahoo.deferred").message;
-            for (const later of requests.slice(index + 1)) this.errors[later.symbols[0]] = deferred;
+            this.message = notice("yahoo.retriesDelayed");
+            for (const later of requests.slice(index + 1)) this.errors[later.symbols[0]] = notice("yahoo.deferred");
             return;
           }
         }
@@ -234,7 +238,7 @@ export class Watchlist {
         this.quotes[pair] = result.quotes[pair];
         delete this.errors[pair];
       }
-      for (const pair of Object.keys(result.errors)) this.errors[pair] = result.errors[pair].message;
+      for (const pair of Object.keys(result.errors)) this.errors[pair] = coded(result.errors[pair]);
     };
     const batch = await this.ask(binance, quote, current, "binance.unreachable");
     if (!batch) return;

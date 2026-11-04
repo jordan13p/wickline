@@ -20,6 +20,8 @@ export const MESSAGES_EN = {
   "yahoo.incomplete": "Yahoo returned an incomplete quote.",
   "yahoo.unreachable": "Could not reach Yahoo Finance.",
   "yahoo.deferred": "Refresh deferred: Yahoo rate limited requests.",
+  "yahoo.retryAfter": "Yahoo rate limited requests. Retry after {seconds}s.",
+  "yahoo.retriesDelayed": "Yahoo rate limited requests. Automatic retries are delayed.",
   "binance.invalidPair": "Binance has no Spot pair with this name.",
   "binance.rateLimited": "Binance rate limited requests.",
   "binance.http": "Binance returned HTTP {status}.",
@@ -28,7 +30,8 @@ export const MESSAGES_EN = {
   "binance.unreachable": "Could not reach Binance.",
 };
 
-const fill = (text, params) => text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match);
+/** Fills `{name}` from params; an unknown name stays as written. */
+export const fill = (text, params) => text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match);
 
 export class QuoteError extends Error {
   constructor(code, params = {}, options = {}) {
@@ -73,7 +76,10 @@ export function cleanSeries(values) {
   return series.length > MAX_POINTS ? series.slice(series.length - MAX_POINTS) : series;
 }
 
-/** Where a stock's market is now: "pre", "open", "post" or "closed"; a pair trades around the clock. */
+/**
+ * Where a stock's market is now: "pre", "open", "post" or "closed"; a pair trades around the clock.
+ * Shown through the i18n keys `session.<value>`.
+ */
 export function marketSession(quote, now) {
   if (!quote.periods) return "24h";
   const within = (range) => range && now >= range[0] && now < range[1];
@@ -82,10 +88,6 @@ export function marketSession(quote, now) {
   if (within(quote.periods.post)) return "post";
   return "closed";
 }
-
-export const SESSION_LABELS = {
-  open: "Market open", pre: "Pre-market", post: "After hours", closed: "Market closed", "24h": "Trades 24h",
-};
 
 /**
  * The line through `series`, scaled into its box as [x%, y%] points, and where

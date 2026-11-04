@@ -8,6 +8,7 @@ import {
 import { decodeYahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/bellwether/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/bellwether/watchlist.js";
+import { t } from "../mods/bellwether/i18n.js";
 
 const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
 const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
@@ -147,7 +148,8 @@ test("an unknown pair fails its batch, then pairs are asked one by one", async (
     binanceUrl(["BTC/USDT"]), binanceUrl(["ETH/USDT"]), binanceUrl(["BAD/USDT"]),
     binanceKlinesUrl("BTC/USDT"), binanceKlinesUrl("ETH/USDT"),
   ]);
-  assert.equal(w.errors["BAD/USDT"], "Binance has no Spot pair with this name.");
+  assert.deepEqual(w.errors["BAD/USDT"], { code: "binance.invalidPair", params: {} });
+  assert.equal(t("en", w.errors["BAD/USDT"].code), "Binance has no Spot pair with this name.");
   assert.ok(w.quotes["BTC/USDT"] && w.quotes["ETH/USDT"]);
   w.stop();
   await tick(host);
@@ -160,7 +162,9 @@ test("a rate limit defers the rest of the round", async () => {
   w.add("AAPL"); w.add("MSFT");
   const run = w.run();
   await new Promise((r) => setImmediate(r));
-  assert.match(w.errors.MSFT, /deferred/);
+  assert.equal(w.errors.MSFT.code, "yahoo.deferred");
+  assert.equal(w.errors.AAPL.code, "yahoo.rateLimited");
+  assert.equal(t("en", w.message.code, w.message.params), "Yahoo rate limited requests. Automatic retries are delayed.");
   assert.equal(host.requests.length, 1);
   assert.ok(w.retryAt >= 60_000);
   w.stop();
@@ -175,7 +179,9 @@ test("removing a ticker drops its quote; pause stops automatic rounds", async ()
   const run = w.run();
   for (let i = 0; i < 3 && !w.quotes.AAPL; i++) await tick(host);
   assert.ok(w.quotes.AAPL);
-  assert.equal(w.remove("AAPL"), "Removed AAPL.");
+  const removed = w.remove("AAPL");
+  assert.deepEqual(removed, { code: "notice.removed", params: { symbol: "AAPL" } });
+  assert.equal(t("en", removed.code, removed.params), "Removed AAPL.");
   assert.equal(w.quotes.AAPL, undefined);
   w.add("MSFT");
   w.pause(true);
@@ -187,6 +193,28 @@ test("removing a ticker drops its quote; pause stops automatic rounds", async ()
   w.stop();
   await tick(host);
   await run;
+});
+
+test("edits return notice codes with the old English text", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  const say = (n) => t("en", n.code, n.params);
+  assert.equal(say(w.add("aapl")), "Added AAPL.");
+  assert.equal(say(w.add("AAPL")), "AAPL is already on your watchlist.");
+  assert.equal(say(w.remove("MSFT")), "MSFT is not on your watchlist.");
+  assert.equal(say(w.pause(true)), "Automatic refresh paused.");
+  assert.equal(say(w.pause(false)), "Automatic refresh resumed.");
+  assert.equal(w.message, null);
+});
+
+test("a Yahoo cooldown says when stocks retry", async () => {
+  const host = fakeHost(() => ({ status: 429, ok: false, text: "" }));
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  w.retryAt = 30_000;
+  await w.round(false);
+  assert.deepEqual(w.message, { code: "yahoo.retryAfter", params: { seconds: 30 } });
+  assert.equal(t("en", w.message.code, w.message.params), "Yahoo rate limited requests. Retry after 30s.");
+  assert.equal(host.requests.length, 0);
 });
 
 test("another copy's edit is picked up at once", async () => {

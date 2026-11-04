@@ -7,10 +7,13 @@ import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { closeOverlay, nextCommand, openOverlay, props, setShared, shared, theme } from "herdr";
 import { Watchlist, INTERVAL_MS, WATCHLIST_KEY } from "./watchlist.js";
 import {
-  SESSION_LABELS, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime,
+  QuoteError, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime,
   isCryptoPair, marketSession,
 } from "./quotes.js";
+import { t as translate } from "./i18n.js";
 
+// Yahoo cooldown messages, shown in the `blocked` color.
+const RATE_LIMITED = ["yahoo.retryAfter", "yahoo.retriesDelayed"];
 // Below this height the panel draws the one-line band.
 const BAND_HEIGHT = 72;
 const ICON = "mods/bellwether/icon.svg";
@@ -18,6 +21,7 @@ const ICON = "mods/bellwether/icon.svg";
 export default class Bellwether extends View {
   init(_props, cx) {
     const given = props() ?? {};
+    this.lang = "en";
     if (given.detail) {
       this.detail = given.detail;
       this.overlay = given.overlay;
@@ -25,10 +29,11 @@ export default class Bellwether extends View {
     }
     this.size = null;
     this.typed = "";
-    this.notice = "";
-    this.error = "";
+    // `{ code, params }` or null, translated when drawn.
+    this.notice = null;
+    this.error = null;
     this.inputFocused = false;
-    this.input = InputState.new({ placeholder: "Add a ticker: AAPL, 0700.HK, BTC/USDT" });
+    this.input = InputState.new({ placeholder: this.tx("input.placeholder") });
     this.input.on("change", () => { this.typed = this.input.value(); });
     this.input.on("submit", (_e, cx) => this.add(cx));
     this.input.on("focus", (_e, cx) => { this.inputFocused = true; cx.notify(); });
@@ -64,11 +69,23 @@ export default class Bellwether extends View {
     this.watch?.stop();
   }
 
+  // The text for `key` in this copy's language.
+  tx(key, params) {
+    return translate(this.lang, key, params);
+  }
+
+  // A `{ code, params }` notice or error as text.
+  say(coded) {
+    return this.tx(coded.code, coded.params);
+  }
+
   act(cx, action) {
-    this.error = "";
-    try { this.notice = action() ?? ""; } catch (cause) {
-      this.notice = "";
-      this.error = cause instanceof Error ? cause.message : "Could not save the watchlist.";
+    this.error = null;
+    try { this.notice = action() ?? null; } catch (cause) {
+      this.notice = null;
+      // An Error that is not a QuoteError has no code: its message stands in as the key.
+      this.error = cause instanceof QuoteError ? { code: cause.code, params: cause.params }
+        : { code: cause instanceof Error ? cause.message : "error.save", params: {} };
     }
     cx.notify();
   }
@@ -140,16 +157,16 @@ export default class Bellwether extends View {
       .child(h_flex().flex_none().gap(6).items_center()
         .child(svg(ICON).w(14).h(14).text_color(t.foreground))
         .child(div().text_color(t.accent).font_semibold().child("Bellwether")))
-      .when(w.preferences.paused, (el) => el.child(div().flex_none().text_color(t.blocked).child("Paused")))
-      .when(!symbols.length, (el) => el.child(div().text_color(t.dim).truncate().child("Make the panel taller to add tickers.")))
+      .when(w.preferences.paused, (el) => el.child(div().flex_none().text_color(t.blocked).child(this.tx("band.paused"))))
+      .when(!symbols.length, (el) => el.child(div().text_color(t.dim).truncate().child(this.tx("band.empty"))))
       .children(symbols.map((symbol) => {
         const quote = w.quotes[symbol];
         const failed = Boolean(w.errors[symbol]);
         return h_flex().flex_none().gap(5).whitespace_nowrap()
           .child(div().font_semibold().child(symbol))
-          .child(div().text_color(quote && !failed ? t.foreground : t.dim).child(quote ? formatBandPrice(quote) : failed ? "unavailable" : "…"))
+          .child(div().text_color(quote && !failed ? t.foreground : t.dim).child(quote ? formatBandPrice(quote) : failed ? this.tx("band.unavailable") : "…"))
           .when(Boolean(quote), (el) => el.child(div().text_color(this.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
-          .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child("cached")));
+          .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(this.tx("band.cached"))));
       }));
   }
 
@@ -164,17 +181,19 @@ export default class Bellwether extends View {
     const { paused, symbols } = w.preferences;
     const now = Date.now();
     const statusColor = paused ? t.blocked : w.loading ? t.working : t.done;
-    const status = paused ? "Auto-refresh paused" : w.loading ? "Refreshing quotes…" : `Auto-refresh every ${INTERVAL_MS / 1000}s`;
-    const rateLimited = w.message.includes("rate limited");
+    const status = paused ? this.tx("status.paused") : w.loading ? this.tx("status.refreshing")
+      : this.tx("status.every", { seconds: INTERVAL_MS / 1000 });
+    const rateLimited = Boolean(w.message) && RATE_LIMITED.includes(w.message.code);
 
     const header = v_flex().flex_none().px(12).pt(12).gap(6)
       .child(h_flex().items_center().gap(7)
         .child(svg(ICON).flex_none().w(16).h(16).text_color(t.foreground))
         .child(div().flex_none().text_size(13.5).font_semibold().text_color(t.accent).child("Bellwether"))
         .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim)
-          .child(`${symbols.length} ${symbols.length === 1 ? "ticker" : "tickers"}`))
-        .child(this.button(t, "bw-refresh", "Refresh", (cx) => { this.watch.refreshNow(); cx.notify(); }))
-        .child(this.button(t, "bw-pause", paused ? "Resume" : "Pause", (cx) => this.act(cx, () => this.togglePause()))))
+          .child(this.tx(symbols.length === 1 ? "header.tickers.one" : "header.tickers.other", { count: symbols.length })))
+        .child(this.button(t, "bw-refresh", this.tx("button.refresh"), (cx) => { this.watch.refreshNow(); cx.notify(); }))
+        .child(this.button(t, "bw-pause", this.tx(paused ? "button.resume" : "button.pause"),
+          (cx) => this.act(cx, () => this.togglePause()))))
       .child(h_flex().items_center().gap(6)
         .child(div().flex_none().w(6).h(6).rounded_full().bg(statusColor)
           .when(w.loading, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 1200 })))
@@ -183,16 +202,18 @@ export default class Bellwether extends View {
     const field = v_flex().flex_none().px(12).pt(10).gap(6)
       .child(Input.new(this.input).h(30).px(8).rounded(6).border_1()
         .border_color(this.inputFocused ? t.accent : t.input).bg(t.background).text_size(12).text_color(t.foreground))
-      .when(Boolean(this.error), (el) => el.child(div().text_size(11.5).text_color(t.ansi1).child(this.error)))
-      .when(!this.error && Boolean(this.notice), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(this.notice)))
-      .when(Boolean(w.message), (el) => el.child(div().text_size(11.5).text_color(rateLimited ? t.blocked : t.dim).child(w.message)));
+      .when(Boolean(this.error), (el) => el.child(div().text_size(11.5).text_color(t.ansi1).child(this.say(this.error))))
+      .when(!this.error && Boolean(this.notice), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(this.say(this.notice))))
+      .when(Boolean(w.message), (el) => el.child(div().text_size(11.5).text_color(rateLimited ? t.blocked : t.dim)
+        .child(this.say(w.message))));
 
     const rows = symbols.map((symbol) => {
       const quote = w.quotes[symbol];
       const failed = w.errors[symbol];
       const stale = quote ? formatStaleDate(quote.timestamp, now) : "";
-      const meta = quote ? [quote.name, stale && `As of ${stale}`,
-        quote.delaySeconds ? `Delay ${Math.ceil(quote.delaySeconds / 60)}m` : ""].filter(Boolean).join(" · ") : "";
+      const meta = quote ? [quote.name, stale && this.tx("quote.asOf", { date: stale }),
+        quote.delaySeconds ? this.tx("quote.delay", { minutes: Math.ceil(quote.delaySeconds / 60) }) : ""]
+        .filter(Boolean).join(" · ") : "";
       const color = quote ? this.changeColor(t, quote.changePercent) : t.dim;
       return h_flex().pl(12).pr(10).gap(6).items_center().hover((s) => s.bg(t.hover))
         // The row opens the ticker's day; × sits beside it, not inside it.
@@ -205,11 +226,11 @@ export default class Bellwether extends View {
             .when(Boolean(quote), (el) => el.child(this.chart(quote, color, t, { width: 56, height: 22 })))
             .child(v_flex().flex_none().w(108).gap(1)
               .child(div().text_right().text_color(quote && !failed ? t.foreground : t.dim)
-                .child(quote ? formatPrice(quote) : failed ? "Unavailable" : paused ? "Not fetched" : "Waiting…"))
+                .child(quote ? formatPrice(quote) : this.tx(failed ? "row.unavailable" : paused ? "row.notFetched" : "row.waiting")))
               .child(div().text_right().text_size(11).text_color(color)
                 .child(quote ? formatChange(quote.changePercent) : "—"))))
           .when(Boolean(failed), (el) => el.child(div().text_size(11).text_color(t.blocked)
-            .child(`${quote ? "Cached quote · " : ""}${failed}`))))
+            .child(quote ? this.tx("quote.cached", { reason: this.say(failed) }) : this.say(failed)))))
         .child(div().id(`bw-remove-${symbol}`).flex_none().w(14).text_right().text_color(t.dim).cursor_pointer()
           .hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => this.act(cx, () => this.watch.remove(symbol)))
           .child("×"));
@@ -217,16 +238,13 @@ export default class Bellwether extends View {
 
     const list = v_flex().id("bw-list").flex_1().min_h(0).pt(8).overflow_y_scrollbar()
       .when(!symbols.length, (el) => el.child(div().px(12).py(6).text_color(t.dim)
-        .child("Your watchlist is empty. Add a ticker above.")))
+        .child(this.tx("list.empty"))))
       .children(rows);
 
     const crypto = symbols.some(isCryptoPair);
     const footer = v_flex().flex_none().px(12).py(10).gap(8).border_t(1).border_color(t.border)
-      .child(div().text_size(10.5).text_color(t.dim).truncate().child("Quotes for reference only. Not investment advice."))
-      .child(div().text_size(10.5).text_color(t.dim)
-        .child(crypto
-          ? "Yahoo Finance · Binance Spot · Stocks: regular session, exchange delays vary · Crypto: 24h change"
-          : "Yahoo Finance · Regular-session quotes · Exchange delays vary"));
+      .child(div().text_size(10.5).text_color(t.dim).truncate().child(this.tx("footer.disclaimer")))
+      .child(div().text_size(10.5).text_color(t.dim).child(this.tx(crypto ? "footer.sourcesCrypto" : "footer.sources")));
 
     return root.child(header).child(field).child(list).child(footer);
   }
@@ -240,11 +258,11 @@ export default class Bellwether extends View {
     const sessionColor = session === "open" || session === "24h" ? t.ansi2 : session === "closed" ? t.dim : t.working;
     const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
     const stale = formatStaleDate(q.timestamp, now);
-    const asOf = [`As of ${stale ? `${stale} ` : ""}${formatTime(q.timestamp)}`,
-      q.delaySeconds ? `Delay ${Math.ceil(q.delaySeconds / 60)}m` : "",
-      isCryptoPair(q.symbol) ? "Binance Spot · 24h" : "Yahoo Finance · regular session"].filter(Boolean).join(" · ");
+    const asOf = [this.tx("quote.asOf", { date: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp)}` }),
+      q.delaySeconds ? this.tx("quote.delay", { minutes: Math.ceil(q.delaySeconds / 60) }) : "",
+      this.tx(isCryptoPair(q.symbol) ? "detail.sourceCrypto" : "detail.sourceStock")].filter(Boolean).join(" · ");
     const stat = (label, price) => v_flex().flex_1().gap(2)
-      .child(div().text_size(10.5).text_color(t.dim).child(label))
+      .child(div().text_size(10.5).text_color(t.dim).child(this.tx(label)))
       .child(div().font_semibold().child(value(price)));
 
     return v_flex().id("bw-detail").w_full().p(18).gap(14).text_color(t.foreground).text_size(12.5)
@@ -254,7 +272,7 @@ export default class Bellwether extends View {
           .child(div().text_size(11.5).text_color(t.dim).truncate().child(q.name)))
         .child(h_flex().flex_none().gap(6).items_center().px(8).h(22).rounded(11).border_1().border_color(t.border)
           .child(div().w(6).h(6).rounded_full().bg(sessionColor))
-          .child(div().text_size(11).text_color(sessionColor).child(SESSION_LABELS[session])))
+          .child(div().text_size(11).text_color(sessionColor).child(this.tx(`session.${session}`))))
         .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
           .hover((s) => s.text_color(t.foreground)).on_click(() => closeOverlay(this.overlay)).child("×")))
       .child(h_flex().gap(10).items_end()
@@ -262,12 +280,13 @@ export default class Bellwether extends View {
         .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent))))
       .child(q.series?.length > 1
         ? this.chart(q, color, t, { width: "full", height: 140, fill: true })
-        : div().h(60).flex().items_center().justify_center().text_color(t.dim).child("No intraday line yet."))
+        : div().h(60).flex().items_center().justify_center().text_color(t.dim).child(this.tx("detail.noLine")))
       .child(isCryptoPair(q.symbol)
-        ? h_flex().gap(12).child(stat("24h open", q.open)).child(stat("24h high", q.high)).child(stat("24h low", q.low))
-        : h_flex().gap(12).child(stat("Open", q.open)).child(stat("High", q.high)).child(stat("Low", q.low))
-          .child(stat("Prev close", q.previousClose)))
+        ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
+          .child(stat("detail.low24h", q.low))
+        : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
+          .child(stat("detail.prevClose", q.previousClose)))
       .child(div().text_size(11).text_color(t.dim).child(asOf))
-      .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(`Cached quote · ${q.error}`)));
+      .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.tx("quote.cached", { reason: this.say(q.error) }))));
   }
 }
