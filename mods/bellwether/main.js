@@ -170,7 +170,7 @@ export default class Bellwether extends View {
 
     const header = v_flex().flex_none().px(12).pt(12).gap(6)
       .child(h_flex().items_center().gap(7)
-        .child(svg(ICON).flex_none().w(18).h(18).text_color(t.foreground))
+        .child(svg(ICON).flex_none().w(16).h(16).text_color(t.foreground))
         .child(div().flex_none().text_size(13.5).font_semibold().text_color(t.accent).child("Bellwether"))
         .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim)
           .child(`${symbols.length} ${symbols.length === 1 ? "ticker" : "tickers"}`))
