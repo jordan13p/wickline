@@ -1,0 +1,4 @@
+.DS_Store
+# Written into mod folders by Herdr itself
+mods/*/jsconfig.json
+mods/*/gpui-kit.d.ts
