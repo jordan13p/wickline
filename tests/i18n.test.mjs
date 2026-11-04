@@ -43,3 +43,31 @@ test("falls back to English", () => {
   assert.equal(t("xx", "notice.added", { symbol: "AAPL" }), "Added AAPL.");
   assert.equal(t("zh-TW", "notice.added", { symbol: "AAPL" }).includes("AAPL"), true);
 });
+
+test("reviewed terms", () => {
+  const tw = STRINGS["zh-TW"];
+  // 開盤中 ("market open") is correct; only 盤中 as "intraday" was wrong.
+  for (const [key, text] of Object.entries(tw)) assert.ok(!text.replaceAll("開盤中", "").includes("盤中"), `zh-TW ${key}`);
+  assert.ok(tw["footer.sources"].includes("一般交易時段"));
+  assert.ok(tw["detail.sourceStock"].includes("一般交易時段"));
+  assert.equal(tw["button.refresh"], "重新整理");
+
+  const ko = STRINGS.ko;
+  for (const [key, text] of Object.entries(ko)) assert.ok(!text.includes("관심 목록"), `ko ${key}`);
+  for (const key of Object.keys(STRINGS.en)) {
+    if (/watchlist/i.test(STRINGS.en[key])) assert.ok(ko[key].includes("관심종목"), `ko ${key}`);
+  }
+  for (const [key, text] of Object.entries(ko)) assert.ok(!text.includes("티커"), `ko ${key}`);
+  assert.deepEqual([ko["session.pre"], ko["session.open"], ko["session.post"]], ["프리마켓", "장중", "애프터마켓"]);
+
+  const ja = STRINGS.ja;
+  assert.ok(ja["input.placeholder"].includes("銘柄コード"));
+  for (const [key, text] of Object.entries(ja)) assert.ok(!text.includes("ティッカー"), `ja ${key}`);
+
+  assert.equal(STRINGS["zh-CN"]["row.unavailable"], "暂无数据");
+  assert.equal(STRINGS["zh-CN"]["band.unavailable"], "暂无数据");
+
+  for (const lang of ["zh-TW", "zh-CN", "ja", "ko"]) {
+    for (const [key, text] of Object.entries(STRINGS[lang])) assert.ok(!text.includes("24h"), `${lang} ${key}`);
+  }
+});
