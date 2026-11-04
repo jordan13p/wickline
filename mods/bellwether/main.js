@@ -7,11 +7,10 @@ import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { closeOverlay, nextCommand, openOverlay, props, setShared, shared, theme } from "herdr";
 import { Watchlist, INTERVAL_MS, WATCHLIST_KEY } from "./watchlist.js";
 import {
-  SESSION_LABELS, USER_AGENT, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime,
+  SESSION_LABELS, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime,
   isCryptoPair, marketSession,
 } from "./quotes.js";
 
-const HEADERS = { "User-Agent": USER_AGENT, Accept: "application/json" };
 // Below this height the panel draws the one-line band.
 const BAND_HEIGHT = 72;
 const ICON = "mods/bellwether/icon.svg";
@@ -38,8 +37,8 @@ export default class Bellwether extends View {
     this.watch = new Watchlist({
       load: () => shared(WATCHLIST_KEY),
       save: (preferences) => setShared(WATCHLIST_KEY, preferences),
-      // Read-only GETs to Yahoo Finance and Binance; see quotes.js for the two hosts.
-      fetch: (url) => fetch(url, { headers: HEADERS }),
+      // Read-only GETs to Yahoo Finance and Binance; see providers/ for the hosts.
+      fetch: (url, headers) => fetch(url, { headers }),
       now: () => Date.now(),
       sleep: () => Promise.resolve(),
       changed: () => {},

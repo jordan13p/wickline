@@ -1,15 +1,14 @@
 // The watchlist and its refresh loop. Herdr's APIs come in through `host`,
 // so tests drive it under Node with a fake clock and network.
-import {
-  BINANCE_BATCH, QuoteError, STARTER_SYMBOLS, binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines, decodeYahoo,
-  isCryptoPair, normalizeSymbol, yahooUrl,
-} from "./quotes.js";
+import { QuoteError, STARTER_SYMBOLS, isCryptoPair, normalizeSymbol } from "./quotes.js";
+import { binance } from "./providers/binance.js";
+import { yahoo } from "./providers/yahoo.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
 export const WATCHLIST_KEY = "bellwether.watchlist.v1";
 export const INTERVAL_MS = 60_000;
 // Stock requests are spaced at least this far apart.
-export const YAHOO_SPACING_MS = 1_000;
+export const YAHOO_SPACING_MS = yahoo.spacingMs(0, INTERVAL_MS);
 
 export function readPreferences(value) {
   // Nothing saved yet: a starter list, until the first edit saves the person's own.
@@ -31,7 +30,7 @@ export function readPreferences(value) {
 /**
  * host: {
  *   load(): unknown, save(preferences): void          // the saved watchlist
- *   fetch(url): Promise<{ status, ok, text }>          // GET, body read
+ *   fetch(url, headers): Promise<{ status, ok, text() }>  // GET with the request's headers; hosts in providers/
  *   now(): number, sleep(ms): Promise<void>
  *   changed(): void                                    // redraw, from the loop only
  * }
@@ -158,36 +157,43 @@ export class Watchlist {
     this.message = "";
     this.host.changed();
     try {
-      const pairs = symbols.filter(isCryptoPair);
-      for (let i = 0; i < pairs.length && current(); i += BINANCE_BATCH) {
-        await this.crypto(pairs.slice(i, i + BINANCE_BATCH), current);
+      // Each quote batch comes with the line requests for its pairs.
+      const crypto = binance.requests(symbols.filter(isCryptoPair), {});
+      for (let i = 0; i < crypto.length && current();) {
+        const quote = crypto[i++];
+        const lines = [];
+        while (i < crypto.length && crypto[i].kind === "line") lines.push(crypto[i++]);
+        await this.crypto(quote, lines, current);
       }
-      const tickers = symbols.filter((s) => !isCryptoPair(s));
-      if (!tickers.length || !current()) return;
+      const requests = yahoo.requests(symbols.filter((s) => !isCryptoPair(s)), {});
+      if (!requests.length || !current()) return;
       if (this.host.now() < this.retryAt) {
         // Pairs keep their cadence through a Yahoo cooldown; stocks wait it out.
         this.message = `Yahoo rate limited requests. Retry after ${Math.ceil((this.retryAt - this.host.now()) / 1000)}s.`;
         return;
       }
-      for (const [index, symbol] of tickers.entries()) {
-        const wait = YAHOO_SPACING_MS - (this.host.now() - this.lastYahooAt);
+      const spacing = yahoo.spacingMs(requests.length, this.intervalMs);
+      for (const [index, request] of requests.entries()) {
+        const wait = spacing - (this.host.now() - this.lastYahooAt);
         if (wait > 0) await this.host.sleep(wait);
         if (!current()) return;
         this.lastYahooAt = this.host.now();
-        try {
-          const response = await this.get(yahooUrl(symbol));
-          if (!current()) return;
-          this.quotes[symbol] = decodeYahoo(symbol, response, this.host.now());
+        const [symbol] = request.symbols;
+        const result = await this.ask(yahoo, request, current, "yahoo.unreachable");
+        if (!result) return;
+        const error = result.errors[symbol];
+        if (!error) {
+          this.quotes[symbol] = result.quotes[symbol];
           delete this.errors[symbol];
-        } catch (error) {
-          if (!current()) return;
-          this.errors[symbol] = error instanceof QuoteError ? error.message : "Could not reach Yahoo Finance.";
-          if (error instanceof QuoteError && error.retryAfterMs !== undefined) {
+        } else {
+          this.errors[symbol] = error.message;
+          if (error.retryAfterMs !== undefined) {
             this.rateFailures++;
             const backoff = Math.min(900_000, 60_000 * 2 ** Math.min(this.rateFailures - 1, 4));
             this.retryAt = this.host.now() + Math.max(backoff, error.retryAfterMs);
             this.message = "Yahoo rate limited requests. Automatic retries are delayed.";
-            for (const rest of tickers.slice(index + 1)) this.errors[rest] = "Refresh deferred: Yahoo rate limited requests.";
+            const deferred = new QuoteError("yahoo.deferred").message;
+            for (const later of requests.slice(index + 1)) this.errors[later.symbols[0]] = deferred;
             return;
           }
         }
@@ -199,49 +205,59 @@ export class Watchlist {
     }
   }
 
-  async get(url) {
-    const response = await this.host.fetch(url);
+  async get(request) {
+    const response = await this.host.fetch(request.url, request.headers);
     return { status: response.status, ok: response.ok, text: await response.text() };
   }
 
-  /** One request per batch; an unknown pair fails the batch, so then ask pair by pair. */
-  async crypto(pairs, current) {
-    const fetchPairs = async (list) => {
-      const response = await this.get(binanceUrl(list));
-      if (!current()) return;
-      const quotes = decodeBinance(list, response, this.host.now());
-      for (const pair of list) {
-        if (quotes[pair]) {
-          // Keep the last line until a new one arrives.
-          quotes[pair].series = this.quotes[pair]?.series ?? [];
-          this.quotes[pair] = quotes[pair];
-          delete this.errors[pair];
-        } else this.errors[pair] = "Binance returned no quote for this pair.";
-      }
-    };
-    const fail = (list, error) => {
-      for (const pair of list) this.errors[pair] = error instanceof QuoteError ? error.message : "Could not reach Binance.";
-    };
+  /**
+   * One request, decoded; null once the round is stale. A network failure (or a decoder bug)
+   * becomes the `unreachable` error for each of the request's symbols.
+   */
+  async ask(provider, request, current, unreachable) {
     try {
-      await fetchPairs(pairs);
+      const response = await this.get(request);
+      if (!current()) return null;
+      return provider.decode(request, response, this.host.now());
     } catch (error) {
-      if (!current()) return;
-      if (error instanceof QuoteError && error.invalidSymbol && pairs.length > 1) {
-        for (const pair of pairs) {
-          if (!current()) return;
-          try { await fetchPairs([pair]); } catch (cause) { if (current()) fail([pair], cause); }
-        }
-      } else fail(pairs, error);
+      if (!current()) return null;
+      const failure = error instanceof QuoteError ? error : new QuoteError(unreachable);
+      return { quotes: {}, errors: Object.fromEntries(request.symbols.map((symbol) => [symbol, failure])) };
     }
+  }
+
+  /** One request per batch; an unknown pair fails the batch, so then ask pair by pair. */
+  async crypto(quote, lines, current) {
+    const pairs = quote.symbols;
+    const apply = (result) => {
+      for (const pair of Object.keys(result.quotes)) {
+        // Keep the last line until a new one arrives.
+        result.quotes[pair].series = this.quotes[pair]?.series ?? [];
+        this.quotes[pair] = result.quotes[pair];
+        delete this.errors[pair];
+      }
+      for (const pair of Object.keys(result.errors)) this.errors[pair] = result.errors[pair].message;
+    };
+    const batch = await this.ask(binance, quote, current, "binance.unreachable");
+    if (!batch) return;
+    if (pairs.length > 1 && pairs.every((pair) => batch.errors[pair]?.invalidSymbol)) {
+      for (const pair of pairs) {
+        if (!current()) return;
+        const single = binance.requests([pair], {}).find((request) => request.kind === "quote");
+        const result = await this.ask(binance, single, current, "binance.unreachable");
+        if (result) apply(result);
+      }
+    } else apply(batch);
     if (!current()) return;
     this.host.changed();
     // The 24-hour line, one request a pair; a failure only leaves the line as it was.
-    for (const pair of pairs) {
+    for (const request of lines) {
+      const [pair] = request.symbols;
       if (!current()) return;
       if (!this.quotes[pair]) continue;
       try {
-        const series = decodeKlines(await this.get(binanceKlinesUrl(pair)));
-        if (current() && this.quotes[pair]) this.quotes[pair].series = series;
+        const series = binance.decode(request, await this.get(request), this.host.now()).lines?.[pair];
+        if (series && current() && this.quotes[pair]) this.quotes[pair].series = series;
       } catch { /* The quote itself is fine. */ }
     }
     if (current()) this.host.changed();

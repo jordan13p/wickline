@@ -1,19 +1,40 @@
-// Symbols, the two quote sources and number formatting. No Herdr imports, so
-// tests run it under Node.
+// Symbols, coded errors, what the quote sources share, and number formatting.
+// No Herdr imports, so tests run it under Node. The hosts live in providers/.
 
-// The only two hosts Bellwether contacts.
-export const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
-export const BINANCE_TICKERS = "https://data-api.binance.vision/api/v3/ticker/24hr";
-export const BINANCE_KLINES = "https://data-api.binance.vision/api/v3/klines";
 export const VERSION = "0.1.0";
 export const USER_AGENT = `Bellwether-Herdr/${VERSION}`;
+// Sent with every request.
+export const HEADERS = { "User-Agent": USER_AGENT, Accept: "application/json" };
 // Shown until the person saves a watchlist of their own.
 export const STARTER_SYMBOLS = ["AAPL", "NVDA", "^GSPC", "BTC/USDT"];
-export const BINANCE_BATCH = 100;
+
+/** English text by error code; `{name}` is filled from the error's params. */
+export const MESSAGES_EN = {
+  "symbol.invalid": "Enter a ticker, such as AAPL, 0700.HK or ^GSPC, or a pair, such as BTC/USDT.",
+  "yahoo.rateLimited": "Yahoo rate limited requests.",
+  "yahoo.notFound": "Ticker not found on Yahoo Finance.",
+  "yahoo.http": "Yahoo returned HTTP {status}.",
+  "yahoo.unreadable": "Yahoo returned an unreadable response.",
+  "yahoo.noQuote": "No quote available for this ticker.",
+  "yahoo.otherTicker": "Yahoo returned a different ticker.",
+  "yahoo.incomplete": "Yahoo returned an incomplete quote.",
+  "yahoo.unreachable": "Could not reach Yahoo Finance.",
+  "yahoo.deferred": "Refresh deferred: Yahoo rate limited requests.",
+  "binance.invalidPair": "Binance has no Spot pair with this name.",
+  "binance.rateLimited": "Binance rate limited requests.",
+  "binance.http": "Binance returned HTTP {status}.",
+  "binance.unreadable": "Binance returned an unreadable response.",
+  "binance.noQuote": "Binance returned no quote for this pair.",
+  "binance.unreachable": "Could not reach Binance.",
+};
+
+const fill = (text, params) => text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match);
 
 export class QuoteError extends Error {
-  constructor(message, options = {}) {
-    super(message);
+  constructor(code, params = {}, options = {}) {
+    super(fill(MESSAGES_EN[code] ?? code, params));
+    this.code = code;
+    this.params = params;
     this.retryAfterMs = options.retryAfterMs;
     this.invalidSymbol = options.invalidSymbol === true;
   }
@@ -29,7 +50,7 @@ export function normalizeSymbol(input) {
   let symbol = String(input ?? "").trim().toUpperCase();
   if (isCryptoPair(symbol)) return symbol;
   if (!/^[A-Z0-9^][A-Z0-9.^=\-]{0,31}$/.test(symbol)) {
-    throw new QuoteError("Enter a ticker, such as AAPL, 0700.HK or ^GSPC, or a pair, such as BTC/USDT.");
+    throw new QuoteError("symbol.invalid");
   }
   if (/^\d{6}\.SH$/.test(symbol)) symbol = symbol.replace(/\.SH$/, ".SS");
   const hk = symbol.match(/^(\d{1,5})\.HK$/);
@@ -37,128 +58,19 @@ export function normalizeSymbol(input) {
   return symbol;
 }
 
-const positive = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
+export const positive = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 
-const cleanText = (value) => typeof value === "string"
+export const cleanText = (value) => typeof value === "string"
   ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 100) || null
   : null;
 
-/** Today's 5-minute bars: the quote metadata and the intraday line in one request. */
-export function yahooUrl(symbol) {
-  return YAHOO_CHART + encodeURIComponent(normalizeSymbol(symbol)) + "?interval=5m&range=1d&includePrePost=false";
-}
-
-const finite = (value) => typeof value === "number" && Number.isFinite(value);
 const MAX_POINTS = 400;
 
 /** Finite closes in order; gaps (null bars) are dropped. */
-function cleanSeries(values) {
+export function cleanSeries(values) {
   if (!Array.isArray(values)) return [];
   const series = values.filter((value) => positive(value));
   return series.length > MAX_POINTS ? series.slice(series.length - MAX_POINTS) : series;
-}
-
-const period = (value) => finite(value?.start) && finite(value?.end) && value.end > value.start
-  ? [value.start * 1000, value.end * 1000] : null;
-
-/** `response` is `{ status, ok, text }` with the body already read. */
-export function decodeYahoo(symbol, response, now) {
-  // Herdr's fetch does not expose headers, so Retry-After is unknown: wait at least a minute.
-  if (response.status === 429) throw new QuoteError("Yahoo rate limited requests.", { retryAfterMs: 60_000 });
-  if (response.status === 404) throw new QuoteError("Ticker not found on Yahoo Finance.");
-  if (!response.ok) throw new QuoteError(`Yahoo returned HTTP ${response.status}.`);
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("Yahoo returned an unreadable response."); }
-  const meta = body?.chart?.result?.[0]?.meta;
-  if (body?.chart?.error || !meta) throw new QuoteError("No quote available for this ticker.");
-  // Never show another instrument's response under the requested ticker.
-  let returned = null;
-  try { returned = typeof meta.symbol === "string" ? normalizeSymbol(meta.symbol) : null; } catch { /* checked below */ }
-  if (returned !== symbol) throw new QuoteError("Yahoo returned a different ticker.");
-  if (!positive(meta.regularMarketPrice) || !positive(meta.regularMarketTime)) {
-    throw new QuoteError("Yahoo returned an incomplete quote.");
-  }
-  const close = positive(meta.previousClose) ? meta.previousClose : meta.chartPreviousClose;
-  const delay = meta.exchangeDataDelayedBy;
-  const bars = body.chart.result[0].indicators?.quote?.[0] ?? {};
-  const series = cleanSeries(bars.close);
-  const opens = cleanSeries(bars.open);
-  const highs = cleanSeries(bars.high);
-  const lows = cleanSeries(bars.low);
-  const periods = meta.currentTradingPeriod ?? {};
-  return {
-    symbol,
-    name: cleanText(meta.longName) ?? cleanText(meta.shortName) ?? symbol,
-    price: meta.regularMarketPrice,
-    changePercent: positive(close) ? (meta.regularMarketPrice - close) / close * 100 : null,
-    currency: typeof meta.currency === "string" && /^[A-Z]{3}$/.test(meta.currency) ? meta.currency : null,
-    timestamp: meta.regularMarketTime * 1000,
-    fetchedAt: now,
-    delaySeconds: typeof delay === "number" && Number.isFinite(delay) && delay >= 0 ? delay : null,
-    series,
-    open: opens[0] ?? null,
-    high: positive(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : highs.length ? Math.max(...highs) : null,
-    low: positive(meta.regularMarketDayLow) ? meta.regularMarketDayLow : lows.length ? Math.min(...lows) : null,
-    previousClose: positive(close) ? close : null,
-    periods: { pre: period(periods.pre), regular: period(periods.regular), post: period(periods.post) },
-  };
-}
-
-/** One request for up to BINANCE_BATCH pairs: `?symbols=["BTCUSDT","ETHUSDT"]`. */
-export function binanceUrl(pairs) {
-  return `${BINANCE_TICKERS}?symbols=${encodeURIComponent(JSON.stringify(pairs.map((pair) => pair.replace("/", ""))))}`;
-}
-
-/** Quotes by requested pair; a pair Binance did not return is absent. */
-export function decodeBinance(pairs, response, now) {
-  // -1121 Invalid symbol: one unknown or delisted pair fails the whole batch.
-  if (response.status === 400) throw new QuoteError("Binance has no Spot pair with this name.", { invalidSymbol: true });
-  if (response.status === 429 || response.status === 418) throw new QuoteError("Binance rate limited requests.");
-  if (!response.ok) throw new QuoteError(`Binance returned HTTP ${response.status}.`);
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("Binance returned an unreadable response."); }
-  const wanted = new Map(pairs.map((pair) => [pair.replace("/", ""), pair]));
-  const quotes = {};
-  for (const ticker of Array.isArray(body) ? body : [body]) {
-    const pair = typeof ticker?.symbol === "string" ? wanted.get(ticker.symbol) : undefined;
-    if (!pair) continue;
-    const price = Number(ticker.lastPrice);
-    const close = Number(ticker.prevClosePrice);
-    const time = Number(ticker.closeTime);
-    if (!positive(price) || !positive(time)) continue;
-    quotes[pair] = {
-      symbol: pair,
-      name: "Binance Spot",
-      price,
-      // Against the price 24 hours before the last trade.
-      changePercent: positive(close) ? (price - close) / close * 100 : null,
-      currency: pair.split("/")[1],
-      timestamp: time,
-      fetchedAt: now,
-      delaySeconds: 0,
-      series: [],
-      open: positive(Number(ticker.openPrice)) ? Number(ticker.openPrice) : null,
-      high: positive(Number(ticker.highPrice)) ? Number(ticker.highPrice) : null,
-      low: positive(Number(ticker.lowPrice)) ? Number(ticker.lowPrice) : null,
-      previousClose: positive(close) ? close : null,
-      periods: null,
-    };
-  }
-  return quotes;
-}
-
-/** The last 24 hours of one pair in 15-minute bars. */
-export function binanceKlinesUrl(pair) {
-  return `${BINANCE_KLINES}?symbol=${encodeURIComponent(pair.replace("/", ""))}&interval=15m&limit=96`;
-}
-
-/** Closing prices, oldest first; throws when Binance answers with anything else. */
-export function decodeKlines(response) {
-  if (!response.ok) throw new QuoteError(`Binance returned HTTP ${response.status}.`);
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("Binance returned an unreadable response."); }
-  if (!Array.isArray(body)) throw new QuoteError("Binance returned an unreadable response.");
-  return cleanSeries(body.map((bar) => Array.isArray(bar) ? Number(bar[4]) : NaN));
 }
 
 /** Where a stock's market is now: "pre", "open", "post" or "closed"; a pair trades around the clock. */

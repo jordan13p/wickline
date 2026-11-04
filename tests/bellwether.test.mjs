@@ -1,10 +1,12 @@
-// node --test tests/  (quotes.js and watchlist.js import nothing from Herdr)
+// node --test tests/  (quotes.js, watchlist.js and providers/ import nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  binanceUrl, decodeBinance, decodeYahoo, formatBandPrice, formatChange, formatPrice, formatStaleDate,
-  normalizeSymbol, yahooUrl, binanceKlinesUrl, decodeKlines, marketSession, chartGeometry, formatTime, STARTER_SYMBOLS, USER_AGENT,
+  formatBandPrice, formatChange, formatPrice, formatStaleDate,
+  normalizeSymbol, marketSession, chartGeometry, formatTime, STARTER_SYMBOLS, USER_AGENT,
 } from "../mods/bellwether/quotes.js";
+import { decodeYahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
+import { binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/bellwether/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/bellwether/watchlist.js";
 
 const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
@@ -104,6 +106,27 @@ test("refreshes stocks spaced apart and crypto in one batch", async () => {
   assert.equal(host.requests.filter((u) => u.includes("ticker/24hr")).length, 1);
   assert.equal(host.requests.filter((u) => u.includes("yahoo")).length, 2);
   assert.ok(w.quotes.AAPL && w.quotes.MSFT && w.quotes["BTC/USDT"]);
+  w.stop();
+  await tick(host);
+  await run;
+});
+
+test("request order and spacing are unchanged", async () => {
+  const host = fakeHost((url) => url.includes("ticker/24hr")
+    ? ok([{ symbol: "BTCUSDT", lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 }])
+    : url.includes("klines") ? ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"]])
+    : chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+  const sent = [];
+  const fetch = host.fetch;
+  host.fetch = (url, headers) => { sent.push({ at: host.clock, headers }); return fetch(url, headers); };
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("MSFT"); w.add("BTC/USDT");
+  const run = w.run();
+  for (let i = 0; i < 6 && host.requests.length < 4; i++) await tick(host);
+  assert.deepEqual(host.requests, [binanceUrl(["BTC/USDT"]), binanceKlinesUrl("BTC/USDT"), yahooUrl("AAPL"), yahooUrl("MSFT")]);
+  assert.equal(sent[3].at - sent[2].at, 1000);
+  for (const { headers } of sent) assert.equal(headers["User-Agent"], USER_AGENT);
+  assert.deepEqual(w.quotes["BTC/USDT"].series, [1.5, 1.75]);
   w.stop();
   await tick(host);
   await run;
