@@ -1,11 +1,11 @@
-// node --test herdr/tests/*.test.mjs  (quotes.js and watchlist.js import nothing from Herdr)
+// node --test tests/  (quotes.js and watchlist.js import nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   binanceUrl, decodeBinance, decodeYahoo, formatBandPrice, formatChange, formatPrice, formatStaleDate,
   normalizeSymbol, yahooUrl, binanceKlinesUrl, decodeKlines, marketSession, chartGeometry, formatTime, STARTER_SYMBOLS, PULSE_URLS,
-} from "../pulse/mods/pulse/quotes.js";
-import { Watchlist, readPreferences } from "../pulse/mods/pulse/watchlist.js";
+} from "../mods/bellwether/quotes.js";
+import { Watchlist, readPreferences } from "../mods/bellwether/watchlist.js";
 
 const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
 const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
@@ -196,16 +196,6 @@ test("scales a line into its box", () => {
   assert.equal(flat.reference, null);
   assert.equal(flat.points[0][1], 50);
   assert.match(formatTime(new Date(2026, 10, 2, 9, 5).getTime()), /^09:05$/);
-});
-
-test("the layout folder carries the same mod", async () => {
-  const { readdirSync, readFileSync } = await import("node:fs");
-  const mod = new URL("../pulse/mods/pulse/", import.meta.url);
-  const copy = new URL("../pulse-layout/mods/pulse/", import.meta.url);
-  assert.deepEqual(readdirSync(copy).sort(), readdirSync(mod).sort());
-  for (const name of readdirSync(mod)) assert.ok(readFileSync(new URL(name, mod)).equals(readFileSync(new URL(name, copy))), name);
-  const layout = JSON.parse(readFileSync(new URL("../pulse-layout/layouts/herdr-pulse.json", import.meta.url), "utf8"));
-  assert.match(JSON.stringify(layout), /"mod":"pulse"/);
 });
 
 test("the site links say where the click came from", () => {

@@ -100,7 +100,7 @@ export default class Pulse extends View {
     const quote = this.watch.quotes[symbol];
     if (!quote) return;
     openOverlay({
-      mod: "pulse", kind: "dialog", width: 440,
+      mod: "bellwether", kind: "dialog", width: 440,
       props: { detail: { ...quote, error: this.watch.errors[symbol] ?? null } },
     });
   }
