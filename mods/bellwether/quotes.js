@@ -1,16 +1,12 @@
 // Symbols, the two quote sources and number formatting. No Herdr imports, so
-// tests run it under Node. Ported from Pulse CC (plugins/claude-code/hooks).
+// tests run it under Node.
 
-// The only two hosts Pulse contacts.
+// The only two hosts Bellwether contacts.
 export const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
 export const BINANCE_TICKERS = "https://data-api.binance.vision/api/v3/ticker/24hr";
 export const BINANCE_KLINES = "https://data-api.binance.vision/api/v3/klines";
-// The one page the mod opens, on a click (`open`, the system's browser), tagged
-// with where the click came from.
-export const PULSE_URLS = {
-  panel: "https://www.pulseticker.app/?utm_source=herdr&utm_medium=mod&utm_content=panel",
-  detail: "https://www.pulseticker.app/?utm_source=herdr&utm_medium=mod&utm_content=detail",
-};
+export const VERSION = "0.1.0";
+export const USER_AGENT = `Bellwether-Herdr/${VERSION}`;
 // Shown until the person saves a watchlist of their own.
 export const STARTER_SYMBOLS = ["AAPL", "NVDA", "^GSPC", "BTC/USDT"];
 export const BINANCE_BATCH = 100;

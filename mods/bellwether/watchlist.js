@@ -5,6 +5,8 @@ import {
   isCryptoPair, normalizeSymbol, yahooUrl,
 } from "./quotes.js";
 
+// The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
+export const WATCHLIST_KEY = "bellwether.watchlist.v1";
 export const INTERVAL_MS = 60_000;
 // Stock requests are spaced at least this far apart.
 export const YAHOO_SPACING_MS = 1_000;

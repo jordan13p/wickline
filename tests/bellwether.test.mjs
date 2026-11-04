@@ -3,9 +3,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   binanceUrl, decodeBinance, decodeYahoo, formatBandPrice, formatChange, formatPrice, formatStaleDate,
-  normalizeSymbol, yahooUrl, binanceKlinesUrl, decodeKlines, marketSession, chartGeometry, formatTime, STARTER_SYMBOLS, PULSE_URLS,
+  normalizeSymbol, yahooUrl, binanceKlinesUrl, decodeKlines, marketSession, chartGeometry, formatTime, STARTER_SYMBOLS, USER_AGENT,
 } from "../mods/bellwether/quotes.js";
-import { Watchlist, readPreferences } from "../mods/bellwether/watchlist.js";
+import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/bellwether/watchlist.js";
 
 const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
 const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
@@ -198,13 +198,7 @@ test("scales a line into its box", () => {
   assert.match(formatTime(new Date(2026, 10, 2, 9, 5).getTime()), /^09:05$/);
 });
 
-test("the site links say where the click came from", () => {
-  for (const [place, url] of Object.entries(PULSE_URLS)) {
-    const link = new URL(url);
-    assert.equal(link.host, "www.pulseticker.app");
-    assert.equal(link.searchParams.get("utm_source"), "herdr");
-    assert.equal(link.searchParams.get("utm_medium"), "mod");
-    assert.equal(link.searchParams.get("utm_content"), place);
-  }
-  assert.deepEqual(Object.keys(PULSE_URLS).sort(), ["detail", "panel"]);
+test("identity", () => {
+  assert.equal(USER_AGENT, "Bellwether-Herdr/0.1.0");
+  assert.equal(WATCHLIST_KEY, "bellwether.watchlist.v1");
 });
