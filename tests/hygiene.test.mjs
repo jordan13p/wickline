@@ -27,6 +27,21 @@ test("no Pulse branding, programs or hc in the mod", () => {
   }
 });
 
+// The grep above misses an aliased import (`exec as run`); the import list does not.
+function herdrImports(source) {
+  return [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']herdr["']/g)]
+    .flatMap(([, list]) => list.split(","))
+    .map((name) => name.trim().split(/\s+as\s+/)[0])
+    .filter(Boolean);
+}
+
+test("main.js imports no program runners from herdr", () => {
+  const names = herdrImports(read(new URL("main.js", MOD)));
+  assert.ok(names.length > 0, "no herdr import found");
+  for (const banned of ["exec", "hc"]) assert.ok(!names.includes(banned), banned);
+  assert.deepEqual(herdrImports('import {\n  theme,\n  exec as run } from "herdr";'), ["theme", "exec"]);
+});
+
 test("mod.json places Bellwether", () => {
   assert.deepEqual(JSON.parse(read(new URL("mod.json", MOD))), { place: "right", size: 320, title: "Bellwether" });
 });

@@ -223,7 +223,7 @@ export default class Bellwether extends View {
 
     const crypto = symbols.some(isCryptoPair);
     const footer = v_flex().flex_none().px(12).py(10).gap(8).border_t(1).border_color(t.border)
-      .child(div().text_size(10.5).text_color(t.dim).child("Quotes for reference only. Not investment advice."))
+      .child(div().text_size(10.5).text_color(t.dim).truncate().child("Quotes for reference only. Not investment advice."))
       .child(div().text_size(10.5).text_color(t.dim)
         .child(crypto
           ? "Yahoo Finance · Binance Spot · Stocks: regular session, exchange delays vary · Crypto: 24h change"

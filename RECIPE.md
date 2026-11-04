@@ -18,7 +18,7 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
   - far right: a `dim` `×` that removes the ticker.
   - A failed refresh adds an 11px `blocked` line: `Cached quote · <reason>` when an older price is kept, the reason alone when there is none. Before the first quote, the price reads `Waiting…` (`Not fetched` while paused).
   - Empty: `Your watchlist is empty. Add a ticker above.` in `dim`.
-- **Footer**, a `border` line above, two 10.5px `dim` lines: `Quotes for reference only. Not investment advice.`, then the sources (`Yahoo Finance · Regular-session quotes · Exchange delays vary`, or the crypto variant naming Binance Spot and 24h change when a pair is watched).
+- **Footer**, a `border` line above, in 10.5px `dim`: `Quotes for reference only. Not investment advice.` on one line (truncated when the panel is narrow), then the sources (`Yahoo Finance · Regular-session quotes · Exchange delays vary`, or the crypto variant naming Binance Spot and 24h change when a pair is watched).
 
 **Detail dialog**, 440px wide, opened by clicking a row that has a quote, 18px padding, 14px between parts:
 
