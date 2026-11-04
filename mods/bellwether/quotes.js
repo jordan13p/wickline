@@ -36,7 +36,7 @@ export function normalizeSymbol(input) {
     throw new QuoteError("Enter a ticker, such as AAPL, 0700.HK or ^GSPC, or a pair, such as BTC/USDT.");
   }
   if (/^\d{6}\.SH$/.test(symbol)) symbol = symbol.replace(/\.SH$/, ".SS");
-  const hk = /^(\d{1,5})\.HK$/.exec(symbol);
+  const hk = symbol.match(/^(\d{1,5})\.HK$/);
   if (hk) symbol = String(Number(hk[1])).padStart(4, "0") + ".HK";
   return symbol;
 }
