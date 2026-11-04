@@ -33,6 +33,11 @@ test("every text is filled in and other languages are translated", () => {
   for (const lang of LANGUAGES.slice(1)) assert.notEqual(STRINGS[lang]["notice.added"], STRINGS.en["notice.added"], lang);
 });
 
+test("a failed settings save has its own text", () => {
+  assert.equal(t("en", "error.saveSettings"), "Could not save the settings.");
+  assert.notEqual(t("en", "error.saveSettings"), t("en", "error.save"));
+});
+
 test("falls back to English", () => {
   assert.equal(t("ja", "no.such"), "no.such");
   assert.equal(t("xx", "notice.added", { symbol: "AAPL" }), "Added AAPL.");

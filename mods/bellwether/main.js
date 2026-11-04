@@ -11,7 +11,7 @@ import {
   isCryptoPair, marketSession,
 } from "./quotes.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
-import { SETTINGS_KEY, readSettings, upIsRed } from "./settings.js";
+import { SETTINGS_KEY, mergeSettings, readSettings, upIsRed } from "./settings.js";
 
 // Yahoo cooldown messages, shown in the `blocked` color.
 const RATE_LIMITED = ["yahoo.retryAfter", "yahoo.retriesDelayed"];
@@ -72,12 +72,13 @@ export default class Bellwether extends View {
   }
 
   saveSettings(change) {
-    setShared(SETTINGS_KEY, { ...readSettings(shared(SETTINGS_KEY)), ...change });
+    setShared(SETTINGS_KEY, mergeSettings(shared(SETTINGS_KEY), change));
     this.readSettings();
   }
 
   // The input's placeholder is fixed when it is made, so a new language needs a new input
-  // (made in init or an event handler, never in render).
+  // (made in init or an event handler, never in render). Another copy's choice reaches this
+  // one on render; its input is remade the next time it takes focus.
   makeInput() {
     this.input?.release();
     this.inputLang = this.lang;
@@ -85,7 +86,14 @@ export default class Bellwether extends View {
     this.input = InputState.new({ placeholder: this.tx("input.placeholder"), value: this.typed });
     this.input.on("change", () => { this.typed = this.input.value(); });
     this.input.on("submit", (_e, cx) => this.add(cx));
-    this.input.on("focus", (_e, cx) => { this.inputFocused = true; cx.notify(); });
+    this.input.on("focus", (_e, cx) => {
+      if (this.inputLang !== this.lang) {
+        this.makeInput();
+        this.input.focus();
+      }
+      this.inputFocused = true;
+      cx.notify();
+    });
     this.input.on("blur", (_e, cx) => { this.inputFocused = false; cx.notify(); });
   }
 
@@ -93,7 +101,7 @@ export default class Bellwether extends View {
     this.act(cx, () => {
       this.saveSettings({ language, languagePromptDismissed: true });
       if (this.inputLang !== this.lang) this.makeInput();
-    });
+    }, "error.saveSettings");
   }
 
   // The text for `key` in this copy's language.
@@ -106,12 +114,13 @@ export default class Bellwether extends View {
     return this.tx(coded.code, coded.params);
   }
 
-  act(cx, action) {
+  // `failure` names what could not be saved: the watchlist, or the settings for the prompt.
+  act(cx, action, failure = "error.save") {
     this.error = null;
     try { this.notice = action() ?? null; } catch (cause) {
       this.notice = null;
       // Anything but a bad symbol is the store failing.
-      this.error = cause instanceof QuoteError ? { code: cause.code, params: cause.params } : { code: "error.save", params: {} };
+      this.error = cause instanceof QuoteError ? { code: cause.code, params: cause.params } : { code: failure, params: {} };
     }
     cx.notify();
   }
@@ -121,12 +130,13 @@ export default class Bellwether extends View {
       const notice = this.watch.add(this.typed);
       this.input.set_value("");
       this.typed = "";
-      // A first add answers the language prompt too: it stays English.
-      if (notice.code === "notice.added" && !this.settings.languagePromptDismissed) {
-        this.saveSettings({ languagePromptDismissed: true });
-      }
       return notice;
     });
+    // A first add answers the language prompt too: it stays English.
+    if (this.notice?.code !== "notice.added" || this.settings.languagePromptDismissed) return;
+    try { this.saveSettings({ languagePromptDismissed: true }); } catch {
+      this.error = { code: "error.saveSettings", params: {} };
+    }
   }
 
   togglePause() {
@@ -222,7 +232,7 @@ export default class Bellwether extends View {
     return h_flex().items_center().gap(6).text_size(11.5)
       .child(div().flex_none().text_color(t.dim).child(this.tx("prompt.language")))
       .child(h_flex().flex_1().min_w(0).items_center().gap(5).overflow_hidden().children(choices))
-      .child(link("bw-lang-dismiss", "×", (cx) => this.act(cx, () => this.saveSettings({ languagePromptDismissed: true }))));
+      .child(link("bw-lang-dismiss", "×", (cx) => this.act(cx, () => this.saveSettings({ languagePromptDismissed: true }), "error.saveSettings")));
   }
 
   panel(root, t) {

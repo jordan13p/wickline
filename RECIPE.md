@@ -55,13 +55,13 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - Charts: `chartGeometry` in `quotes.js` scales a line into `[x%, y%]` points with 8% headroom, the previous close included in the range. `PathBuilder.stroke(...)` for the line, `.dash_array([3, 3])` for the rule, `PathBuilder.fill()` closed along the bottom for the area, each painted with `window.paint_path(...)` as an absolute layer over a sized `div`.
 - `watchlist.js`: the list and the refresh loop, with no Herdr imports. Herdr's APIs are passed in as a host: `load`/`save`, `fetch`, `now`, `sleep`, `changed`. The loop runs in one `cx.spawn` for the copy's whole life, sleeping with that task's `cx.sleep` and redrawing with its `cx.notify()`. Edits are synchronous; each bumps a revision so a round in flight drops late results, and wakes the loop. `render` calls `sync()`, which adopts another copy's edit of the shared list the same way (Herdr re-renders every copy on `setShared`).
 - `i18n.js`: `LANGUAGES`, `LANGUAGE_LABELS` and `STRINGS`, one table per language with the same keys and `{name}` placeholders (English includes the error texts from `quotes.js`), and `t(lang, key, params)`, which falls back to English, then to the key. The watchlist hands the view notices, errors and status messages as `{ code, params }`; the view translates them when it draws.
-- `settings.js`: `readSettings` (each field checked, defaults for anything else) and `upIsRed`.
+- `settings.js`: `readSettings` (each field checked, defaults for anything else), `mergeSettings` (what a save writes) and `upIsRed`.
 - `quotes.js`: symbol rules, error codes with their English texts, the request headers, the session, chart geometry, and number, date and time formatting by hand (no `Intl` in Herdr's runtime).
 - `providers/yahoo.js`, `providers/binance.js`: one provider per source, each with its host, how it splits a watchlist into requests, and how it decodes the answers. `markets.js` names a symbol's market from its form.
 - `icon.svg`: three candles, a single `currentColor` stroke, drawn with `svg("mods/bellwether/icon.svg")` so Herdr tints it with the text color (16px in the header, 14px in the band).
 - **Storage**: two keys in Herdr's shared state (`shared(...)` / `setShared(...)`), persisted by Herdr and seen by every copy:
   - `shared("bellwether.watchlist.v1")`: `{ version: 1, symbols: [...], paused }`. The loop re-reads it each round.
-  - `shared("bellwether.settings.v1")`: `{ version: 1, language: "en"|"zh-TW"|"zh-CN"|"ja"|"ko", colors: "auto"|"red-up"|"green-up", languagePromptDismissed }`. Read on every render.
+  - `shared("bellwether.settings.v1")`: `{ version: 1, language: "en"|"zh-TW"|"zh-CN"|"ja"|"ko", colors: "auto"|"red-up"|"green-up", languagePromptDismissed }`. Read on every render, field by field (a bad field gets its default); a save keeps keys this build does not know.
   - Quotes and lines are memory only.
 - **Network**: `fetch` GETs, with headers `User-Agent: Bellwether-Herdr/<version>` and `Accept: application/json`, to two hosts only:
   - `https://query1.finance.yahoo.com/v8/finance/chart/<symbol>?interval=5m&range=1d&includePrePost=false`: `chart.result[0].meta` (`regularMarketPrice`, `regularMarketTime`, `previousClose` else `chartPreviousClose`, `currency`, `longName`/`shortName`, `exchangeDataDelayedBy`, `regularMarketDayHigh`/`Low`, `currentTradingPeriod.pre/regular/post`) and `indicators.quote[0]` (`close` for the line, the first `open`). A response whose `meta.symbol` differs from the request is rejected.
@@ -80,9 +80,9 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - Herdr's `fetch` response has no headers, so Yahoo's `Retry-After` can't be read; the 60-second floor stands in for it.
 - Yahoo's chart endpoint is unofficial and may be unavailable in some regions. Prices are regular-session, not pre- or after-hours. Never label cached data as fresh or unknown delay as real time.
 - Each shown copy runs its own refresh loop, and timers keep running while a copy is hidden. One copy is the intended setup; a second copy doubles the requests. The dialog copy fetches nothing.
-- `toLocaleString` options are ignored in Herdr's QuickJS: format prices with grouping and 2 decimals (2 to 4 significant digits below 1), and times as `HH:MM`, by hand.
+- `toLocaleString` options are ignored in Herdr's QuickJS: format prices with grouping and 2 decimals (2 to 4 significant digits below 1), and times as `HH:MM` in the panel and `HH:MM:SS` in the detail dialog, by hand.
 - Keep the change colors on `ansi2`/`ansi1`, swapped by the color setting; a theme's own `done` color isn't necessarily green.
-- `InputState` takes its placeholder only when made, and only in `init` or an event handler. Choosing a language makes a new input in that copy; another open copy keeps its old placeholder until it is reopened.
+- `InputState` takes its placeholder only when made, and only in `init` or an event handler. Choosing a language makes a new input in that copy; another open copy remakes its input (and its placeholder) the next time the field takes focus.
 - Herdr's QuickJS has no `Intl`: dates are `Oct 31` (English) or `10/31`, built by hand, never from the system locale.
 
 ## Done when
