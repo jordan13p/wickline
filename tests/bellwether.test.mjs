@@ -132,6 +132,28 @@ test("request order and spacing are unchanged", async () => {
   await run;
 });
 
+test("an unknown pair fails its batch, then pairs are asked one by one", async () => {
+  const host = fakeHost((url) => url.includes("BADUSDT") ? { status: 400, ok: false, text: "" }
+    : url.includes("klines") ? ok([[1, "1", "2", "0.5", "1.5"]])
+    : ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1])).map((symbol) =>
+      ({ symbol, lastPrice: "10", prevClosePrice: "9", closeTime: 5 }))));
+  const w = new Watchlist(host);
+  w.add("BTC/USDT"); w.add("ETH/USDT"); w.add("BAD/USDT");
+  const run = w.run();
+  // Pairs are not spaced, so one round runs without the clock moving.
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(host.requests, [
+    binanceUrl(["BTC/USDT", "ETH/USDT", "BAD/USDT"]),
+    binanceUrl(["BTC/USDT"]), binanceUrl(["ETH/USDT"]), binanceUrl(["BAD/USDT"]),
+    binanceKlinesUrl("BTC/USDT"), binanceKlinesUrl("ETH/USDT"),
+  ]);
+  assert.equal(w.errors["BAD/USDT"], "Binance has no Spot pair with this name.");
+  assert.ok(w.quotes["BTC/USDT"] && w.quotes["ETH/USDT"]);
+  w.stop();
+  await tick(host);
+  await run;
+});
+
 test("a rate limit defers the rest of the round", async () => {
   const host = fakeHost(() => ({ status: 429, ok: false, text: "" }));
   const w = new Watchlist(host);

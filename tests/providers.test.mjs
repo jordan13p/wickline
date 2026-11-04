@@ -30,6 +30,17 @@ test("binance batches quotes and asks lines per pair", () => {
   for (const request of requests) assert.equal(request.headers["User-Agent"], USER_AGENT);
 });
 
+test("binance keeps each batch's lines before the next batch", () => {
+  const pairs = Array.from({ length: 101 }, (_, i) => `P${i}/USDT`);
+  const first = pairs.slice(0, 100);
+  assert.deepEqual(binance.requests(pairs, {}).map((r) => [r.kind, r.url]), [
+    ["quote", binanceUrl(first)],
+    ...first.map((pair) => ["line", binanceKlinesUrl(pair)]),
+    ["quote", binanceUrl([pairs[100]])],
+    ["line", binanceKlinesUrl(pairs[100])],
+  ]);
+});
+
 test("errors carry codes and the old English text", () => {
   assert.throws(() => decodeYahoo("AAPL", { status: 429, ok: false, text: "" }, 1), (e) =>
     e.code === "yahoo.rateLimited" && e.message === "Yahoo rate limited requests." && e.retryAfterMs === 60_000);

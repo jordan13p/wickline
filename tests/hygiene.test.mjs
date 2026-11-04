@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { MESSAGES_EN } from "../mods/bellwether/quotes.js";
 
 const MOD = new URL("../mods/bellwether/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
@@ -66,6 +67,19 @@ test("only allowed hosts", () => {
       assert.ok(ALLOWED_HOSTS.includes(host), `${host} in ${file.pathname}`);
     }
   }
+});
+
+// QuoteError shows a code it does not know as text, so every code used must have English text.
+test("every error code has English text", () => {
+  const codes = new Set();
+  for (const file of files(MOD).filter((url) => url.pathname.endsWith(".js"))) {
+    const text = read(file);
+    for (const [, code] of text.matchAll(/new QuoteError\(\s*"([^"]+)"/g)) codes.add(code);
+    // Codes passed along as arguments, e.g. the unreachable code handed to Watchlist.ask.
+    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance)\.[A-Za-z]+)"/g)) codes.add(code);
+  }
+  assert.ok(codes.size > 0);
+  for (const code of codes) assert.ok(code in MESSAGES_EN, code);
 });
 
 test("READMEs link to each other", () => {

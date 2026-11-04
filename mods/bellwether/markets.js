@@ -7,7 +7,8 @@ const SUFFIXES = { TW: "tw", TWO: "tw", HK: "hk", SS: "cn", SZ: "cn", T: "jp", K
 /** "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges). */
 export function marketOf(symbol) {
   if (isCryptoPair(symbol)) return "crypto";
-  if (/[\^=]/.test(symbol)) return "other";
+  // Indices start with ^, currencies and futures contain =.
+  if (/^\^|=/.test(symbol)) return "other";
   const dot = symbol.lastIndexOf(".");
   if (dot === -1) return "us";
   return SUFFIXES[symbol.slice(dot + 1)] ?? "other";
