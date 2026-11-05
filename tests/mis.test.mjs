@@ -290,3 +290,81 @@ test("an MIS address change is used at once", async () => {
   assert.ok(host.requests.some((url) => url.startsWith("https://mirror.test/mis?ex_ch=tse_2330.tw")));
   await stop(w, host, runs);
 });
+
+// An answer with a valid row for every requested channel.
+const rowsFor = (url) => {
+  const template = JSON.parse(OPEN).msgArray[1];
+  const channels = decodeURIComponent(url.split("ex_ch=")[1].split("&")[0]).split("|");
+  return answer(JSON.stringify({ msgArray: channels.map((channel) => {
+    const [ex, rest] = channel.split("_");
+    return { ...template, ex, c: rest.replace(/\.tw$/, "") };
+  }) }));
+};
+
+test("a MIS timeout drops the overlay", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.shown("2330.TW").source, "mis");
+  host.mis = () => new Promise(() => {});
+  const fetch = host.fetch;
+  host.fetch = (url, headers) => (url.startsWith(MIS_URL) ? (host.requests.push(url), host.mis(url)) : fetch(url, headers));
+  // The next round starts at 10 s and times out 10 s later.
+  await advance(host, 20_001);
+  assert.equal(w.shown("2330.TW").source, "yahoo");
+  assert.equal(w.overlayErrors["2330.TW"].code, "request.timeout");
+  assert.deepEqual(w.problems(), [{ provider: "mis", code: "request.timeout", params: { source: "mis", seconds: 10 } }]);
+  await stop(w, host, runs);
+});
+
+test("a MIS rate limit keeps Yahoo's quote for the whole cooldown", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.shown("2330.TW").source, "mis");
+  host.mis = () => ({ status: 429, ok: false, text: "" });
+  await advance(host, 10_001);
+  const retryAt = w.sources.mis.retryAt;
+  assert.ok(retryAt >= 10_000 + 60_000, `retryAt ${retryAt}`);
+  const sent = misCount(host);
+  host.mis = () => answer(OPEN);
+  for (const at of [10_001, 30_000, retryAt - 1]) {
+    await advance(host, at);
+    assert.equal(w.shown("2330.TW").source, "yahoo", `at ${at}`);
+    assert.equal(w.overlayErrors["2330.TW"].code, "mis.rateLimited");
+    assert.deepEqual(w.problems(), [{ provider: "mis", code: "mis.rateLimited", params: {} }]);
+  }
+  assert.equal(misCount(host), sent);
+  await stop(w, host, runs);
+});
+
+test("a later batch loses its overlays when an earlier one fails", async () => {
+  const symbols = Array.from({ length: 51 }, (_, i) => `${1101 + i}.TW`);
+  const failures = [
+    [() => { throw new Error("offline"); }, "mis.unreachable"],
+    [() => ({ status: 429, ok: false, text: "" }), "request.deferred"],
+  ];
+  for (const [failure, later] of failures) {
+    const host = twHost(CONSENTED, rowsFor);
+    const w = new Watchlist(host);
+    for (const symbol of symbols) w.add(symbol);
+    const runs = start(w, host);
+    await advance(host, 1);
+    assert.ok(symbols.every((symbol) => w.shown(symbol)?.source === "mis"));
+    let batch = 0;
+    host.mis = (url) => (batch++ === 0 ? failure() : rowsFor(url));
+    await advance(host, 10_001);
+    for (const symbol of symbols) {
+      assert.equal(w.overlays[symbol], undefined, symbol);
+      assert.ok(w.overlayErrors[symbol], symbol);
+    }
+    // The second batch (the 51st symbol) was never asked: down means the same reason, limited means deferred.
+    assert.equal(batch, 1);
+    assert.equal(w.overlayErrors[symbols[50]].code, later);
+    await stop(w, host, runs);
+  }
+});
