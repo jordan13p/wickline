@@ -102,7 +102,7 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 - `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Bellwether pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
 - 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod bellwether`。
 - 關閉方式和其他 pane 一樣：用 Herdr 的 pane 標題列，或執行 `pane.close`。
-- 標題列的 **在自己的分頁開啟** 圖示會把 Bellwether 移到名為 `Bellwether` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側並關閉該分頁。無論哪種方式，都只有一個 copy 在抓報價。
+- 標題列的 **在自己的分頁開啟** 圖示會把 Bellwether 移到名為 `Bellwether` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。
 - 放大（zoom）交給 Herdr 自己的 pane 標題列；Bellwether 沒有自己的放大功能。
 
 ## 設定

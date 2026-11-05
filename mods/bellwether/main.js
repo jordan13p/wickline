@@ -17,7 +17,9 @@ import {
 } from "./settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
-import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, layoutFor, nameWidth, returnPane, tableColumns } from "./layout.js";
+import {
+  COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, canOpenOwnTab, layoutFor, nameWidth, newBellwether, ownTabSource, returnPane, tableColumns,
+} from "./layout.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
@@ -445,33 +447,38 @@ export default class Bellwether extends View {
       .child(svg(icon(name)).w(16).h(16));
   }
 
-  // A pane copy offers its own tab; the copy in that tab offers the way back, when there is a pane to go
-  // back beside. Dialog copies draw neither (they never reach the header). Clicking a mod pane focuses it,
-  // so the focused Bellwether pane is the one clicked.
+  // A pane copy that shares its tab offers its own tab; the copy in that tab offers the way back, when
+  // there is a pane to go back beside. Dialog copies draw neither (they never reach the header).
+  // Clicking a mod pane focuses it, so the focused Bellwether pane is the one clicked; each click
+  // checks again. Commands apply as run() returns: the old copy closes only once panes() shows the
+  // new one, and only its own pane, never a shell the person split in beside it.
   ownTabAction() {
     const all = panes();
+    const shownTab = focused()?.tab ?? null;
     if (!this.from) {
-      if (!all.some((p) => p.mod === "bellwether")) return null;
+      if (!canOpenOwnTab(all, shownTab)) return null;
       return {
         icon: "zoom", label: "button.ownTab",
         go: () => {
-          const pane = panes().find((p) => p.mod === "bellwether" && p.focused);
-          if (!pane) return;
-          run("tab.new", { mod: "bellwether", name: "Bellwether", props: { from: pane.tab } });
-          run("pane.close", { pane: pane.pane });
+          const before = panes();
+          const me = ownTabSource(before);
+          if (!me) return;
+          run("tab.new", { mod: "bellwether", name: "Bellwether", props: { from: me.tab } });
+          if (newBellwether(before, panes())) run("pane.close", { pane: me.pane });
         },
       };
     }
-    if (!returnPane(all, this.from, focused())) return null;
+    if (!returnPane(all, this.from, focused(), shownTab)) return null;
     return {
       icon: "restore", label: "button.backBeside",
       go: () => {
-        const now = panes();
-        const me = now.find((p) => p.mod === "bellwether" && p.focused && p.tab !== this.from);
-        const target = returnPane(now, this.from, focused());
-        if (!me || !target) return;
+        const before = panes();
+        const me = before.find((p) => p.mod === "bellwether" && p.focused && p.tab !== this.from);
+        const target = me && returnPane(before, this.from, focused(), me.tab);
+        if (!target) return;
         run("pane.split", { pane: target, direction: "right", mod: "bellwether" });
-        run("tab.close", { id: me.tab });
+        const targetTab = before.find((p) => p.pane === target).tab;
+        if (newBellwether(before, panes(), targetTab)) run("pane.close", { pane: me.pane });
       },
     };
   }

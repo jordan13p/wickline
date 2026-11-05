@@ -102,7 +102,7 @@ Type a symbol into the add field and press Enter:
 - `ctrl-alt-b` opens Bellwether as a pane to the right of the focused terminal, on any layout. Pressing it again opens another copy, and every copy sends its own requests, so keep one open.
 - To change the key, rename `ctrl-alt-b` in the `global` section of `~/.config/herdr-app/keys.json`; to drop it, delete that line. Without a key: `herdr-app do pane.split --direction right --mod bellwether`.
 - Close it like any pane, from Herdr's pane header or with `pane.close`.
-- The header's **open in its own tab** icon moves Bellwether to a `Bellwether` tab, wide enough for the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes the tab. Only one copy fetches either way.
+- The header's **open in its own tab** icon moves Bellwether to a `Bellwether` tab, wide enough for the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes only its own pane (the tab too, when it held nothing else; a shell you split in there stays). The old copy closes only once the new one is open, so a refused move leaves everything as it was. Only one copy fetches either way.
 - Zoom stays with Herdr's own pane header; Bellwether has no zoom of its own.
 
 ## Settings
