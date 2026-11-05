@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
-  layoutFor, nameWidth, tableColumns,
+  layoutFor, nameWidth, returnPane, tableColumns,
 } from "../mods/bellwether/layout.js";
 
 const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", "high", "low", "prevClose"];
@@ -88,4 +88,30 @@ test("the name takes the rest, within its bounds", () => {
   // A very wide pane: the table stops at 1280 and the name at its cap.
   assert.equal(nameWidth(2000, ALL), nameWidth(TABLE_MAX_WIDTH, ALL));
   assert.ok(nameWidth(TABLE_MAX_WIDTH, ALL) <= NAME_MAX_WIDTH);
+});
+
+// Panes as panes() gives them: Bellwether's own tab "t9", opened from "t1".
+const pane = (id, tab, extra = {}) => ({ pane: id, tab, terminal: `term-${id}`, focused: false, ...extra });
+const mine = { pane: "p9", tab: "t9", terminal: null, mod: "bellwether", focused: true };
+
+test("back beside the terminal: a pane of the tab it came from", () => {
+  const panes = [pane("p1", "t1", { terminal: null, mod: "notes" }), pane("p2", "t1"), pane("p3", "t1", { focused: true }), mine];
+  // That tab's focused pane first.
+  assert.equal(returnPane(panes, "t1", null), "p3");
+  // Else its first terminal pane.
+  panes[2].focused = false;
+  assert.equal(returnPane(panes, "t1", null), "p2");
+  // Else any other pane there.
+  assert.equal(returnPane([pane("p1", "t1", { terminal: null, mod: "notes" }), mine], "t1", null), "p1");
+});
+
+test("back beside the terminal: never beside another Bellwether or in its own tab", () => {
+  const other = { pane: "p4", tab: "t1", terminal: null, mod: "bellwether", focused: false };
+  assert.equal(returnPane([other, pane("p5", "t1"), mine], "t1", null), "p5");
+  // The tab it came from is gone: the focused pane, unless it is Bellwether's own.
+  assert.equal(returnPane([pane("p6", "t2"), mine], "t1", { pane: "p6", tab: "t2" }), "p6");
+  assert.equal(returnPane([pane("p6", "t2"), mine], "t1", { pane: "p9", tab: "t9" }), "p6");
+  assert.equal(returnPane([mine], "t1", { pane: "p9", tab: "t9" }), null);
+  assert.equal(returnPane([mine], "t1", null), null);
+  assert.equal(returnPane([other, mine], "t1", null), null);
 });

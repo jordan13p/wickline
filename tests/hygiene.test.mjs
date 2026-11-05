@@ -60,6 +60,22 @@ test("icon is single-colour", () => {
   for (const fill of fills) assert.ok(fill === "none" || fill === "currentColor", fill);
 });
 
+test("header and row icons are single-colour and drawn on a 24 px grid", () => {
+  const dir = new URL("icons/", MOD);
+  const names = readdirSync(dir).filter((name) => name.endsWith(".svg")).sort();
+  for (const name of ["close", "grip", "mark-center", "mark-sides", "pause", "play", "refresh", "restore", "settings", "zoom"]) {
+    assert.ok(names.includes(`${name}.svg`), name);
+  }
+  for (const name of names) {
+    const svg = read(new URL(name, dir));
+    assert.match(svg, /viewBox="0 0 24 24"/, name);
+    assert.match(svg, /currentColor/, name);
+    for (const [, attr, value] of svg.matchAll(/(fill|stroke)="([^"]*)"/g)) {
+      assert.ok(value === "none" || value === "currentColor", `${name} ${attr}=${value}`);
+    }
+  }
+});
+
 test("licence keeps both notices", () => {
   const licence = read(new URL("LICENSE", ROOT));
   assert.match(licence, /Copyright \(c\) 2026 fatwang2/);

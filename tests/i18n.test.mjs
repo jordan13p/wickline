@@ -48,7 +48,7 @@ test("reviewed terms", () => {
   const tw = STRINGS["zh-TW"];
   // 開盤中 ("market open") is correct; only 盤中 as "intraday" was wrong.
   for (const [key, text] of Object.entries(tw)) assert.ok(!text.replaceAll("開盤中", "").includes("盤中"), `zh-TW ${key}`);
-  assert.ok(tw["footer.sources"].includes("一般交易時段"));
+  assert.ok(tw["disclaimer.sourcesStocks"].includes("一般交易時段"));
   assert.ok(tw["detail.sourceStock"].includes("一般交易時段"));
   assert.equal(tw["button.refresh"], "重新整理");
 
@@ -69,5 +69,20 @@ test("reviewed terms", () => {
 
   for (const lang of ["zh-TW", "zh-CN", "ja", "ko"]) {
     for (const [key, text] of Object.entries(STRINGS[lang])) assert.ok(!text.includes("24h"), `${lang} ${key}`);
+  }
+});
+
+test("icon tooltips, table labels and the source legend", () => {
+  const keys = ["button.ownTab", "button.backBeside", "button.remove", "status.updated", "table.symbol", "table.name",
+    "table.state", "table.line", "table.price", "table.change", "table.changePct",
+    "disclaimer.sourcesTitle", "disclaimer.sourcesStocks", "disclaimer.sourcesCrypto"];
+  for (const key of keys) assert.ok(key in STRINGS.en, key);
+  assert.equal(t("zh-TW", "button.ownTab"), "在自己的分頁開啟");
+  assert.equal(t("zh-TW", "button.backBeside"), "回到側邊");
+  assert.equal(t("zh-TW", "button.settings"), "設定");
+  assert.equal(t("en", "status.updated", { time: "14:05" }), "Updated 14:05");
+  // The legend lives in the Disclaimer & privacy tab now; the footer is one line.
+  for (const lang of LANGUAGES) {
+    assert.ok(!("footer.sources" in STRINGS[lang]) && !("footer.sourcesCrypto" in STRINGS[lang]), lang);
   }
 });

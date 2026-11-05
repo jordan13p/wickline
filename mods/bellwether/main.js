@@ -4,7 +4,7 @@
 // settings button opens the settings: the same mod, given the quote or `settings` in its props.
 import { View, div, svg, PathBuilder, Background } from "gpui-kit";
 import { v_flex, h_flex, Checkbox, InputState, Input } from "gpui-base";
-import { appHome, closeOverlay, nextCommand, openOverlay, props, run, setShared, shared, theme } from "herdr";
+import { appHome, closeOverlay, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme } from "herdr";
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import {
@@ -17,13 +17,20 @@ import {
 } from "./settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
-import { layoutFor } from "./layout.js";
+import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, layoutFor, nameWidth, returnPane, tableColumns } from "./layout.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
 const ICON = "mods/bellwether/icon.svg";
+const icon = (name) => `mods/bellwether/icons/${name}.svg`;
+// Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
+// The right group keeps this width, so a wider pane gives its room to the name.
+const SPARK = { width: 56, height: 20 };
+const TABLE_SPARK = { width: 120, height: 20 };
+const NUMBER_W = 72;
+const CODE_W = 34;
 // Below this panel width the footer shows the short disclaimer.
-const SHORT_FOOTER_WIDTH = 360;
+const SHORT_FOOTER_WIDTH = 480;
 const SETTINGS_TABS = ["sources", "display", "language", "disclaimer"];
 const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
 
@@ -79,6 +86,8 @@ export default class Bellwether extends View {
     // `{ code, params }` or null, translated when drawn.
     this.notice = null;
     this.error = null;
+    // The tab this copy's own tab was opened from (props().from), or null for a pane or block copy.
+    this.from = typeof given.from === "string" ? given.from : null;
     this.makeInput();
 
     this.watch = new Watchlist({
@@ -281,7 +290,8 @@ export default class Bellwether extends View {
     const root = (layout === "band" ? h_flex() : v_flex())
       .id("bw").size_full().bg(t.chrome).text_color(t.foreground).text_size(12.5)
       .on_size_change((size, cx) => { this.size = size; cx.notify(); });
-    return layout === "band" ? this.band(root, t) : this.panel(root, t);
+    if (layout === "band") return this.band(root, t);
+    return layout === "table" ? this.table(root, t) : this.sidebar(root, t);
   }
 
   // Red-up or green-up, by the color setting (automatic: red-up in every language but English).
@@ -355,7 +365,7 @@ export default class Bellwether extends View {
     return root.px(12).gap(14).items_center().overflow_hidden()
       .child(h_flex().flex_none().gap(6).items_center()
         .child(svg(ICON).w(14).h(14).text_color(t.foreground))
-        .child(div().text_color(t.accent).font_semibold().child("Bellwether")))
+        .child(div().text_color(t.foreground).font_semibold().child("Bellwether")))
       .when(w.preferences.paused, (el) => el.child(div().flex_none().text_color(t.blocked).child(this.tx("band.paused"))))
       .when(!symbols.length, (el) => el.child(div().text_color(t.dim).truncate().child(this.tx("band.empty"))))
       .children(symbols.map((symbol) => {
@@ -386,121 +396,221 @@ export default class Bellwether extends View {
       ...(i ? [div().flex_none().text_color(t.dim).child("·")] : []),
       link(`bw-lang-${language}`, LANGUAGE_LABELS[language], (cx) => this.chooseLanguage(cx, language)),
     ]);
-    return h_flex().items_center().gap(6).text_size(11.5)
+    return h_flex().items_center().gap(6).text_size(11)
       .child(div().flex_none().text_color(t.dim).child(this.tx("prompt.language")))
       .child(h_flex().flex_1().min_w(0).items_center().gap(5).overflow_hidden().children(choices))
       .child(link("bw-lang-dismiss", "×", (cx) => this.act(cx, () => this.saveSettings({ languagePromptDismissed: true }), "error.saveSettings")));
   }
 
-  panel(root, t) {
+  // The text for the header's count: `8 tickers`.
+  countText() {
+    const count = this.watch.preferences.symbols.length;
+    return this.tx(count === 1 ? "header.tickers.one" : "header.tickers.other", { count });
+  }
+
+  // `Auto-refresh on · Updated 14:05` (the newest fetch among the rows), or `… · Refreshing quotes…` during a Refresh.
+  statusText() {
     const w = this.watch;
-    const { paused, symbols } = w.preferences;
-    const now = Date.now();
-    const statusColor = paused ? t.blocked : w.refreshing ? t.working : t.done;
-    const status = paused ? this.tx("status.paused") : w.refreshing ? this.tx("status.refreshing") : this.tx("status.on");
+    const state = this.tx(w.preferences.paused ? "status.paused" : "status.on");
+    // Only for a refresh the person asked for: automatic rounds would flip the line every few seconds.
+    if (w.refreshing) return `${state} · ${this.tx("status.refreshing")}`;
+    const fetched = Math.max(0, ...w.preferences.symbols.map((symbol) => w.shown(symbol)?.fetchedAt ?? 0));
+    return fetched ? `${state} · ${this.tx("status.updated", { time: formatTime(fetched) })}` : state;
+  }
 
-    const header = v_flex().flex_none().px(12).pt(12).gap(6)
-      .child(h_flex().items_center().gap(7)
-        .child(svg(ICON).flex_none().w(16).h(16).text_color(t.foreground))
-        .child(div().flex_none().text_size(13.5).font_semibold().text_color(t.accent).child("Bellwether"))
-        .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim)
-          .child(this.tx(symbols.length === 1 ? "header.tickers.one" : "header.tickers.other", { count: symbols.length })))
-        .child(this.button(t, "bw-refresh", this.tx("button.refresh"), (cx) => { this.watch.refreshNow(); cx.notify(); }))
-        .child(this.button(t, "bw-pause", this.tx(paused ? "button.resume" : "button.pause"),
-          (cx) => this.act(cx, () => this.togglePause())))
-        .child(this.button(t, "bw-settings", this.tx("button.settings"), () => this.openSettings("sources"))))
-      .child(h_flex().items_center().gap(6)
-        .child(div().flex_none().w(6).h(6).rounded_full().bg(statusColor)
-          .when(w.refreshing, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 1200 })))
-        .child(div().text_size(11.5).text_color(statusColor).child(status)))
-      // One line per source with a problem: rate limited, unreachable, timed out, refused.
-      .children(w.problems().map((problem) => div().text_size(11.5).text_color(t.blocked).child(this.say(problem))));
+  // The mark and the name in the text color, the mark's middle candle in the accent: two single-color
+  // layers, since an svg takes one tint. Otherwise the accent is kept for focus, the drop line and links.
+  brand(t) {
+    return h_flex().flex_none().items_center().gap(8)
+      .child(div().relative().flex_none().w(16).h(16)
+        .child(svg(icon("mark-sides")).absolute().top(0).left(0).w(16).h(16).text_color(t.foreground))
+        .child(svg(icon("mark-center")).absolute().top(0).left(0).w(16).h(16).text_color(t.accent)))
+      .child(div().flex_none().text_size(13).font_semibold().text_color(t.foreground).child("Bellwether"));
+  }
 
-    const field = v_flex().flex_none().px(12).pt(10).gap(6)
-      .when(!this.settings.languagePromptDismissed, (el) => el.child(this.languagePrompt(t)))
-      .child(Input.new(this.input).h(30).px(8).rounded(6).border_1()
-        .border_color(this.inputFocused ? t.accent : t.input).bg(t.background).text_size(12).text_color(t.foreground))
-      .when(Boolean(this.error), (el) => el.child(div().text_size(11.5).text_color(t.ansi1).child(this.say(this.error))))
-      .when(!this.error && Boolean(this.notice), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(this.say(this.notice))));
+  // A header action: a 16 px single-color icon in a 28 × 28 target, named by its tooltip.
+  iconButton(t, id, name, label, onClick) {
+    return h_flex().id(id).flex_none().w(28).h(28).items_center().justify_center().rounded(6)
+      .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .tooltip(label).on_click((_e, cx) => onClick(cx))
+      .child(svg(icon(name)).w(16).h(16));
+  }
 
-    const rows = symbols.map((symbol, index) => {
-      const quote = w.shown(symbol);
-      const failed = w.errors[symbol];
+  // A pane copy offers its own tab; the copy in that tab offers the way back, when there is a pane to go
+  // back beside. Dialog copies draw neither (they never reach the header). Clicking a mod pane focuses it,
+  // so the focused Bellwether pane is the one clicked.
+  ownTabAction() {
+    const all = panes();
+    if (!this.from) {
+      if (!all.some((p) => p.mod === "bellwether")) return null;
+      return {
+        icon: "zoom", label: "button.ownTab",
+        go: () => {
+          const pane = panes().find((p) => p.mod === "bellwether" && p.focused);
+          if (!pane) return;
+          run("tab.new", { mod: "bellwether", name: "Bellwether", props: { from: pane.tab } });
+          run("pane.close", { pane: pane.pane });
+        },
+      };
+    }
+    if (!returnPane(all, this.from, focused())) return null;
+    return {
+      icon: "restore", label: "button.backBeside",
+      go: () => {
+        const now = panes();
+        const me = now.find((p) => p.mod === "bellwether" && p.focused && p.tab !== this.from);
+        const target = returnPane(now, this.from, focused());
+        if (!me || !target) return;
+        run("pane.split", { pane: target, direction: "right", mod: "bellwether" });
+        run("tab.close", { id: me.tab });
+      },
+    };
+  }
+
+  // Refresh, pause or resume, settings, own tab or back; the glyphs' right edge lines up with the content's.
+  headerIcons(t) {
+    const { paused } = this.watch.preferences;
+    const own = this.ownTabAction();
+    return h_flex().flex_none().items_center().mr(-6)
+      .child(this.iconButton(t, "bw-refresh", "refresh", this.tx("button.refresh"), (cx) => { this.watch.refreshNow(); cx.notify(); }))
+      .child(this.iconButton(t, "bw-pause", paused ? "play" : "pause", this.tx(paused ? "button.resume" : "button.pause"),
+        (cx) => this.act(cx, () => this.togglePause())))
+      .child(this.iconButton(t, "bw-settings", "settings", this.tx("button.settings"), () => this.openSettings("sources")))
+      .when(Boolean(own), (el) => el.child(this.iconButton(t, "bw-own-tab", own.icon, this.tx(own.label), () => own.go())));
+  }
+
+  // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves
+  // the text. `hover` rather than `background`: light themes may draw `background` and `chrome` alike.
+  addField(t) {
+    return Input.new(this.input).h(32).px(10).rounded(6).border_1()
+      .border_color(this.inputFocused ? t.accent : t.hover).bg(t.hover).text_size(12.5).text_color(t.foreground);
+  }
+
+  // What the last edit said, under the add field.
+  messages(t) {
+    if (this.error) return [div().text_size(11).text_color(t.ansi1).child(this.say(this.error))];
+    return this.notice ? [div().text_size(11).text_color(t.dim).child(this.say(this.notice))] : [];
+  }
+
+  // One line per source with a problem: rate limited, unreachable, timed out, refused.
+  problemLines(t) {
+    return this.watch.problems().map((problem) => div().text_size(11).text_color(t.blocked).child(this.say(problem)));
+  }
+
+  // What a row shows, whichever layout draws it.
+  rowData(t, symbol, now) {
+    const w = this.watch;
+    const quote = w.shown(symbol);
+    const fresh = quote && freshness(quote, sessionOf(quote, now), now);
+    // A closed label carries its own date; any other quote from an earlier day gets one.
+    const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, this.lang) : "";
+    return {
+      quote,
+      failed: w.errors[symbol],
       // The real-time source failed for this symbol: the base quote shows, with the reason.
-      const fallback = w.overlayErrors[symbol];
+      fallback: w.overlayErrors[symbol],
       // A US row past Finnhub's budget stays on Yahoo and says so.
-      const overCap = w.overCap(symbol);
-      const fresh = quote && freshness(quote, sessionOf(quote, now), now);
-      // A closed label carries its own date; any other quote from an earlier day gets one.
-      const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, this.lang) : "";
-      const meta = quote ? rowMeta(symbol, [this.freshnessLabel(quote, fresh, now), stale && this.tx("quote.asOf", { date: stale }), displayName(quote, this.lang)])
-        .join(" · ") : "";
-      const dot = quote && this.dot(t, fresh.state);
-      const color = quote ? this.changeColor(t, quote.changePercent) : t.dim;
-      const dragged = this.drag?.symbol === symbol;
-      const next = symbols[index + 1] ?? null;
-      return h_flex().id(`bw-line-${symbol}`).relative().pl(0).pr(10).gap(6).items_center()
-        .when(dragged, (el) => el.bg(t.raised))
-        .when(!this.drag, (el) => el.hover((s) => s.bg(t.hover)))
-        .on_hover((hovered, cx) => {
-          if (hovered) this.hovered = symbol;
-          else if (this.hovered === symbol) this.hovered = null;
-          cx.notify();
-        })
-        .on_mouse_move((e, cx) => {
-          if (!this.drag || !e.bounds) return;
-          // Upper half: in front of this row; lower half: in front of the next one.
-          const before = e.local_position.y < e.bounds.height / 2 ? symbol : next;
-          if (before === this.drag.before) return;
-          this.drag.before = before;
-          cx.notify();
-        })
-        // Where the dragged row would land: a 2 px accent bar in front of `before`, or after the last row.
-        .when(this.drag && !this.dropsInPlace() && this.drag.before === symbol, (el) => el.child(this.dropBar(t).top(0)))
-        .when(this.drag && !this.dropsInPlace() && this.drag.before === null && next === null, (el) => el.child(this.dropBar(t).bottom(0)))
-        .when(dragged, (el) => el.child(div().absolute().top(0).left(0).right(0).bottom(0).border_1().border_color(t.border)))
-        // The handle takes its place only under the pointer; the slot stays so the row does not shift.
-        // It is the whole row tall and 22 px wide, so it is easy to grab.
-        .child(div().id(`bw-handle-${symbol}`).flex_none().w(22).self_stretch().flex().items_center().justify_center()
-          .text_size(15).text_color(t.dim)
-          .when(dragged || (!this.drag && this.hovered === symbol), (el) => el
-            .hover((s) => s.text_color(t.foreground))
-            .when(dragged, (h) => h.text_color(t.foreground).cursor_grabbing())
-            .when(!dragged, (h) => h.cursor_grab())
-            .on_mouse_down("left", (_e, cx) => {
-              cx.stop_propagation();
-              this.drag = { symbol, before: symbol };
-              cx.notify();
-            })
-            .child("⋮⋮")))
-        // The row opens the ticker's day; × sits beside it, not inside it.
-        .child(v_flex().id(`bw-row-${symbol}`).flex_1().min_w(0).py(7).gap(3).when(Boolean(quote), (el) => el.cursor_pointer())
-          .on_click(() => this.openDetail(symbol))
-          .child(h_flex().gap(10).items_center()
-            .child(v_flex().flex_1().min_w(0).gap(1)
-              .child(div().font_semibold().truncate().child(symbol))
-              .when(Boolean(meta), (el) => el.child(h_flex().gap(5).items_center()
-                .when(Boolean(dot), (row) => row.child(dot))
-                .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(meta)))))
-            .when(Boolean(quote), (el) => el.child(this.chart(quote, color, t, { width: 56, height: 22 })))
-            .child(v_flex().flex_none().w(108).gap(1)
-              .child(div().text_right().text_color(quote && !failed ? t.foreground : t.dim)
-                .child(quote ? formatPrice(quote) : this.tx(failed ? "row.unavailable" : paused ? "row.notFetched" : "row.waiting")))
-              .child(div().text_right().text_size(11).text_color(color)
-                .child(quote ? formatChange(quote.changePercent) : "—"))))
-          .when(Boolean(failed), (el) => el.child(div().text_size(11).text_color(t.blocked)
-            .child(quote ? this.tx("quote.cached", { reason: this.say(failed) }) : this.say(failed))))
-          .when(Boolean(fallback), (el) => el.child(div().text_size(11).text_color(t.blocked)
-            .child(quote ? this.fallbackText(quote, fallback) : this.say(fallback))))
-          .when(overCap, (el) => el.child(div().text_size(11).text_color(t.dim)
-            .child(this.tx("finnhub.overCap", { cap: finnhubCap(this.settings.sources.us.budgetPerMinute) })))))
-        .child(div().id(`bw-remove-${symbol}`).flex_none().w(14).text_right().text_color(t.dim).cursor_pointer()
-          .hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => this.act(cx, () => this.watch.remove(symbol)))
-          .child("×"));
-    });
+      overCap: w.overCap(symbol),
+      label: quote ? this.freshnessLabel(quote, fresh, now) : "",
+      date: stale ? this.tx("quote.asOf", { date: stale }) : "",
+      name: quote ? displayName(quote, this.lang) : null,
+      dot: quote && this.dot(t, fresh.state),
+      color: quote ? this.changeColor(t, quote.changePercent) : t.dim,
+    };
+  }
 
-    const list = v_flex().id("bw-list").flex_1().min_h(0).pt(8).overflow_y_scrollbar()
-      // No pointer capture: a release outside the list never arrives, so leaving the list cancels.
+  // Under a row: a cached quote's reason, a real-time source's fallback, Finnhub's budget.
+  rowNotes(t, { quote, failed, fallback, overCap }) {
+    return [
+      failed && div().text_size(11).text_color(t.blocked).child(quote ? this.tx("quote.cached", { reason: this.say(failed) }) : this.say(failed)),
+      fallback && div().text_size(11).text_color(t.blocked).child(quote ? this.fallbackText(quote, fallback) : this.say(fallback)),
+      overCap && div().text_size(11).text_color(t.dim).child(this.tx("finnhub.overCap", { cap: finnhubCap(this.settings.sources.us.budgetPerMinute) })),
+    ].filter(Boolean);
+  }
+
+  // `value` (the price by default) without its currency, for a fixed right-aligned column.
+  number(quote, value = quote.price) {
+    return typeof value === "number" && value > 0 ? formatPrice({ ...quote, price: value, currency: null }) : "—";
+  }
+
+  // The day's change in the price's own units: `+3.58`, `-1,234.56`.
+  signed(quote) {
+    if (!(quote.previousClose > 0)) return "—";
+    const change = quote.price - quote.previousClose;
+    const size = Math.abs(change) > 0 ? formatPrice({ ...quote, price: Math.abs(change), currency: null }) : "0.00";
+    return `${change >= 0 ? "+" : "-"}${size}`;
+  }
+
+  // Before the first quote: why there is none yet.
+  waiting(row) {
+    return this.tx(row.failed ? "row.unavailable" : this.watch.preferences.paused ? "row.notFetched" : "row.waiting");
+  }
+
+  // The price over the change, both right-aligned on the number; the currency hangs in its own slot.
+  priceStack(t, row) {
+    const { quote, failed, color } = row;
+    if (!quote) return div().flex_none().w(NUMBER_W + CODE_W).pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(this.waiting(row));
+    return v_flex().flex_none().gap(2)
+      .child(h_flex().items_baseline()
+        .child(div().flex_none().w(NUMBER_W).text_right().whitespace_nowrap().text_color(failed ? t.dim : t.foreground).child(this.number(quote)))
+        .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? "")))
+      .child(div().flex_none().w(NUMBER_W).text_right().text_size(11).text_color(color).child(formatChange(quote.changePercent)));
+  }
+
+  // A row: the drag handle in the left gutter and × in the right one, both only under the pointer; between
+  // them the body, which opens the ticker's day. Hairlines between rows span the body only.
+  rowFrame(t, symbol, index, symbols, body, clickable) {
+    const dragged = this.drag?.symbol === symbol;
+    const next = symbols[index + 1] ?? null;
+    const controls = dragged || (!this.drag && this.hovered === symbol);
+    const moving = Boolean(this.drag) && !this.dropsInPlace();
+    return h_flex().id(`bw-line-${symbol}`).relative().items_stretch()
+      .when(dragged, (el) => el.bg(t.raised))
+      .when(!this.drag, (el) => el.hover((s) => s.bg(t.hover)))
+      .on_hover((hovered, cx) => {
+        if (hovered) this.hovered = symbol;
+        else if (this.hovered === symbol) this.hovered = null;
+        cx.notify();
+      })
+      .on_mouse_move((e, cx) => {
+        if (!this.drag || !e.bounds) return;
+        // Upper half: in front of this row; lower half: in front of the next one.
+        const before = e.local_position.y < e.bounds.height / 2 ? symbol : next;
+        if (before === this.drag.before) return;
+        this.drag.before = before;
+        cx.notify();
+      })
+      // Where the dragged row would land: a 2 px accent line in front of `before`, or after the last row.
+      .when(moving && this.drag?.before === symbol, (el) => el.child(this.dropBar(t).top(0)))
+      .when(moving && this.drag?.before === null && next === null, (el) => el.child(this.dropBar(t).bottom(0)))
+      .when(dragged, (el) => el.child(div().absolute().top(0).left(0).right(0).bottom(0).border_1().border_color(t.border)))
+      // The handle fills its gutter for the row's whole height, so it is easy to grab; the slot stays when hidden.
+      .child(div().id(`bw-handle-${symbol}`).flex_none().w(GUTTER).flex().items_center().justify_center().text_color(t.dim)
+        .when(controls, (el) => el
+          .hover((s) => s.text_color(t.foreground))
+          .when(dragged, (h) => h.text_color(t.foreground).cursor_grabbing())
+          .when(!dragged, (h) => h.cursor_grab())
+          .on_mouse_down("left", (_e, cx) => {
+            cx.stop_propagation();
+            this.drag = { symbol, before: symbol };
+            cx.notify();
+          })
+          .child(svg(icon("grip")).w(14).h(14))))
+      .child(body.id(`bw-row-${symbol}`).flex_1().min_w(0)
+        .when(next !== null, (el) => el.border_b(1).border_color(t.border))
+        .when(clickable, (el) => el.cursor_pointer())
+        .on_click(() => this.openDetail(symbol)))
+      // × sits beside the body, not inside it.
+      .child(div().id(`bw-remove-${symbol}`).flex_none().w(GUTTER).flex().items_center().justify_center().text_color(t.dim)
+        .when(controls && !dragged, (el) => el.cursor_pointer().hover((s) => s.text_color(t.foreground))
+          .tooltip(this.tx("button.remove"))
+          .on_click((_e, cx) => this.act(cx, () => this.watch.remove(symbol)))
+          .child(svg(icon("close")).w(12).h(12))));
+  }
+
+  // The scrolling rows. No pointer capture: a release outside the list never arrives, so leaving it cancels a drag.
+  list(t, rows) {
+    return v_flex().id("bw-list").flex_1().min_h(0).overflow_y_scrollbar()
       .on_hover((hovered, cx) => {
         if (hovered || !this.drag) return;
         this.drag = null;
@@ -515,18 +625,138 @@ export default class Bellwether extends View {
         if (inPlace) cx.notify();
         else this.act(cx, () => this.watch.move(drag.symbol, drag.before));
       })
-      .when(!symbols.length, (el) => el.child(div().px(12).py(6).text_color(t.dim)
-        .child(this.tx("list.empty"))))
+      .when(!rows.length, (el) => el.child(div().px(GUTTER).py(8).text_color(t.dim).child(this.tx("list.empty"))))
       .children(rows);
+  }
 
-    const crypto = symbols.some(isCryptoPair);
-    const footer = v_flex().flex_none().px(12).py(10).gap(8).border_t(1).border_color(t.border)
-      .child(div().id("bw-disclaimer").text_size(10.5).text_color(t.dim).truncate().cursor_pointer()
-        .hover((s) => s.text_color(t.foreground)).on_click(() => this.openSettings("disclaimer"))
-        .child(this.tx(this.size && this.size.width >= SHORT_FOOTER_WIDTH ? "footer.long" : "footer.short")))
-      .child(div().text_size(10.5).text_color(t.dim).child(this.tx(crypto ? "footer.sourcesCrypto" : "footer.sources")));
+  // One line: the disclaimer, which opens the settings' disclaimer tab.
+  footer(t) {
+    const short = this.size && this.size.width < SHORT_FOOTER_WIDTH;
+    return div().flex_none().px(GUTTER)
+      .child(div().id("bw-disclaimer").py(10).border_t(1).border_color(t.border).text_size(11).text_color(t.dim).truncate()
+        .cursor_pointer().hover((s) => s.text_color(t.foreground)).on_click(() => this.openSettings("disclaimer"))
+        .child(this.tx(short ? "footer.short" : "footer.long")));
+  }
 
-    return root.child(header).child(field).child(list).child(footer);
+  // Below TABLE_MIN_WIDTH: the header, the status line, the add field, two-line rows, the footer.
+  sidebar(root, t) {
+    const { symbols } = this.watch.preferences;
+    const now = Date.now();
+    const header = v_flex().flex_none().px(GUTTER).pt(10).gap(2)
+      .child(h_flex().h(28).items_center().gap(8)
+        .child(this.brand(t))
+        .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(this.countText()))
+        .child(this.headerIcons(t)))
+      .child(div().truncate().text_size(11).text_color(t.dim).child(this.statusText()))
+      .children(this.problemLines(t));
+    const field = v_flex().flex_none().px(GUTTER).pt(12).gap(6)
+      .when(!this.settings.languagePromptDismissed, (el) => el.child(this.languagePrompt(t)))
+      .child(this.addField(t))
+      .children(this.messages(t));
+    const rows = symbols.map((symbol, index) => this.sidebarRow(t, symbol, index, symbols, now));
+    return root.child(header).child(field).child(this.list(t, rows).pt(8)).child(this.footer(t));
+  }
+
+  // Symbol over freshness and name on the left; the line, then the price over the change, at a fixed
+  // width on the right, so a wider pane gives its room to the name.
+  sidebarRow(t, symbol, index, symbols, now) {
+    const row = this.rowData(t, symbol, now);
+    const meta = row.quote ? rowMeta(symbol, [row.label, row.date, row.name]).join(" · ") : "";
+    const body = v_flex().py(8).gap(2)
+      .child(h_flex().gap(12).items_center()
+        .child(v_flex().flex_1().min_w(0).gap(2)
+          .child(div().font_semibold().truncate().child(symbol))
+          .when(Boolean(meta), (el) => el.child(h_flex().gap(6).items_center()
+            .when(Boolean(row.dot), (line) => line.child(row.dot))
+            .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(meta)))))
+        .child(row.quote ? this.chart(row.quote, row.color, t, SPARK) : div().flex_none().w(SPARK.width).h(SPARK.height))
+        .child(this.priceStack(t, row)))
+      .children(this.rowNotes(t, row));
+    return this.rowFrame(t, symbol, index, symbols, body, Boolean(row.quote));
+  }
+
+  // A table cell at its column's width.
+  cell(id, nameW) {
+    return div().flex_none().w(id === "name" ? nameW : TABLE_COLUMNS.find((column) => column.id === id).width);
+  }
+
+  // From TABLE_MIN_WIDTH: one header line, column labels that stay while the rows scroll, 36 px rows. At most
+  // TABLE_MAX_WIDTH wide, centered; columns drop by DROP_ORDER when the width cannot hold them.
+  table(root, t) {
+    const { symbols } = this.watch.preferences;
+    const now = Date.now();
+    const width = Math.min(this.size.width, TABLE_MAX_WIDTH);
+    const columns = tableColumns(width);
+    const nameW = nameWidth(width, columns);
+    const notes = [
+      ...(this.settings.languagePromptDismissed ? [] : [this.languagePrompt(t)]),
+      ...this.messages(t),
+      ...this.problemLines(t),
+    ];
+    const header = h_flex().flex_none().px(GUTTER).pt(10).gap(12).items_center()
+      .child(this.brand(t))
+      .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(`${this.countText()} · ${this.statusText()}`))
+      .child(div().flex_none().w(320).child(this.addField(t)))
+      .child(this.headerIcons(t));
+    const rows = symbols.map((symbol, index) => this.tableRow(t, symbol, index, symbols, columns, nameW, now));
+    const frame = v_flex().w(width).flex_1().min_h(0)
+      .child(header)
+      .when(notes.length > 0, (el) => el.child(v_flex().flex_none().px(GUTTER).pt(8).gap(4).children(notes)))
+      .child(this.tableHead(t, columns, nameW))
+      .child(this.list(t, rows))
+      .child(this.footer(t));
+    return root.items_center().child(frame);
+  }
+
+  tableHead(t, columns, nameW) {
+    const labels = {
+      symbol: "table.symbol", name: "table.name", state: "table.state", line: "table.line", price: "table.price",
+      change: "table.change", changePct: "table.changePct", high: "detail.high", low: "detail.low", prevClose: "detail.prevClose",
+    };
+    return div().flex_none().px(GUTTER).pt(12)
+      .child(h_flex().h(28).items_center().gap(COLUMN_GAP).border_b(1).border_color(t.border).text_size(11).text_color(t.dim)
+        .children(columns.map((id) => {
+          const right = TABLE_COLUMNS.find((column) => column.id === id).align === "right";
+          // Over the number, not the currency slot; over the state's text, past its dot.
+          return this.cell(id, nameW).truncate().when(right, (el) => el.text_right())
+            .when(id === "price", (el) => el.pr(CODE_W)).when(id === "state", (el) => el.pl(12))
+            .child(this.tx(labels[id]));
+        })));
+  }
+
+  tableRow(t, symbol, index, symbols, columns, nameW, now) {
+    const row = this.rowData(t, symbol, now);
+    const { quote, color } = row;
+    // As the sidebar's line: a name that begins with the label (a pair's "Binance Spot") replaces it.
+    const named = row.name && row.name !== symbol ? row.name : "";
+    const merged = Boolean(named && row.label && named.startsWith(row.label));
+    const state = [merged ? named : row.label, row.date].filter(Boolean).join(" · ");
+    const cell = (id) => this.cell(id, nameW);
+    const figure = (id, value) => cell(id).text_right().whitespace_nowrap().text_color(t.muted).child(quote ? this.number(quote, value) : "");
+    const cells = {
+      symbol: () => cell("symbol").font_semibold().truncate().child(symbol),
+      name: () => cell("name").text_color(t.muted).truncate().child(merged ? "" : named),
+      state: () => h_flex().flex_none().w(TABLE_COLUMNS.find((column) => column.id === "state").width).gap(6).items_center()
+        .child(div().flex_none().w(6).h(6).when(Boolean(row.dot), (el) => el.child(row.dot)))
+        .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(state)),
+      line: () => (quote ? this.chart(quote, color, t, TABLE_SPARK) : cell("line")),
+      price: () => (quote
+        ? h_flex().flex_none().w(TABLE_COLUMNS.find((column) => column.id === "price").width).items_baseline()
+          .child(div().flex_1().min_w(0).text_right().whitespace_nowrap().text_color(row.failed ? t.dim : t.foreground).child(this.number(quote)))
+          .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? ""))
+        : cell("price").pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(this.waiting(row))),
+      change: () => cell("change").text_right().whitespace_nowrap().text_color(color).child(quote ? this.signed(quote) : ""),
+      changePct: () => cell("changePct").text_right().whitespace_nowrap().text_color(color).child(quote ? formatChange(quote.changePercent) : ""),
+      high: () => figure("high", quote?.high),
+      low: () => figure("low", quote?.low),
+      // A pair's reference is the price 24 hours back, not a close: left out here, as in the detail.
+      prevClose: () => figure("prevClose", quote && !isCryptoPair(symbol) ? quote.previousClose : null),
+    };
+    const notes = this.rowNotes(t, row);
+    const body = v_flex()
+      .child(h_flex().h(36).items_center().gap(COLUMN_GAP).children(columns.map((id) => cells[id]())))
+      .when(notes.length > 0, (el) => el.child(v_flex().pb(8).gap(2).children(notes)));
+    return this.rowFrame(t, symbol, index, symbols, body, Boolean(quote));
   }
 
   // The drag would put the row where it already is: in front of itself or of the row after it.
@@ -537,7 +767,7 @@ export default class Bellwether extends View {
   }
 
   dropBar(t) {
-    return div().absolute().left(0).right(0).h(2).bg(t.accent);
+    return div().absolute().left(GUTTER).right(GUTTER).h(2).bg(t.accent);
   }
 
   // "Showing Yahoo · <reason>": a real-time price was dropped, so the row shows its base quote.
@@ -551,7 +781,6 @@ export default class Bellwether extends View {
     const now = Date.now();
     const color = this.changeColor(t, q.changePercent);
     const session = sessionOf(q, now);
-    const sessionColor = session === "open" || session === "24h" ? t.ansi2 : session === "closed" || session === "unknown" ? t.dim : t.working;
     const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
     const stale = formatStaleDate(q.timestamp, now, this.lang);
     const source = detailSource(q, session, now, (key, params) => this.tx(key, params));
@@ -566,9 +795,8 @@ export default class Bellwether extends View {
         .child(v_flex().flex_1().min_w(0).gap(2)
           .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
           .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, this.lang) ?? "")))
-        .child(h_flex().flex_none().gap(6).items_center().px(8).h(22).rounded(11).border_1().border_color(t.border)
-          .child(div().w(6).h(6).rounded_full().bg(sessionColor))
-          .child(div().text_size(11).text_color(sessionColor).child(this.tx(`session.${session}`))))
+        // The session as plain text: a filled dot means a live quote, everywhere.
+        .child(div().flex_none().text_size(11).text_color(t.muted).child(this.tx(`session.${session}`)))
         .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
           .hover((s) => s.text_color(t.foreground)).on_click(() => closeOverlay(this.overlay)).child("×")))
       .child(h_flex().gap(10).items_end()
@@ -597,7 +825,7 @@ export default class Bellwether extends View {
     const errors = this.draftErrors();
     const invalid = Object.keys(errors).length > 0 || !this.keyLoaded || this.saving;
     const tabs = v_flex().flex_none().w(168).p(10).gap(2).border_r(1).border_color(t.border)
-      .child(div().px(8).pb(8).text_size(13).font_semibold().text_color(t.accent).child(this.tx("settings.title")))
+      .child(div().px(8).pb(8).text_size(13).font_semibold().text_color(t.foreground).child(this.tx("settings.title")))
       .children(SETTINGS_TABS.map((tab) => h_flex().id(`bw-tab-${tab}`).px(8).h(28).items_center().rounded(5).cursor_pointer()
         .text_color(tab === this.tab ? t.foreground : t.muted).when(tab === this.tab, (el) => el.bg(t.hover).font_semibold())
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
@@ -798,6 +1026,8 @@ export default class Bellwether extends View {
       .child(div().font_semibold().child(this.tx("disclaimer.title")))
       .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct"].map(paragraph))
       .child(this.note(t, this.tx("disclaimer.prevails")))
+      .child(div().mt(8).font_semibold().child(this.tx("disclaimer.sourcesTitle")))
+      .children(["disclaimer.sourcesStocks", "disclaimer.sourcesCrypto"].map(paragraph))
       .child(div().mt(8).font_semibold().child(this.tx("privacy.title")))
       .children(["privacy.hosts", "privacy.programs", "privacy.storage", "privacy.finnhub"].map(paragraph));
   }

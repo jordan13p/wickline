@@ -64,3 +64,18 @@ export function nameWidth(width, ids) {
   const room = Math.min(width, TABLE_MAX_WIDTH);
   return Math.max(NAME_MIN_WIDTH, Math.min(NAME_MAX_WIDTH, room - needed(ids) + NAME_MIN_WIDTH));
 }
+
+/**
+ * Where the copy in its own tab goes back to: a pane of the tab it was opened from (that tab's focused
+ * pane, else its first terminal, else any), else the focused pane, else any terminal. Never a
+ * Bellwether pane, whose tab may be the one about to close. `panes` as panes() gives them, `focused`
+ * as focused(); null: nowhere to go.
+ */
+export function returnPane(panes, fromTab, focused) {
+  const others = panes.filter((p) => p.mod !== "bellwether");
+  const home = others.filter((p) => p.tab === fromTab);
+  const there = home.find((p) => p.focused) ?? home.find((p) => p.terminal) ?? home[0];
+  if (there) return there.pane;
+  const focusedPane = focused?.pane && others.find((p) => p.pane === focused.pane);
+  return (focusedPane ?? others.find((p) => p.terminal))?.pane ?? null;
+}
