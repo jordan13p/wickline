@@ -56,13 +56,14 @@ export function finnhubChosen(settings) {
 }
 
 /**
- * What Save does with the Finnhub key, given the US source chosen, the key field (trimmed) and the key
- * saved now (null: none): "write" a new key while Finnhub is chosen, "remove" the saved key when the
- * field is cleared with Yahoo chosen, else null. Choosing Yahoo alone keeps the key.
+ * What Save does with the Finnhub key, given the US source chosen, the key field (trimmed), whether a
+ * key is saved now and whether the person pressed Remove (the dialog never holds the saved key): "write"
+ * a typed key while Finnhub is chosen, "remove" the saved key after Remove with nothing typed, else null.
+ * An empty field keeps the saved key; choosing Yahoo alone keeps it too.
  */
-export function keyChange({ provider, typed, saved }) {
-  if (provider === "finnhub") return typed !== (saved ?? "") ? "write" : null;
-  return typed === "" && saved !== null ? "remove" : null;
+export function keyChange({ provider, typed, saved, removing }) {
+  if (provider === "finnhub" && typed !== "") return "write";
+  return removing && saved ? "remove" : null;
 }
 
 /** MIS is on only when chosen and consented to for the current statement. */
@@ -86,11 +87,17 @@ const URL_FIELDS = [
 // The host has at least one letter or digit and no `@` (a password in the address would be sent as is).
 const HTTPS_ADDRESS = /^https:\/\/[^\s/?#@]*[a-z0-9][^\s/?#@]*(\/[^\s?#]*)?$/i;
 
+// A key as typed, trimmed: no spaces or control characters inside, and a loose length bound (a key in
+// Finnhub's current shape is 20 characters; a longer future one still fits).
+const KEY_MAX_LENGTH = 128;
+const KEY_BAD_CHARACTER = /[\s\x00-\x1f\x7f]/;
+
 /**
  * What stops a save: `{}` is valid. The text for each code is in i18n.js. `finnhubKey` is the key
- * the dialog holds (it is never in the settings); without it the key is not checked.
+ * typed in the dialog (it is never in the settings; without it the key is not checked) and `keySaved`
+ * says a saved key stays after Save, so an empty field keeps it.
  */
-export function validateSettings(settings, { finnhubKey } = {}) {
+export function validateSettings(settings, { finnhubKey, keySaved = false } = {}) {
   const errors = {};
   for (const [path, get] of URL_FIELDS) {
     const value = get(settings);
@@ -103,7 +110,9 @@ export function validateSettings(settings, { finnhubKey } = {}) {
   if (settings.sources.us?.provider === "finnhub") {
     const budget = settings.sources.us.budgetPerMinute;
     if (!Number.isInteger(budget) || budget < MIN_FINNHUB_BUDGET) errors["sources.us.budgetPerMinute"] = "budget.tooSmall";
-    if (typeof finnhubKey === "string" && !finnhubKey.trim()) errors["sources.us.key"] = "finnhub.keyNeeded";
+    const key = typeof finnhubKey === "string" ? finnhubKey.trim() : null;
+    if (key === "" && !keySaved) errors["sources.us.key"] = "finnhub.keyNeeded";
+    else if (key && (KEY_BAD_CHARACTER.test(key) || key.length > KEY_MAX_LENGTH)) errors["sources.us.key"] = "finnhub.keyInvalid";
   }
   // MIS cannot be saved without ticking the consent box.
   if (settings.sources.tw && misReconfirm(settings)) errors["sources.tw.misAck"] = "mis.consentNeeded";

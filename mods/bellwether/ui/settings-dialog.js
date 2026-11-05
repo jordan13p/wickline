@@ -21,7 +21,7 @@ export function settingsView(view, t) {
     .children(SETTINGS_TABS.map((tab) => h_flex().id(`bw-tab-${tab}`).px(8).h(28).items_center().rounded(5).cursor_pointer()
       .text_color(tab === view.tab ? t.foreground : t.muted).when(tab === view.tab, (el) => el.bg(t.hover).font_semibold())
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
-      .on_click((_e, cx) => { view.tab = tab; cx.notify(); }).child(view.tx(`settings.tab.${tab}`))));
+      .on_click((_e, cx) => { view.tab = tab; view.maskKey(); cx.notify(); }).child(view.tx(`settings.tab.${tab}`))));
   const pane = v_flex().id("bw-settings-pane").flex_1().min_w(0).min_h(0).p(18).gap(14).overflow_y_scrollbar()
     .child(TABS[view.tab](view, t, errors));
   const save = h_flex().id("bw-settings-save").flex_none().h(28).px(14).items_center().rounded(5).font_semibold()
@@ -72,19 +72,30 @@ function usCard(view, t, errors) {
       view.keyInput.set_masked(!view.keyShown);
       cx.notify();
     }));
+  // A saved key is never drawn: only its last four characters, and Remove (applied on Save).
+  const saved = view.keyEnding === null ? null : h_flex().gap(6).items_center()
+    .child(div().flex_1().min_w(0).truncate().text_size(12)
+      .text_color(view.keyRemoving ? t.dim : t.muted)
+      .child(view.tx(view.keyRemoving ? "sources.us.keyRemoving" : "sources.us.keySaved", { ending: view.keyEnding })))
+    .child(button(t, "bw-key-remove", view.tx(view.keyRemoving ? "sources.us.keyKeep" : "sources.us.keyRemoveButton"), (cx) => {
+      view.keyRemoving = !view.keyRemoving;
+      cx.notify();
+    }));
   const finnhubParts = chosen ? [
     div().text_size(11).text_color(t.muted).child(view.tx("sources.us.key")),
+    saved,
     key,
     keyError ? div().text_size(11.5).text_color(t.ansi1).child(view.tx(keyError)) : null,
+    saved && note(t, view.tx("sources.us.keyReplace")),
     note(t, view.tx("sources.us.keyNote")),
     ...field(view, t, view.tx("sources.us.url"), view.finnhubUrlInput, view.finnhubUrlFocused, errors["sources.us.finnhubUrl"]),
     ...field(view, t, view.tx("sources.us.budget"), view.budgetInput, view.budgetFocused, budgetError),
     budgetError ? null : note(t, view.tx("sources.us.cap", { cap: finnhubCap(us.budgetPerMinute) })),
     note(t, view.tx("sources.us.copies")),
-  ] : view.savedKey ? [
-    // Yahoo keeps a saved key; clearing the field and saving removes it.
+  ] : saved ? [
+    // Yahoo keeps a saved key; Remove and Save removes it.
     div().text_size(11).text_color(t.muted).child(view.tx("sources.us.key")),
-    key,
+    saved,
     note(t, view.tx("sources.us.keyRemove")),
   ] : [];
   return card(t, view.tx("sources.us.title"), view.tx(chosen ? "sources.us.finnhubSource" : "sources.us.yahooSource"),

@@ -193,14 +193,33 @@ test("the Finnhub address keeps the host finnhub.io; only its path can change", 
 });
 
 test("what a save does with the key", () => {
-  // Finnhub chosen: a new key is written; the same one is not written again.
-  assert.equal(keyChange({ provider: "finnhub", typed: "new-key", saved: "old-key" }), "write");
-  assert.equal(keyChange({ provider: "finnhub", typed: "new-key", saved: null }), "write");
-  assert.equal(keyChange({ provider: "finnhub", typed: "old-key", saved: "old-key" }), null);
-  // Yahoo chosen with the field cleared: the saved key is removed.
-  assert.equal(keyChange({ provider: "yahoo", typed: "", saved: "old-key" }), "remove");
-  // Yahoo alone keeps the key, also with another key typed; nothing to remove without a saved key.
-  assert.equal(keyChange({ provider: "yahoo", typed: "old-key", saved: "old-key" }), null);
-  assert.equal(keyChange({ provider: "yahoo", typed: "new-key", saved: "old-key" }), null);
-  assert.equal(keyChange({ provider: "yahoo", typed: "", saved: null }), null);
+  // The dialog never holds the saved key: a typed key replaces it while Finnhub is chosen.
+  assert.equal(keyChange({ provider: "finnhub", typed: "test-key-new", saved: true, removing: false }), "write");
+  assert.equal(keyChange({ provider: "finnhub", typed: "test-key-new", saved: false, removing: false }), "write");
+  assert.equal(keyChange({ provider: "finnhub", typed: "test-key-new", saved: true, removing: true }), "write");
+  // An empty field keeps the saved key.
+  assert.equal(keyChange({ provider: "finnhub", typed: "", saved: true, removing: false }), null);
+  // Remove, then Save: the saved key goes, with either source chosen.
+  assert.equal(keyChange({ provider: "yahoo", typed: "", saved: true, removing: true }), "remove");
+  assert.equal(keyChange({ provider: "finnhub", typed: "", saved: true, removing: true }), "remove");
+  // Yahoo alone keeps the key, also with a key left typed; nothing to remove without a saved key.
+  assert.equal(keyChange({ provider: "yahoo", typed: "", saved: true, removing: false }), null);
+  assert.equal(keyChange({ provider: "yahoo", typed: "test-key-new", saved: true, removing: false }), null);
+  assert.equal(keyChange({ provider: "yahoo", typed: "", saved: false, removing: true }), null);
+});
+
+test("a typed key is trimmed, has no spaces inside and at most 128 characters", () => {
+  const check = (finnhubKey, keySaved = false) => validateSettings(us({ provider: "finnhub" }), { finnhubKey, keySaved });
+  assert.deepEqual(check("  test-key-0123  "), {});
+  assert.deepEqual(check("t".repeat(128)), {});
+  for (const bad of ["test key", "test-key\n2", "test\tkey", "t".repeat(129), "test\u0000key"]) {
+    assert.deepEqual(check(bad), { "sources.us.key": "finnhub.keyInvalid" }, JSON.stringify(bad));
+  }
+  // An empty field is the saved key, if there is one (and it is not being removed).
+  assert.deepEqual(check("", true), {});
+  assert.deepEqual(check("", false), { "sources.us.key": "finnhub.keyNeeded" });
+  assert.deepEqual(check("test key", true), { "sources.us.key": "finnhub.keyInvalid" });
+  // Not checked while Yahoo is chosen: there is no field to type in.
+  assert.deepEqual(validateSettings(us({ provider: "yahoo" }), { finnhubKey: "test key", keySaved: true }), {});
+  for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.keyInvalid"], lang);
 });

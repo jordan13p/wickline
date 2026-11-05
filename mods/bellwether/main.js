@@ -28,6 +28,8 @@ const secretsDir = () => `${appHome()}/data/bellwether`;
 // Herdr's process runner, for the one program Bellwether runs: `chmod 600` on that file after each write.
 const system = { platform, run: runProgram };
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
+// The dialog reads only what it may show of a saved key, never the key.
+const loadSecretEnding = (name) => secrets.loadSecretEnding(fs, secretsDir(), name);
 // Both resolve false when the file could not be made owner-only (it is written all the same).
 const saveSecret = (name, value) => secrets.saveSecret(fs, system, secretsDir(), name, value);
 const removeSecret = (name) => secrets.removeSecret(fs, system, secretsDir(), name);
@@ -141,18 +143,24 @@ export default class Bellwether extends View {
     input.on("blur", (_e, cx) => { this[flag] = false; cx.notify(); });
   }
 
-  // The key input starts empty and masked; the saved key fills it once read. Save waits for that read,
-  // so an unchanged key is never written again and a missing one is never taken for a cleared one.
+  // The key input is for a new key only: it starts empty and masked, and a saved key is shown as its last
+  // four characters (keyEnding; null: none saved). Save waits for that read, so a missing key is never
+  // taken for a saved one.
   initFinnhubDraft(cx) {
-    this.savedKey = null;
+    this.keyEnding = null;
     this.keyLoaded = false;
+    this.keyShown = false;
+    // Remove was pressed: the saved key goes on Save; Cancel drops it with the rest of the draft.
+    this.keyRemoving = false;
     // `{ code, params }` once the key was saved but could not be made owner-only.
     this.keyWarning = null;
-    this.keyShown = false;
     this.keyInput = InputState.new({ placeholder: this.tx("sources.us.key") });
     this.keyInput.set_masked(true);
     this.keyInput.on("change", (_e, cx) => cx.notify());
-    this.trackFocus(this.keyInput, "keyFocused");
+    // Shown text is masked again as soon as the field loses the focus.
+    this.keyFocused = false;
+    this.keyInput.on("focus", (_e, cx) => { this.keyFocused = true; cx.notify(); });
+    this.keyInput.on("blur", (_e, cx) => { this.keyFocused = false; this.maskKey(); cx.notify(); });
     this.finnhubUrlInput = InputState.new({ placeholder: FINNHUB_URL, value: this.draft.sources.us.finnhubUrl });
     this.finnhubUrlInput.on("change", (_e, cx) => { this.draft.sources.us.finnhubUrl = this.finnhubUrlInput.value(); cx.notify(); });
     this.trackFocus(this.finnhubUrlInput, "finnhubUrlFocused");
@@ -165,16 +173,24 @@ export default class Bellwether extends View {
     });
     this.trackFocus(this.budgetInput, "budgetFocused");
     cx.spawn(async (cx) => {
-      try {
-        this.savedKey = await loadSecret(SECRET_KEY_FINNHUB);
-      } catch {
-        // Unreadable: the card shows the panel's problem; a key saved now replaces the file.
-        this.savedKey = null;
-      }
-      if (this.savedKey) this.keyInput.set_value(this.savedKey);
+      await this.readKeyEnding();
       this.keyLoaded = true;
       cx.notify();
     });
+  }
+
+  async readKeyEnding() {
+    try {
+      this.keyEnding = await loadSecretEnding(SECRET_KEY_FINNHUB);
+    } catch {
+      // Unreadable: the card shows the panel's problem; a key saved now replaces the file.
+      this.keyEnding = null;
+    }
+  }
+
+  maskKey() {
+    this.keyShown = false;
+    this.keyInput.set_masked(true);
   }
 
   // The input's placeholder is fixed when it is made, so a new language needs a new input
@@ -330,17 +346,17 @@ export default class Bellwether extends View {
 
   // What stops a save, the key the dialog holds included (it is never in the draft).
   draftErrors() {
-    return validateSettings(this.draft, { finnhubKey: this.keyInput.value() });
+    return validateSettings(this.draft, { finnhubKey: this.keyInput.value(), keySaved: this.keyEnding !== null && !this.keyRemoving });
   }
 
   // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay. A new
-  // Finnhub key goes to the secrets file first (or, cleared with Yahoo chosen, leaves it), then keyRev + 1
+  // Finnhub key goes to the secrets file first (or, after Remove, leaves it), then keyRev + 1
   // tells every copy to read it again.
   saveDraft(cx) {
     if (Object.keys(this.draftErrors()).length || !this.keyLoaded || this.saving) return;
     const { language, colors, sources } = this.draft;
     const key = this.keyInput.value().trim();
-    const change = keyChange({ provider: sources.us.provider, typed: key, saved: this.savedKey });
+    const change = keyChange({ provider: sources.us.provider, typed: key, saved: this.keyEnding !== null, removing: this.keyRemoving });
     this.saving = true;
     this.error = null;
     cx.spawn(async (cx) => {
@@ -372,7 +388,9 @@ export default class Bellwether extends View {
       if (!ownerOnly) {
         // Saved, but other accounts may read the file: the dialog stays open to say so, and Save closes it.
         this.saving = false;
-        this.savedKey = change === "write" ? key : null;
+        this.keyInput.set_value("");
+        this.keyRemoving = false;
+        await this.readKeyEnding();
         this.keyWarning = { code: "finnhub.keyUnprotected", params: {} };
         this.tab = "sources";
         cx.notify();
