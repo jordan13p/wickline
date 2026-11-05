@@ -223,3 +223,16 @@ test("a typed key is trimmed, has no spaces inside and at most 128 characters", 
   assert.deepEqual(validateSettings(us({ provider: "yahoo" }), { finnhubKey: "test key", keySaved: true }), {});
   for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.keyInvalid"], lang);
 });
+
+test("the key texts say what lifts a stop, what Remove needs and that a chmod warning loses nothing", () => {
+  // Any change to the US settings (or a new key) lifts finnhub.redirected, not only the source.
+  assert.match(STRINGS.en["finnhub.redirected"], /US settings/);
+  assert.match(STRINGS["zh-TW"]["finnhub.redirected"], /美股設定/);
+  // Remove with Finnhub chosen blocks Save until a key is typed or Yahoo is chosen.
+  assert.match(STRINGS.en["sources.us.keyRemoveHint"], /Yahoo/);
+  // The warning comes after both saves, so Cancel is safe.
+  assert.match(STRINGS.en["finnhub.keyUnprotected"], /settings and the key are saved/);
+  for (const lang of Object.keys(STRINGS)) {
+    for (const key of ["sources.us.keyRemoveHint", "finnhub.keyUnprotected", "finnhub.redirected"]) assert.ok(STRINGS[lang][key], `${lang} ${key}`);
+  }
+});

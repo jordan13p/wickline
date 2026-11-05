@@ -86,7 +86,7 @@ function usCard(view, t, errors) {
     saved,
     key,
     keyError ? div().text_size(11.5).text_color(t.ansi1).child(view.tx(keyError)) : null,
-    saved && note(t, view.tx("sources.us.keyReplace")),
+    saved && note(t, view.tx(view.keyRemoving ? "sources.us.keyRemoveHint" : "sources.us.keyReplace")),
     note(t, view.tx("sources.us.keyNote")),
     ...field(view, t, view.tx("sources.us.url"), view.finnhubUrlInput, view.finnhubUrlFocused, errors["sources.us.finnhubUrl"]),
     ...field(view, t, view.tx("sources.us.budget"), view.budgetInput, view.budgetFocused, budgetError),
