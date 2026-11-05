@@ -55,6 +55,16 @@ export function finnhubChosen(settings) {
   return settings.sources.us.provider === "finnhub";
 }
 
+/**
+ * What Save does with the Finnhub key, given the US source chosen, the key field (trimmed) and the key
+ * saved now (null: none): "write" a new key while Finnhub is chosen, "remove" the saved key when the
+ * field is cleared with Yahoo chosen, else null. Choosing Yahoo alone keeps the key.
+ */
+export function keyChange({ provider, typed, saved }) {
+  if (provider === "finnhub") return typed !== (saved ?? "") ? "write" : null;
+  return typed === "" && saved !== null ? "remove" : null;
+}
+
 /** MIS is on only when chosen and consented to for the current statement. */
 export function misEnabled(settings) {
   return settings.sources.tw.provider === "mis" && settings.sources.tw.misAck?.version === MIS_CONSENT_VERSION;

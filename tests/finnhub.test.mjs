@@ -352,6 +352,32 @@ test("only Finnhub's requests carry the key", async () => {
   }
 });
 
+test("a removed key leaves every copy's memory", async () => {
+  // Removed with Yahoo chosen (the dialog's way) or with Finnhub still chosen (the file deleted, keyRev bumped).
+  for (const provider of ["yahoo", "finnhub"]) {
+    const host = usHost();
+    const w = new Watchlist(host);
+    w.add("AAPL");
+    const runs = start(w, host);
+    await advance(host, 1_000);
+    assert.equal(w.finnhubKey, KEY);
+    assert.ok(finnhubCount(host) > 0);
+    host.secrets = {};
+    host.prefs = { version: 1, keyRev: 1, sources: { us: { provider } } };
+    assert.equal(w.sync(), true);
+    await advance(host, 2_000);
+    assert.equal(w.finnhubKey, null, provider);
+    const sent = host.requests.length;
+    await advance(host, 62_000);
+    assert.ok(host.requests.length > sent);
+    for (const [i, url] of host.requests.entries()) {
+      if (i >= sent) assert.equal(host.headers[i]["X-Finnhub-Token"], undefined, url);
+    }
+    assert.equal(w.shown("AAPL").source, "yahoo");
+    await stop(w, host, runs);
+  }
+});
+
 // ---- helpers ----
 
 function finnhubOn(us = {}, keyRev = 0) {

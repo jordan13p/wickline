@@ -147,9 +147,19 @@ export class Watchlist {
     };
   }
 
-  /** Reads the Finnhub key again when Finnhub is chosen and keyRev changed; a broken file is no key. */
+  /**
+   * Reads the Finnhub key again when Finnhub is chosen and keyRev changed; a broken file is no key.
+   * With Finnhub not chosen no key is held, so a key removed from the file leaves memory too; choosing
+   * Finnhub again reads the file again.
+   */
   async loadKey(settings) {
-    if (!finnhubChosen(settings) || this.keyRev === settings.keyRev) return;
+    if (!finnhubChosen(settings)) {
+      this.finnhubKey = null;
+      this.keyRev = null;
+      this.keyUnreadable = false;
+      return;
+    }
+    if (this.keyRev === settings.keyRev) return;
     this.keyRev = settings.keyRev;
     try {
       const value = await this.host.loadSecret(SECRET_KEY_FINNHUB);

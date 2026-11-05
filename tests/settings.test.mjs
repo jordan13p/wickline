@@ -1,7 +1,7 @@
 // node --test tests/  (settings.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SECRET_KEY_FINNHUB, SETTINGS_KEY, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings } from "../mods/bellwether/settings.js";
+import { SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings } from "../mods/bellwether/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/bellwether/providers/mis.js";
 import { FINNHUB_URL } from "../mods/bellwether/providers/finnhub.js";
 import { STRINGS } from "../mods/bellwether/i18n.js";
@@ -173,4 +173,17 @@ test("Finnhub needs an https address and a key to save", () => {
   const saved = mergeSettings(undefined, { sources: { us: { provider: "finnhub", finnhubUrl: ` ${FINNHUB_URL} ` } } });
   assert.equal(saved.sources.us.finnhubUrl, FINNHUB_URL);
   for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.keyNeeded"], lang);
+});
+
+test("what a save does with the key", () => {
+  // Finnhub chosen: a new key is written; the same one is not written again.
+  assert.equal(keyChange({ provider: "finnhub", typed: "new-key", saved: "old-key" }), "write");
+  assert.equal(keyChange({ provider: "finnhub", typed: "new-key", saved: null }), "write");
+  assert.equal(keyChange({ provider: "finnhub", typed: "old-key", saved: "old-key" }), null);
+  // Yahoo chosen with the field cleared: the saved key is removed.
+  assert.equal(keyChange({ provider: "yahoo", typed: "", saved: "old-key" }), "remove");
+  // Yahoo alone keeps the key, also with another key typed; nothing to remove without a saved key.
+  assert.equal(keyChange({ provider: "yahoo", typed: "old-key", saved: "old-key" }), null);
+  assert.equal(keyChange({ provider: "yahoo", typed: "new-key", saved: "old-key" }), null);
+  assert.equal(keyChange({ provider: "yahoo", typed: "", saved: null }), null);
 });

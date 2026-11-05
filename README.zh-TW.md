@@ -127,7 +127,7 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 | `finnhub.io`，或你設定的 Finnhub 網址 | 只有在你將美股改為 Finnhub 並儲存 API 金鑰後；金鑰放在請求標頭中，不會出現在網址裡 |
 
 - **程式**：不執行任何程式。
-- **儲存**：自選清單存於 Herdr 共用狀態的 `bellwether.watchlist.v1`，設定存於 `bellwether.settings.v1`。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/bellwether/secrets.json`，不會寫入共用狀態；能讀取你檔案的人都能看到它，所以請使用免費方案的 API 金鑰。不讀寫其他檔案。
+- **儲存**：自選清單存於 Herdr 共用狀態的 `bellwether.watchlist.v1`，設定存於 `bellwether.settings.v1`。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/bellwether/secrets.json`，不會寫入共用狀態；能讀取你檔案的人都能看到它，所以請使用免費方案的 API 金鑰。若要移除 API 金鑰，請將美股改回 Yahoo、清空 API 金鑰欄位後儲存（每個 copy 會立即捨棄它），或刪除該檔案；只改回 Yahoo 則會保留 API 金鑰。不讀寫其他檔案。
 - **Finnhub**：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍。
 - 沒有遙測、沒有分析、沒有中繼伺服器：請求直接從這台電腦送到各個來源。
 - 請只開一個 Bellwether。每個 copy（即使被隱藏）都會跑自己的更新迴圈，開第二個就會讓所有請求加倍。

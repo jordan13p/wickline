@@ -13,7 +13,7 @@ import {
 import { detailSource, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
 import {
-  DEFAULT_BINANCE_URL, SECRET_KEY_FINNHUB, SETTINGS_KEY, mergeSettings, readSettings, upIsRed, validateSettings,
+  DEFAULT_BINANCE_URL, SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
 } from "./settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
@@ -60,6 +60,13 @@ async function saveSecret(name, value) {
   try { secrets = await readSecrets(); } catch { /* Replaced below. */ }
   await fs.mkdir(secretsDir(), { recursive: true });
   await fs.writeFile(secretsFile(), `${JSON.stringify({ ...secrets, [name]: value }, null, 2)}\n`);
+}
+
+// The file is written again without this key; an unreadable file rejects, so nothing is taken as removed.
+async function removeSecret(name) {
+  if (!(await fs.exists(secretsFile()))) return;
+  const { [name]: _removed, ...rest } = await readSecrets();
+  await fs.writeFile(secretsFile(), `${JSON.stringify(rest, null, 2)}\n`);
 }
 
 export default class Bellwether extends View {
@@ -867,17 +874,21 @@ export default class Bellwether extends View {
   }
 
   // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay. A new
-  // Finnhub key goes to the secrets file first, then keyRev + 1 tells every copy to read it again.
+  // Finnhub key goes to the secrets file first (or, cleared with Yahoo chosen, leaves it), then keyRev + 1
+  // tells every copy to read it again.
   saveDraft(cx) {
     if (Object.keys(this.draftErrors()).length || !this.keyLoaded || this.saving) return;
     const { language, colors, sources } = this.draft;
     const key = this.keyInput.value().trim();
-    const newKey = sources.us.provider === "finnhub" && key !== (this.savedKey ?? "");
+    const change = keyChange({ provider: sources.us.provider, typed: key, saved: this.savedKey });
     this.saving = true;
     this.error = null;
     cx.spawn(async (cx) => {
-      if (newKey) {
-        try { await saveSecret(SECRET_KEY_FINNHUB, key); } catch {
+      if (change) {
+        try {
+          if (change === "write") await saveSecret(SECRET_KEY_FINNHUB, key);
+          else await removeSecret(SECRET_KEY_FINNHUB);
+        } catch {
           this.saving = false;
           this.error = { code: "error.saveKey", params: {} };
           cx.notify();
@@ -890,7 +901,7 @@ export default class Bellwether extends View {
           language, colors, sources,
           // Picking a language answers the language prompt too.
           ...(language !== this.settings.language && { languagePromptDismissed: true }),
-          ...(newKey && { keyRev: readSettings(saved).keyRev + 1 }),
+          ...(change && { keyRev: readSettings(saved).keyRev + 1 }),
         }));
       } catch {
         this.saving = false;
@@ -964,6 +975,11 @@ export default class Bellwether extends View {
       ...this.field(t, this.tx("sources.us.budget"), this.budgetInput, this.budgetFocused, budgetError),
       budgetError ? null : this.note(t, this.tx("sources.us.cap", { cap: finnhubCap(us.budgetPerMinute) })),
       this.note(t, this.tx("sources.us.copies")),
+    ] : this.savedKey ? [
+      // Yahoo keeps a saved key; clearing the field and saving removes it.
+      div().text_size(11).text_color(t.muted).child(this.tx("sources.us.key")),
+      key,
+      this.note(t, this.tx("sources.us.keyRemove")),
     ] : [];
     return this.card(t, this.tx("sources.us.title"), this.tx(chosen ? "sources.us.finnhubSource" : "sources.us.yahooSource"),
       this.segmented(t, "bw-us", [["yahoo", this.tx("src.yahoo")], ["finnhub", this.tx("src.finnhub")]], us.provider,

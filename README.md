@@ -127,7 +127,7 @@ Hosts, and when Bellwether contacts them:
 | `finnhub.io`, or the Finnhub address you set | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address |
 
 - **Programs**: none are run.
-- **Storage**: the watchlist in Herdr's shared state under `bellwether.watchlist.v1`, the settings under `bellwether.settings.v1`. A Finnhub key you save is kept in plaintext in `data/bellwether/secrets.json` in Herdr's folder on this computer, never in the shared state; anyone who can read your files can read it, so use a free-plan key. No other file is read or written.
+- **Storage**: the watchlist in Herdr's shared state under `bellwether.watchlist.v1`, the settings under `bellwether.settings.v1`. A Finnhub key you save is kept in plaintext in `data/bellwether/secrets.json` in Herdr's folder on this computer, never in the shared state; anyone who can read your files can read it, so use a free-plan key. To remove the key, choose Yahoo for US stocks, clear the key field and save (every copy drops it at once), or delete that file; choosing Yahoo alone keeps it. No other file is read or written.
 - **Finnhub**: only the first US symbols your budget covers are asked (15 at the default 60 requests per minute). Every open copy sends its own requests, so two copies use the budget twice as fast.
 - No telemetry, no analytics and no intermediate server: requests go directly from this computer to each source.
 - Keep one copy of Bellwether open. Each copy, even a hidden one, runs its own refresh loops, so a second copy doubles every request.
