@@ -1,6 +1,7 @@
 // TWSE MIS: the exchange's unofficial market-info feed, seconds behind, laid over Yahoo's delayed
-// Taiwan quotes. Off until the person turns it on and consents. This file is the whole source, so
-// one commit can remove it. No Herdr imports, so tests run it under Node.
+// Taiwan quotes. Off until the person turns it on and consents. This file holds
+// the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
+// dialog. No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanText, positive } from "../quotes.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
