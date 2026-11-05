@@ -220,14 +220,27 @@ export class Watchlist {
       if (state.manual || state.dirty) continue;
       const idle = paused || !symbols.length || state.disabled;
       const now = this.host.now();
-      // Idle loops fetch nothing, but still wake to redraw when a live price turns stale.
-      const wait = idle ? this.staleInMs(symbols, now)
-        : Math.max(provider.intervalMs(this.sessionFor(symbols, now)), state.retryAt - now);
-      await new Promise((resolve) => {
-        state.wake = resolve;
-        io.sleep(wait).then(resolve);
+      const due = now + (idle ? 0 : Math.max(provider.intervalMs(this.sessionFor(symbols, now)), state.retryAt - now));
+      await this.rest(state, symbols, due, io);
+    }
+  }
+
+  /**
+   * Sleeps until `due` (an idle loop: until a live price turns stale), or until poked. A long wait,
+   * such as a rate-limit cooldown, is cut where a live price turns stale: that wake only redraws.
+   */
+  async rest(state, symbols, due, io) {
+    for (;;) {
+      const now = this.host.now();
+      const stale = this.staleInMs(symbols, now);
+      const wait = due > now ? Math.min(due - now, stale) : stale;
+      const poked = await new Promise((resolve) => {
+        state.wake = () => resolve(true);
+        io.sleep(wait).then(() => resolve(false));
       });
       state.wake = null;
+      if (poked || this.stopped || this.host.now() >= due) return;
+      io.changed();
     }
   }
 

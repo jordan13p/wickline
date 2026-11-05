@@ -195,3 +195,33 @@ test("a hung source ends its round at the first timeout", async () => {
   assert.equal(count(host, "yahoo"), 2);
   await stop(w, host, runs);
 });
+
+test("a rate-limit cooldown still redraws when a live quote turns stale", async () => {
+  let limited = false;
+  const host = fakeHost((url) => limited ? { status: 429, ok: false, text: "" } : url.includes("ticker/24hr") ? ticker(url) : lines());
+  const redraws = [];
+  host.changed = () => redraws.push(host.clock);
+  const w = new Watchlist(host);
+  w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 0);
+  const quote = w.quotes["BTC/USDT"];
+  assert.equal(freshness(quote, "24h", host.clock).state, "live");
+  limited = true;
+  // A second refusal in a row: the next round (15 s) starts a two-minute cooldown.
+  w.sources.binance.failures = 1;
+  await advance(host, 15_000);
+  assert.equal(w.problems()[0].code, "binance.rateLimited");
+  const requests = host.requests.length;
+  const retryAt = w.sources.binance.retryAt;
+  assert.ok(retryAt > quote.timestamp + LIVE_MAX_AGE_MS + 1, `retryAt ${retryAt}`);
+  redraws.length = 0;
+  await advance(host, quote.timestamp + LIVE_MAX_AGE_MS + 1);
+  // A redraw once the price is too old to read as live, and no request before the cooldown ends.
+  const turned = redraws.find((at) => freshness(quote, "24h", at).state === "stalled");
+  assert.ok(turned !== undefined, redraws.join());
+  assert.equal(host.requests.length, requests);
+  await advance(host, retryAt - 1);
+  assert.equal(host.requests.length, requests);
+  await stop(w, host, runs);
+});
