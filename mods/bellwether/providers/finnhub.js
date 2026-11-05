@@ -13,8 +13,10 @@ export function finnhubSymbol(symbol) {
 }
 
 /**
- * How many US symbols Finnhub prices within `budgetPerMinute` requests: each is asked every 15 s
- * while the market is open, four times a minute. The rest stay on Yahoo.
+ * How many US symbols Finnhub prices within `budgetPerMinute`: the cap keeps one round within a
+ * quarter-minute of requests at the budget's pace. With a round spread over about 15 s plus the 15 s
+ * wait after it, each symbol refreshes about every 30 s and one copy uses about half the budget,
+ * leaving room for retries and a second copy. The rest stay on Yahoo.
  */
 export function finnhubCap(budgetPerMinute) {
   return Math.floor(budgetPerMinute / 4);
