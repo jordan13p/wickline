@@ -1,52 +1,168 @@
-[English](README.md) | 繁體中文
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo-light.svg" width="96" alt="Bellwether">
+  </picture>
+</p>
 
-# Bellwether 領頭羊
+<h1 align="center">Bellwether</h1>
 
-Herdr 的股票與加密貨幣自選清單。它停靠在 agent 旁邊，顯示每檔標的的價格、漲跌幅與當日走勢線，點一下即可查看該標的當天的詳細資料。停靠成矮長條時，會變成單行報價列。報價來自 Yahoo Finance 與 Binance（另可自行開啟台股的證交所 MIS 與美股的 Finnhub），僅供參考。
+<p align="center">在 Herdr 的 agent 旁看盤：哪些是即時、哪些是延遲，一眼分清楚。</p>
 
-## 版面
+<p align="center"><a href="README.md">English</a> · 繁體中文</p>
 
-Bellwether 依自己的大小決定版面。放在終端機旁（寬度小於 720 px）時是側邊欄：每一列左邊是代號，下方為即時程度與名稱，右邊是走勢線，以及價格與下方的漲跌幅，數字一律靠右對齊，上下列對得整齊。寬度達 720 px 以上（例如在自己的分頁中）時改為表格，每檔一列，欄位依序為代號、名稱、狀態、走勢、價格、漲跌、漲跌幅、最高、最低與昨收；捲動清單時欄位標題固定不動，表格最寬 1280 px，寬度不足時依序隱藏昨收、最低、最高、漲跌、走勢與名稱（代號、狀態、價格與漲跌幅一律保留）。停靠成高度小於 72 px 的矮長條時，則是單行報價列。
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <a href="https://herdr.dev/mods"><img src="https://img.shields.io/badge/Herdr-mod-555" alt="Herdr mod"></a>
+  <a href="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml"><img src="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml/badge.svg" alt="checks"></a>
+</p>
 
-標題列的圖示依序為重新整理、暫停或繼續、設定，以及 Bellwether 是 pane 時的 **在自己的分頁開啟**：開一個名為 `Bellwether`、顯示表格的分頁，並關閉原本的 pane，所以始終只有一個 copy 在抓報價。在那個分頁中，同一位置改為 **回到側邊**：把 Bellwether 放回原來那個分頁中某個 pane 的右側，並關閉自己的分頁。每個圖示都有以你的介面語言顯示的提示文字。狀態列是純文字：自動更新是否開啟、報價最後更新的時間，只有在你手動重新整理時才會顯示「正在更新報價…」。logo 中間那根 K 棒會使用你佈景主題的強調色。
+![Bellwether](preview.png)
 
-## 報價有多即時？
+## 特色
 
-每個來源各自更新，慢的來源不會拖住其他來源：Yahoo Finance 每 60 秒，Binance 報價每 15 秒，各交易對的 24 小時走勢線每 60 秒；證交所 MIS（需自行開啟，見「設定」）在台股開盤期間每 10 秒，其他時間每 60 秒；Finnhub（需自行選擇並儲存你自己的 key）在美股開盤期間於上一輪結束 15 秒後再更新，其他時間為 60 秒。Finnhub 每檔一個請求，平均分散在約 15 秒內、至少間隔一秒，因此每檔約每 30 秒更新一次，一個 copy 約使用每分鐘額度的一半，且只為每分鐘額度所能涵蓋的美股提供報價：額度除以 4，預設每分鐘 60 次即 15 檔（此時一個 copy 每分鐘約發出 30 次請求）；其餘仍使用 Yahoo，該列會標示超出 Finnhub 上限。「重新整理」按鈕不會多發 Finnhub 請求。請求超過 10 秒沒有回應即視為失敗，並在下一個間隔重試。被限制頻率的來源至少暫停 60 秒，重複發生時加倍，最長 15 分鐘，其他來源照常更新。標題列下方的狀態列會列出目前有問題的每個來源。
+- 每個市場各有來源：股票與指數用 Yahoo Finance，加密貨幣用 Binance Spot；台股（證交所 MIS）與美股（Finnhub，用你自己的 key）的即時報價需自行開啟。
+- 即時或延遲一眼可辨：每一列都標示價格來源與新舊程度，延遲或快取的價格絕不會看起來像即時。
+- 五種介面語言：English、繁體中文、简体中文、日本語與 한국어，可選紅漲綠跌或綠漲紅跌。
+- 拖曳列即可調整順序，每個開啟的 copy 立即同步。
+- 不執行程式、沒有遙測、沒有中繼伺服器：請求直接從你的電腦送到各個來源。
+- 跟隨你的 Herdr 佈景主題（淺色或深色）：在終端機旁是側邊欄，在自己的分頁中是表格。
+
+## 市場與資料來源
+
+| 市場 | 預設 | 可選即時來源 | 說明 |
+|---|---|---|---|
+| 美股 | Yahoo Finance（延遲） | Finnhub，需你自己的 API key | 預設額度每分鐘 60 次時，Finnhub 提供清單中前 15 檔美股的報價，其餘仍用 Yahoo。 |
+| 台股 | Yahoo Finance（延遲 20 分鐘） | 證交所 MIS，同意後才會開啟 | MIS 為非官方來源；超出該股當日漲跌停範圍的價格會被捨棄，該列改顯示 Yahoo。 |
+| 港股、陸股、日股、韓股 | Yahoo Finance（延遲） | — | 延遲時間依交易所而定，Yahoo 通常不回報。 |
+| 加密貨幣 | Binance Spot（即時） | — | 部分地區（例如美國）無法使用 Binance；可改設提供相同 API 的其他網址。 |
 
 每一列都有一個圓點和一個標籤：
 
-| 圓點 | 標籤 | 意思 |
-|---|---|---|
-| 實心 | `Binance Spot`、`證交所 MIS`、`Finnhub` | 即時報價、市場交易中，且報價時間在 120 秒內 |
-| 空心 | 來源名稱 | 即時報價，但還不知道市場交易時段 |
-| 空心 | `報價停在 13:05` | 即時來源、市場交易中，但報價已超過 120 秒 |
-| 空心 | `延遲 15 分鐘`、`Yahoo · 延遲` | Yahoo Finance：有回報延遲分鐘數時顯示分鐘（台股一律 20 分鐘），否則只標示「延遲」 |
-| 無 | `已收盤 · 10/31 16:00` | 市場已收盤；不是今天的報價會加上日期 |
-| 無 | `盤前`、`盤後` | 一般交易時段以外；價格是一般交易時段的價格 |
+- **實心圓點**：即時。即時來源、市場交易中，且報價在 120 秒內（`Binance Spot`、`證交所 MIS`、`Finnhub`）。
+- **空心圓圈**：延遲或停滯。Yahoo 的報價（`延遲 20 分鐘`、`Yahoo · 延遲`）、超過 120 秒的即時報價（`報價停在 13:05`），或尚不知道交易時段。
+- **無圓點**：市場已收盤或不在一般交易時段（`已收盤 · 10/31 16:00`、`盤前`、`盤後`）。
 
-Yahoo 的報價永遠不會標示為即時。開啟證交所 MIS 後，台股列的價格來自 MIS，走勢線仍來自 Yahoo；MIS 失敗，或價格超出該股當日漲跌停範圍時，該列會立即改回 Yahoo 的延遲報價並說明原因（`暫用 Yahoo · …`）。美股列使用 Finnhub 時也一樣。若 Finnhub 拒絕你的 key（HTTP 401 或 403），Bellwether 會停止向 Finnhub 請求、顯示 key 無效，並改用 Yahoo，直到你儲存新的 key 或變更美股來源設定。詳細資料對話框會顯示報價時間與取得時間，精確到秒。建議只顯示一個 Bellwether：每個顯示中的 copy（即使被隱藏）都會跑自己的更新迴圈，開第二個就會讓請求加倍。使用 Finnhub 時，兩個 copy 會讓每分鐘額度用得快一倍，並收到頻率限制。
+每個來源各自更新：Yahoo 每 60 秒，Binance 每 15 秒，證交所 MIS 在台股交易時每 10 秒，Finnhub 在美股交易時每檔約每 30 秒。失敗或被限制頻率的來源會暫緩並在該列說明原因，其他來源照常更新。
 
-## 調整順序
+## 安裝
 
-滑鼠移到某一列上，左側會出現六點把手（右側出現 `×`）。按住把手拖到想放的位置再放開：細細的強調色線會標出落點，被拖曳的那一列會呈現浮起的樣子。把指標移出清單會取消拖曳，順序不變。順序會和自選清單一起儲存，所以每個 copy 都會立即同步，重新啟動後也會保留。順序也決定哪些美股使用 Finnhub 的請求額度（清單中靠前的那幾檔）。
+在 Herdr 中請 agent 執行：
 
-## 語言與顏色
+```text
+Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/jordan13p/bellwether
+```
 
-介面提供 English、繁體中文、简体中文、日本語與 한국어。在你做出選擇前，新增欄位上方會顯示一行 `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`：點選語言即可切換，按 `×`（或新增一檔標的）則維持英文。這行不會再出現。語言完全由你決定，不會依所看的市場或系統語言而改變。四種亞洲語言預設紅漲綠跌，英文預設綠漲紅跌。
+agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合併它的 `keys.json`（取代你已在使用的按鍵前會先詢問）並檢查。
+
+<details>
+<summary>手動安裝</summary>
+
+1. 將 `mods/bellwether/` 複製到 `~/.config/herdr-app/mods/bellwether/`。它的 `mod.json` 是 `"place": "none"`，所以你的 layout 不會被改動。
+2. 將本 repo `keys.json` 中的那一行加到 `~/.config/herdr-app/keys.json` 的 `global` 區段。編輯過這個檔案後，它就算是你自己的：Herdr 升級時不會再自動加入新的預設快捷鍵。
+3. 檢查：
+
+   ```sh
+   herdr-app check ~/.config/herdr-app/mods/bellwether
+   ```
+
+4. 按 `ctrl-alt-b` 開啟；不用快捷鍵時，在 Herdr 的 `main` layout 或你自己的 layout 執行：
+
+   ```sh
+   herdr-app do pane.split --direction right --mod bellwether
+   ```
+
+</details>
+
+## 使用方式
+
+在新增欄位輸入代號後按 Enter：
+
+| 代號 | 市場 |
+|---|---|
+| `AAPL` | 美股 |
+| `^GSPC` | 指數（S&P 500） |
+| `2330.TW` | 台股上市（上櫃用 `.TWO`） |
+| `0700.HK` | 港股（輸入 `700.HK` 也可以） |
+| `7203.T` | 日股 |
+| `BTC/USDT` | Binance 加密貨幣交易對，格式為 `BASE/QUOTE` |
+
+- **移除**：滑鼠移到某一列，按右側的 `×`。
+- **調整順序**：滑鼠移到某一列，按住左側的六點把手拖曳；強調色線會標出落點。拖出清單即取消。
+- **詳細資料**：點一下某一列即可查看當天的走勢圖、開盤、最高、最低與昨收、交易時段、報價時間與取得時間。
+- **重新整理與暫停**：標題列的圖示。重新整理會讓 Finnhub 以外的每個來源立即更新一輪，暫停時也可以；暫停會停止每個 copy 的自動更新。
+- **快捷鍵**：Bellwether 接受 `bellwether.refresh` 與 `bellwether.pause` 兩個指令，預設都沒有綁定。要綁定時，加到 `~/.config/herdr-app/keys.json`：
+
+  ```json
+  { "global": { "ctrl-alt-r": "bellwether.refresh" } }
+  ```
+
+### 開啟與關閉
+
+- `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Bellwether pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
+- 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod bellwether`。
+- 關閉方式和其他 pane 一樣：用 Herdr 的 pane 標題列，或執行 `pane.close`。
+- 標題列的 **在自己的分頁開啟** 圖示會把 Bellwether 移到名為 `Bellwether` 的分頁並顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側並關閉該分頁。無論哪種方式，都只有一個 copy 在抓報價。
+- 放大（zoom）交給 Herdr 自己的 pane 標題列；Bellwether 沒有自己的放大功能。
 
 ## 設定
 
-面板標題列的設定圖示（齒輪）會開啟設定對話框，共三個分頁；按「儲存」前不會有任何變更，按「取消」或 Esc 會捨棄你的修改。
+齒輪圖示會開啟設定對話框，共三個分頁。按「儲存」前不會有任何變更，按「取消」或 Esc 會捨棄修改。
 
-- **資料來源**：股票與指數使用 Yahoo Finance（延遲報價，沒有可調整的項目），加密貨幣交易對使用 Binance Spot。「美股」卡片可將美股在 Yahoo（預設）與 Finnhub 之間切換，Finnhub 需要你自己的 API key（免費方案即可，也建議使用免費方案）。選擇 Finnhub 後會出現遮蔽的 key 欄位（附「顯示／隱藏」按鈕）、Finnhub 網址、每分鐘請求數（4 以上的整數，預設 60），以及可涵蓋的美股檔數。沒有 key 時無法儲存。key 以明文存放在這台電腦上（見下方）。「台股」卡片可將台股在 Yahoo（預設）與證交所 MIS（臺灣證券交易所的非官方市況資料）之間切換。選擇證交所 MIS 後會出現它的網址、責任聲明（以繁體中文版為準）與同意勾選框；未勾選前無法儲存。你的同意會連同聲明版本一起儲存：聲明更新後，台股會改回 Yahoo，卡片與狀態列會請你重新確認。部分地區（例如美國）可能無法使用 Binance（加密貨幣列會顯示原因），可將 Binance 網址改為提供相同 API 的其他網址。網址必須以 `https://` 開頭，否則無法儲存。
-- **顯示**：介面語言（只改變介面文字，不影響報價）、漲跌顏色（依語言自動、紅漲綠跌或綠漲紅跌），整份清單不分市場一律套用；另有按鈕可開啟 Herdr 自己的外觀設定。Bellwether 本身沒有淺色／深色設定。
-- **免責聲明與隱私**：完整免責聲明、各資料來源與其報價的意思（Yahoo Finance：一般交易時段報價，各交易所延遲不一；Binance Spot：加密貨幣交易對，顯示 24 小時漲跌）、連線主機與儲存位置。面板底部那一行免責聲明會開啟這個分頁。
+**資料來源。** Yahoo Finance 與 Binance Spot 不需要任何設定。「美股」卡片可將美股改用 Finnhub，需填入你自己的 API key（免費方案即可）、每分鐘請求數，並顯示可涵蓋的檔數。「台股」卡片在你閱讀責任聲明並勾選同意後，可將台股改用證交所 MIS。「加密貨幣」卡片可改設其他 Binance 網址（限 `https://`）。
 
-## 網路與儲存
+**顯示。** 介面語言（只改變介面文字，不影響報價）、漲跌顏色（依語言自動、紅漲綠跌或綠漲紅跌），以及開啟 Herdr 外觀設定的按鈕；淺色與深色主題由 Herdr 設定。
 
-Bellwether 只對 `query1.finance.yahoo.com` 與 `data-api.binance.vision` 發出唯讀請求，若你在設定中改用其他 Binance 網址，也會對該網址發出請求，不執行任何程式。只有在你於「台股」卡片選擇證交所 MIS 並勾選同意後，才會為清單中的台股連線 `mis.twse.com.tw`（非官方；或你設定的 MIS 網址）。只有在你於「美股」卡片選擇 Finnhub 並儲存 key 後，才會為清單中前幾檔美股連線 `finnhub.io`（或你設定的 Finnhub 網址）；key 放在請求標頭中，不會出現在網址裡。自選清單存於 Herdr 共享狀態的 `bellwether.watchlist.v1`，設定（語言、顏色、是否已回應語言列、美股與台股來源、Finnhub、MIS 與 Binance 網址、Finnhub 額度、你同意的 MIS 聲明版本，以及通知每個 copy 重新讀取 Finnhub key 的計數）存於 `bellwether.settings.v1`。你儲存的 Finnhub key 以明文存放在這台電腦上 Herdr 資料夾（`~/.config/herdr-app`）內的 `data/bellwether/secrets.json`，不會寫入 Herdr 共享狀態；能讀取你檔案的人都能看到它，所以請使用免費方案的 key。不讀寫其他檔案。
+**免責聲明與隱私。** 完整免責聲明、各來源報價的意思，以及下方列出的連線主機、程式與儲存位置。面板底部那一行免責聲明會開啟這個分頁。
 
-## 致謝
+## 隱私與安全
+
+連線主機與連線時機：
+
+| 主機 | 時機 |
+|---|---|
+| `query1.finance.yahoo.com` | 一律，用於股票與指數 |
+| `data-api.binance.vision`，或你設定的 Binance 網址 | 一律，用於加密貨幣交易對 |
+| `mis.twse.com.tw`，或你設定的 MIS 網址 | 只有在你將台股改為證交所 MIS 並勾選同意後（非官方） |
+| `finnhub.io`，或你設定的 Finnhub 網址 | 只有在你將美股改為 Finnhub 並儲存 key 後；key 放在請求標頭中，不會出現在網址裡 |
+
+- **程式**：不執行任何程式。
+- **儲存**：自選清單存於 Herdr 共用狀態的 `bellwether.watchlist.v1`，設定存於 `bellwether.settings.v1`。你儲存的 Finnhub key 以明文存放在這台電腦上 Herdr 資料夾內的 `data/bellwether/secrets.json`，不會寫入共用狀態；能讀取你檔案的人都能看到它，所以請使用免費方案的 key。不讀寫其他檔案。
+- **Finnhub**：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍。
+- 沒有遙測、沒有分析、沒有中繼伺服器：請求直接從這台電腦送到各個來源。
+- 請只開一個 Bellwether。每個 copy（即使被隱藏）都會跑自己的更新迴圈，開第二個就會讓所有請求加倍。
+
+## 常見問題
+
+**為什麼我的台股報價晚了 20 分鐘？** Yahoo Finance 的台股報價延遲 20 分鐘，Bellwether 會在每一列台股標示 `延遲 20 分鐘`。要看即時台股價格，請在設定中開啟證交所 MIS。
+
+**為什麼證交所 MIS 預設關閉？** 開啟前，設定中會顯示以下責任聲明（以繁體中文版為準），你必須勾選同意才能使用：
+
+> 證交所 MIS（mis.twse.com.tw）是臺灣證券交易所的基本市況報導網站，並非提供給第三方程式使用的 API。Bellwether 與臺灣證券交易所無任何關聯，亦未獲其授權。啟用後，Bellwether 會從這台電腦直接向 MIS 查詢你清單中的台股（開盤期間約每 10 秒一次），取代延遲約 20 分鐘的 Yahoo 價格；走勢圖仍來自 Yahoo。MIS 資料可能延遲、錯誤或中斷，也可能隨時變更或停止提供。Bellwether 會捨棄超出該股當日漲跌停範圍的價格，但無法保證其他價格正確。是否使用 MIS、使用方式是否符合臺灣證券交易所網站的使用條款，以及使用其資料的一切後果，均由你自行判斷並負責。資料僅供個人參考，不構成投資建議。
+
+**為什麼美股只有 15 檔即時報價？** Finnhub 免費方案每分鐘可發 60 次請求。Bellwether 提供即時報價的美股檔數是額度除以 4，因此每檔約每 30 秒更新一次，並留一半額度給重試與第二個 copy。清單中靠前的美股使用 Finnhub，其餘顯示 Yahoo 並標示超出上限。若你的方案允許，可在設定中調高每分鐘請求數。
+
+**為什麼我無法使用 Binance？** Binance 會拒絕部分地區（例如美國）的請求，此時加密貨幣列會顯示此地區無法使用 Binance。股票不受影響。你可以在設定中改設提供相同 API 的其他 Binance 網址。
+
+**Bellwether 會把我的自選清單傳到任何地方嗎？** 不會。每個代號只會作為請求的一部分，直接從你的電腦送到提供該報價的來源。沒有 Bellwether 伺服器，也沒有遙測；清單本身存放在這台電腦上 Herdr 的共用狀態中。
+
+## 免責聲明
+
+一般免責聲明以英文版為準。
+
+報價來自第三方，不保證正確、即時或可用。此處顯示的任何內容均不構成投資建議。啟用非公開來源或輸入金鑰，屬於你自己的行為，並受該來源的條款規範。請求直接從這台電腦送到各個來源。Bellwether 沒有伺服器，也不傳送任何遙測資料。你儲存的 Finnhub key 以明文存放在這台電腦上。
+
+## 致謝與授權
 
 Bellwether 修改自 [fatwang2/Pulse](https://github.com/fatwang2/Pulse)（MIT）中的 Herdr mod，與 Pulse 無關，亦未獲其背書。
+
+以 [MIT License](LICENSE) 授權，著作權 (c) 2026 fatwang2 與 (c) 2026 jordan13p。
+
+## 開發
+
+```sh
+node --test tests/
+herdr-app check "$PWD/mods/bellwether"
+```
+
+`RECIPE.md` 是完整的建構說明：Bellwether 畫出什麼、如何運作，以及由哪些檔案組成。

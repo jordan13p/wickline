@@ -1,52 +1,164 @@
-English | [繁體中文](README.zh-TW.md)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo-light.svg" width="96" alt="Bellwether">
+  </picture>
+</p>
 
-# Bellwether
+<h1 align="center">Bellwether</h1>
 
-A stock and crypto watchlist for Herdr. It docks beside your agents, shows each ticker's price, signed change and today's line, and opens a ticker's day on a click. Dock it as a short strip and it becomes a one-line quote band. Quotes come from Yahoo Finance and Binance (plus TWSE MIS for Taiwan and Finnhub for US stocks, only if you turn them on) and are for reference only.
+<p align="center">Stock and crypto quotes beside your agents in Herdr — honest about what is live and what is delayed.</p>
 
-## Layout
+<p align="center">English · <a href="README.zh-TW.md">繁體中文</a></p>
 
-Bellwether picks its layout from its size. Beside a terminal (below 720 px wide) it is a sidebar: each row shows the ticker over its freshness and name, then the line and the price over the change, with the numbers right-aligned so they line up. From 720 px, for example in its own tab, it is a table with one row per ticker and the columns Symbol, Name, Status, Today, Price, Change, Change %, High, Low and Prev close; the column labels stay put while the list scrolls, the table is at most 1280 px wide, and narrower tables drop Prev close first, then Low, High, Change, Today and Name (Symbol, Status, Price and Change % always stay). Docked as a strip under 72 px tall, it is a one-line band.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <a href="https://herdr.dev/mods"><img src="https://img.shields.io/badge/Herdr-mod-555" alt="Herdr mod"></a>
+  <a href="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml"><img src="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml/badge.svg" alt="checks"></a>
+</p>
 
-The header's icons are refresh, pause or resume, settings and, when Bellwether is a pane, **open in its own tab**: it opens a `Bellwether` tab with the table and closes the pane, so only one copy keeps fetching. In that tab the same spot reads **back beside the terminal**: it puts Bellwether back to the right of a pane in the tab it came from and closes its own tab. Every icon has a tooltip in your language. The status line is plain text: whether auto-refresh is on, when quotes were last updated, and `Refreshing quotes…` only while a refresh you asked for runs. The middle candle of the logo takes your theme's accent color.
+![Bellwether](preview.png)
 
-## How fresh are quotes?
+## Highlights
 
-Each source refreshes on its own, so a slow one never holds up another: Yahoo Finance every 60 seconds, Binance tickers every 15 seconds and each pair's 24-hour line every 60 seconds, TWSE MIS (only if you turn it on, see Settings) every 10 seconds while the Taiwan market is open and every 60 seconds otherwise, and Finnhub (only if you choose it and save your own key) 15 seconds after its previous round ends while the US market is open and 60 seconds otherwise. Finnhub gets one request per symbol, spread over about 15 seconds and at least a second apart, so each symbol refreshes about every 30 seconds and one copy uses about half its per-minute budget, and prices only as many US symbols as its per-minute budget allows: the budget divided by 4, so 15 symbols at the default 60 requests per minute (one copy then sends about 30 a minute); the rest stay on Yahoo and their rows say they are over the Finnhub limit. The Refresh button never sends extra Finnhub requests. A request that has not answered within 10 seconds counts as failed and is retried at the next interval. A rate-limited source waits at least 60 seconds, doubling up to 15 minutes, while the others carry on. The status line under the header names every source that has a problem right now.
+- One source per market: Yahoo Finance for stocks and indexes, Binance Spot for crypto, and real time for Taiwan (TWSE MIS) or US stocks (Finnhub, your own key) only if you turn it on.
+- Live or delayed at a glance: every row says where its price comes from and how old it is; a delayed or cached price never looks live.
+- Five interface languages: English, 繁體中文, 简体中文, 日本語 and 한국어, with red-up or green-up colors.
+- Drag a row to reorder the list; every open copy follows at once.
+- No programs, no telemetry, no server in between: requests go straight from your computer to each source.
+- Follows your Herdr theme, light or dark: a sidebar beside a terminal, a table in its own tab.
 
-Every row shows a dot and a label:
+## Markets and sources
 
-| Dot | Label | Meaning |
-|---|---|---|
-| filled | `Binance Spot`, `TWSE MIS`, `Finnhub` | real-time price, market trading, quote at most 120 seconds old |
-| hollow | source name | real-time price, but the market session is not known yet |
-| hollow | `quote stopped at 13:05` | real-time source, market trading, but the quote is older than 120 seconds |
-| hollow | `delayed 15 min`, `Yahoo · delayed` | Yahoo Finance: minutes when Yahoo reports them (Taiwan is always 20 minutes), otherwise just "delayed" |
-| none | `Market closed · Oct 31 16:00` | the market is closed; the date shows when it is not today |
-| none | `Pre-market`, `After hours` | outside the regular session; the price is the regular session's |
+| Market | Default | Optional real-time | Notes |
+|---|---|---|---|
+| United States | Yahoo Finance (delayed) | Finnhub, with your own API key | Finnhub prices the first 15 US symbols at its default budget of 60 requests per minute; the rest stay on Yahoo. |
+| Taiwan | Yahoo Finance (delayed 20 min) | TWSE MIS, off until you consent | MIS is unofficial; a price outside the stock's daily limits is discarded and the row shows Yahoo. |
+| Hong Kong, China, Japan, Korea | Yahoo Finance (delayed) | — | Delays vary by exchange; Yahoo usually does not report them. |
+| Crypto | Binance Spot (real time) | — | Binance is unavailable in some regions, such as the United States; you can set another address that serves the same API. |
 
-A Yahoo price is never shown as live. With TWSE MIS on, a Taiwan row takes its price from MIS and keeps Yahoo's line; if MIS fails, or its price falls outside the stock's daily price limits, the row falls back to Yahoo's delayed quote at once and says why (`Showing Yahoo · …`). Finnhub works the same way for US rows. If Finnhub refuses your key (HTTP 401 or 403), Bellwether stops asking Finnhub, says the key is invalid and shows Yahoo until you save a new key or change the US source settings. The detail dialog gives the quote time and the fetch time to the second. Keep one copy of Bellwether shown: each shown copy (even a hidden one) runs its own loops, so a second copy doubles the requests. With Finnhub that means two copies use up its per-minute limit twice as fast, and it answers with rate limits.
+Each row has a dot and a label:
 
-## Reordering
+- **Filled dot**: live. A real-time source, the market trading, the quote at most 120 seconds old (`Binance Spot`, `TWSE MIS`, `Finnhub`).
+- **Ring**: delayed or stalled. Yahoo's prices (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds (`quote stopped at 13:05`), or a session not known yet.
+- **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`).
 
-Hover a row and a six-dot handle appears at its left (and `×` at its right). Press it, drag to where the row should go and release: a thin accent line shows the spot, and the row you are moving looks lifted. Moving the pointer out of the list cancels the drag and changes nothing. The order is saved with your watchlist, so every copy shows it at once and it survives a restart. It also decides which US symbols use Finnhub's request budget (the first ones in the list).
+Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, TWSE MIS every 10 seconds while Taiwan trades, Finnhub about every 30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
 
-## Languages and colors
+## Install
 
-The interface is in English, 繁體中文, 简体中文, 日本語 or 한국어. Until you answer it, a line above the add field reads `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`: pick a language to switch, or press `×` (or add a ticker) to stay in English. The line does not come back. The language is your choice only; it never follows the markets you watch or your system language. By default, gains show red and losses green in the four Asian languages, and green-up in English.
+Ask the agent in Herdr:
+
+```text
+Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/jordan13p/bellwether
+```
+
+The agent tells you what Bellwether reaches on the network, copies the mod, merges its `keys.json` (it asks before replacing a key you already use) and checks it.
+
+<details>
+<summary>Install by hand</summary>
+
+1. Copy `mods/bellwether/` to `~/.config/herdr-app/mods/bellwether/`. Its `mod.json` says `"place": "none"`, so your layouts stay as they are.
+2. Add the line from this repo's `keys.json` to the `global` section of `~/.config/herdr-app/keys.json`. Editing that file keeps it as yours: Herdr no longer adds new default shortcuts to it on upgrade.
+3. Check it:
+
+   ```sh
+   herdr-app check ~/.config/herdr-app/mods/bellwether
+   ```
+
+4. Open it with `ctrl-alt-b`, or without the key, on Herdr's `main` layout or your own:
+
+   ```sh
+   herdr-app do pane.split --direction right --mod bellwether
+   ```
+
+</details>
+
+## Usage
+
+Type a symbol into the add field and press Enter:
+
+| Symbol | Market |
+|---|---|
+| `AAPL` | US stock |
+| `^GSPC` | index (S&P 500) |
+| `2330.TW` | Taiwan stock (`.TWO` for the OTC market) |
+| `0700.HK` | Hong Kong stock (`700.HK` works too) |
+| `7203.T` | Japan stock |
+| `BTC/USDT` | Binance crypto pair, `BASE/QUOTE` |
+
+- **Remove**: hover a row and press `×` at its right.
+- **Reorder**: hover a row, press the six-dot handle at its left and drag; an accent line shows where it lands. Leaving the list cancels the drag.
+- **Detail**: click a row for its day: a chart, open, high, low and previous close, the session, the quote time and the fetch time.
+- **Refresh and Pause**: the header icons. Refresh runs one round of every source but Finnhub, also while paused; Pause stops automatic refreshes in every copy.
+- **Keys**: Bellwether answers `bellwether.refresh` and `bellwether.pause`; neither is bound. To bind one, add it to `~/.config/herdr-app/keys.json`:
+
+  ```json
+  { "global": { "ctrl-alt-r": "bellwether.refresh" } }
+  ```
+
+### Open and close
+
+- `ctrl-alt-b` opens Bellwether as a pane to the right of the focused terminal, on any layout. Pressing it again opens another copy, and every copy sends its own requests, so keep one open.
+- To change the key, rename `ctrl-alt-b` in the `global` section of `~/.config/herdr-app/keys.json`; to drop it, delete that line. Without a key: `herdr-app do pane.split --direction right --mod bellwether`.
+- Close it like any pane, from Herdr's pane header or with `pane.close`.
+- The header's **open in its own tab** icon moves Bellwether to a `Bellwether` tab, where it shows the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes the tab. Only one copy fetches either way.
+- Zoom stays with Herdr's own pane header; Bellwether has no zoom of its own.
 
 ## Settings
 
-The settings icon (a gear) in the panel header opens a dialog with three tabs; nothing changes until you press Save, and Cancel or Esc drops your edits.
+The gear icon opens a dialog with three tabs. Nothing changes until you press Save; Cancel or Esc drops your edits.
 
-- **Data sources**: Yahoo Finance for stocks and indexes (delayed, nothing to set) and Binance Spot for crypto pairs. The United States card switches US stocks between Yahoo (the default) and Finnhub, which needs your own API key (a free-plan key is enough and recommended). Choosing Finnhub shows a masked key field with a Show/Hide button, the Finnhub URL, the requests per minute (a whole number of at least 4, default 60) and how many US symbols that covers. Save stays disabled without a key. The key is stored in plaintext on this computer (see below). The Taiwan card switches Taiwan stocks between Yahoo (the default) and TWSE MIS, the Taiwan Stock Exchange's unofficial market-information feed. Choosing TWSE MIS shows its URL, a responsibility statement (the Traditional Chinese text prevails) and a consent box; Save stays disabled until you tick it. Your consent is stored with the statement's version: when the statement changes, Taiwan stocks go back to Yahoo and the card and status line ask you to confirm again. Binance may be unavailable in some regions, such as the United States (crypto rows then say so); the Binance URL can be changed to another address that serves the same API. It must start with `https://`, otherwise Save stays disabled.
-- **Display**: the interface language (it changes only the interface text, not the quotes), the gain/loss color (automatic by language, red-up or green-up), which applies to the whole list whatever the market, and a button that opens Herdr's own appearance settings. Bellwether has no light/dark setting of its own.
-- **Disclaimer & privacy**: the full disclaimer, the sources and what their quotes mean (Yahoo Finance: regular-session quotes, exchange delays vary; Binance Spot: crypto pairs with a 24-hour change), the hosts and the storage. The one-line disclaimer in the panel footer opens this tab.
+**Data sources.** Yahoo Finance and Binance Spot need nothing set. The United States card switches US stocks to Finnhub, with your own API key (a free-plan key is enough), the requests per minute and how many symbols that covers. The Taiwan card switches Taiwan stocks to TWSE MIS after you read its statement and tick the consent box. The Crypto card takes another Binance address (`https://` only).
 
-## Network and storage
+**Display.** The interface language (it changes only the text, not the quotes), the gain and loss colors (automatic by language, red-up or green-up) and a button to Herdr's own appearance settings; light and dark themes come from Herdr.
 
-Bellwether sends read-only requests to `query1.finance.yahoo.com` and `data-api.binance.vision`, plus the Binance URL if you set another one in Settings, and runs no programs. Only after you choose TWSE MIS on the Taiwan card and tick its consent box does it also contact `mis.twse.com.tw` (unofficial; or the MIS URL you set), for the Taiwan symbols on your list. Only after you choose Finnhub on the United States card and save a key does it also contact `finnhub.io` (or the Finnhub URL you set), for the first US symbols on your list; the key travels in a request header, never in the address. It keeps your watchlist in Herdr's shared state under `bellwether.watchlist.v1` and your settings (language, colors, whether the language line was answered, the US and Taiwan sources, the Finnhub, MIS and Binance URLs, the Finnhub budget, the version of the MIS statement you consented to, and a counter that tells every copy to read the Finnhub key again) under `bellwether.settings.v1`. A Finnhub key you save is kept in plaintext in `data/bellwether/secrets.json` in Herdr's folder on this computer (`~/.config/herdr-app`), never in Herdr's shared state; anyone who can read your files can read it, so use a free-plan key. It reads and writes no other files.
+**Disclaimer & privacy.** The full disclaimer, what each source's quotes mean, and the hosts, programs and storage listed below. The one-line disclaimer in the panel footer opens this tab.
 
-## Credits
+## Privacy and security
+
+Hosts, and when Bellwether contacts them:
+
+| Host | When |
+|---|---|
+| `query1.finance.yahoo.com` | always, for stocks and indexes |
+| `data-api.binance.vision`, or the Binance address you set | always, for crypto pairs |
+| `mis.twse.com.tw`, or the MIS address you set | only after you choose TWSE MIS for Taiwan and tick its consent box (unofficial) |
+| `finnhub.io`, or the Finnhub address you set | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address |
+
+- **Programs**: none are run.
+- **Storage**: the watchlist in Herdr's shared state under `bellwether.watchlist.v1`, the settings under `bellwether.settings.v1`. A Finnhub key you save is kept in plaintext in `data/bellwether/secrets.json` in Herdr's folder on this computer, never in the shared state; anyone who can read your files can read it, so use a free-plan key. No other file is read or written.
+- **Finnhub**: only the first US symbols your budget covers are asked (15 at the default 60 requests per minute). Every open copy sends its own requests, so two copies use the budget twice as fast.
+- No telemetry, no analytics and no intermediate server: requests go directly from this computer to each source.
+- Keep one copy of Bellwether open. Each copy, even a hidden one, runs its own refresh loops, so a second copy doubles every request.
+
+## FAQ
+
+**Why are my Taiwan quotes 20 minutes late?** Yahoo Finance delays Taiwan quotes by 20 minutes, and Bellwether says so on every Taiwan row (`delayed 20 min`). For real-time Taiwan prices, turn on TWSE MIS in Settings.
+
+**Why is TWSE MIS off by default?** TWSE MIS is the Taiwan Stock Exchange's market-information website, not an API offered to third-party programs, and nothing about it is promised. Bellwether uses it only after you read its responsibility statement in Settings and tick the consent box; whether to use it, and whether that complies with the exchange website's terms of use, is your own judgment and responsibility. The Traditional Chinese statement prevails.
+
+**Why only 15 real-time US symbols?** Finnhub's free plan allows 60 requests a minute. Bellwether prices as many US symbols as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US symbols in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
+
+**Why is Binance unavailable for me?** Binance refuses requests from some regions, such as the United States, and the crypto rows then say Binance is not available in this region. Stocks are unaffected. You can set another Binance address that serves the same API in Settings.
+
+**Does Bellwether send my watchlist anywhere?** No. Each symbol goes only to the source that prices it, as part of that source's request, directly from your computer. There is no Bellwether server and no telemetry; the list itself stays in Herdr's shared state on this computer.
+
+## Disclaimer
+
+Quotes come from third parties and are not guaranteed to be accurate, timely or available. Nothing shown here is investment advice. Turning on a source that is not public, or entering a key, is your own act and is governed by that source's terms. Requests go directly from this computer to each source. Bellwether has no server and sends no telemetry. A Finnhub key you save is stored in plaintext on this computer. The English text prevails over its translations.
+
+## Credits and license
 
 Bellwether is a modified version of the Herdr mod in [fatwang2/Pulse](https://github.com/fatwang2/Pulse) (MIT). It is not affiliated with or endorsed by Pulse.
+
+Released under the [MIT License](LICENSE), copyright (c) 2026 fatwang2 and (c) 2026 jordan13p.
+
+## Development
+
+```sh
+node --test tests/
+herdr-app check "$PWD/mods/bellwether"
+```
+
+`RECIPE.md` is the full brief: what Bellwether draws, how it behaves and what it is built from.

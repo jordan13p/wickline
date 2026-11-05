@@ -59,6 +59,15 @@ test("keys.json binds only the open key", () => {
   });
 });
 
+test("the repo root is the listing folder", () => {
+  const names = readdirSync(ROOT);
+  for (const name of ["mods", "RECIPE.md", "README.md", "README.zh-TW.md", "LICENSE", "keys.json", "assets", "tests"]) {
+    assert.ok(names.includes(name), name);
+  }
+  assert.ok(!names.includes("layouts"), "no layouts/");
+  for (const name of ["logo-light.svg", "logo-dark.svg"]) assert.match(read(new URL(`assets/${name}`, ROOT)), /viewBox="0 0 24 24"/, name);
+});
+
 test("icon is single-colour", () => {
   const svg = read(new URL("icon.svg", MOD));
   assert.match(svg, /stroke="currentColor"/);
@@ -119,6 +128,21 @@ test("every error code has English text", () => {
 test("READMEs link to each other", () => {
   assert.match(read(new URL("README.md", ROOT)), /README\.zh-TW\.md/);
   assert.match(read(new URL("README.zh-TW.md", ROOT)), /README\.md/);
+});
+
+test("READMEs carry the same sections", () => {
+  const headings = (name) => read(new URL(name, ROOT)).match(/^## .+$/gm) ?? [];
+  assert.ok(headings("README.md").length >= 10);
+  assert.equal(headings("README.zh-TW.md").length, headings("README.md").length);
+});
+
+test("README and RECIPE show the preview and say how to open Bellwether", () => {
+  for (const name of ["README.md", "README.zh-TW.md", "RECIPE.md"]) {
+    const text = read(new URL(name, ROOT));
+    assert.match(text, /preview\.png/, name);
+    assert.ok(text.includes("ctrl-alt-b"), `open key in ${name}`);
+    assert.ok(text.includes("herdr-app do pane.split --direction right --mod bellwether"), `manual open in ${name}`);
+  }
 });
 
 test("the disclosure names every host and the key file in all four places", () => {
