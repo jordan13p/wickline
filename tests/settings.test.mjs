@@ -3,10 +3,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { SECRET_KEY_FINNHUB, SETTINGS_KEY, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings } from "../mods/bellwether/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/bellwether/providers/mis.js";
+import { FINNHUB_URL } from "../mods/bellwether/providers/finnhub.js";
 import { STRINGS } from "../mods/bellwether/i18n.js";
 
 const BINANCE = "https://data-api.binance.vision";
-const DEFAULTS = { version: 1, language: "en", colors: "auto", languagePromptDismissed: false, sources: { tw: { provider: "yahoo", misUrl: MIS_URL, misAck: null }, crypto: { binanceUrl: BINANCE } } };
+const DEFAULTS = {
+  version: 1, language: "en", colors: "auto", languagePromptDismissed: false, keyRev: 0,
+  sources: {
+    us: { provider: "yahoo", finnhubUrl: FINNHUB_URL, budgetPerMinute: 60 },
+    tw: { provider: "yahoo", misUrl: MIS_URL, misAck: null },
+    crypto: { binanceUrl: BINANCE },
+  },
+};
 
 test("reads settings defensively", () => {
   assert.equal(SETTINGS_KEY, "bellwether.settings.v1");
@@ -78,10 +86,10 @@ test("a save keeps sources keys this build does not know", () => {
   const raw = { version: 1, sources: { crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } } };
   const change = { sources: { crypto: { binanceUrl: "https://b.test" } } };
   assert.deepEqual(mergeSettings(raw, change).sources,
-    { tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://b.test", later: 1 }, future: { x: 2 } });
+    { us: DEFAULTS.sources.us, tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://b.test", later: 1 }, future: { x: 2 } });
   // A change without sources leaves them as they were.
   assert.deepEqual(mergeSettings(raw, { language: "ja" }).sources,
-    { tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } });
+    { us: DEFAULTS.sources.us, tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } });
 });
 
 const tw = (fields) => readSettings({ version: 1, sources: { tw: fields } });
@@ -125,4 +133,44 @@ test("a save stores URLs without surrounding spaces", () => {
   const inner = mergeSettings(undefined, { sources: { crypto: { binanceUrl: " https://a b.test " } } });
   assert.equal(inner.sources.crypto.binanceUrl, "https://a b.test");
   assert.deepEqual(validateSettings(readSettings(inner)), { "sources.crypto.binanceUrl": "url.invalid" });
+});
+
+const us = (fields) => readSettings({ version: 1, sources: { us: fields } });
+
+test("budget validation", () => {
+  assert.deepEqual(validateSettings(us({ provider: "finnhub", budgetPerMinute: 3 })), { "sources.us.budgetPerMinute": "budget.tooSmall" });
+  assert.equal(us({ budgetPerMinute: "60" }).sources.us.budgetPerMinute, 60);
+  assert.equal(us({ budgetPerMinute: "30" }).sources.us.budgetPerMinute, 60);
+  assert.equal(us({ budgetPerMinute: 30 }).sources.us.budgetPerMinute, 30);
+  for (const bad of [4.5, null, -8, {}]) assert.equal(us({ budgetPerMinute: bad }).sources.us.budgetPerMinute, 60, String(bad));
+  assert.deepEqual(validateSettings(us({ provider: "finnhub", budgetPerMinute: 4 })), {});
+  // A draft holds what is typed until it is a whole number.
+  for (const typed of ["", "12a", "4.5", 0]) {
+    const draft = us({ provider: "finnhub" });
+    draft.sources.us.budgetPerMinute = typed;
+    assert.deepEqual(validateSettings(draft), { "sources.us.budgetPerMinute": "budget.tooSmall" }, String(typed));
+  }
+  // Hidden while Yahoo is chosen: never blocks a save.
+  assert.deepEqual(validateSettings(us({ provider: "yahoo", budgetPerMinute: 3 })), {});
+  for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["budget.tooSmall"], lang);
+});
+
+test("reads the US source and the key revision", () => {
+  assert.equal(us({ provider: "bogus" }).sources.us.provider, "yahoo");
+  assert.equal(us({ provider: "finnhub" }).sources.us.provider, "finnhub");
+  assert.equal(us({ finnhubUrl: "https://mirror.test/fh" }).sources.us.finnhubUrl, "https://mirror.test/fh");
+  assert.equal(readSettings({ keyRev: 3 }).keyRev, 3);
+  for (const bad of ["3", -1, 1.5, null]) assert.equal(readSettings({ keyRev: bad }).keyRev, 0, String(bad));
+});
+
+test("Finnhub needs an https address and a key to save", () => {
+  assert.deepEqual(validateSettings(us({ provider: "finnhub", finnhubUrl: "http://x.test" })), { "sources.us.finnhubUrl": "url.notHttps" });
+  assert.deepEqual(validateSettings(us({ provider: "yahoo", finnhubUrl: "http://x.test" })), {});
+  // The key is checked only when the dialog passes what is typed.
+  assert.deepEqual(validateSettings(us({ provider: "finnhub" }), { finnhubKey: " " }), { "sources.us.key": "finnhub.keyNeeded" });
+  assert.deepEqual(validateSettings(us({ provider: "finnhub" }), { finnhubKey: "test-key" }), {});
+  assert.deepEqual(validateSettings(us({ provider: "yahoo" }), { finnhubKey: "" }), {});
+  const saved = mergeSettings(undefined, { sources: { us: { provider: "finnhub", finnhubUrl: ` ${FINNHUB_URL} ` } } });
+  assert.equal(saved.sources.us.finnhubUrl, FINNHUB_URL);
+  for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.keyNeeded"], lang);
 });

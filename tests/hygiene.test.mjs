@@ -5,11 +5,13 @@ import { readFileSync, readdirSync } from "node:fs";
 import { MESSAGES_EN } from "../mods/bellwether/quotes.js";
 import { STRINGS } from "../mods/bellwether/i18n.js";
 import { Watchlist } from "../mods/bellwether/watchlist.js";
+import { SECRET_KEY_FINNHUB } from "../mods/bellwether/settings.js";
 
 const MOD = new URL("../mods/bellwether/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
-// mis.twse.com.tw only once the person turns TWSE MIS on and consents.
-const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw"];
+// mis.twse.com.tw only once the person turns TWSE MIS on and consents; finnhub.io only with Finnhub
+// chosen and a key saved.
+const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw", "finnhub.io"];
 // Herdr writes these into the mod folder; they are git-ignored.
 const GENERATED = ["jsconfig.json", "gpui-kit.d.ts"];
 
@@ -80,8 +82,10 @@ test("every error code has English text", () => {
     const text = read(file);
     for (const [, code] of text.matchAll(/new QuoteError\(\s*"([^"]+)"/g)) errors.add(code);
     // Codes handed to the view as `{ code, params }`, e.g. a deferred refresh.
-    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance|mis|request)\.[A-Za-z]+)"/g)) notices.add(code);
+    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance|mis|finnhub|request|notice|budget)\.[A-Za-z]+)"/g)) notices.add(code);
   }
+  // The key's name in the secrets file, not a text.
+  notices.delete(SECRET_KEY_FINNHUB);
   // Built from the provider id: `${provider.id}.unreachable`.
   for (const id of new Watchlist({ load: () => undefined, settings: () => undefined }).providerIds()) errors.add(`${id}.unreachable`);
   assert.ok(errors.size > 0);
@@ -92,4 +96,18 @@ test("every error code has English text", () => {
 test("READMEs link to each other", () => {
   assert.match(read(new URL("README.md", ROOT)), /README\.zh-TW\.md/);
   assert.match(read(new URL("README.zh-TW.md", ROOT)), /README\.md/);
+});
+
+test("the disclosure names every host and the key file in all four places", () => {
+  const docs = ["README.md", "README.zh-TW.md", "RECIPE.md"].map((name) => [name, read(new URL(name, ROOT))]);
+  for (const lang of Object.keys(STRINGS)) {
+    const privacy = ["privacy.hosts", "privacy.storage", "privacy.finnhub"].map((key) => STRINGS[lang][key]).join(" ");
+    docs.push([`${lang} privacy`, privacy]);
+  }
+  for (const [name, text] of docs) {
+    for (const host of ALLOWED_HOSTS) assert.ok(text.includes(host), `${host} in ${name}`);
+    assert.ok(text.includes("data/bellwether/secrets.json"), `key file in ${name}`);
+    // The default cap, behind the budget and the two-copies warning.
+    assert.ok(text.includes("15"), `cap in ${name}`);
+  }
 });

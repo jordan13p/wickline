@@ -31,6 +31,11 @@ export const MESSAGES_EN = {
   "mis.unreadable": "TWSE MIS returned an unreadable response.",
   "mis.outOfLimits": "The TWSE MIS price was outside the stock's daily price limits.",
   "mis.unreachable": "Could not reach TWSE MIS.",
+  "finnhub.invalidKey": "Finnhub refused the API key. Check it in Settings.",
+  "finnhub.rateLimited": "Finnhub rate limited requests.",
+  "finnhub.http": "Finnhub returned HTTP {status}.",
+  "finnhub.unreadable": "Finnhub returned an unreadable response.",
+  "finnhub.unreachable": "Could not reach Finnhub.",
   // `{source}` is a provider id; the view shows its name.
   "request.timeout": "{source} did not answer within {seconds}s.",
 };
@@ -45,6 +50,8 @@ export class QuoteError extends Error {
     this.params = params;
     this.retryAfterMs = options.retryAfterMs;
     this.invalidSymbol = options.invalidSymbol === true;
+    // The source refuses every request until its settings change (a rejected key).
+    this.stopsSource = options.stopsSource === true;
   }
 }
 

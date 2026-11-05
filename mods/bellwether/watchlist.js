@@ -4,8 +4,9 @@ import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
 import { marketOf } from "./markets.js";
 import { binance } from "./providers/binance.js";
+import { finnhub, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
-import { misEnabled, misReconfirm, readSettings } from "./settings.js";
+import { SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
@@ -13,11 +14,22 @@ export const WATCHLIST_KEY = "bellwether.watchlist.v1";
 // Herdr's fetch cannot be aborted: a request that has not answered by then counts as failed.
 export const REQUEST_TIMEOUT_MS = 10_000;
 // Started in this order, so their first requests go out in this order too.
-const PROVIDERS = [binance, mis, yahoo];
-// Overlay sources the person turns on in Settings: whether each is on now, and what its card and
-// status line say while it is chosen but cannot run.
+const PROVIDERS = [binance, mis, finnhub, yahoo];
+// Overlay sources the person turns on in Settings: whether each is on now (given this watchlist, which
+// holds the key read from the secrets file), what its card and status line say while it is chosen but
+// cannot run, and, for a source that can refuse the key, the settings whose change lets it try again.
 const SWITCHES = {
   mis: { on: misEnabled, notice: (settings) => (misReconfirm(settings) ? "mis.reconfirm" : null) },
+  finnhub: {
+    on: (settings, w) => finnhubChosen(settings) && Boolean(w.finnhubKey),
+    // Only once this copy has read the key file for the saved keyRev.
+    notice: (settings, w) => {
+      if (!finnhubChosen(settings) || w.keyRev !== settings.keyRev) return null;
+      if (w.keyUnreadable) return "finnhub.secretUnreadable";
+      return w.finnhubKey ? null : "finnhub.noKey";
+    },
+    retryOn: (settings) => JSON.stringify([settings.sources.us, settings.keyRev]),
+  },
 };
 // A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open.
 const SESSION_RANK = { open: 3, "24h": 3, unknown: 2, pre: 1, post: 1, closed: 0 };
@@ -84,6 +96,8 @@ export function readPreferences(value) {
  *   load(): unknown, save(preferences): void          // the saved watchlist
  *   settings(): unknown                                // the saved settings (read only)
  *   fetch(url, headers): Promise<{ status, ok, text() }>  // GET with the request's headers; hosts in providers/
+ *   loadSecret(name): Promise<string|null>             // the secrets file's value (null: no file or no key);
+ *                                                      // rejects when the file cannot be read
  *   now(): number
  * }
  * Each loop gets its own io: { sleep(ms): Promise<void>, changed(): void } (redraw).
@@ -91,6 +105,11 @@ export function readPreferences(value) {
 export class Watchlist {
   constructor(host) {
     this.host = host;
+    // The Finnhub key as read from the secrets file for keyRev `keyRev` (null: not read yet). Only in
+    // memory: never in the config, the shared state or an error.
+    this.finnhubKey = null;
+    this.keyRev = null;
+    this.keyUnreadable = false;
     this.preferences = readPreferences(host.load());
     this.configKey = JSON.stringify(this.config());
     // By symbol: the base quote (Yahoo for stocks, Binance for pairs) and a real-time overlay over it.
@@ -108,18 +127,50 @@ export class Watchlist {
     this.sources = Object.fromEntries(PROVIDERS.map((provider) => [provider.id, {
       retryAt: 0, failures: 0, disabled: false, problem: null,
       loading: false, manual: false, dirty: true, wake: null,
-      lastRequestAt: -Infinity, linesAt: {}, configKey: null,
+      lastRequestAt: -Infinity, linesAt: {}, configKey: null, disabledFor: null,
     }]));
   }
 
-  /** What the providers are given: the saved addresses, and which overlay sources are on. */
+  /**
+   * What the providers are given: the saved addresses and budget, and which overlay sources are on.
+   * The key is added only to the requests of a round, so it never reaches `configKey`.
+   */
   config() {
     const settings = readSettings(this.host.settings());
     return {
       binanceUrl: settings.sources.crypto.binanceUrl,
       misUrl: settings.sources.tw.misUrl,
-      on: Object.fromEntries(Object.entries(SWITCHES).map(([id, { on }]) => [id, on(settings)])),
+      finnhubUrl: settings.sources.us.finnhubUrl,
+      budgetPerMinute: settings.sources.us.budgetPerMinute,
+      keyRev: settings.keyRev,
+      on: Object.fromEntries(Object.entries(SWITCHES).map(([id, { on }]) => [id, on(settings, this)])),
     };
+  }
+
+  /** Reads the Finnhub key again when Finnhub is chosen and keyRev changed; a broken file is no key. */
+  async loadKey(settings) {
+    if (!finnhubChosen(settings) || this.keyRev === settings.keyRev) return;
+    this.keyRev = settings.keyRev;
+    try {
+      const value = await this.host.loadSecret(SECRET_KEY_FINNHUB);
+      this.finnhubKey = typeof value === "string" && value.trim() ? value.trim() : null;
+      this.keyUnreadable = false;
+    } catch {
+      this.finnhubKey = null;
+      this.keyUnreadable = true;
+    }
+  }
+
+  /** The US symbols Finnhub prices: the first `finnhubCap(budget)` in list order. */
+  finnhubSymbols() {
+    return this.symbolsFor(finnhub);
+  }
+
+  /** A listed US symbol left on Yahoo because Finnhub's budget is used up by the ones before it. */
+  overCap(symbol) {
+    const config = this.config();
+    return config.on.finnhub && marketOf(symbol) === "us" && this.preferences.symbols.includes(symbol)
+      && !this.symbolsFor(finnhub, config).includes(symbol);
   }
 
   /** What a row shows: the base quote with its overlay, if any. */
@@ -144,7 +195,7 @@ export class Watchlist {
   problems() {
     const settings = readSettings(this.host.settings());
     return PROVIDERS.flatMap((provider) => {
-      const code = SWITCHES[provider.id]?.notice(settings);
+      const code = SWITCHES[provider.id]?.notice(settings, this);
       const problem = code ? notice(code) : this.sources[provider.id].problem;
       return problem ? [{ provider: provider.id, ...problem }] : [];
     });
@@ -163,11 +214,13 @@ export class Watchlist {
 
   add(input) {
     const symbol = normalizeSymbol(input);
-    return this.edit((p) => {
+    const message = this.edit((p) => {
       if (p.symbols.includes(symbol)) return notice("notice.duplicate", { symbol });
       p.symbols.push(symbol);
       return notice("notice.added", { symbol });
     });
+    if (message.code !== "notice.added" || !this.overCap(symbol)) return message;
+    return notice("notice.overCap", { symbol, cap: finnhubCap(this.config().budgetPerMinute) });
   }
 
   remove(symbol) {
@@ -185,10 +238,17 @@ export class Watchlist {
     });
   }
 
-  /** One round of every source now, also while paused; a source's cooldown still holds. */
+  /**
+   * One round of every source now, also while paused; a source's cooldown still holds. A source on
+   * a request budget (Finnhub) keeps its own pace.
+   */
   refreshNow() {
-    for (const state of Object.values(this.sources)) state.manual = true;
-    this.poke();
+    for (const provider of PROVIDERS) {
+      if (provider.manualRefresh === false) continue;
+      const state = this.sources[provider.id];
+      state.manual = true;
+      wake(state);
+    }
   }
 
   stop() {
@@ -236,10 +296,11 @@ export class Watchlist {
     }
   }
 
-  /** The listed symbols a provider quotes; none for an overlay source that is off. */
+  /** The listed symbols a provider quotes, up to its cap; none for an overlay source that is off. */
   symbolsFor(provider, config = this.config()) {
     if (provider.overlay && !config.on[provider.id]) return [];
-    return this.preferences.symbols.filter((symbol) => provider.markets.includes(marketOf(symbol)));
+    const symbols = this.preferences.symbols.filter((symbol) => provider.markets.includes(marketOf(symbol)));
+    return provider.cap ? symbols.slice(0, Math.max(0, provider.cap(config))) : symbols;
   }
 
   /** The busiest session among `symbols`: open > unknown (no quote yet) > pre/post > closed. */
@@ -275,6 +336,14 @@ export class Watchlist {
       const manual = state.manual;
       state.manual = false;
       state.dirty = false;
+      const settings = readSettings(this.host.settings());
+      if (provider === finnhub) await this.loadKey(settings);
+      if (this.stopped) return;
+      // A refused key stops the source until its own settings change (a new key, address or budget).
+      if (state.disabled && state.disabledFor !== SWITCHES[id]?.retryOn?.(settings)) {
+        state.disabled = false;
+        state.problem = null;
+      }
       // Another copy may have edited the shared list.
       this.adopt(readPreferences(this.host.load()));
       this.configKey = JSON.stringify(this.config());
@@ -320,7 +389,9 @@ export class Watchlist {
     const configKey = JSON.stringify(config);
     // A new address asks every line again.
     if (state.configKey !== configKey) { state.configKey = configKey; state.linesAt = {}; }
-    const requests = provider.requests(symbols, config);
+    // Only the requests carry the key.
+    const asked = { ...config, finnhubKey: this.finnhubKey };
+    const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));
     let problem = null;
@@ -334,13 +405,22 @@ export class Watchlist {
         if (wait > 0) await io.sleep(wait);
         if (!current()) return;
         state.lastRequestAt = this.host.now();
-        const result = await this.quote(provider, request, io, current, config);
+        const result = await this.quote(provider, request, io, current, asked);
         if (!result) return;
         const failures = Object.values(result.errors);
+        const refused = failures.find((error) => error.stopsSource);
         const limited = failures.find((error) => error.retryAfterMs !== undefined);
         const down = failures.find((error) => SOURCE_DOWN.test(error.code));
         if (!problem) problem = failures.find((error) => SOURCE_FAILURE.test(error.code)) ?? null;
         this.apply(provider, request, result);
+        if (refused) {
+          // No more requests with this key: the rest fall back with the same reason.
+          state.disabled = true;
+          state.disabledFor = SWITCHES[provider.id]?.retryOn?.(readSettings(this.host.settings())) ?? null;
+          state.problem = coded(refused);
+          this.failRest(provider, requests, index, coded(refused));
+          return;
+        }
         if (limited) {
           // Back off this provider only: at least a minute, doubling up to 15 minutes.
           state.failures++;

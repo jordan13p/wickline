@@ -2,6 +2,7 @@
 // language prompt was dismissed, and where each source lives. No Herdr imports,
 // so tests run it under Node.
 import { LANGUAGES } from "./i18n.js";
+import { FINNHUB_URL } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 
 // Herdr's shared state (persisted), so every copy uses the same settings.
@@ -10,6 +11,9 @@ export const SETTINGS_KEY = "bellwether.settings.v1";
 export const SECRET_KEY_FINNHUB = "finnhub.key";
 export const DEFAULT_BINANCE_URL = "https://data-api.binance.vision";
 const COLORS = ["auto", "red-up", "green-up"];
+// Finnhub's free plan allows 60 requests a minute; each US symbol takes four.
+export const DEFAULT_FINNHUB_BUDGET = 60;
+const MIN_FINNHUB_BUDGET = 4;
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -25,17 +29,30 @@ export function readSettings(value) {
   const saved = isPlainObject(value) ? value : {};
   const crypto = section(saved.sources, "crypto");
   const tw = section(saved.sources, "tw");
+  const us = section(saved.sources, "us");
   return {
     version: 1,
     language: LANGUAGES.includes(saved.language) ? saved.language : "en",
     colors: COLORS.includes(saved.colors) ? saved.colors : "auto",
     languagePromptDismissed: saved.languagePromptDismissed === true,
-    // A URL is kept as written, even a bad one, so the dialog can name the problem.
+    // Raised by each save of a new Finnhub key, so every copy reads the key file again.
+    keyRev: Number.isInteger(saved.keyRev) && saved.keyRev >= 0 ? saved.keyRev : 0,
+    // A URL or budget is kept as written, even a bad one, so the dialog can name the problem.
     sources: {
+      us: {
+        provider: us.provider === "finnhub" ? "finnhub" : "yahoo",
+        finnhubUrl: readUrl(us.finnhubUrl, FINNHUB_URL),
+        budgetPerMinute: Number.isInteger(us.budgetPerMinute) && us.budgetPerMinute > 0 ? us.budgetPerMinute : DEFAULT_FINNHUB_BUDGET,
+      },
       tw: { provider: tw.provider === "mis" ? "mis" : "yahoo", misUrl: readUrl(tw.misUrl, MIS_URL), misAck: readAck(tw.misAck) },
       crypto: { binanceUrl: readUrl(crypto.binanceUrl, DEFAULT_BINANCE_URL) },
     },
   };
+}
+
+/** Finnhub is chosen for US stocks; it runs only once a key is saved too. */
+export function finnhubChosen(settings) {
+  return settings.sources.us.provider === "finnhub";
 }
 
 /** MIS is on only when chosen and consented to for the current statement. */
@@ -51,14 +68,18 @@ export function misReconfirm(settings) {
 // Field path -> error code; an https address, optionally with a path, and no userinfo, query or fragment.
 // A field is checked only while it is shown: the MIS address only with MIS chosen.
 const URL_FIELDS = [
+  ["sources.us.finnhubUrl", (s) => (s.sources.us?.provider === "finnhub" ? s.sources.us.finnhubUrl : null)],
   ["sources.tw.misUrl", (s) => (s.sources.tw?.provider === "mis" ? s.sources.tw.misUrl : null)],
   ["sources.crypto.binanceUrl", (s) => s.sources.crypto.binanceUrl],
 ];
 // The host has at least one letter or digit and no `@` (a password in the address would be sent as is).
 const HTTPS_ADDRESS = /^https:\/\/[^\s/?#@]*[a-z0-9][^\s/?#@]*(\/[^\s?#]*)?$/i;
 
-/** What stops a save: `{}` is valid. The text for each code is in i18n.js. */
-export function validateSettings(settings) {
+/**
+ * What stops a save: `{}` is valid. The text for each code is in i18n.js. `finnhubKey` is the key
+ * the dialog holds (it is never in the settings); without it the key is not checked.
+ */
+export function validateSettings(settings, { finnhubKey } = {}) {
   const errors = {};
   for (const [path, get] of URL_FIELDS) {
     const value = get(settings);
@@ -66,6 +87,11 @@ export function validateSettings(settings) {
     const url = value.trim();
     if (!/^https:\/\//i.test(url)) errors[path] = "url.notHttps";
     else if (!HTTPS_ADDRESS.test(url)) errors[path] = "url.invalid";
+  }
+  if (settings.sources.us?.provider === "finnhub") {
+    const budget = settings.sources.us.budgetPerMinute;
+    if (!Number.isInteger(budget) || budget < MIN_FINNHUB_BUDGET) errors["sources.us.budgetPerMinute"] = "budget.tooSmall";
+    if (typeof finnhubKey === "string" && !finnhubKey.trim()) errors["sources.us.key"] = "finnhub.keyNeeded";
   }
   // MIS cannot be saved without ticking the consent box.
   if (settings.sources.tw && misReconfirm(settings)) errors["sources.tw.misAck"] = "mis.consentNeeded";
@@ -88,7 +114,7 @@ export function mergeSettings(raw, change) {
 }
 
 // The address fields in `sources`, as [source, key].
-const URL_KEYS = [["tw", "misUrl"], ["crypto", "binanceUrl"]];
+const URL_KEYS = [["us", "finnhubUrl"], ["tw", "misUrl"], ["crypto", "binanceUrl"]];
 
 // Each source keeps the keys a newer copy added to it, and whole sources this build lacks.
 function mergeSources(old, known, change) {

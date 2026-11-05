@@ -18,7 +18,7 @@ const count = (host, part) => host.requests.filter((url) => url.includes(part)).
 
 test("one loop per source", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  assert.deepEqual(w.providerIds(), ["binance", "mis", "yahoo"]);
+  assert.deepEqual(w.providerIds(), ["binance", "mis", "finnhub", "yahoo"]);
   assert.equal(REQUEST_TIMEOUT_MS, 10_000);
 });
 

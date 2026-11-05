@@ -6,7 +6,7 @@ export const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } }
 
 export function fakeHost(respond) {
   const host = {
-    store: { version: 1, symbols: [], paused: false }, clock: 0, sleeps: [], requests: [],
+    store: { version: 1, symbols: [], paused: false }, clock: 0, sleeps: [], requests: [], headers: [],
     load: () => host.store,
     // The saved settings (shared state in Herdr); nothing saved yet.
     prefs: undefined,
@@ -14,7 +14,19 @@ export function fakeHost(respond) {
     save: (p) => { host.store = JSON.parse(JSON.stringify(p)); },
     now: () => host.clock,
     sleep: (ms) => new Promise((resolve) => host.sleeps.push({ at: host.clock + ms, resolve })),
-    fetch: async (url) => { host.requests.push(url); const r = respond(url); return { ...r, text: async () => r.text }; },
+    fetch: async (url, headers) => {
+      host.requests.push(url);
+      host.headers.push(headers);
+      const r = await respond(url);
+      return { ...r, text: async () => r.text };
+    },
+    // The secrets file (main.js reads it from Herdr's data folder): `secret` by name, or a broken file.
+    secrets: {}, secretsBroken: false, secretReads: 0,
+    loadSecret: async (name) => {
+      host.secretReads++;
+      if (host.secretsBroken) throw new SyntaxError("broken");
+      return host.secrets[name] ?? null;
+    },
     changed: () => {},
   };
   return host;

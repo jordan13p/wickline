@@ -4,15 +4,19 @@
 // settings button opens the settings: the same mod, given the quote or `settings` in its props.
 import { View, div, svg, PathBuilder, Background } from "gpui-kit";
 import { v_flex, h_flex, Checkbox, InputState, Input } from "gpui-base";
-import { closeOverlay, nextCommand, openOverlay, props, run, setShared, shared, theme } from "herdr";
+import { appHome, closeOverlay, nextCommand, openOverlay, props, run, setShared, shared, theme } from "herdr";
+import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import {
   QuoteError, chartGeometry, displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair, rowMeta,
 } from "./quotes.js";
 import { detailSource, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
-import { DEFAULT_BINANCE_URL, SETTINGS_KEY, mergeSettings, readSettings, upIsRed, validateSettings } from "./settings.js";
+import {
+  DEFAULT_BINANCE_URL, SECRET_KEY_FINNHUB, SETTINGS_KEY, mergeSettings, readSettings, upIsRed, validateSettings,
+} from "./settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
+import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
@@ -23,6 +27,32 @@ const ICON = "mods/bellwether/icon.svg";
 const SHORT_FOOTER_WIDTH = 360;
 const SETTINGS_TABS = ["sources", "display", "language", "disclaimer"];
 const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
+
+// The Finnhub key, in plaintext, in Bellwether's folder under Herdr's data folder: localStorage is per
+// copy, so the dialog could not hand it to the panel there, and shared state is no place for a key.
+const secretsDir = () => `${appHome()}/data/bellwether`;
+const secretsFile = () => `${secretsDir()}/secrets.json`;
+
+// `{}` when there is no file yet; rejects when the file cannot be read or is not a JSON object.
+async function readSecrets() {
+  if (!(await fs.exists(secretsFile()))) return {};
+  const value = JSON.parse(await fs.readFile(secretsFile(), "utf8"));
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("not an object");
+  return value;
+}
+
+async function loadSecret(name) {
+  const value = (await readSecrets())[name];
+  return typeof value === "string" ? value : null;
+}
+
+// A file that cannot be read is replaced by one holding only this key.
+async function saveSecret(name, value) {
+  let secrets = {};
+  try { secrets = await readSecrets(); } catch { /* Replaced below. */ }
+  await fs.mkdir(secretsDir(), { recursive: true });
+  await fs.writeFile(secretsFile(), `${JSON.stringify({ ...secrets, [name]: value }, null, 2)}\n`);
+}
 
 export default class Bellwether extends View {
   init(_props, cx) {
@@ -38,7 +68,7 @@ export default class Bellwether extends View {
       this.tab = SETTINGS_TABS.includes(given.settings.tab) ? given.settings.tab : "sources";
       // Each source's problem as the panel saw it when it opened the dialog.
       this.health = Array.isArray(given.settings.health) ? given.settings.health : [];
-      this.initDraft();
+      this.initDraft(cx);
       return;
     }
     this.size = null;
@@ -53,8 +83,11 @@ export default class Bellwether extends View {
       save: (preferences) => setShared(WATCHLIST_KEY, preferences),
       settings: () => shared(SETTINGS_KEY),
       // Read-only GETs to Yahoo Finance and Binance (or the Binance address the person set), and to
-      // TWSE MIS (or the MIS address the person set) only once the person turned it on and consented.
+      // TWSE MIS (or the MIS address the person set) only once the person turned it on and consented,
+      // and Finnhub (or the Finnhub address the person set) only once chosen with a key saved.
       fetch: (url, headers) => fetch(url, { headers }),
+      // Read again by each copy when keyRev changes in the shared settings.
+      loadSecret,
       now: () => Date.now(),
     });
     // One loop per source, so a slow source never holds up another. Each owns the cx of its own
@@ -91,9 +124,11 @@ export default class Bellwether extends View {
   }
 
   // Edits to the settings wait in a copy until Save: Cancel, Esc or closing drops it.
-  initDraft() {
+  initDraft(cx) {
     this.draft = JSON.parse(JSON.stringify(this.settings));
     this.error = null;
+    this.saving = false;
+    this.initFinnhubDraft(cx);
     this.urlFocused = false;
     this.urlInput = InputState.new({ placeholder: DEFAULT_BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
     // Redraw on every keystroke: the field's error and the Save button follow the draft.
@@ -105,6 +140,46 @@ export default class Bellwether extends View {
     this.misUrlInput.on("change", (_e, cx) => { this.draft.sources.tw.misUrl = this.misUrlInput.value(); cx.notify(); });
     this.misUrlInput.on("focus", (_e, cx) => { this.misUrlFocused = true; cx.notify(); });
     this.misUrlInput.on("blur", (_e, cx) => { this.misUrlFocused = false; cx.notify(); });
+  }
+
+  // The key input starts empty and masked; the saved key fills it once read. Save waits for that read,
+  // so an unchanged key is never written again and a missing one is never taken for a cleared one.
+  initFinnhubDraft(cx) {
+    this.savedKey = null;
+    this.keyLoaded = false;
+    this.keyShown = false;
+    this.keyInput = InputState.new({ placeholder: this.tx("sources.us.key") });
+    this.keyInput.set_masked(true);
+    this.keyInput.on("change", (_e, cx) => cx.notify());
+    this.keyFocused = false;
+    this.keyInput.on("focus", (_e, cx) => { this.keyFocused = true; cx.notify(); });
+    this.keyInput.on("blur", (_e, cx) => { this.keyFocused = false; cx.notify(); });
+    this.finnhubUrlFocused = false;
+    this.finnhubUrlInput = InputState.new({ placeholder: FINNHUB_URL, value: this.draft.sources.us.finnhubUrl });
+    this.finnhubUrlInput.on("change", (_e, cx) => { this.draft.sources.us.finnhubUrl = this.finnhubUrlInput.value(); cx.notify(); });
+    this.finnhubUrlInput.on("focus", (_e, cx) => { this.finnhubUrlFocused = true; cx.notify(); });
+    this.finnhubUrlInput.on("blur", (_e, cx) => { this.finnhubUrlFocused = false; cx.notify(); });
+    this.budgetFocused = false;
+    this.budgetInput = InputState.new({ value: String(this.draft.sources.us.budgetPerMinute) });
+    // A whole number once it reads as one; until then the text, which validation refuses.
+    this.budgetInput.on("change", (_e, cx) => {
+      const typed = this.budgetInput.value().trim();
+      this.draft.sources.us.budgetPerMinute = /^\d+$/.test(typed) ? Number(typed) : typed;
+      cx.notify();
+    });
+    this.budgetInput.on("focus", (_e, cx) => { this.budgetFocused = true; cx.notify(); });
+    this.budgetInput.on("blur", (_e, cx) => { this.budgetFocused = false; cx.notify(); });
+    cx.spawn(async (cx) => {
+      try {
+        this.savedKey = await loadSecret(SECRET_KEY_FINNHUB);
+      } catch {
+        // Unreadable: the card shows the panel's problem; a key saved now replaces the file.
+        this.savedKey = null;
+      }
+      if (this.savedKey) this.keyInput.set_value(this.savedKey);
+      this.keyLoaded = true;
+      cx.notify();
+    });
   }
 
   // The input's placeholder is fixed when it is made, so a new language needs a new input
@@ -349,6 +424,8 @@ export default class Bellwether extends View {
       const failed = w.errors[symbol];
       // The real-time source failed for this symbol: the base quote shows, with the reason.
       const fallback = w.overlayErrors[symbol];
+      // A US row past Finnhub's budget stays on Yahoo and says so.
+      const overCap = w.overCap(symbol);
       const fresh = quote && freshness(quote, sessionOf(quote, now), now);
       // A closed label carries its own date; any other quote from an earlier day gets one.
       const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, this.lang) : "";
@@ -375,7 +452,9 @@ export default class Bellwether extends View {
           .when(Boolean(failed), (el) => el.child(div().text_size(11).text_color(t.blocked)
             .child(quote ? this.tx("quote.cached", { reason: this.say(failed) }) : this.say(failed))))
           .when(Boolean(fallback), (el) => el.child(div().text_size(11).text_color(t.blocked)
-            .child(quote ? this.fallbackText(quote, fallback) : this.say(fallback)))))
+            .child(quote ? this.fallbackText(quote, fallback) : this.say(fallback))))
+          .when(overCap, (el) => el.child(div().text_size(11).text_color(t.dim)
+            .child(this.tx("finnhub.overCap", { cap: finnhubCap(this.settings.sources.us.budgetPerMinute) })))))
         .child(div().id(`bw-remove-${symbol}`).flex_none().w(14).text_right().text_color(t.dim).cursor_pointer()
           .hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => this.act(cx, () => this.watch.remove(symbol)))
           .child("×"));
@@ -444,9 +523,14 @@ export default class Bellwether extends View {
   }
 
   // The settings dialog: tabs on the left, the tab on the right, Cancel / Save below.
+  // What stops a save, the key the dialog holds included (it is never in the draft).
+  draftErrors() {
+    return validateSettings(this.draft, { finnhubKey: this.keyInput.value() });
+  }
+
   settingsView(t) {
-    const errors = validateSettings(this.draft);
-    const invalid = Object.keys(errors).length > 0;
+    const errors = this.draftErrors();
+    const invalid = Object.keys(errors).length > 0 || !this.keyLoaded || this.saving;
     const tabs = v_flex().flex_none().w(168).p(10).gap(2).border_r(1).border_color(t.border)
       .child(div().px(8).pb(8).text_size(13).font_semibold().text_color(t.accent).child(this.tx("settings.title")))
       .children(SETTINGS_TABS.map((tab) => h_flex().id(`bw-tab-${tab}`).px(8).h(28).items_center().rounded(5).cursor_pointer()
@@ -472,22 +556,40 @@ export default class Bellwether extends View {
       .child(footer);
   }
 
-  // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay.
+  // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay. A new
+  // Finnhub key goes to the secrets file first, then keyRev + 1 tells every copy to read it again.
   saveDraft(cx) {
-    if (Object.keys(validateSettings(this.draft)).length) return;
+    if (Object.keys(this.draftErrors()).length || !this.keyLoaded || this.saving) return;
     const { language, colors, sources } = this.draft;
-    try {
-      setShared(SETTINGS_KEY, mergeSettings(shared(SETTINGS_KEY), {
-        language, colors, sources,
-        // Picking a language answers the language prompt too.
-        ...(language !== this.settings.language && { languagePromptDismissed: true }),
-      }));
-    } catch {
-      this.error = { code: "error.saveSettings", params: {} };
-      cx.notify();
-      return;
-    }
-    closeOverlay(this.overlay);
+    const key = this.keyInput.value().trim();
+    const newKey = sources.us.provider === "finnhub" && key !== (this.savedKey ?? "");
+    this.saving = true;
+    this.error = null;
+    cx.spawn(async (cx) => {
+      if (newKey) {
+        try { await saveSecret(SECRET_KEY_FINNHUB, key); } catch {
+          this.saving = false;
+          this.error = { code: "error.saveKey", params: {} };
+          cx.notify();
+          return;
+        }
+      }
+      try {
+        const saved = shared(SETTINGS_KEY);
+        setShared(SETTINGS_KEY, mergeSettings(saved, {
+          language, colors, sources,
+          // Picking a language answers the language prompt too.
+          ...(language !== this.settings.language && { languagePromptDismissed: true }),
+          ...(newKey && { keyRev: readSettings(saved).keyRev + 1 }),
+        }));
+      } catch {
+        this.saving = false;
+        this.error = { code: "error.saveSettings", params: {} };
+        cx.notify();
+        return;
+      }
+      closeOverlay(this.overlay);
+    });
   }
 
   // One group of choices: the chosen one filled, the rest muted.
@@ -516,6 +618,48 @@ export default class Bellwether extends View {
   healthLine(t, provider) {
     const problem = this.health.find((entry) => entry.provider === provider);
     return problem ? div().text_size(11.5).text_color(t.blocked).child(this.say(problem)) : null;
+  }
+
+  // A labeled input of the settings dialog, red while its value is refused.
+  field(t, label, state, focused, error) {
+    return [
+      div().text_size(11).text_color(t.muted).child(label),
+      Input.new(state).h(30).px(8).rounded(6).border_1().border_color(error ? t.ansi1 : focused ? t.accent : t.input)
+        .bg(t.background).text_size(12).text_color(t.foreground),
+      error ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(error)) : null,
+    ];
+  }
+
+  // US: Yahoo, or Finnhub with the person's key, address and per-minute budget.
+  usCard(t, errors) {
+    const us = this.draft.sources.us;
+    const chosen = us.provider === "finnhub";
+    const keyError = errors["sources.us.key"];
+    const budgetError = errors["sources.us.budgetPerMinute"];
+    const key = h_flex().gap(6).items_center()
+      .child(Input.new(this.keyInput).flex_1().min_w(0).h(30).px(8).rounded(6).border_1()
+        .border_color(keyError ? t.ansi1 : this.keyFocused ? t.accent : t.input)
+        .bg(t.background).text_size(12).text_color(t.foreground))
+      .child(this.button(t, "bw-key-show", this.tx(this.keyShown ? "sources.us.hide" : "sources.us.show"), (cx) => {
+        this.keyShown = !this.keyShown;
+        this.keyInput.set_masked(!this.keyShown);
+        cx.notify();
+      }));
+    const finnhubParts = chosen ? [
+      div().text_size(11).text_color(t.muted).child(this.tx("sources.us.key")),
+      key,
+      keyError ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(keyError)) : null,
+      this.note(t, this.tx("sources.us.keyNote")),
+      ...this.field(t, this.tx("sources.us.url"), this.finnhubUrlInput, this.finnhubUrlFocused, errors["sources.us.finnhubUrl"]),
+      ...this.field(t, this.tx("sources.us.budget"), this.budgetInput, this.budgetFocused, budgetError),
+      budgetError ? null : this.note(t, this.tx("sources.us.cap", { cap: finnhubCap(us.budgetPerMinute) })),
+      this.note(t, this.tx("sources.us.copies")),
+    ] : [];
+    return this.card(t, this.tx("sources.us.title"), this.tx(chosen ? "sources.us.finnhubSource" : "sources.us.yahooSource"),
+      this.segmented(t, "bw-us", [["yahoo", this.tx("src.yahoo")], ["finnhub", this.tx("src.finnhub")]], us.provider,
+        (provider) => { us.provider = provider; }),
+      ...finnhubParts,
+      this.healthLine(t, "finnhub"));
   }
 
   // Taiwan: Yahoo, or TWSE MIS once its statement is read and the box ticked (Save waits for it).
@@ -550,6 +694,7 @@ export default class Bellwether extends View {
   sourcesTab(t, errors) {
     const field = "sources.crypto.binanceUrl";
     return v_flex().gap(12)
+      .child(this.usCard(t, errors))
       .child(this.taiwanCard(t, errors))
       .child(this.card(t, this.tx("sources.other.title"), this.tx("sources.other.body"), this.healthLine(t, "yahoo")))
       .child(this.card(t, this.tx("sources.crypto.title"), this.tx("sources.crypto.source"),
@@ -589,6 +734,6 @@ export default class Bellwether extends View {
       .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct"].map(paragraph))
       .child(this.note(t, this.tx("disclaimer.prevails")))
       .child(div().mt(8).font_semibold().child(this.tx("privacy.title")))
-      .children(["privacy.hosts", "privacy.programs", "privacy.storage"].map(paragraph));
+      .children(["privacy.hosts", "privacy.programs", "privacy.storage", "privacy.finnhub"].map(paragraph));
   }
 }

@@ -16,6 +16,8 @@ const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
  *   markets: string[],
  *   realtime: boolean,
  *   overlay?: boolean,
+ *   manualRefresh?: boolean,
+ *   cap?(config: object): number,
  *   spacingMs(count: number, intervalMs: number): number,
  *   intervalMs(session: string): number,
  *   linesMs?: number,
@@ -26,7 +28,9 @@ const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
  * this provider's quote requests in one round. `intervalMs` is the wait between rounds, given the
  * busiest session among its symbols ("open" while unknown). A provider with `kind: "line"`
  * requests asks each line again only once `linesMs` has passed. An `overlay` provider (TWSE MIS) is
- * off until the person turns it on, and lays its prices over the base quote instead of replacing it. `decode` does not throw
+ * off until the person turns it on, and lays its prices over the base quote instead of replacing it.
+ * `cap` limits it to that many of its symbols, in list order; `manualRefresh: false` keeps Refresh
+ * from starting an extra round (a request budget). `decode` does not throw
  * for an HTTP or body problem: the request's symbols each get that error instead.
  */
 
