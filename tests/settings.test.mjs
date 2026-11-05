@@ -39,9 +39,14 @@ test("validates URLs", () => {
   assert.deepEqual(check("https://mirror.test"), {});
   assert.deepEqual(check("https://mirror.test/proxy"), {});
   assert.deepEqual(check("HTTPS://mirror.test"), {});
-  for (const bad of ["https://", "https:///x", "https://a b.test", "https://x.test?a=1", "https://x.test#top"]) {
+  assert.deepEqual(check("https://mirror.test/x"), {});
+  for (const bad of ["https://", "https:///x", "https://a b.test", "https://x.test?a=1", "https://x.test#top",
+    "https://u:p@mirror.test", "https://user@mirror.test/x", "https://.", "https://:", "https://-.:/x"]) {
     assert.deepEqual(check(bad), { "sources.crypto.binanceUrl": "url.invalid" }, bad);
   }
+  // Spaces around the address are ignored, as when it is read back.
+  assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: " https://mirror.test " } } }), {});
+  assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: "  " } } }), { "sources.crypto.binanceUrl": "url.notHttps" });
   // A draft that the person is still typing is validated as it is, not read again.
   assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: "" } } }), { "sources.crypto.binanceUrl": "url.notHttps" });
   for (const lang of Object.keys(STRINGS)) {

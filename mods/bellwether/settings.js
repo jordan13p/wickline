@@ -28,15 +28,16 @@ export function readSettings(value) {
   };
 }
 
-// Field path -> error code; an https address, optionally with a path, and no query or fragment.
+// Field path -> error code; an https address, optionally with a path, and no userinfo, query or fragment.
 const URL_FIELDS = [["sources.crypto.binanceUrl", (s) => s.sources.crypto.binanceUrl]];
-const HTTPS_ADDRESS = /^https:\/\/[^\s/?#]+(\/[^\s?#]*)?$/i;
+// The host has at least one letter or digit and no `@` (a password in the address would be sent as is).
+const HTTPS_ADDRESS = /^https:\/\/[^\s/?#@]*[a-z0-9][^\s/?#@]*(\/[^\s?#]*)?$/i;
 
 /** What stops a save: `{}` is valid. The text for each code is in i18n.js. */
 export function validateSettings(settings) {
   const errors = {};
   for (const [path, get] of URL_FIELDS) {
-    const url = get(settings);
+    const url = get(settings).trim();
     if (!/^https:\/\//i.test(url)) errors[path] = "url.notHttps";
     else if (!HTTPS_ADDRESS.test(url)) errors[path] = "url.invalid";
   }
