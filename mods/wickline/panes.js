@@ -1,6 +1,9 @@
 // Pane and tab navigation: where a Bellwether tab goes back to, and when it can get a tab of its own.
 // `panes` is what Herdr's panes() gives. No Herdr imports, so tests run it under Node.
 
+// The mod id: Herdr names a mod after its folder, and panes(), pane.split and openOverlay use it.
+export const MOD_ID = "wickline";
+
 /**
  * Where the copy in its own tab goes back to: a pane of the tab it was opened from (that tab's focused
  * pane, else its first terminal, else any), else the focused pane, else any terminal. Never a
@@ -9,7 +12,7 @@
  * focused(); null: nowhere to go.
  */
 export function returnPane(panes, fromTab, focused, ownTab = null) {
-  const others = panes.filter((p) => p.mod !== "wickline" && p.tab !== ownTab);
+  const others = panes.filter((p) => p.mod !== MOD_ID && p.tab !== ownTab);
   const home = others.filter((p) => p.tab === fromTab);
   const there = home.find((p) => p.focused) ?? home.find((p) => p.terminal) ?? home[0];
   if (there) return there.pane;
@@ -22,7 +25,7 @@ const hasCompany = (panes, pane) => panes.some((p) => p.tab === pane.tab && p.pa
 
 /** A Bellwether pane in the shown `tab` has another pane beside it: only then can it get a tab of its own. */
 export function canOpenOwnTab(panes, tab) {
-  return panes.some((p) => p.mod === "wickline" && p.tab === tab && hasCompany(panes, p));
+  return panes.some((p) => p.mod === MOD_ID && p.tab === tab && hasCompany(panes, p));
 }
 
 /**
@@ -30,7 +33,7 @@ export function canOpenOwnTab(panes, tab) {
  * is not alone in its tab. Null otherwise, also for a docked block, which is not a pane.
  */
 export function ownTabSource(panes) {
-  const me = panes.find((p) => p.mod === "wickline" && p.focused);
+  const me = panes.find((p) => p.mod === MOD_ID && p.focused);
   return me && hasCompany(panes, me) ? me : null;
 }
 
@@ -40,7 +43,7 @@ export function ownTabSource(panes) {
  */
 export function newBellwether(before, after, tab = null) {
   const old = new Set(before.map((p) => p.pane));
-  return after.find((p) => p.mod === "wickline" && !old.has(p.pane) && (tab === null || p.tab === tab)) ?? null;
+  return after.find((p) => p.mod === MOD_ID && !old.has(p.pane) && (tab === null || p.tab === tab)) ?? null;
 }
 
 // How often and how long a move looks for the new copy: Herdr lists a new pane in panes() a little after
