@@ -263,6 +263,54 @@ test("a drop lands next to its symbol, not at a stale index", () => {
   assert.deepEqual(host.store.symbols, ["2330.TW", "NVDA"]);
 });
 
+// Quiet loops: nothing marked for a new round, so a restart shows as `dirty` and a new revision.
+function settle(w) {
+  for (const state of Object.values(w.sources)) state.dirty = false;
+  return w.revision;
+}
+const restarted = (w) => Object.values(w.sources).some((state) => state.dirty);
+
+test("a reorder leaves the rounds alone, here and in other copies", () => {
+  const host = listed(["AAPL", "NVDA", "2330.TW", "BTC/USDT"]);
+  const a = new Watchlist(host);
+  const b = new Watchlist(host);
+  const revisionA = settle(a);
+  const revisionB = settle(b);
+  assert.equal(a.move("BTC/USDT", "AAPL").code, "notice.moved");
+  assert.equal(a.revision, revisionA);
+  assert.equal(restarted(a), false);
+  assert.equal(b.sync(), true);
+  assert.deepEqual(b.preferences.symbols, ["BTC/USDT", "AAPL", "NVDA", "2330.TW"]);
+  assert.equal(b.revision, revisionB);
+  assert.equal(restarted(b), false);
+  // Adding, removing and pausing still start new rounds.
+  a.add("MSFT");
+  assert.equal(restarted(a), true);
+  settle(a);
+  a.pause(true);
+  assert.equal(restarted(a), true);
+});
+
+test("a reorder that changes Finnhub's slice restarts", () => {
+  const host = listed(["AAPL", "MSFT", "NVDA", "2330.TW"]);
+  // Budget 8: the first two US symbols use Finnhub.
+  host.prefs = { version: 1, keyRev: 0, sources: { us: { provider: "finnhub", budgetPerMinute: 8 } } };
+  const w = new Watchlist(host);
+  w.finnhubKey = "test-key";
+  assert.deepEqual(w.finnhubSymbols(), ["AAPL", "MSFT"]);
+  const revision = settle(w);
+  // Inside the slice and outside it: the same symbols, so no new round.
+  w.move("MSFT", "AAPL");
+  w.move("2330.TW", "AAPL");
+  assert.equal(restarted(w), false);
+  assert.equal(w.revision, revision);
+  // NVDA enters the slice.
+  w.move("NVDA", "MSFT");
+  assert.deepEqual(w.finnhubSymbols(), ["NVDA", "MSFT"]);
+  assert.equal(restarted(w), true);
+  assert.ok(w.revision > revision);
+});
+
 test("no-op move saves nothing", () => {
   const host = listed(["AAPL", "NVDA", "2330.TW"]);
   const w = new Watchlist(host);

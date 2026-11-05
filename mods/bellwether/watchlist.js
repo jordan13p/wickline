@@ -208,8 +208,7 @@ export class Watchlist {
     const message = change(preferences);
     if (message === null) return null;
     this.host.save(preferences);
-    this.adopt(preferences);
-    this.restart();
+    this.adoptAndRestart(preferences);
     return message;
   }
 
@@ -294,10 +293,27 @@ export class Watchlist {
     const preferences = readPreferences(this.host.load());
     const configKey = JSON.stringify(this.config());
     if (JSON.stringify(preferences) === JSON.stringify(this.preferences) && configKey === this.configKey) return false;
+    const configChanged = configKey !== this.configKey;
     this.configKey = configKey;
-    this.adopt(preferences);
-    this.restart();
+    this.adoptAndRestart(preferences, configChanged);
     return true;
+  }
+
+  /** What the loops act on: whether paused, and the symbols each provider quotes (order does not matter). */
+  loopKey() {
+    const config = this.config();
+    return JSON.stringify([this.preferences.paused,
+      PROVIDERS.map((provider) => [...this.symbolsFor(provider, config)].sort())]);
+  }
+
+  /**
+   * Takes `preferences` as the list and starts new rounds only when something the loops act on
+   * changed (or `restart`): a pure reorder leaves the rounds in flight alone.
+   */
+  adoptAndRestart(preferences, restart = false) {
+    const before = this.loopKey();
+    this.adopt(preferences);
+    if (restart || before !== this.loopKey()) this.restart();
   }
 
   adopt(preferences) {

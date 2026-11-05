@@ -456,8 +456,8 @@ export default class Bellwether extends View {
           cx.notify();
         })
         // Where the dragged row would land: a 2 px accent bar in front of `before`, or after the last row.
-        .when(this.drag && this.drag.before !== this.drag.symbol && this.drag.before === symbol, (el) => el.child(this.dropBar(t).top(0)))
-        .when(this.drag && this.drag.before === null && next === null && !dragged, (el) => el.child(this.dropBar(t).bottom(0)))
+        .when(this.drag && !this.dropsInPlace() && this.drag.before === symbol, (el) => el.child(this.dropBar(t).top(0)))
+        .when(this.drag && !this.dropsInPlace() && this.drag.before === null && next === null, (el) => el.child(this.dropBar(t).bottom(0)))
         .when(dragged, (el) => el.child(div().absolute().top(0).left(0).right(0).bottom(0).border_1().border_color(t.border)))
         // The handle takes its place only under the pointer; the slot stays so the row does not shift.
         .child(div().id(`bw-handle-${symbol}`).flex_none().w(10).text_size(11).text_color(t.dim)
@@ -506,8 +506,11 @@ export default class Bellwether extends View {
       .on_mouse_up("left", (_e, cx) => {
         const drag = this.drag;
         if (!drag) return;
+        const inPlace = this.dropsInPlace();
         this.drag = null;
-        this.act(cx, () => this.watch.move(drag.symbol, drag.before));
+        // A drop where the row already is changes nothing, and leaves the current notice be.
+        if (inPlace) cx.notify();
+        else this.act(cx, () => this.watch.move(drag.symbol, drag.before));
       })
       .when(!symbols.length, (el) => el.child(div().px(12).py(6).text_color(t.dim)
         .child(this.tx("list.empty"))))
@@ -521,6 +524,13 @@ export default class Bellwether extends View {
       .child(div().text_size(10.5).text_color(t.dim).child(this.tx(crypto ? "footer.sourcesCrypto" : "footer.sources")));
 
     return root.child(header).child(field).child(list).child(footer);
+  }
+
+  // The drag would put the row where it already is: in front of itself or of the row after it.
+  dropsInPlace() {
+    const { symbols } = this.watch.preferences;
+    const { symbol, before } = this.drag;
+    return before === symbol || before === (symbols[symbols.indexOf(symbol) + 1] ?? null);
   }
 
   dropBar(t) {
