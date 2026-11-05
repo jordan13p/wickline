@@ -2,13 +2,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { USER_AGENT } from "../mods/bellwether/quotes.js";
-import { displayName } from "../mods/bellwether/format.js";
-import { detailSource } from "../mods/bellwether/freshness.js";
-import { t } from "../mods/bellwether/i18n.js";
-import { Watchlist, mergeOverlay } from "../mods/bellwether/watchlist.js";
+import { USER_AGENT } from "../mods/wickline/quotes.js";
+import { displayName } from "../mods/wickline/format.js";
+import { detailSource } from "../mods/wickline/freshness.js";
+import { t } from "../mods/wickline/i18n.js";
+import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
 import { advance, chart, fakeHost, start, stop } from "./helpers.mjs";
-import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel, withinLimits } from "../mods/bellwether/providers/mis.js";
+import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel, withinLimits } from "../mods/wickline/providers/mis.js";
 
 // Recorded answers from MIS during trading hours (2026-11-05), only these symbols' rows.
 const fixture = (name) => readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8");

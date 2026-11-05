@@ -1,7 +1,7 @@
 // node --test tests/  (markets.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { marketOf } from "../mods/bellwether/markets.js";
+import { marketOf } from "../mods/wickline/markets.js";
 
 test("routes symbols to markets", () => {
   const table = [

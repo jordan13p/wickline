@@ -11,7 +11,7 @@ import { finnhubCap } from "../providers/finnhub.js";
 import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, tableColumns } from "../layout.js";
 import { chart, dot, icon, iconButton } from "./parts.js";
 
-const ICON = "mods/bellwether/icon.svg";
+const ICON = "mods/wickline/icon.svg";
 // Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
 // The right group keeps this width, so a wider pane gives its room to the name.
 const SPARK = { width: 56, height: 20 };

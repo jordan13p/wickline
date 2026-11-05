@@ -1,7 +1,7 @@
 // node --test tests/  (the Finnhub key file, over an in-memory fs and a fake chmod runner)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadSecret, loadSecretEnding, removeSecret, saveSecret } from "../mods/bellwether/secrets.js";
+import { loadSecret, loadSecretEnding, removeSecret, saveSecret } from "../mods/wickline/secrets.js";
 
 const DIR = "home/data/bellwether";
 const FILE = `${DIR}/secrets.json`;

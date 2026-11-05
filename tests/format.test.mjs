@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta } from "../mods/bellwether/format.js";
+import { chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta } from "../mods/wickline/format.js";
 
 test("formats without Intl", () => {
   assert.equal(formatPrice({ price: 1234567.891, currency: "USD" }), "1,234,567.89 USD");

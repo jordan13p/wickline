@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   LIVE_MAX_AGE_MS, REALTIME_SOURCES, TAIWAN_YAHOO_DELAY_S, freshness, sessionOf,
-} from "../mods/bellwether/freshness.js";
+} from "../mods/wickline/freshness.js";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, delaySeconds: null, periods: null, ...fields });

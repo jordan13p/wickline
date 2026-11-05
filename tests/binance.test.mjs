@@ -1,8 +1,8 @@
 // node --test tests/  (the Binance provider imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USER_AGENT } from "../mods/bellwether/quotes.js";
-import { binance, binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/bellwether/providers/binance.js";
+import { USER_AGENT } from "../mods/wickline/quotes.js";
+import { binance, binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/wickline/providers/binance.js";
 import { ok } from "./helpers.mjs";
 
 const BASE = "https://data-api.binance.vision";

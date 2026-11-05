@@ -1,11 +1,11 @@
 // node --test tests/  (watchlist.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { STARTER_SYMBOLS, USER_AGENT } from "../mods/bellwether/quotes.js";
-import { yahooUrl } from "../mods/bellwether/providers/yahoo.js";
-import { binanceKlinesUrl, binanceUrl } from "../mods/bellwether/providers/binance.js";
-import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/bellwether/watchlist.js";
-import { t } from "../mods/bellwether/i18n.js";
+import { STARTER_SYMBOLS, USER_AGENT } from "../mods/wickline/quotes.js";
+import { yahooUrl } from "../mods/wickline/providers/yahoo.js";
+import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
+import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/wickline/watchlist.js";
+import { t } from "../mods/wickline/i18n.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 
 const BASE = "https://data-api.binance.vision";

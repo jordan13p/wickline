@@ -58,18 +58,18 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 <details>
 <summary>手動安裝</summary>
 
-1. 將 `mods/bellwether/` 複製到 `~/.config/herdr-app/mods/bellwether/`。它的 `mod.json` 是 `"place": "none"`，所以你的 layout 不會被改動。
+1. 將 `mods/wickline/` 複製到 `~/.config/herdr-app/mods/wickline/`。它的 `mod.json` 是 `"place": "none"`，所以你的 layout 不會被改動。
 2. 將本 repo `keys.json` 中的那一行加到 `~/.config/herdr-app/keys.json` 的 `global` 區段。編輯過這個檔案後，它就算是你自己的：Herdr 升級時不會再自動加入新的預設快捷鍵。
 3. 檢查：
 
    ```sh
-   herdr-app check ~/.config/herdr-app/mods/bellwether
+   herdr-app check ~/.config/herdr-app/mods/wickline
    ```
 
 4. 按 `ctrl-alt-b` 開啟；不用快捷鍵時，在 Herdr 的 `main` layout 或你自己的 layout 執行：
 
    ```sh
-   herdr-app do pane.split --direction right --mod bellwether
+   herdr-app do pane.split --direction right --mod wickline
    ```
 
 </details>
@@ -91,16 +91,16 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 - **調整順序**：滑鼠移到某一列，按住左側的六點把手拖曳；強調色線會標出落點。拖出清單即取消。
 - **詳細資料**：點一下某一列即可查看當天的走勢圖、開盤、最高、最低與昨收、交易時段、報價時間與取得時間。
 - **重新整理與暫停**：標題列的圖示。重新整理會讓 Finnhub 以外的每個來源立即更新一輪，暫停時也可以；暫停會停止每個 copy 的自動更新。
-- **快捷鍵**：Bellwether 接受 `bellwether.refresh` 與 `bellwether.pause` 兩個指令，預設都沒有綁定。要綁定時，加到 `~/.config/herdr-app/keys.json`：
+- **快捷鍵**：Bellwether 接受 `wickline.refresh` 與 `wickline.pause` 兩個指令，預設都沒有綁定。要綁定時，加到 `~/.config/herdr-app/keys.json`：
 
   ```json
-  { "global": { "ctrl-alt-r": "bellwether.refresh" } }
+  { "global": { "ctrl-alt-r": "wickline.refresh" } }
   ```
 
 ### 開啟與關閉
 
 - `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Bellwether pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
-- 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod bellwether`。
+- 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod wickline`。
 - 關閉方式和其他 pane 一樣：用 Herdr 的 pane 標題列，或執行 `pane.close`。
 - 標題列的 **在自己的分頁開啟** 圖示會把 Bellwether 移到名為 `Bellwether` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。
 - 放大（zoom）交給 Herdr 自己的 pane 標題列；Bellwether 沒有自己的放大功能。
@@ -162,7 +162,7 @@ Bellwether 修改自 [fatwang2/Pulse](https://github.com/fatwang2/Pulse)（MIT�
 
 ```sh
 node --test tests/
-herdr-app check "$PWD/mods/bellwether"
+herdr-app check "$PWD/mods/wickline"
 ```
 
 `RECIPE.md` 是完整的建構說明：Bellwether 畫出什麼、如何運作，以及由哪些檔案組成。

@@ -99,7 +99,7 @@ export default class Bellwether extends View {
         cx.notify();
       }
     });
-    // `bellwether.refresh` and `bellwether.pause` (bind them in keys.json if you like).
+    // `wickline.refresh` and `wickline.pause` (bind them in keys.json if you like).
     cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
@@ -259,14 +259,14 @@ export default class Bellwether extends View {
     const quote = this.watch.shown(symbol);
     if (!quote) return;
     openOverlay({
-      mod: "bellwether", kind: "dialog", width: 440,
+      mod: "wickline", kind: "dialog", width: 440,
       props: { detail: { ...quote, error: this.watch.errors[symbol] ?? null, fallback: this.watch.overlayErrors[symbol] ?? null } },
     });
   }
 
   openSettings(tab) {
     openOverlay({
-      mod: "bellwether", kind: "dialog", modal: true, width: 640, height: 520,
+      mod: "wickline", kind: "dialog", modal: true, width: 640, height: 520,
       // `health`: each source's current problem, `{ provider, code, params }`.
       props: { settings: { tab, health: this.watch.problems() } },
     });
@@ -314,7 +314,7 @@ export default class Bellwether extends View {
           const before = panes();
           const me = ownTabSource(before);
           if (!me) return;
-          run("tab.new", { mod: "bellwether", name: "Bellwether", props: { from: me.tab } });
+          run("tab.new", { mod: "wickline", name: "Bellwether", props: { from: me.tab } });
           this.finishMove(cx, before, me);
         },
       };
@@ -325,10 +325,10 @@ export default class Bellwether extends View {
       go: (cx) => {
         if (this.moving) return;
         const before = panes();
-        const me = before.find((p) => p.mod === "bellwether" && p.focused && p.tab !== this.from);
+        const me = before.find((p) => p.mod === "wickline" && p.focused && p.tab !== this.from);
         const target = me && returnPane(before, this.from, focused(), me.tab);
         if (!target) return;
-        run("pane.split", { pane: target, direction: "right", mod: "bellwether" });
+        run("pane.split", { pane: target, direction: "right", mod: "wickline" });
         this.finishMove(cx, before, me, before.find((p) => p.pane === target).tab);
       },
     };

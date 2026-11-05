@@ -1,15 +1,15 @@
 // node --test tests/  (providers/finnhub.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MESSAGES_EN, USER_AGENT } from "../mods/bellwether/quotes.js";
-import { STRINGS } from "../mods/bellwether/i18n.js";
-import { Watchlist } from "../mods/bellwether/watchlist.js";
-import { SECRET_KEY_FINNHUB } from "../mods/bellwether/settings.js";
+import { MESSAGES_EN, USER_AGENT } from "../mods/wickline/quotes.js";
+import { STRINGS } from "../mods/wickline/i18n.js";
+import { Watchlist } from "../mods/wickline/watchlist.js";
+import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
-import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/bellwether/providers/finnhub.js";
-import { binance } from "../mods/bellwether/providers/binance.js";
-import { MIS_CONSENT_VERSION, mis } from "../mods/bellwether/providers/mis.js";
-import { yahoo } from "../mods/bellwether/providers/yahoo.js";
+import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/wickline/providers/finnhub.js";
+import { binance } from "../mods/wickline/providers/binance.js";
+import { MIS_CONSENT_VERSION, mis } from "../mods/wickline/providers/mis.js";
+import { yahoo } from "../mods/wickline/providers/yahoo.js";
 
 // An obvious fake: no real key is ever in a test.
 const KEY = "test-key";

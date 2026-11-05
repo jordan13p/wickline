@@ -1,11 +1,11 @@
 // node --test tests/  (one refresh loop per source, on a fake clock)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/bellwether/watchlist.js";
-import { LIVE_MAX_AGE_MS, freshness } from "../mods/bellwether/freshness.js";
+import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/wickline/watchlist.js";
+import { LIVE_MAX_AGE_MS, freshness } from "../mods/wickline/freshness.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
-import { binance } from "../mods/bellwether/providers/binance.js";
-import { yahoo } from "../mods/bellwether/providers/yahoo.js";
+import { binance } from "../mods/wickline/providers/binance.js";
+import { yahoo } from "../mods/wickline/providers/yahoo.js";
 
 const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD" };
 const ticker = (url) => ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1]))

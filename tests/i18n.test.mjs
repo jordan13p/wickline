@@ -1,8 +1,8 @@
 // node --test tests/  (i18n.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LANGUAGES, LANGUAGE_LABELS, STRINGS, t } from "../mods/bellwether/i18n.js";
-import { MESSAGES_EN } from "../mods/bellwether/quotes.js";
+import { LANGUAGES, LANGUAGE_LABELS, STRINGS, t } from "../mods/wickline/i18n.js";
+import { MESSAGES_EN } from "../mods/wickline/quotes.js";
 
 const tokens = (text) => new Set([...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
 

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
   columnWidth, layoutFor, nameWidth, tableColumns,
-} from "../mods/bellwether/layout.js";
+} from "../mods/wickline/layout.js";
 
 const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", "high", "low", "prevClose"];
 const KEPT = ["symbol", "state", "price", "changePct"];

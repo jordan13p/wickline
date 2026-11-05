@@ -1,7 +1,7 @@
 // node --test tests/  (quotes.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USER_AGENT, normalizeSymbol } from "../mods/bellwether/quotes.js";
+import { USER_AGENT, normalizeSymbol } from "../mods/wickline/quotes.js";
 
 test("normalizes symbols", () => {
   assert.equal(normalizeSymbol(" aapl "), "AAPL");

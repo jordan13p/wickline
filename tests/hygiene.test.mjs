@@ -2,12 +2,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { MESSAGES_EN } from "../mods/bellwether/quotes.js";
-import { STRINGS } from "../mods/bellwether/i18n.js";
-import { Watchlist } from "../mods/bellwether/watchlist.js";
-import { SECRET_KEY_FINNHUB } from "../mods/bellwether/settings.js";
+import { MESSAGES_EN } from "../mods/wickline/quotes.js";
+import { STRINGS } from "../mods/wickline/i18n.js";
+import { Watchlist } from "../mods/wickline/watchlist.js";
+import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 
-const MOD = new URL("../mods/bellwether/", import.meta.url);
+const MOD = new URL("../mods/wickline/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
 // mis.twse.com.tw only once the person turns TWSE MIS on and consents; finnhub.io only with Finnhub
 // chosen and a key saved.
@@ -29,7 +29,7 @@ test("no Pulse branding, programs or hc in the mod", () => {
     const text = read(file);
     assert.doesNotMatch(text, /pulse|pulseticker/i, file.pathname);
     // main.js's one exec is pinned by "the only program is chmod 600 on the key file".
-    if (!file.pathname.endsWith("/bellwether/main.js")) assert.doesNotMatch(text, /\bexec\(/, file.pathname);
+    if (!file.pathname.endsWith("/wickline/main.js")) assert.doesNotMatch(text, /\bexec\(/, file.pathname);
     assert.doesNotMatch(text, /\bhc\(/, file.pathname);
   }
 });
@@ -158,7 +158,7 @@ test("mod.json docks Bellwether nowhere", () => {
 
 test("keys.json binds only the open key", () => {
   assert.deepEqual(JSON.parse(read(new URL("keys.json", ROOT))), {
-    global: { "ctrl-alt-b": { command: "pane.split", args: { direction: "right", mod: "bellwether" } } },
+    global: { "ctrl-alt-b": { command: "pane.split", args: { direction: "right", mod: "wickline" } } },
   });
 });
 
@@ -244,7 +244,7 @@ test("README and RECIPE show the preview and say how to open Bellwether", () => 
     const text = read(new URL(name, ROOT));
     assert.match(text, /preview\.png/, name);
     assert.ok(text.includes("ctrl-alt-b"), `open key in ${name}`);
-    assert.ok(text.includes("herdr-app do pane.split --direction right --mod bellwether"), `manual open in ${name}`);
+    assert.ok(text.includes("herdr-app do pane.split --direction right --mod wickline"), `manual open in ${name}`);
   }
 });
 

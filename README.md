@@ -58,18 +58,18 @@ The agent tells you what Bellwether reaches on the network, copies the mod, merg
 <details>
 <summary>Install by hand</summary>
 
-1. Copy `mods/bellwether/` to `~/.config/herdr-app/mods/bellwether/`. Its `mod.json` says `"place": "none"`, so your layouts stay as they are.
+1. Copy `mods/wickline/` to `~/.config/herdr-app/mods/wickline/`. Its `mod.json` says `"place": "none"`, so your layouts stay as they are.
 2. Add the line from this repo's `keys.json` to the `global` section of `~/.config/herdr-app/keys.json`. Editing that file keeps it as yours: Herdr no longer adds new default shortcuts to it on upgrade.
 3. Check it:
 
    ```sh
-   herdr-app check ~/.config/herdr-app/mods/bellwether
+   herdr-app check ~/.config/herdr-app/mods/wickline
    ```
 
 4. Open it with `ctrl-alt-b`, or without the key, on Herdr's `main` layout or your own:
 
    ```sh
-   herdr-app do pane.split --direction right --mod bellwether
+   herdr-app do pane.split --direction right --mod wickline
    ```
 
 </details>
@@ -91,16 +91,16 @@ Type a symbol into the add field and press Enter:
 - **Reorder**: hover a row, press the six-dot handle at its left and drag; an accent line shows where it lands. Leaving the list cancels the drag.
 - **Detail**: click a row for its day: a chart, open, high, low and previous close, the session, the quote time and the fetch time.
 - **Refresh and Pause**: the header icons. Refresh runs one round of every source but Finnhub, also while paused; Pause stops automatic refreshes in every copy.
-- **Keys**: Bellwether answers `bellwether.refresh` and `bellwether.pause`; neither is bound. To bind one, add it to `~/.config/herdr-app/keys.json`:
+- **Keys**: Bellwether answers `wickline.refresh` and `wickline.pause`; neither is bound. To bind one, add it to `~/.config/herdr-app/keys.json`:
 
   ```json
-  { "global": { "ctrl-alt-r": "bellwether.refresh" } }
+  { "global": { "ctrl-alt-r": "wickline.refresh" } }
   ```
 
 ### Open and close
 
 - `ctrl-alt-b` opens Bellwether as a pane to the right of the focused terminal, on any layout. Pressing it again opens another copy, and every copy sends its own requests, so keep one open.
-- To change the key, rename `ctrl-alt-b` in the `global` section of `~/.config/herdr-app/keys.json`; to drop it, delete that line. Without a key: `herdr-app do pane.split --direction right --mod bellwether`.
+- To change the key, rename `ctrl-alt-b` in the `global` section of `~/.config/herdr-app/keys.json`; to drop it, delete that line. Without a key: `herdr-app do pane.split --direction right --mod wickline`.
 - Close it like any pane, from Herdr's pane header or with `pane.close`.
 - The header's **open in its own tab** icon moves Bellwether to a `Bellwether` tab, wide enough for the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes only its own pane (the tab too, when it held nothing else; a shell you split in there stays). The old copy closes only once the new one is open, so a refused move leaves everything as it was. Only one copy fetches either way.
 - Zoom stays with Herdr's own pane header; Bellwether has no zoom of its own.
@@ -158,7 +158,7 @@ Released under the [MIT License](LICENSE), copyright (c) 2026 fatwang2 and (c) 2
 
 ```sh
 node --test tests/
-herdr-app check "$PWD/mods/bellwether"
+herdr-app check "$PWD/mods/wickline"
 ```
 
 `RECIPE.md` is the full brief: what Bellwether draws, how it behaves and what it is built from.

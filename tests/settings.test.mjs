@@ -1,10 +1,10 @@
 // node --test tests/  (settings.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings } from "../mods/bellwether/settings.js";
-import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/bellwether/providers/mis.js";
-import { FINNHUB_URL } from "../mods/bellwether/providers/finnhub.js";
-import { STRINGS } from "../mods/bellwether/i18n.js";
+import { SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings } from "../mods/wickline/settings.js";
+import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
+import { FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
+import { STRINGS } from "../mods/wickline/i18n.js";
 
 const BINANCE = "https://data-api.binance.vision";
 const DEFAULTS = {

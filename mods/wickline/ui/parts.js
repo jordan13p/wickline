@@ -6,7 +6,7 @@ import { chartGeometry } from "../format.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
-export const icon = (name) => `mods/bellwether/icons/${name}.svg`;
+export const icon = (name) => `mods/wickline/icons/${name}.svg`;
 
 // The day's line, scaled to its box; the previous close is a dashed rule.
 export function chart(quote, color, t, { width, height, fill }) {

@@ -1,9 +1,9 @@
 // node --test tests/  (the Yahoo provider imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USER_AGENT } from "../mods/bellwether/quotes.js";
-import { marketSession } from "../mods/bellwether/freshness.js";
-import { decodeYahoo, yahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
+import { USER_AGENT } from "../mods/wickline/quotes.js";
+import { marketSession } from "../mods/wickline/freshness.js";
+import { decodeYahoo, yahoo, yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { ok, chart } from "./helpers.mjs";
 
 const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD", longName: "Apple Inc." };
