@@ -2,3 +2,5 @@
 # Written into mod folders by Herdr itself
 mods/*/jsconfig.json
 mods/*/gpui-kit.d.ts
+# also beside any module in a subfolder that imports gpui-kit
+mods/*/*/gpui-kit.d.ts
