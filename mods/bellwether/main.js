@@ -20,7 +20,7 @@ import {
 import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
-import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, layoutFor, nameWidth, tableColumns } from "./layout.js";
+import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, layoutFor, nameWidth, tableColumns } from "./layout.js";
 import { canOpenOwnTab, newBellwether, ownTabSource, returnPane } from "./panes.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
@@ -30,7 +30,7 @@ const icon = (name) => `mods/bellwether/icons/${name}.svg`;
 // Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
 // The right group keeps this width, so a wider pane gives its room to the name.
 const SPARK = { width: 56, height: 20 };
-const TABLE_SPARK = { width: 120, height: 20 };
+const TABLE_SPARK = { width: columnWidth("line"), height: 20 };
 const NUMBER_W = 72;
 const CODE_W = 34;
 // Below this panel width the footer shows the short disclaimer.
@@ -676,7 +676,7 @@ export default class Bellwether extends View {
 
   // A table cell at its column's width.
   cell(id, nameW) {
-    return div().flex_none().w(id === "name" ? nameW : TABLE_COLUMNS.find((column) => column.id === id).width);
+    return div().flex_none().w(id === "name" ? nameW : columnWidth(id));
   }
 
   // From TABLE_MIN_WIDTH: one header line, column labels that stay while the rows scroll, 36 px rows. At most
@@ -735,12 +735,12 @@ export default class Bellwether extends View {
     const cells = {
       symbol: () => cell("symbol").font_semibold().truncate().child(symbol),
       name: () => cell("name").text_color(t.muted).truncate().child(merged ? "" : named),
-      state: () => h_flex().flex_none().w(TABLE_COLUMNS.find((column) => column.id === "state").width).gap(6).items_center()
+      state: () => h_flex().flex_none().w(columnWidth("state")).gap(6).items_center()
         .child(div().flex_none().w(6).h(6).when(Boolean(row.dot), (el) => el.child(row.dot)))
         .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(state)),
       line: () => (quote ? this.chart(quote, color, t, TABLE_SPARK) : cell("line")),
       price: () => (quote
-        ? h_flex().flex_none().w(TABLE_COLUMNS.find((column) => column.id === "price").width).items_baseline()
+        ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
           .child(div().flex_1().min_w(0).text_right().whitespace_nowrap().text_color(row.failed ? t.dim : t.foreground).child(this.number(quote)))
           .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? ""))
         : cell("price").pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(this.waiting(row))),

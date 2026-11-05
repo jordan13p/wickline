@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
-  layoutFor, nameWidth, tableColumns,
+  columnWidth, layoutFor, nameWidth, tableColumns,
 } from "../mods/bellwether/layout.js";
 
 const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", "high", "low", "prevClose"];
@@ -40,6 +40,7 @@ test("the columns, in display order, with the name the only flexible one", () =>
   for (const id of ["price", "change", "changePct", "high", "low", "prevClose"]) {
     assert.equal(TABLE_COLUMNS.find((column) => column.id === id).align, "right", id);
   }
+  for (const id of ALL) assert.equal(columnWidth(id), width(id), id);
   assert.deepEqual(DROP_ORDER, ["prevClose", "low", "high", "change", "line", "name"]);
 });
 

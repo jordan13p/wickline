@@ -32,6 +32,9 @@ export const TABLE_COLUMNS = [
   { id: "prevClose", width: 80, align: "right" },
 ];
 
+/** The content width in px of column `id`; null for the flexible name. */
+export const columnWidth = (id) => TABLE_COLUMNS.find((column) => column.id === id).width;
+
 // First to go when the width cannot hold every column; the others never drop.
 export const DROP_ORDER = ["prevClose", "low", "high", "change", "line", "name"];
 
@@ -44,7 +47,7 @@ export function layoutFor(size) {
 
 // The width `ids` need: their fixed widths, the name at its minimum, the gaps and both gutters.
 function needed(ids) {
-  const widths = ids.map((id) => TABLE_COLUMNS.find((column) => column.id === id).width ?? NAME_MIN_WIDTH);
+  const widths = ids.map((id) => columnWidth(id) ?? NAME_MIN_WIDTH);
   return widths.reduce((sum, width) => sum + width, 0) + COLUMN_GAP * (ids.length - 1) + 2 * GUTTER;
 }
 
