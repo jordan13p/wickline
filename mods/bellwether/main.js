@@ -439,7 +439,7 @@ export default class Bellwether extends View {
       const color = quote ? this.changeColor(t, quote.changePercent) : t.dim;
       const dragged = this.drag?.symbol === symbol;
       const next = symbols[index + 1] ?? null;
-      return h_flex().id(`bw-line-${symbol}`).relative().pl(2).pr(10).gap(6).items_center()
+      return h_flex().id(`bw-line-${symbol}`).relative().pl(0).pr(10).gap(6).items_center()
         .when(dragged, (el) => el.bg(t.raised))
         .when(!this.drag, (el) => el.hover((s) => s.bg(t.hover)))
         .on_hover((hovered, cx) => {
@@ -460,9 +460,12 @@ export default class Bellwether extends View {
         .when(this.drag && !this.dropsInPlace() && this.drag.before === null && next === null, (el) => el.child(this.dropBar(t).bottom(0)))
         .when(dragged, (el) => el.child(div().absolute().top(0).left(0).right(0).bottom(0).border_1().border_color(t.border)))
         // The handle takes its place only under the pointer; the slot stays so the row does not shift.
-        .child(div().id(`bw-handle-${symbol}`).flex_none().w(10).text_size(11).text_color(t.dim)
+        // It is the whole row tall and 22 px wide, so it is easy to grab.
+        .child(div().id(`bw-handle-${symbol}`).flex_none().w(22).self_stretch().flex().items_center().justify_center()
+          .text_size(15).text_color(t.dim)
           .when(dragged || (!this.drag && this.hovered === symbol), (el) => el
-            .when(dragged, (h) => h.cursor_grabbing())
+            .hover((s) => s.text_color(t.foreground))
+            .when(dragged, (h) => h.text_color(t.foreground).cursor_grabbing())
             .when(!dragged, (h) => h.cursor_grab())
             .on_mouse_down("left", (_e, cx) => {
               cx.stop_propagation();
