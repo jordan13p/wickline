@@ -3,7 +3,7 @@
 // draws one line of quotes. A row opens the ticker's day as a dialog, and the
 // settings button opens the settings: the same mod, given the quote or `settings` in its props.
 import { View, div, svg } from "gpui-kit";
-import { v_flex, h_flex, Checkbox, InputState, Input } from "gpui-base";
+import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { appHome, closeOverlay, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme } from "herdr";
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
@@ -18,12 +18,13 @@ import {
   SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
 } from "./settings.js";
 import { BINANCE_URL } from "./providers/binance.js";
-import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
+import { MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
 import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, layoutFor, nameWidth, tableColumns } from "./layout.js";
 import { canOpenOwnTab, newBellwether, ownTabSource, returnPane } from "./panes.js";
-import { button, card, chart, dot, icon, iconButton, note, segmented } from "./ui/parts.js";
+import { chart, dot, icon, iconButton } from "./ui/parts.js";
 import { detailView } from "./ui/detail-dialog.js";
+import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
 const ICON = "mods/bellwether/icon.svg";
 // Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
@@ -34,8 +35,6 @@ const NUMBER_W = 72;
 const CODE_W = 34;
 // Below this panel width the footer shows the short disclaimer.
 const SHORT_FOOTER_WIDTH = 480;
-const SETTINGS_TABS = ["sources", "display", "disclaimer"];
-const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
 
 // The key file lives in Herdr's data folder (see secrets.js); `appHome()` is called per use, never at the top level.
 const secretsDir = () => `${appHome()}/data/bellwether`;
@@ -265,7 +264,7 @@ export default class Bellwether extends View {
     const t = theme();
     this.readSettings();
     if (this.detail) return detailView(this, t);
-    if (this.draft) return this.settingsView(t);
+    if (this.draft) return settingsView(this, t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
     if (this.inputLang !== this.lang) this.wakeInput?.();
@@ -715,43 +714,20 @@ export default class Bellwether extends View {
     closeOverlay(this.overlay);
   }
 
+  // Herdr's own appearance settings, in place of this dialog.
+  openAppearance() {
+    closeOverlay(this.overlay);
+    run("app.settings", { section: "look" });
+  }
+
   // "Showing Yahoo · <reason>": a real-time price was dropped, so the row shows its base quote.
   fallbackText(quote, error) {
     return this.tx("quote.fallback", { source: this.tx(`src.${quote.source}`), reason: this.say(error) });
   }
 
-  // The settings dialog: tabs on the left, the tab on the right, Cancel / Save below.
   // What stops a save, the key the dialog holds included (it is never in the draft).
   draftErrors() {
     return validateSettings(this.draft, { finnhubKey: this.keyInput.value() });
-  }
-
-  settingsView(t) {
-    const errors = this.draftErrors();
-    const invalid = Object.keys(errors).length > 0 || !this.keyLoaded || this.saving;
-    const tabs = v_flex().flex_none().w(168).p(10).gap(2).border_r(1).border_color(t.border)
-      .child(div().px(8).pb(8).text_size(13).font_semibold().text_color(t.foreground).child(this.tx("settings.title")))
-      .children(SETTINGS_TABS.map((tab) => h_flex().id(`bw-tab-${tab}`).px(8).h(28).items_center().rounded(5).cursor_pointer()
-        .text_color(tab === this.tab ? t.foreground : t.muted).when(tab === this.tab, (el) => el.bg(t.hover).font_semibold())
-        .hover((s) => s.bg(t.hover).text_color(t.foreground))
-        .on_click((_e, cx) => { this.tab = tab; cx.notify(); }).child(this.tx(`settings.tab.${tab}`))));
-    const pane = v_flex().id("bw-settings-pane").flex_1().min_w(0).min_h(0).p(18).gap(14).overflow_y_scrollbar()
-      .child(this[`${this.tab}Tab`](t, errors));
-    const save = h_flex().id("bw-settings-save").flex_none().h(28).px(14).items_center().rounded(5).font_semibold()
-      .when(invalid, (el) => el.bg(t.hover).text_color(t.dim))
-      .when(!invalid, (el) => el.bg(t.solid).text_color(t.solid_foreground).cursor_pointer().on_click((_e, cx) => this.saveDraft(cx)))
-      .child(this.tx("settings.save"));
-    const footer = h_flex().flex_none().px(14).py(10).gap(8).items_center().border_t(1).border_color(t.border)
-      .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(t.ansi1)
-        .child(this.error ? this.say(this.error) : ""))
-      .child(h_flex().id("bw-settings-cancel").flex_none().h(28).px(14).items_center().rounded(5).border_1().border_color(t.border)
-        .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-        .on_click(() => closeOverlay(this.overlay)).child(this.tx("settings.cancel")))
-      .child(save);
-    return v_flex().id("bw-settings").size_full().text_color(t.foreground).text_size(12.5)
-      // h_flex centers its children; stretch lets the tab column and the pane both fill the height.
-      .child(h_flex().flex_1().min_h(0).items_stretch().child(tabs).child(pane))
-      .child(footer);
   }
 
   // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay. A new
@@ -792,124 +768,5 @@ export default class Bellwether extends View {
       }
       closeOverlay(this.overlay);
     });
-  }
-
-  // The source's problem when the dialog opened, if it had one.
-  healthLine(t, provider) {
-    const problem = this.health.find((entry) => entry.provider === provider);
-    return problem ? div().text_size(11.5).text_color(t.blocked).child(this.say(problem)) : null;
-  }
-
-  // A labeled input of the settings dialog, red while its value is refused.
-  field(t, label, state, focused, error) {
-    return [
-      div().text_size(11).text_color(t.muted).child(label),
-      Input.new(state).h(30).px(8).rounded(6).border_1().border_color(error ? t.ansi1 : focused ? t.accent : t.input)
-        .bg(t.background).text_size(12).text_color(t.foreground),
-      error ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(error)) : null,
-    ];
-  }
-
-  // US: Yahoo, or Finnhub with the person's key, address and per-minute budget.
-  usCard(t, errors) {
-    const us = this.draft.sources.us;
-    const chosen = us.provider === "finnhub";
-    const keyError = errors["sources.us.key"];
-    const budgetError = errors["sources.us.budgetPerMinute"];
-    const key = h_flex().gap(6).items_center()
-      .child(Input.new(this.keyInput).flex_1().min_w(0).h(30).px(8).rounded(6).border_1()
-        .border_color(keyError ? t.ansi1 : this.keyFocused ? t.accent : t.input)
-        .bg(t.background).text_size(12).text_color(t.foreground))
-      .child(button(t, "bw-key-show", this.tx(this.keyShown ? "sources.us.hide" : "sources.us.show"), (cx) => {
-        this.keyShown = !this.keyShown;
-        this.keyInput.set_masked(!this.keyShown);
-        cx.notify();
-      }));
-    const finnhubParts = chosen ? [
-      div().text_size(11).text_color(t.muted).child(this.tx("sources.us.key")),
-      key,
-      keyError ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(keyError)) : null,
-      note(t, this.tx("sources.us.keyNote")),
-      ...this.field(t, this.tx("sources.us.url"), this.finnhubUrlInput, this.finnhubUrlFocused, errors["sources.us.finnhubUrl"]),
-      ...this.field(t, this.tx("sources.us.budget"), this.budgetInput, this.budgetFocused, budgetError),
-      budgetError ? null : note(t, this.tx("sources.us.cap", { cap: finnhubCap(us.budgetPerMinute) })),
-      note(t, this.tx("sources.us.copies")),
-    ] : this.savedKey ? [
-      // Yahoo keeps a saved key; clearing the field and saving removes it.
-      div().text_size(11).text_color(t.muted).child(this.tx("sources.us.key")),
-      key,
-      note(t, this.tx("sources.us.keyRemove")),
-    ] : [];
-    return card(t, this.tx("sources.us.title"), this.tx(chosen ? "sources.us.finnhubSource" : "sources.us.yahooSource"),
-      segmented(t, "bw-us", [["yahoo", this.tx("src.yahoo")], ["finnhub", this.tx("src.finnhub")]], us.provider,
-        (provider) => { us.provider = provider; }),
-      ...finnhubParts,
-      this.healthLine(t, "finnhub"));
-  }
-
-  // Taiwan: Yahoo, or TWSE MIS once its statement is read and the box ticked (Save waits for it).
-  taiwanCard(t, errors) {
-    const tw = this.draft.sources.tw;
-    const chosen = tw.provider === "mis";
-    const agreed = tw.misAck?.version === MIS_CONSENT_VERSION;
-    const urlError = errors["sources.tw.misUrl"];
-    const consent = Checkbox.new("bw-mis-consent").checked(agreed).cursor_pointer()
-      .on_change((checked, cx) => { tw.misAck = checked ? { version: MIS_CONSENT_VERSION } : null; cx.notify(); })
-      .child(h_flex().gap(8).items_start()
-        .child(div().flex_none().mt(2).w(14).h(14).rounded(3).border_1().border_color(agreed ? t.accent : t.border)
-          .flex().items_center().justify_center().text_size(10).text_color(t.background)
-          .when(agreed, (el) => el.bg(t.accent).child("✓")))
-        .child(div().flex_1().min_w(0).font_semibold().child(this.tx("mis.consent"))));
-    return card(t, this.tx("sources.tw.title"), this.tx(chosen ? "sources.tw.misSource" : "sources.tw.yahooSource"),
-      segmented(t, "bw-tw", [["yahoo", this.tx("src.yahoo")], ["mis", this.tx("src.mis")]], tw.provider,
-        (provider) => { tw.provider = provider; }),
-      ...(chosen ? this.field(t, this.tx("sources.tw.url"), this.misUrlInput, this.misUrlFocused, urlError) : []),
-      // The statement in the reader's language; the Traditional Chinese text prevails.
-      chosen && div().text_size(11.5).text_color(t.muted).child(this.tx("mis.statement")),
-      chosen && note(t, this.tx("mis.prevails")),
-      chosen && consent,
-      chosen && !agreed ? note(t, this.tx("mis.consentNeeded")) : null,
-      this.healthLine(t, "mis"));
-  }
-
-  sourcesTab(t, errors) {
-    return v_flex().gap(12)
-      .child(this.usCard(t, errors))
-      .child(this.taiwanCard(t, errors))
-      .child(card(t, this.tx("sources.other.title"), this.tx("sources.other.body"), this.healthLine(t, "yahoo")))
-      .child(card(t, this.tx("sources.crypto.title"), this.tx("sources.crypto.source"),
-        ...this.field(t, this.tx("sources.crypto.url"), this.urlInput, this.urlFocused, errors["sources.crypto.binanceUrl"]),
-        note(t, this.tx("sources.crypto.region")),
-        this.healthLine(t, "binance")));
-  }
-
-  // The interface language, then the gain and loss colors, then Herdr's own appearance settings.
-  displayTab(t) {
-    return v_flex().gap(12)
-      .child(div().font_semibold().child(this.tx("display.language")))
-      .child(segmented(t, "bw-language", LANGUAGES.map((language) => [language, LANGUAGE_LABELS[language]]), this.draft.language,
-        (language) => { this.draft.language = language; }))
-      .child(note(t, this.tx("display.languageHint")))
-      .child(div().mt(8).font_semibold().child(this.tx("display.colors")))
-      .child(segmented(t, "bw-colors", COLOR_CHOICES.map(([value, key]) => [value, this.tx(key)]), this.draft.colors,
-        (colors) => { this.draft.colors = colors; }))
-      .child(note(t, this.tx("display.colorsHint")))
-      .child(h_flex().mt(8).child(button(t, "bw-appearance", this.tx("display.appearance"), () => {
-        closeOverlay(this.overlay);
-        run("app.settings", { section: "look" });
-      })))
-      .child(note(t, this.tx("display.appearanceHint")));
-  }
-
-  disclaimerTab(t) {
-    const paragraph = (key) => div().text_color(t.muted).child(this.tx(key));
-    return v_flex().gap(10)
-      .child(div().font_semibold().child(this.tx("disclaimer.title")))
-      .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"].map(paragraph))
-      .child(note(t, this.tx("disclaimer.prevails")))
-      .child(div().mt(8).font_semibold().child(this.tx("disclaimer.sourcesTitle")))
-      .children(["disclaimer.sourcesStocks", "disclaimer.sourcesCrypto"].map(paragraph))
-      .child(div().mt(8).font_semibold().child(this.tx("privacy.title")))
-      .children(["privacy.hosts", "privacy.programs", "privacy.storage", "privacy.finnhub"].map(paragraph));
   }
 }

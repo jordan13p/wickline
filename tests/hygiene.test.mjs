@@ -184,7 +184,7 @@ test("the READMEs and RECIPE carry the settings tab's disclaimer", () => {
   const recipe = read(new URL("RECIPE.md", ROOT));
   assert.ok(recipe.includes(STRINGS.en["disclaimer.key"]), "disclaimer.key in RECIPE.md");
   assert.doesNotMatch(recipe, /`disclaimer\.[a-z]+`/, "string ids in RECIPE.md");
-  assert.ok(read(new URL("main.js", MOD)).includes('"disclaimer.key"'), "the tab shows disclaimer.key");
+  assert.ok(read(new URL("ui/settings-dialog.js", MOD)).includes('"disclaimer.key"'), "the tab shows disclaimer.key");
 });
 
 test("the disclosure names every host and the key file in all four places", () => {
