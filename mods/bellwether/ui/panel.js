@@ -115,7 +115,7 @@ function headerIcons(view, t) {
     .child(iconButton(t, "bw-pause", paused ? "play" : "pause", view.tx(paused ? "button.resume" : "button.pause"),
       (cx) => view.act(cx, () => view.togglePause())))
     .child(iconButton(t, "bw-settings", "settings", view.tx("button.settings"), () => view.openSettings("sources")))
-    .when(Boolean(own), (el) => el.child(iconButton(t, "bw-own-tab", own.icon, view.tx(own.label), () => own.go())));
+    .when(Boolean(own), (el) => el.child(iconButton(t, "bw-own-tab", own.icon, view.tx(own.label), (cx) => own.go(cx))));
 }
 
 // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves

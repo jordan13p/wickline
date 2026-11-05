@@ -42,3 +42,24 @@ export function newBellwether(before, after, tab = null) {
   const old = new Set(before.map((p) => p.pane));
   return after.find((p) => p.mod === "bellwether" && !old.has(p.pane) && (tab === null || p.tab === tab)) ?? null;
 }
+
+// How often and how long a move looks for the new copy: Herdr lists a new pane in panes() a little after
+// run() returns, not at once.
+const POLL_MS = 50;
+const WAIT_MS = 1500;
+
+/**
+ * Closes `me` (the moving copy's own pane) once the new Bellwether copy shows up in panes() (in `tab`,
+ * when given), looking every 50 ms for about 1.5 s. `host`: `{ panes, sleep(ms), close(pane) }`.
+ * True once closed; false when the new copy never showed up, and then nothing closes.
+ */
+export async function closeOnceOpened(before, me, host, tab = null) {
+  for (let waited = 0; ; waited += POLL_MS) {
+    if (newBellwether(before, host.panes(), tab)) {
+      host.close(me.pane);
+      return true;
+    }
+    if (waited >= WAIT_MS) return false;
+    await host.sleep(POLL_MS);
+  }
+}

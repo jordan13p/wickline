@@ -19,7 +19,7 @@ import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL } from "./providers/finnhub.js";
 import { layoutFor } from "./layout.js";
-import { canOpenOwnTab, newBellwether, ownTabSource, returnPane } from "./panes.js";
+import { canOpenOwnTab, closeOnceOpened, ownTabSource, returnPane } from "./panes.js";
 import { band, sidebar, table } from "./ui/panel.js";
 import { detailView } from "./ui/detail-dialog.js";
 import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
@@ -64,6 +64,8 @@ export default class Bellwether extends View {
     this.error = null;
     // The tab this copy's own tab was opened from (props().from), or null for a pane or block copy.
     this.from = typeof given.from === "string" ? given.from : null;
+    // A move to or from the own tab is waiting for the new copy (see finishMove).
+    this.moving = false;
     this.makeInput();
 
     this.watch = new Watchlist({
@@ -297,8 +299,9 @@ export default class Bellwether extends View {
   // A pane copy that shares its tab offers its own tab; the copy in that tab offers the way back, when
   // there is a pane to go back beside. Dialog copies draw neither (they never reach the header).
   // Clicking a mod pane focuses it, so the focused Bellwether pane is the one clicked; each click
-  // checks again. Commands apply as run() returns: the old copy closes only once panes() shows the
-  // new one, and only its own pane, never a shell the person split in beside it.
+  // checks again. panes() lists the new copy a little after run() returns, so a task looks for it
+  // (closeOnceOpened) and only then closes the old copy's own pane, never a shell the person split in
+  // beside it. Clicks while a move is under way do nothing, so copies never pile up.
   ownTabAction() {
     const all = panes();
     const shownTab = focused()?.tab ?? null;
@@ -306,28 +309,41 @@ export default class Bellwether extends View {
       if (!canOpenOwnTab(all, shownTab)) return null;
       return {
         icon: "zoom", label: "button.ownTab",
-        go: () => {
+        go: (cx) => {
+          if (this.moving) return;
           const before = panes();
           const me = ownTabSource(before);
           if (!me) return;
           run("tab.new", { mod: "bellwether", name: "Bellwether", props: { from: me.tab } });
-          if (newBellwether(before, panes())) run("pane.close", { pane: me.pane });
+          this.finishMove(cx, before, me);
         },
       };
     }
     if (!returnPane(all, this.from, focused(), shownTab)) return null;
     return {
       icon: "restore", label: "button.backBeside",
-      go: () => {
+      go: (cx) => {
+        if (this.moving) return;
         const before = panes();
         const me = before.find((p) => p.mod === "bellwether" && p.focused && p.tab !== this.from);
         const target = me && returnPane(before, this.from, focused(), me.tab);
         if (!target) return;
         run("pane.split", { pane: target, direction: "right", mod: "bellwether" });
-        const targetTab = before.find((p) => p.pane === target).tab;
-        if (newBellwether(before, panes(), targetTab)) run("pane.close", { pane: me.pane });
+        this.finishMove(cx, before, me, before.find((p) => p.pane === target).tab);
       },
     };
+  }
+
+  // Closes `me` once the new copy is seen (in `tab`, when given); the spawned task owns its cx. When the
+  // new copy never shows up, both stay open and the button works again.
+  finishMove(cx, before, me, tab = null) {
+    this.moving = true;
+    cx.spawn(async (cx) => {
+      const closed = await closeOnceOpened(before, me, {
+        panes, sleep: (ms) => cx.sleep(ms), close: (pane) => run("pane.close", { pane }),
+      }, tab);
+      if (!closed) this.moving = false;
+    });
   }
 
   // The dialogs' close: Herdr names the overlay in the props it opened the copy with.

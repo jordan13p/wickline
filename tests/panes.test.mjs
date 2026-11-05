@@ -1,7 +1,7 @@
 // node --test tests/  (panes.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canOpenOwnTab, newBellwether, ownTabSource, returnPane } from "../mods/bellwether/panes.js";
+import { canOpenOwnTab, closeOnceOpened, newBellwether, ownTabSource, returnPane } from "../mods/bellwether/panes.js";
 
 // Panes as panes() gives them: Bellwether's own tab "t9", opened from "t1".
 const pane = (id, tab, extra = {}) => ({ pane: id, tab, terminal: `term-${id}`, focused: false, ...extra });
@@ -63,4 +63,49 @@ test("the old copy closes only once the new one is seen", () => {
   // Back beside: it must be in the target's tab.
   assert.equal(newBellwether(before, [...before, opened], "t1"), null);
   assert.equal(newBellwether(before, [...before, { ...opened, tab: "t1" }], "t1").pane, "p4");
+});
+
+// Herdr shows a new pane in panes() a little after run() returns: a fake host whose panes() lists the
+// new copy only from its `shownAt`-th call on (never, when null), and records sleeps and closes.
+function fakeHost(before, opened, shownAt) {
+  const host = { reads: 0, sleeps: [], closed: [] };
+  host.panes = () => (++host.reads, shownAt !== null && host.reads >= shownAt ? [...before, opened] : before);
+  host.sleep = async (ms) => { host.sleeps.push(ms); };
+  host.close = (pane) => { host.closed.push(pane); };
+  return host;
+}
+
+test("the old copy closes once the new one shows up, even a few polls after the command", async () => {
+  const me = { pane: "p2", tab: "t1", terminal: null, mod: "bellwether", focused: true };
+  const before = [pane("p1", "t1"), me];
+  const opened = { pane: "p4", tab: "t4", terminal: null, mod: "bellwether" };
+  const host = fakeHost(before, opened, 4);
+  assert.equal(await closeOnceOpened(before, me, host), true);
+  // Its own pane only, and only once the new copy was seen.
+  assert.deepEqual(host.closed, ["p2"]);
+  assert.equal(host.reads, 4);
+  assert.equal(host.sleeps.length, 3);
+  assert.ok(host.sleeps.every((ms) => ms === 50));
+});
+
+test("back beside: the new copy must show up in the target's tab", async () => {
+  const me = { pane: "p9", tab: "t9", terminal: null, mod: "bellwether", focused: true };
+  const before = [pane("p1", "t1"), me];
+  const elsewhere = fakeHost(before, { pane: "p4", tab: "t4", terminal: null, mod: "bellwether" }, 1);
+  assert.equal(await closeOnceOpened(before, me, elsewhere, "t1"), false);
+  assert.deepEqual(elsewhere.closed, []);
+  const beside = fakeHost(before, { pane: "p4", tab: "t1", terminal: null, mod: "bellwether" }, 2);
+  assert.equal(await closeOnceOpened(before, me, beside, "t1"), true);
+  assert.deepEqual(beside.closed, ["p9"]);
+});
+
+test("a new copy that never shows up: nothing closes, and the wait is bounded", async () => {
+  const me = { pane: "p2", tab: "t1", terminal: null, mod: "bellwether", focused: true };
+  const before = [pane("p1", "t1"), me];
+  const host = fakeHost(before, null, null);
+  assert.equal(await closeOnceOpened(before, me, host), false);
+  assert.deepEqual(host.closed, []);
+  // About 1.5 s of 50 ms polls, then it gives up.
+  const waited = host.sleeps.reduce((a, b) => a + b, 0);
+  assert.ok(waited >= 1000 && waited <= 2000, `waited ${waited} ms`);
 });
