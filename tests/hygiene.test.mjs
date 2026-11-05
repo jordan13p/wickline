@@ -41,11 +41,39 @@ function herdrImports(source) {
     .filter(Boolean);
 }
 
-test("main.js imports no program runners from herdr", () => {
-  const names = herdrImports(read(new URL("main.js", MOD)));
-  assert.ok(names.length > 0, "no herdr import found");
-  for (const banned of ["exec", "hc"]) assert.ok(!names.includes(banned), banned);
+const jsFiles = () => files(MOD).filter((url) => url.pathname.endsWith(".js"));
+const relativeName = (url) => url.pathname.slice(MOD.pathname.length);
+
+test("no module imports program runners from herdr", () => {
+  const importers = jsFiles().filter((file) => herdrImports(read(file)).length > 0);
+  assert.ok(importers.length > 0, "no herdr import found");
+  for (const file of importers) {
+    for (const banned of ["exec", "hc"]) assert.ok(!herdrImports(read(file)).includes(banned), `${banned} in ${relativeName(file)}`);
+  }
   assert.deepEqual(herdrImports('import {\n  theme,\n  exec as run } from "herdr";'), ["theme", "exec"]);
+});
+
+// Every module specifier, whether it is imported with a list, a namespace or a default.
+function importSpecifiers(source) {
+  return [...source.matchAll(/(?:\bfrom|\bimport)\s*["']([^"']+)["']/g)].map(([, specifier]) => specifier);
+}
+
+// The layer rule: the core imports only other modules of the mod, so `node --test` can load it; main.js
+// is the shell that talks to Herdr, and anything under ui/ may add the view libraries.
+const VIEW_LIBRARIES = ["gpui-kit", "gpui-base", "herdr"];
+test("core modules import only relative modules; ui/ adds the view libraries", () => {
+  let core = 0;
+  for (const file of jsFiles()) {
+    const name = relativeName(file);
+    if (name === "main.js") continue;
+    const allowed = name.startsWith("ui/") ? VIEW_LIBRARIES : [];
+    if (allowed.length === 0) core += 1;
+    for (const specifier of importSpecifiers(read(file))) {
+      assert.ok(specifier.startsWith("./") || specifier.startsWith("../") || allowed.includes(specifier), `${specifier} in ${name}`);
+    }
+  }
+  assert.ok(core > 0, "no core module found");
+  assert.deepEqual(importSpecifiers('import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";'), ["./a.js", "fs/promises", "gpui-kit"]);
 });
 
 // "none": installing never docks Bellwether into the person's layout; the open key or pane.split opens it.
