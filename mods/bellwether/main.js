@@ -408,7 +408,8 @@ export default class Bellwether extends View {
         .on_click(() => closeOverlay(this.overlay)).child(this.tx("settings.cancel")))
       .child(save);
     return v_flex().id("bw-settings").size_full().text_color(t.foreground).text_size(12.5)
-      .child(h_flex().flex_1().min_h(0).child(tabs).child(pane))
+      // h_flex centers its children; stretch lets the tab column and the pane both fill the height.
+      .child(h_flex().flex_1().min_h(0).items_stretch().child(tabs).child(pane))
       .child(footer);
   }
 
