@@ -1,7 +1,8 @@
 // node --test tests/  (the Yahoo provider imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USER_AGENT, marketSession } from "../mods/bellwether/quotes.js";
+import { USER_AGENT } from "../mods/bellwether/quotes.js";
+import { marketSession } from "../mods/bellwether/freshness.js";
 import { decodeYahoo, yahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
 import { ok, chart } from "./helpers.mjs";
 

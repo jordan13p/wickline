@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { USER_AGENT, displayName } from "../mods/bellwether/quotes.js";
+import { USER_AGENT } from "../mods/bellwether/quotes.js";
+import { displayName } from "../mods/bellwether/format.js";
 import { detailSource } from "../mods/bellwether/freshness.js";
 import { t } from "../mods/bellwether/i18n.js";
 import { Watchlist, mergeOverlay } from "../mods/bellwether/watchlist.js";

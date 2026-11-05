@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { marketOf } from "./markets.js";
-import { isCryptoPair, marketSession } from "./quotes.js";
+import { isCryptoPair } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
 export const LIVE_MAX_AGE_MS = 120_000;
@@ -9,6 +9,19 @@ export const LIVE_MAX_AGE_MS = 120_000;
 export const TAIWAN_YAHOO_DELAY_S = 1200;
 // Providers whose prices are real time; any other source is delayed.
 export const REALTIME_SOURCES = new Set(["mis", "finnhub", "binance"]);
+
+/**
+ * Where a stock's market is now: "pre", "open", "post" or "closed"; a pair trades around the clock.
+ * Shown through the i18n keys `session.<value>`.
+ */
+export function marketSession(quote, now) {
+  if (!quote.periods) return "24h";
+  const within = (range) => range && now >= range[0] && now < range[1];
+  if (within(quote.periods.regular)) return "open";
+  if (within(quote.periods.pre)) return "pre";
+  if (within(quote.periods.post)) return "post";
+  return "closed";
+}
 
 /**
  * "open", "pre", "post" or "closed" from the quote's trading periods; a pair trades "24h";

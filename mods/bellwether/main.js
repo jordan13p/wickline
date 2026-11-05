@@ -8,9 +8,10 @@ import { appHome, closeOverlay, focused, nextCommand, openOverlay, panes, props,
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
+import { QuoteError, isCryptoPair } from "./quotes.js";
 import {
-  QuoteError, chartGeometry, displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair, rowMeta,
-} from "./quotes.js";
+  chartGeometry, displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta,
+} from "./format.js";
 import { detailSource, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
 import {
