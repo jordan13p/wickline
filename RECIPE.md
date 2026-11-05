@@ -8,7 +8,7 @@ A stock and crypto watchlist docked beside your agents. Modified from the Herdr 
 
 A panel 320px wide in the theme's `chrome` background with `foreground` text at 12.5px. The one accent is `theme().accent`: the name and the focused input border. Top to bottom:
 
-- **Header**, 12px padding: the three-candle icon (`svg("mods/bellwether/icon.svg")`, 16px, tinted with the text color), `Bellwether` (13.5px, semibold, `accent`), `5 tickers` (11px, `dim`, truncates), then two small outlined buttons on the right, **Refresh** and **Pause** (22px high, 8px horizontal padding, radius 5, `border` outline, 11px `muted` text; hover fills `hover`). Pause reads **Resume** while paused.
+- **Header**, 12px padding: the three-candle icon (`svg("mods/bellwether/icon.svg")`, 16px, tinted with the text color), `Bellwether` (13.5px, semibold, `accent`), `5 tickers` (11px, `dim`, truncates), then three small outlined buttons on the right, **Refresh**, **Pause** and **Settings** (22px high, 8px horizontal padding, radius 5, `border` outline, 11px `muted` text; hover fills `hover`). Pause reads **Resume** while paused.
 - **Status line** under it: a 6px round dot and 11.5px text in one color. `Auto-refresh every 60s` in `done`, `Refreshing quotes…` in `working` (the dot pulses with a native opacity loop, 0.35 to 1 over 1.2s), `Auto-refresh paused` in `blocked`.
 - **Language prompt**, 10px below, until answered: one 11.5px line `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`. `Language:` and the `·` separators in `dim`, each language name in `muted` (`foreground` on hover), the `×` beside them, not inside a name. It names no data source.
 - **Add field**, 6px below the prompt (10px below the status line without it): a 30px input, radius 6, `background` fill, `input` border (`accent` while focused), placeholder `Add a ticker: AAPL, 0700.HK, BTC/USDT`. Under it, one short line when there is something to say: an error in `ansi1`, the last edit's notice (`Added AAPL.`) in `dim`, or a Yahoo rate-limit note in `blocked`.
@@ -19,7 +19,7 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
   - far right: a `dim` `×` that removes the ticker.
   - A failed refresh adds an 11px `blocked` line: `Cached quote · <reason>` when an older price is kept, the reason alone when there is none. Before the first quote, the price reads `Waiting…` (`Not fetched` while paused).
   - Empty: `Your watchlist is empty. Add a ticker above.` in `dim`.
-- **Footer**, a `border` line above, in 10.5px `dim`: `Quotes for reference only. Not investment advice.` on one line (truncated when the panel is narrow), then the sources (`Yahoo Finance · Regular-session quotes · Exchange delays vary`, or the crypto variant naming Binance Spot and 24h change when a pair is watched).
+- **Footer**, a `border` line above, in 10.5px `dim`: the disclaimer on one line, truncated, `Quotes for reference only. Not investment advice.` below 360px panel width and a longer line (`Quotes are third-party data for reference only, not investment advice. See Disclaimer & privacy.`) from 360px; a click on it opens the Disclaimer & privacy tab of Settings (hover: `foreground`). Then the sources (`Yahoo Finance · Regular-session quotes · Exchange delays vary`, or the crypto variant naming Binance Spot and 24h change when a pair is watched).
 
 **Detail dialog**, 440px wide, opened by clicking a row that has a quote, 18px padding, 14px between parts:
 
@@ -28,6 +28,13 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - a 140px chart across the width: the same line, 2px, over a fill of the change color at 16% opacity, with the dashed previous close.
 - four columns, 10.5px `dim` labels over semibold values: Open, High, Low, Prev close (a pair: 24h open, 24h high, 24h low).
 - `As of 15:04:05 · Delay 15m · Yahoo Finance · regular session` in 11px `dim` (a pair: `Binance Spot · 24h`), with the date when it is not today, and `Cached quote · <reason>` in `blocked` after a failed refresh.
+
+**Settings dialog**, 640px by 520px, modal (a click beside it does not close it; Esc does), opened by the header's **Settings** button or the footer's disclaimer line. A column 168px wide on the left with `Settings` (13px semibold, `accent`) over four tabs, 28px high, radius 5: `Data sources`, `Display`, `Language`, `Disclaimer & privacy` (the chosen one on `hover` fill, `foreground`, semibold; the rest `muted`), a `border` rule, then the tab on the right, 18px padding, scrolling. Below, a `border` line above a footer with an `ansi1` message on the left (`Could not save the settings.`) and **Cancel** (outlined) and **Save** (`solid` fill, `solid_foreground` text; `hover` fill and `dim` text while disabled) on the right. Edits wait in a copy until Save; Cancel, Esc or closing drops it.
+
+- **Data sources**: a card `Other markets` (`Yahoo Finance · delayed. This source has nothing to set.`, read only), and a card `Crypto` (`Binance Spot · real time`) with the `Binance URL` input (30px, radius 6, `input` border, `accent` while focused, `ansi1` when invalid; placeholder is the default address), the error under it, and the region note in `dim` (`Binance may be unavailable in some regions, such as the United States. If so, enter an address that serves the same API.`). A URL that does not start with `https://`, or has no host, a query (`?`) or a fragment (`#`), disables Save and shows the reason.
+- **Display**: `Gain and loss colors` over a segmented control `Automatic` / `Red up` / `Green up` (1px `border`, radius 6; the chosen segment on `hover` fill, semibold), the hint `Colors follow you, not the market: one rule for the whole list. Hong Kong usually uses green-up.` in `dim`, then a button `Open Herdr appearance settings` (closes the dialog, then runs Herdr's `app.settings` with `section: "look"`) and a note that light and dark themes are set in Herdr.
+- **Language**: a segmented control with the five languages by their own names. Choosing one in the dialog also answers the language prompt (it never returns).
+- **Disclaimer & privacy**: the disclaimer (quotes come from third parties and are not guaranteed accurate, timely or available; nothing shown is investment advice; turning on a non-public source or entering a key is the person's own act under that source's terms; requests go directly from this computer, there is no server and no telemetry; English prevails over translations), then the hosts, programs and storage in the same words as the README.
 
 **Band**: when the block is under 72px tall (docked top or bottom), the same mod draws one row instead: the 14px icon (tinted with the text color) and `Bellwether` in `accent`, `Paused` in `blocked` if paused, then each ticker as `AAPL 230.10 +1.23%` (symbol semibold, price without USD or the pair's own quote currency, change colored as above, `cached` in `dim` after a failed refresh), 14px apart, clipped at the right edge. With nothing watched it says `Make the panel taller to add tickers.`
 
@@ -40,6 +47,7 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - **Gain/loss colors**: the saved `colors` setting is `auto` (the default), `red-up` or `green-up`. Automatic is red-up (gains `ansi1`, losses `ansi2`) for 繁體中文, 简体中文, 日本語 and 한국어, and green-up (gains `ansi2`, losses `ansi1`) for English.
 - **Adding**: Enter in the field adds the ticker. Input is upper-cased and checked: Yahoo symbols (`AAPL`, `BRK-B`, `^GSPC`, `7203.T`) or Binance pairs written `BASE/QUOTE`. `700.HK` becomes `0700.HK`; `600519.SH` becomes `600519.SS`. Company names and anything URL-like are refused with an inline error. A duplicate says it is already there. The field clears on success.
 - **Removing**: `×` removes the ticker and its cached quote at once.
+- **Settings**: a copy whose `props()` has `settings` draws only the dialog and starts no loop. Save writes only `language`, `colors` and `sources` (plus the answered language prompt when the language changed) over the settings saved at that moment, so keys another copy added stay; every copy re-renders at once, and the watchlist starts a new round at once when the saved Binance URL changed. A bad or missing saved field gets its default.
 - **Detail**: a click on a row with a quote opens the dialog with that quote as it was; Esc or `×` closes it. A row without a quote does nothing.
 - **Copies**: an edit in one copy (add, remove, pause) shows in every other copy at once, and stops that copy's round in flight.
 - **Refreshing**: a round starts right after any edit, then 60 seconds after the previous round ends. Pairs go first, up to 100 per Binance request, then one 24-hour line request per pair. Stocks go one at a time to Yahoo, at least one second apart; one request brings the quote and today's line. A pair Binance doesn't know fails only itself: a failed batch is retried pair by pair. A failed line request keeps the last line.
@@ -55,24 +63,25 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - Charts: `chartGeometry` in `quotes.js` scales a line into `[x%, y%]` points with 8% headroom, the previous close included in the range. `PathBuilder.stroke(...)` for the line, `.dash_array([3, 3])` for the rule, `PathBuilder.fill()` closed along the bottom for the area, each painted with `window.paint_path(...)` as an absolute layer over a sized `div`.
 - `watchlist.js`: the list and the refresh loop, with no Herdr imports. Herdr's APIs are passed in as a host: `load`/`save`, `fetch`, `now`, `sleep`, `changed`. The loop runs in one `cx.spawn` for the copy's whole life, sleeping with that task's `cx.sleep` and redrawing with its `cx.notify()`. Edits are synchronous; each bumps a revision so a round in flight drops late results, and wakes the loop. `render` calls `sync()`, which adopts another copy's edit of the shared list the same way (Herdr re-renders every copy on `setShared`).
 - `i18n.js`: `LANGUAGES`, `LANGUAGE_LABELS` and `STRINGS`, one table per language with the same keys and `{name}` placeholders (English includes the error texts from `quotes.js`), and `t(lang, key, params)`, which falls back to English, then to the key. The watchlist hands the view notices, errors and status messages as `{ code, params }`; the view translates them when it draws.
-- `settings.js`: `readSettings` (each field checked, defaults for anything else), `mergeSettings` (what a save writes) and `upIsRed`.
+- `settings.js`: `readSettings` (each field checked, defaults for anything else, including `sources.crypto.binanceUrl`), `validateSettings` (field path to error code; `{}` is valid), `mergeSettings` (what a save writes, keeping unknown keys, also inside `sources`), `upIsRed`, and `SECRET_KEY_FINNHUB` (the local-storage name reserved for the Finnhub key, not used yet).
 - `quotes.js`: symbol rules, error codes with their English texts, the request headers, the session, chart geometry, and number, date and time formatting by hand (no `Intl` in Herdr's runtime).
 - `providers/yahoo.js`, `providers/binance.js`: one provider per source, each with its host, how it splits a watchlist into requests, and how it decodes the answers. `markets.js` names a symbol's market from its form.
 - `icon.svg`: three candles, a single `currentColor` stroke, drawn with `svg("mods/bellwether/icon.svg")` so Herdr tints it with the text color (16px in the header, 14px in the band).
 - **Storage**: two keys in Herdr's shared state (`shared(...)` / `setShared(...)`), persisted by Herdr and seen by every copy:
   - `shared("bellwether.watchlist.v1")`: `{ version: 1, symbols: [...], paused }`. The loop re-reads it each round.
-  - `shared("bellwether.settings.v1")`: `{ version: 1, language: "en"|"zh-TW"|"zh-CN"|"ja"|"ko", colors: "auto"|"red-up"|"green-up", languagePromptDismissed }`. Read on every render, field by field (a bad field gets its default); a save keeps keys this build does not know.
+  - `shared("bellwether.settings.v1")`: `{ version: 1, language: "en"|"zh-TW"|"zh-CN"|"ja"|"ko", colors: "auto"|"red-up"|"green-up", languagePromptDismissed, sources: { crypto: { binanceUrl } } }`. Read on every render, field by field (a bad field gets its default); a save keeps keys this build does not know.
   - Quotes and lines are memory only.
-- **Network**: `fetch` GETs, with headers `User-Agent: Bellwether-Herdr/<version>` and `Accept: application/json`, to two hosts only:
+- **Network**: `fetch` GETs, with headers `User-Agent: Bellwether-Herdr/<version>` and `Accept: application/json`, to two hosts, plus the Binance URL the person sets in Settings (`https://` only; the default is the Binance host below, and both Binance paths are appended to whatever is saved):
   - `https://query1.finance.yahoo.com/v8/finance/chart/<symbol>?interval=5m&range=1d&includePrePost=false`: `chart.result[0].meta` (`regularMarketPrice`, `regularMarketTime`, `previousClose` else `chartPreviousClose`, `currency`, `longName`/`shortName`, `exchangeDataDelayedBy`, `regularMarketDayHigh`/`Low`, `currentTradingPeriod.pre/regular/post`) and `indicators.quote[0]` (`close` for the line, the first `open`). A response whose `meta.symbol` differs from the request is rejected.
   - `https://data-api.binance.vision/api/v3/ticker/24hr?symbols=["BTCUSDT",...]`: `lastPrice`, `prevClosePrice`, `openPrice`, `highPrice`, `lowPrice`, `closeTime`.
   - `https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96`: closes (index 4) for the 24-hour line.
-- **Programs**: none are run.
-- Herdr functions: `theme`, `shared`, `setShared`, `nextCommand`, `props`, `openOverlay`, `closeOverlay`. No `exec`, no `hc`, no files outside the mod.
+- **Programs**: none are run. `run("app.settings", { section: "look" })` is a Herdr command that opens Herdr's own settings, not a program.
+- Herdr functions: `theme`, `shared`, `setShared`, `nextCommand`, `props`, `openOverlay`, `closeOverlay`, `run`. No `exec`, no `hc`, no files outside the mod.
 
 ## Watch out
 
-- The mod reaches the network (Yahoo Finance and Binance, nothing else) and runs no programs.
+- The mod reaches the network (Yahoo Finance and Binance, or the Binance address the person set, nothing else) and runs no programs.
+- A saved Binance URL is used as written: whoever can edit Herdr's shared state can point the crypto requests at another host. The dialog only accepts `https://` addresses.
 - Herdr's shipped layouts (`main`) don't take a new mod's `mod.json` dock (Herdr 0.1.12); only a layout of the person's own does. On `main`, open it with `pane.split`.
 - Without `sync()` on render, a copy kept its old list and paused state until its next round, up to 60 seconds.
 - A gradient to a fully transparent `#rrggbb00` stop drew as one flat color; a solid fill with `.opacity(0.16)` reads the same in both themes.
@@ -94,6 +103,8 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - Adding `0700.HK` adds a row; `Apple` shows an error and adds nothing.
 - Clicking `AAPL` opens its day with a chart, Open/High/Low/Prev close and the session; Esc closes it.
 - `×` removes a row immediately; Pause stops automatic requests and Refresh still runs one round.
+- The Settings button opens a modal dialog with four tabs; Cancel or Esc discards edits; an `http://` Binance URL disables Save with an error; Save with a new language switches the panel and every copy at once.
+- The footer's disclaimer line opens the Disclaimer & privacy tab.
 - Resizing the block below 72px shows the one-line band; taller shows the panel again.
 - Pausing in one copy shows `Auto-refresh paused` in every copy at once.
 - Restarting Herdr keeps the watchlist and paused state.

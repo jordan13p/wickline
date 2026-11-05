@@ -2,16 +2,16 @@
 // No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanSeries, positive } from "../quotes.js";
 
-// The only Binance host (the public market-data mirror).
-const BINANCE_TICKERS = "https://data-api.binance.vision/api/v3/ticker/24hr";
-const BINANCE_KLINES = "https://data-api.binance.vision/api/v3/klines";
 const BINANCE_BATCH = 100;
+
+// `base` is the saved Binance URL (the public market-data mirror unless the person set another).
+const endpoint = (base, path) => `${base.replace(/\/+$/, "")}/api/v3/${path}`;
 
 /** @typedef {import("./yahoo.js").Provider} Provider */
 
 /** One request for up to BINANCE_BATCH pairs: `?symbols=["BTCUSDT","ETHUSDT"]`. */
-export function binanceUrl(pairs) {
-  return `${BINANCE_TICKERS}?symbols=${encodeURIComponent(JSON.stringify(pairs.map((pair) => pair.replace("/", ""))))}`;
+export function binanceUrl(base, pairs) {
+  return `${endpoint(base, "ticker/24hr")}?symbols=${encodeURIComponent(JSON.stringify(pairs.map((pair) => pair.replace("/", ""))))}`;
 }
 
 /** Quotes by requested pair; a pair Binance did not return is absent. */
@@ -54,8 +54,8 @@ export function decodeBinance(pairs, response, now) {
 }
 
 /** The last 24 hours of one pair in 15-minute bars. */
-export function binanceKlinesUrl(pair) {
-  return `${BINANCE_KLINES}?symbol=${encodeURIComponent(pair.replace("/", ""))}&interval=15m&limit=96`;
+export function binanceKlinesUrl(base, pair) {
+  return `${endpoint(base, "klines")}?symbol=${encodeURIComponent(pair.replace("/", ""))}&interval=15m&limit=96`;
 }
 
 /** Closing prices, oldest first; throws when Binance answers with anything else. */
@@ -74,12 +74,12 @@ export const binance = {
   spacingMs: () => 0,
   intervalMs: () => 60_000,
   // Per batch: its quote request, then a line request per pair of that batch.
-  requests(pairs) {
+  requests(pairs, { binanceUrl: base }) {
     const requests = [];
     for (let i = 0; i < pairs.length; i += BINANCE_BATCH) {
       const batch = pairs.slice(i, i + BINANCE_BATCH);
-      requests.push({ url: binanceUrl(batch), headers: HEADERS, symbols: batch, kind: "quote" });
-      for (const pair of batch) requests.push({ url: binanceKlinesUrl(pair), headers: HEADERS, symbols: [pair], kind: "line" });
+      requests.push({ url: binanceUrl(base, batch), headers: HEADERS, symbols: batch, kind: "quote" });
+      for (const pair of batch) requests.push({ url: binanceKlinesUrl(base, pair), headers: HEADERS, symbols: [pair], kind: "line" });
     }
     return requests;
   },

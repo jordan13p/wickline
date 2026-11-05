@@ -10,6 +10,8 @@ import { binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mo
 import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/bellwether/watchlist.js";
 import { t } from "../mods/bellwether/i18n.js";
 
+const BASE = "https://data-api.binance.vision";
+
 const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
 const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
 const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD", longName: "Apple Inc." };
@@ -26,7 +28,7 @@ test("normalizes symbols", () => {
 
 test("builds the two request URLs", () => {
   assert.equal(yahooUrl("^GSPC"), "https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=5m&range=1d&includePrePost=false");
-  assert.equal(binanceUrl(["BTC/USDT", "ETH/USDT"]), "https://data-api.binance.vision/api/v3/ticker/24hr?symbols=" + encodeURIComponent('["BTCUSDT","ETHUSDT"]'));
+  assert.equal(binanceUrl(BASE, ["BTC/USDT", "ETH/USDT"]), "https://data-api.binance.vision/api/v3/ticker/24hr?symbols=" + encodeURIComponent('["BTCUSDT","ETHUSDT"]'));
 });
 
 test("decodes Yahoo quotes and refuses another ticker", () => {
@@ -85,6 +87,9 @@ function fakeHost(respond) {
   const host = {
     store: { version: 1, symbols: [], paused: false }, clock: 0, sleeps: [], requests: [],
     load: () => host.store,
+    // The saved settings (shared state in Herdr); nothing saved yet.
+    prefs: undefined,
+    settings: () => host.prefs,
     save: (p) => { host.store = JSON.parse(JSON.stringify(p)); },
     now: () => host.clock,
     sleep: (ms) => new Promise((resolve) => host.sleeps.push({ at: host.clock + ms, resolve })),
@@ -134,7 +139,7 @@ test("request order and spacing are unchanged", async () => {
   w.add("AAPL"); w.add("MSFT"); w.add("BTC/USDT");
   const run = w.run();
   for (let i = 0; i < 6 && host.requests.length < 4; i++) await tick(host);
-  assert.deepEqual(host.requests, [binanceUrl(["BTC/USDT"]), binanceKlinesUrl("BTC/USDT"), yahooUrl("AAPL"), yahooUrl("MSFT")]);
+  assert.deepEqual(host.requests, [binanceUrl(BASE, ["BTC/USDT"]), binanceKlinesUrl(BASE, "BTC/USDT"), yahooUrl("AAPL"), yahooUrl("MSFT")]);
   assert.equal(sent[3].at - sent[2].at, 1000);
   for (const { headers } of sent) assert.equal(headers["User-Agent"], USER_AGENT);
   assert.deepEqual(w.quotes["BTC/USDT"].series, [1.5, 1.75]);
@@ -154,9 +159,9 @@ test("an unknown pair fails its batch, then pairs are asked one by one", async (
   // Pairs are not spaced, so one round runs without the clock moving.
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(host.requests, [
-    binanceUrl(["BTC/USDT", "ETH/USDT", "BAD/USDT"]),
-    binanceUrl(["BTC/USDT"]), binanceUrl(["ETH/USDT"]), binanceUrl(["BAD/USDT"]),
-    binanceKlinesUrl("BTC/USDT"), binanceKlinesUrl("ETH/USDT"),
+    binanceUrl(BASE, ["BTC/USDT", "ETH/USDT", "BAD/USDT"]),
+    binanceUrl(BASE, ["BTC/USDT"]), binanceUrl(BASE, ["ETH/USDT"]), binanceUrl(BASE, ["BAD/USDT"]),
+    binanceKlinesUrl(BASE, "BTC/USDT"), binanceKlinesUrl(BASE, "ETH/USDT"),
   ]);
   assert.deepEqual(w.errors["BAD/USDT"], { code: "binance.invalidPair", params: {} });
   assert.equal(t("en", w.errors["BAD/USDT"].code), "Binance has no Spot pair with this name.");
@@ -244,6 +249,30 @@ test("another copy's edit is picked up at once", async () => {
   assert.equal(b.quotes.AAPL, undefined);
 });
 
+test("crypto requests use the saved Binance URL, also after a change", async () => {
+  const MIRROR = "https://mirror.test";
+  const host = fakeHost((url) => url.includes("ticker/24hr")
+    ? ok([{ symbol: "BTCUSDT", lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 }])
+    : ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"]]));
+  host.prefs = { version: 1, sources: { crypto: { binanceUrl: MIRROR } } };
+  const w = new Watchlist(host);
+  w.add("BTC/USDT");
+  const run = w.run();
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(host.requests, [binanceUrl(MIRROR, ["BTC/USDT"]), binanceKlinesUrl(MIRROR, "BTC/USDT")]);
+  // A saved change starts a new round against the new address at once.
+  assert.equal(w.sync(), false);
+  host.prefs = { version: 1, sources: { crypto: { binanceUrl: "https://other.test" } } };
+  assert.equal(w.sync(), true);
+  assert.equal(w.sync(), false);
+  host.requests.length = 0;
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(host.requests, [binanceUrl("https://other.test", ["BTC/USDT"]), binanceKlinesUrl("https://other.test", "BTC/USDT")]);
+  w.stop();
+  await tick(host);
+  await run;
+});
+
 test("reads today's line, the day's range and the session from Yahoo", () => {
   const body = { chart: { result: [{
     meta: { ...AAPL, regularMarketDayHigh: 232, regularMarketDayLow: 224,
@@ -263,7 +292,7 @@ test("reads today's line, the day's range and the session from Yahoo", () => {
 });
 
 test("reads Binance's 24-hour line", () => {
-  assert.equal(binanceKlinesUrl("BTC/USDT"), "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96");
+  assert.equal(binanceKlinesUrl(BASE, "BTC/USDT"), "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96");
   assert.deepEqual(decodeKlines(ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"], "junk"])), [1.5, 1.75]);
   assert.throws(() => decodeKlines({ status: 400, ok: false, text: "" }));
 });

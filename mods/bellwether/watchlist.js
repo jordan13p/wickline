@@ -2,6 +2,7 @@
 // so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, isCryptoPair, normalizeSymbol } from "./quotes.js";
 import { binance } from "./providers/binance.js";
+import { readSettings } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
@@ -31,6 +32,7 @@ export function readPreferences(value) {
 /**
  * host: {
  *   load(): unknown, save(preferences): void          // the saved watchlist
+ *   settings(): unknown                                // the saved settings (read only)
  *   fetch(url, headers): Promise<{ status, ok, text() }>  // GET with the request's headers; hosts in providers/
  *   now(): number, sleep(ms): Promise<void>
  *   changed(): void                                    // redraw, from the loop only
@@ -41,6 +43,7 @@ export class Watchlist {
     this.host = host;
     this.intervalMs = intervalMs;
     this.preferences = readPreferences(host.load());
+    this.binanceUrl = this.savedBinanceUrl();
     this.quotes = {};
     // By symbol, and for the whole round: `{ code, params }` for the view to translate.
     this.errors = {};
@@ -54,6 +57,10 @@ export class Watchlist {
     this.dirty = true;
     this.lastYahooAt = -Infinity;
     this.wake = null;
+  }
+
+  savedBinanceUrl() {
+    return readSettings(this.host.settings()).sources.crypto.binanceUrl;
   }
 
   // Edits are synchronous (the store is Herdr's shared state) and return a short notice,
@@ -111,10 +118,15 @@ export class Watchlist {
     wake?.();
   }
 
-  /** Picks up another copy's edit of the shared list at once (the main view calls it on render). */
+  /**
+   * Picks up another copy's edit of the shared list, or a saved Binance URL, at once
+   * (the main view calls it on render).
+   */
   sync() {
     const preferences = readPreferences(this.host.load());
-    if (JSON.stringify(preferences) === JSON.stringify(this.preferences)) return false;
+    const binanceUrl = this.savedBinanceUrl();
+    if (JSON.stringify(preferences) === JSON.stringify(this.preferences) && binanceUrl === this.binanceUrl) return false;
+    this.binanceUrl = binanceUrl;
     this.adopt(preferences);
     this.revision++;
     this.dirty = true;
@@ -138,6 +150,7 @@ export class Watchlist {
       this.dirty = false;
       // Another copy may have edited the shared list.
       this.adopt(readPreferences(this.host.load()));
+      this.binanceUrl = this.savedBinanceUrl();
       const due = manual || (!this.preferences.paused && this.preferences.symbols.length > 0);
       if (due) await this.round(manual);
       if (this.stopped) return;
@@ -161,7 +174,7 @@ export class Watchlist {
     this.host.changed();
     try {
       // Each quote batch comes with the line requests for its pairs.
-      const crypto = binance.requests(symbols.filter(isCryptoPair), {});
+      const crypto = binance.requests(symbols.filter(isCryptoPair), { binanceUrl: this.binanceUrl });
       for (let i = 0; i < crypto.length && current();) {
         const quote = crypto[i++];
         const lines = [];
@@ -245,7 +258,7 @@ export class Watchlist {
     if (pairs.length > 1 && pairs.every((pair) => batch.errors[pair]?.invalidSymbol)) {
       for (const pair of pairs) {
         if (!current()) return;
-        const single = binance.requests([pair], {}).find((request) => request.kind === "quote");
+        const single = binance.requests([pair], { binanceUrl: this.binanceUrl }).find((request) => request.kind === "quote");
         const result = await this.ask(binance, single, current, "binance.unreachable");
         if (result) apply(result);
       }

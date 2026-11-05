@@ -1,23 +1,27 @@
 // Bellwether: stock and crypto quotes beside your agents. A watchlist panel with an
 // add field and a line per ticker; docked as a short strip (top or bottom), it
-// draws one line of quotes. A row opens the ticker's day as a dialog: the same
-// mod, given the quote in its props.
+// draws one line of quotes. A row opens the ticker's day as a dialog, and the
+// settings button opens the settings: the same mod, given the quote or `settings` in its props.
 import { View, div, svg, PathBuilder, Background } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
-import { closeOverlay, nextCommand, openOverlay, props, setShared, shared, theme } from "herdr";
+import { closeOverlay, nextCommand, openOverlay, props, run, setShared, shared, theme } from "herdr";
 import { Watchlist, INTERVAL_MS, WATCHLIST_KEY } from "./watchlist.js";
 import {
   QuoteError, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime,
   isCryptoPair, marketSession,
 } from "./quotes.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
-import { SETTINGS_KEY, mergeSettings, readSettings, upIsRed } from "./settings.js";
+import { DEFAULT_BINANCE_URL, SETTINGS_KEY, mergeSettings, readSettings, upIsRed, validateSettings } from "./settings.js";
 
 // Yahoo cooldown messages, shown in the `blocked` color.
 const RATE_LIMITED = ["yahoo.retryAfter", "yahoo.retriesDelayed"];
 // Below this height the panel draws the one-line band.
 const BAND_HEIGHT = 72;
 const ICON = "mods/bellwether/icon.svg";
+// Below this panel width the footer shows the short disclaimer.
+const SHORT_FOOTER_WIDTH = 360;
+const SETTINGS_TABS = ["sources", "display", "language", "disclaimer"];
+const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
 
 export default class Bellwether extends View {
   init(_props, cx) {
@@ -26,6 +30,12 @@ export default class Bellwether extends View {
     if (given.detail) {
       this.detail = given.detail;
       this.overlay = given.overlay;
+      return;
+    }
+    if (given.settings) {
+      this.overlay = given.overlay;
+      this.tab = SETTINGS_TABS.includes(given.settings.tab) ? given.settings.tab : "sources";
+      this.initDraft();
       return;
     }
     this.size = null;
@@ -38,7 +48,8 @@ export default class Bellwether extends View {
     this.watch = new Watchlist({
       load: () => shared(WATCHLIST_KEY),
       save: (preferences) => setShared(WATCHLIST_KEY, preferences),
-      // Read-only GETs to Yahoo Finance and Binance; see providers/ for the hosts.
+      settings: () => shared(SETTINGS_KEY),
+      // Read-only GETs to Yahoo Finance and Binance (or the Binance address the person set).
       fetch: (url, headers) => fetch(url, { headers }),
       now: () => Date.now(),
       sleep: () => Promise.resolve(),
@@ -74,6 +85,17 @@ export default class Bellwether extends View {
   saveSettings(change) {
     setShared(SETTINGS_KEY, mergeSettings(shared(SETTINGS_KEY), change));
     this.readSettings();
+  }
+
+  // Edits to the settings wait in a copy until Save: Cancel, Esc or closing drops it.
+  initDraft() {
+    this.draft = JSON.parse(JSON.stringify(this.settings));
+    this.error = null;
+    this.urlFocused = false;
+    this.urlInput = InputState.new({ placeholder: DEFAULT_BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
+    this.urlInput.on("change", () => { this.draft.sources.crypto.binanceUrl = this.urlInput.value(); });
+    this.urlInput.on("focus", (_e, cx) => { this.urlFocused = true; cx.notify(); });
+    this.urlInput.on("blur", (_e, cx) => { this.urlFocused = false; cx.notify(); });
   }
 
   // The input's placeholder is fixed when it is made, so a new language needs a new input
@@ -152,10 +174,19 @@ export default class Bellwether extends View {
     });
   }
 
+  openSettings(tab) {
+    openOverlay({
+      mod: "bellwether", kind: "dialog", modal: true, width: 640, height: 520,
+      // `health` is each source's current problem; the sources report none yet.
+      props: { settings: { tab, health: [] } },
+    });
+  }
+
   render() {
     const t = theme();
     this.readSettings();
     if (this.detail) return this.detailView(t);
+    if (this.draft) return this.settingsView(t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
     const root = (this.size && this.size.height < BAND_HEIGHT ? h_flex() : v_flex())
@@ -252,7 +283,8 @@ export default class Bellwether extends View {
           .child(this.tx(symbols.length === 1 ? "header.tickers.one" : "header.tickers.other", { count: symbols.length })))
         .child(this.button(t, "bw-refresh", this.tx("button.refresh"), (cx) => { this.watch.refreshNow(); cx.notify(); }))
         .child(this.button(t, "bw-pause", this.tx(paused ? "button.resume" : "button.pause"),
-          (cx) => this.act(cx, () => this.togglePause()))))
+          (cx) => this.act(cx, () => this.togglePause())))
+        .child(this.button(t, "bw-settings", this.tx("button.settings"), () => this.openSettings("sources"))))
       .child(h_flex().items_center().gap(6)
         .child(div().flex_none().w(6).h(6).rounded_full().bg(statusColor)
           .when(w.loading, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 1200 })))
@@ -303,7 +335,9 @@ export default class Bellwether extends View {
 
     const crypto = symbols.some(isCryptoPair);
     const footer = v_flex().flex_none().px(12).py(10).gap(8).border_t(1).border_color(t.border)
-      .child(div().text_size(10.5).text_color(t.dim).truncate().child(this.tx("footer.disclaimer")))
+      .child(div().id("bw-disclaimer").text_size(10.5).text_color(t.dim).truncate().cursor_pointer()
+        .hover((s) => s.text_color(t.foreground)).on_click(() => this.openSettings("disclaimer"))
+        .child(this.tx(this.size && this.size.width >= SHORT_FOOTER_WIDTH ? "footer.long" : "footer.short")))
       .child(div().text_size(10.5).text_color(t.dim).child(this.tx(crypto ? "footer.sourcesCrypto" : "footer.sources")));
 
     return root.child(header).child(field).child(list).child(footer);
@@ -348,5 +382,116 @@ export default class Bellwether extends View {
           .child(stat("detail.prevClose", q.previousClose)))
       .child(div().text_size(11).text_color(t.dim).child(asOf))
       .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.tx("quote.cached", { reason: this.say(q.error) }))));
+  }
+
+  // The settings dialog: tabs on the left, the tab on the right, Cancel / Save below.
+  settingsView(t) {
+    const errors = validateSettings(this.draft);
+    const invalid = Object.keys(errors).length > 0;
+    const tabs = v_flex().flex_none().w(168).p(10).gap(2).border_r(1).border_color(t.border)
+      .child(div().px(8).pb(8).text_size(13).font_semibold().text_color(t.accent).child(this.tx("settings.title")))
+      .children(SETTINGS_TABS.map((tab) => h_flex().id(`bw-tab-${tab}`).px(8).h(28).items_center().rounded(5).cursor_pointer()
+        .text_color(tab === this.tab ? t.foreground : t.muted).when(tab === this.tab, (el) => el.bg(t.hover).font_semibold())
+        .hover((s) => s.bg(t.hover).text_color(t.foreground))
+        .on_click((_e, cx) => { this.tab = tab; cx.notify(); }).child(this.tx(`settings.tab.${tab}`))));
+    const pane = v_flex().id("bw-settings-pane").flex_1().min_w(0).min_h(0).p(18).gap(14).overflow_y_scrollbar()
+      .child(this[`${this.tab}Tab`](t, errors));
+    const save = h_flex().id("bw-settings-save").flex_none().h(28).px(14).items_center().rounded(5).font_semibold()
+      .when(invalid, (el) => el.bg(t.hover).text_color(t.dim))
+      .when(!invalid, (el) => el.bg(t.solid).text_color(t.solid_foreground).cursor_pointer().on_click((_e, cx) => this.saveDraft(cx)))
+      .child(this.tx("settings.save"));
+    const footer = h_flex().flex_none().px(14).py(10).gap(8).items_center().border_t(1).border_color(t.border)
+      .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(t.ansi1)
+        .child(this.error ? this.say(this.error) : ""))
+      .child(h_flex().id("bw-settings-cancel").flex_none().h(28).px(14).items_center().rounded(5).border_1().border_color(t.border)
+        .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
+        .on_click(() => closeOverlay(this.overlay)).child(this.tx("settings.cancel")))
+      .child(save);
+    return v_flex().id("bw-settings").size_full().text_color(t.foreground).text_size(12.5)
+      .child(h_flex().flex_1().min_h(0).child(tabs).child(pane))
+      .child(footer);
+  }
+
+  // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay.
+  saveDraft(cx) {
+    if (Object.keys(validateSettings(this.draft)).length) return;
+    const { language, colors, sources } = this.draft;
+    try {
+      setShared(SETTINGS_KEY, mergeSettings(shared(SETTINGS_KEY), {
+        language, colors, sources,
+        // Picking a language answers the language prompt too.
+        ...(language !== this.settings.language && { languagePromptDismissed: true }),
+      }));
+    } catch {
+      this.error = { code: "error.saveSettings", params: {} };
+      cx.notify();
+      return;
+    }
+    closeOverlay(this.overlay);
+  }
+
+  // One group of choices: the chosen one filled, the rest muted.
+  segmented(t, id, choices, current, onPick) {
+    return h_flex().flex_none().rounded(6).border_1().border_color(t.border).overflow_hidden()
+      .children(choices.map(([value, label]) => h_flex().id(`${id}-${value}`).h(28).px(12).items_center().cursor_pointer()
+        .text_color(value === current ? t.foreground : t.muted).when(value === current, (el) => el.bg(t.hover).font_semibold())
+        .hover((s) => s.text_color(t.foreground))
+        .on_click((_e, cx) => { onPick(value); cx.notify(); }).child(label)));
+  }
+
+  // A source's card: its name and kind, then whatever it lets the person set.
+  card(t, title, source, ...children) {
+    return v_flex().gap(8).p(12).rounded(8).border_1().border_color(t.border)
+      .child(h_flex().gap(8).items_center()
+        .child(div().flex_1().min_w(0).font_semibold().child(title))
+        .child(div().flex_none().text_size(11).text_color(t.dim).child(source)))
+      .children(children.filter(Boolean));
+  }
+
+  note(t, text) {
+    return div().text_size(11.5).text_color(t.dim).child(text);
+  }
+
+  sourcesTab(t, errors) {
+    const field = "sources.crypto.binanceUrl";
+    return v_flex().gap(12)
+      .child(this.card(t, this.tx("sources.other.title"), this.tx("sources.other.body")))
+      .child(this.card(t, this.tx("sources.crypto.title"), this.tx("sources.crypto.source"),
+        div().text_size(11).text_color(t.muted).child(this.tx("sources.crypto.url")),
+        Input.new(this.urlInput).h(30).px(8).rounded(6).border_1()
+          .border_color(errors[field] ? t.ansi1 : this.urlFocused ? t.accent : t.input)
+          .bg(t.background).text_size(12).text_color(t.foreground),
+        errors[field] ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(errors[field])) : null,
+        this.note(t, this.tx("sources.crypto.region"))));
+  }
+
+  displayTab(t) {
+    return v_flex().gap(12)
+      .child(div().font_semibold().child(this.tx("display.colors")))
+      .child(this.segmented(t, "bw-colors", COLOR_CHOICES.map(([value, key]) => [value, this.tx(key)]), this.draft.colors,
+        (colors) => { this.draft.colors = colors; }))
+      .child(this.note(t, this.tx("display.colorsHint")))
+      .child(h_flex().mt(8).child(this.button(t, "bw-appearance", this.tx("display.appearance"), () => {
+        closeOverlay(this.overlay);
+        run("app.settings", { section: "look" });
+      })))
+      .child(this.note(t, this.tx("display.appearanceHint")));
+  }
+
+  languageTab(t) {
+    return v_flex().gap(12)
+      .child(div().font_semibold().child(this.tx("settings.tab.language")))
+      .child(this.segmented(t, "bw-language", LANGUAGES.map((language) => [language, LANGUAGE_LABELS[language]]), this.draft.language,
+        (language) => { this.draft.language = language; }));
+  }
+
+  disclaimerTab(t) {
+    const paragraph = (key) => div().text_color(t.muted).child(this.tx(key));
+    return v_flex().gap(10)
+      .child(div().font_semibold().child(this.tx("disclaimer.title")))
+      .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct"].map(paragraph))
+      .child(this.note(t, this.tx("disclaimer.prevails")))
+      .child(div().mt(8).font_semibold().child(this.tx("privacy.title")))
+      .children(["privacy.hosts", "privacy.programs", "privacy.storage"].map(paragraph));
   }
 }
