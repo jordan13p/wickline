@@ -6,6 +6,7 @@ import { View } from "gpui-kit";
 import { v_flex, h_flex, InputState } from "gpui-base";
 import { appHome, closeOverlay, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme } from "herdr";
 import * as fs from "fs/promises";
+import { platform, run as runProgram } from "process";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
@@ -24,9 +25,12 @@ import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
 // The key file lives in Herdr's data folder (see secrets.js); `appHome()` is called per use, never at the top level.
 const secretsDir = () => `${appHome()}/data/bellwether`;
+// Herdr's process runner, for the one program Bellwether runs: `chmod 600` on that file after each write.
+const system = { platform, run: runProgram };
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
-const saveSecret = (name, value) => secrets.saveSecret(fs, secretsDir(), name, value);
-const removeSecret = (name) => secrets.removeSecret(fs, secretsDir(), name);
+// Both resolve false when the file could not be made owner-only (it is written all the same).
+const saveSecret = (name, value) => secrets.saveSecret(fs, system, secretsDir(), name, value);
+const removeSecret = (name) => secrets.removeSecret(fs, system, secretsDir(), name);
 
 export default class Bellwether extends View {
   init(_props, cx) {
@@ -142,6 +146,8 @@ export default class Bellwether extends View {
   initFinnhubDraft(cx) {
     this.savedKey = null;
     this.keyLoaded = false;
+    // `{ code, params }` once the key was saved but could not be made owner-only.
+    this.keyWarning = null;
     this.keyShown = false;
     this.keyInput = InputState.new({ placeholder: this.tx("sources.us.key") });
     this.keyInput.set_masked(true);
@@ -338,10 +344,10 @@ export default class Bellwether extends View {
     this.saving = true;
     this.error = null;
     cx.spawn(async (cx) => {
+      let ownerOnly = true;
       if (change) {
         try {
-          if (change === "write") await saveSecret(SECRET_KEY_FINNHUB, key);
-          else await removeSecret(SECRET_KEY_FINNHUB);
+          ownerOnly = change === "write" ? await saveSecret(SECRET_KEY_FINNHUB, key) : await removeSecret(SECRET_KEY_FINNHUB);
         } catch {
           this.saving = false;
           this.error = { code: "error.saveKey", params: {} };
@@ -360,6 +366,15 @@ export default class Bellwether extends View {
       } catch {
         this.saving = false;
         this.error = { code: "error.saveSettings", params: {} };
+        cx.notify();
+        return;
+      }
+      if (!ownerOnly) {
+        // Saved, but other accounts may read the file: the dialog stays open to say so, and Save closes it.
+        this.saving = false;
+        this.savedKey = change === "write" ? key : null;
+        this.keyWarning = { code: "finnhub.keyUnprotected", params: {} };
+        this.tab = "sources";
         cx.notify();
         return;
       }

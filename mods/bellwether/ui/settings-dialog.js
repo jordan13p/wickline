@@ -91,6 +91,7 @@ function usCard(view, t, errors) {
     segmented(t, "bw-us", [["yahoo", view.tx("src.yahoo")], ["finnhub", view.tx("src.finnhub")]], us.provider,
       (provider) => { us.provider = provider; }),
     ...finnhubParts,
+    view.keyWarning ? div().text_size(11.5).text_color(t.blocked).child(view.say(view.keyWarning)) : null,
     healthLine(view, t, "finnhub"));
 }
 

@@ -102,6 +102,31 @@ test("only main.js wires Herdr's storage, network and files", () => {
   assert.match(code('const u = "https://x"; globalThis'), HERDR_GLOBALS);
 });
 
+// The one program Bellwether runs: `chmod 600` on its key file (secrets.js), with Herdr's `process` module
+// handed over by main.js. No other module imports `process` or reaches the global of that name, and
+// main.js hands `run` over once, to secrets.js.
+const PROCESS_GLOBAL = /(?<![.\w$])process\b/;
+test("the only program is chmod 600 on the key file", () => {
+  for (const file of jsFiles()) {
+    const name = relativeName(file);
+    if (name === "main.js") continue;
+    assert.ok(!importSpecifiers(read(file)).includes("process"), `process imported in ${name}`);
+    assert.doesNotMatch(code(read(file)).replace(/"[^"\n]*"/g, '""'), PROCESS_GLOBAL, name);
+  }
+  const main = code(read(new URL("main.js", MOD)));
+  const imported = [...main.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']process["']/g)].flatMap(([, list]) => list.split(","))
+    .map((entry) => entry.trim()).filter(Boolean);
+  assert.deepEqual(imported.sort(), ["platform", "run as runProgram"]);
+  assert.doesNotMatch(main, /import\s+(?:\*|\w+)[^;]*from\s*["']process["']/, "process imported whole");
+  assert.doesNotMatch(main.replace(/"[^"\n]*"/g, '""'), PROCESS_GLOBAL, "the process global in main.js");
+  assert.equal([...main.matchAll(/\brunProgram\b/g)].length, 2, "runProgram imported and handed over once");
+  const runs = [...code(read(new URL("secrets.js", MOD))).matchAll(/\.run\b[^\n]*?(?:\]\)|$)/gm)].map(([call]) => call);
+  assert.deepEqual(runs, ['.run("chmod", ["600", file(dir)])']);
+  for (const file of jsFiles().filter((url) => relativeName(url) !== "secrets.js")) {
+    assert.doesNotMatch(code(read(file)), /\brunProgram\s*\(|\bsystem\.run\b/, relativeName(file));
+  }
+});
+
 // "none": installing never docks Bellwether into the person's layout; the open key or pane.split opens it.
 test("mod.json docks Bellwether nowhere", () => {
   assert.deepEqual(JSON.parse(read(new URL("mod.json", MOD))), { place: "none", title: "Bellwether" });
