@@ -1,6 +1,4 @@
 .DS_Store
-# Written into mod folders by Herdr itself
-mods/*/jsconfig.json
-mods/*/gpui-kit.d.ts
-# also beside any module in a subfolder that imports gpui-kit
-mods/*/*/gpui-kit.d.ts
+# Written into mod folders by Herdr itself, beside any module that imports gpui-kit
+mods/**/jsconfig.json
+mods/**/gpui-kit.d.ts

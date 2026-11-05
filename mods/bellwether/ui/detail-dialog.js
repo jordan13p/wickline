@@ -45,4 +45,3 @@ export function detailView(view, t) {
     .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.tx("quote.cached", { reason: view.say(q.error) }))))
     .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback))));
 }
-
