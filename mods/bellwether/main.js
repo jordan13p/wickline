@@ -480,10 +480,10 @@ export default class Bellwether extends View {
   }
 
   // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves
-  // the text. `hover` rather than `background`: light themes may draw `background` and `chrome` alike.
+  // the text. `background`, not `hover`, so the field never looks like a hovered row.
   addField(t) {
     return Input.new(this.input).h(32).px(10).rounded(6).border_1()
-      .border_color(this.inputFocused ? t.accent : t.hover).bg(t.hover).text_size(12.5).text_color(t.foreground);
+      .border_color(this.inputFocused ? t.accent : t.background).bg(t.background).text_size(12.5).text_color(t.foreground);
   }
 
   // What the last edit said, under the add field.
