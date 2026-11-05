@@ -135,7 +135,7 @@ A panel in the theme's `background` (the color of Herdr's terminals and other pa
 - Each shown copy runs its own refresh loops (one per source), and timers keep running while a copy is hidden. Keep one copy shown: a second copy doubles every source's requests, Binance's 15-second tickers and Finnhub's budget included, and makes rate limits come sooner. The dialog copies fetch nothing.
 - `toLocaleString` options are ignored in Herdr's QuickJS: format prices with grouping and 2 decimals (2 to 4 significant digits below 1), and times as `HH:MM` in the panel and `HH:MM:SS` in the detail dialog, by hand.
 - Keep the change colors on `ansi2`/`ansi1`, swapped by the color setting; a theme's own `done` color isn't necessarily green.
-- `InputState` takes its placeholder only when made, and only in `init` or an event handler. Choosing a language makes a new input in that copy; another open copy remakes its input (and its placeholder) the next time the field takes focus.
+- `InputState` takes its placeholder only when made, and only outside `render` (`init`, an event handler or a spawned task). Choosing a language makes a new input in that copy at once; another open copy sees the new language on its next render (Herdr re-renders every copy on `setShared`), which wakes a task of its own that remakes the input there and then, keeping the typed text and the focus. Without that, the placeholder stayed in the old language until the field took focus.
 - Herdr's QuickJS has no `Intl`: dates are `Oct 31` (English) or `10/31`, built by hand, never from the system locale.
 
 ## Done when

@@ -109,6 +109,18 @@ export default class Bellwether extends View {
         await this.watch.runProvider(id, { sleep: (ms) => cx.sleep(ms), changed: () => cx.notify() });
       });
     }
+    // A language chosen in another copy reaches this one on render, where no input can be made: render
+    // wakes this loop, which remakes the input at once, keeping what was typed and the focus.
+    cx.spawn(async (cx) => {
+      for (;;) {
+        await new Promise((resolve) => { this.wakeInput = resolve; });
+        if (this.inputLang === this.lang) continue;
+        const hadFocus = this.inputFocused;
+        this.makeInput();
+        if (hadFocus) this.input.focus();
+        cx.notify();
+      }
+    });
     // `bellwether.refresh` and `bellwether.pause` (bind them in keys.json if you like).
     cx.spawn(async (cx) => {
       for (;;) {
@@ -195,8 +207,7 @@ export default class Bellwether extends View {
   }
 
   // The input's placeholder is fixed when it is made, so a new language needs a new input
-  // (made in init or an event handler, never in render). Another copy's choice reaches this
-  // one on render; its input is remade the next time it takes focus.
+  // (made in init, an event handler or a spawned task, never in render).
   makeInput() {
     this.input?.release();
     this.inputLang = this.lang;
@@ -205,10 +216,6 @@ export default class Bellwether extends View {
     this.input.on("change", () => { this.typed = this.input.value(); });
     this.input.on("submit", (_e, cx) => this.add(cx));
     this.input.on("focus", (_e, cx) => {
-      if (this.inputLang !== this.lang) {
-        this.makeInput();
-        this.input.focus();
-      }
       this.inputFocused = true;
       cx.notify();
     });
@@ -286,6 +293,7 @@ export default class Bellwether extends View {
     if (this.draft) return this.settingsView(t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
+    if (this.inputLang !== this.lang) this.wakeInput?.();
     const layout = layoutFor(this.size);
     const root = (layout === "band" ? h_flex() : v_flex())
       // `background`, as Herdr's terminals and other panes: Bellwether sits beside them as one more pane.
