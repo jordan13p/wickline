@@ -114,3 +114,15 @@ test("MIS needs consent and an https address to save", () => {
     for (const code of ["mis.consentNeeded", "mis.statement", "mis.consent", "mis.reconfirm"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
   }
 });
+
+test("a save stores URLs without surrounding spaces", () => {
+  const change = { sources: { tw: { provider: "mis", misUrl: ` ${MIS_URL}\t`, misAck: { version: MIS_CONSENT_VERSION } },
+    crypto: { binanceUrl: "  https://mirror.test/x " } } };
+  const saved = mergeSettings(undefined, change);
+  assert.equal(saved.sources.tw.misUrl, MIS_URL);
+  assert.equal(saved.sources.crypto.binanceUrl, "https://mirror.test/x");
+  // Spaces inside an address are kept, so the dialog still refuses it.
+  const inner = mergeSettings(undefined, { sources: { crypto: { binanceUrl: " https://a b.test " } } });
+  assert.equal(inner.sources.crypto.binanceUrl, "https://a b.test");
+  assert.deepEqual(validateSettings(readSettings(inner)), { "sources.crypto.binanceUrl": "url.invalid" });
+});

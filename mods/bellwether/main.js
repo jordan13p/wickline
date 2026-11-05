@@ -96,12 +96,13 @@ export default class Bellwether extends View {
     this.error = null;
     this.urlFocused = false;
     this.urlInput = InputState.new({ placeholder: DEFAULT_BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
-    this.urlInput.on("change", () => { this.draft.sources.crypto.binanceUrl = this.urlInput.value(); });
+    // Redraw on every keystroke: the field's error and the Save button follow the draft.
+    this.urlInput.on("change", (_e, cx) => { this.draft.sources.crypto.binanceUrl = this.urlInput.value(); cx.notify(); });
     this.urlInput.on("focus", (_e, cx) => { this.urlFocused = true; cx.notify(); });
     this.urlInput.on("blur", (_e, cx) => { this.urlFocused = false; cx.notify(); });
     this.misUrlFocused = false;
     this.misUrlInput = InputState.new({ placeholder: MIS_URL, value: this.draft.sources.tw.misUrl });
-    this.misUrlInput.on("change", () => { this.draft.sources.tw.misUrl = this.misUrlInput.value(); });
+    this.misUrlInput.on("change", (_e, cx) => { this.draft.sources.tw.misUrl = this.misUrlInput.value(); cx.notify(); });
     this.misUrlInput.on("focus", (_e, cx) => { this.misUrlFocused = true; cx.notify(); });
     this.misUrlInput.on("blur", (_e, cx) => { this.misUrlFocused = false; cx.notify(); });
   }

@@ -79,8 +79,16 @@ export function validateSettings(settings) {
 export function mergeSettings(raw, change) {
   const old = isPlainObject(raw) ? raw : {};
   const known = readSettings(raw);
-  return { ...old, ...known, ...change, sources: mergeSources(old.sources, known.sources, change?.sources) };
+  const sources = mergeSources(old.sources, known.sources, change?.sources);
+  // An address is stored without the spaces around it; spaces inside stay, for validation to refuse.
+  for (const [name, key] of URL_KEYS) {
+    if (typeof sources[name]?.[key] === "string") sources[name][key] = sources[name][key].trim();
+  }
+  return { ...old, ...known, ...change, sources };
 }
+
+// The address fields in `sources`, as [source, key].
+const URL_KEYS = [["tw", "misUrl"], ["crypto", "binanceUrl"]];
 
 // Each source keeps the keys a newer copy added to it, and whole sources this build lacks.
 function mergeSources(old, known, change) {
