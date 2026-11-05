@@ -465,12 +465,7 @@ export class Watchlist {
           return;
         }
         if (limited) {
-          // Back off this provider only: at least a minute, doubling up to 15 minutes.
-          state.failures++;
-          const backoff = Math.min(900_000, 60_000 * 2 ** Math.min(state.failures - 1, 4));
-          state.retryAt = this.host.now() + Math.max(backoff, limited.retryAfterMs);
-          state.problem = coded(limited);
-          this.failRest(provider, requests, index, notice("request.deferred", { source: provider.id }));
+          this.backOff(provider, state, requests, index, limited);
           return;
         }
         if (down) {
@@ -488,6 +483,16 @@ export class Watchlist {
     } finally {
       state.loading = false;
     }
+  }
+
+  // Back off this provider only: at least a minute, doubling up to 15 minutes; the rest of the
+  // round's quote requests are deferred.
+  backOff(provider, state, requests, index, limited) {
+    state.failures++;
+    const backoff = Math.min(900_000, 60_000 * 2 ** Math.min(state.failures - 1, 4));
+    state.retryAt = this.host.now() + Math.max(backoff, limited.retryAfterMs);
+    state.problem = coded(limited);
+    this.failRest(provider, requests, index, notice("request.deferred", { source: provider.id }));
   }
 
   apply(provider, request, result) {
