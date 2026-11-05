@@ -26,7 +26,7 @@
 - 五種介面語言：English、繁體中文、简体中文、日本語與 한국어，可選紅漲綠跌或綠漲紅跌。
 - 拖曳列即可調整順序，每個開啟的 copy 立即同步。
 - 不執行程式、沒有遙測、沒有中繼伺服器：請求直接從你的電腦送到各個來源。
-- 跟隨你的 Herdr 佈景主題（淺色或深色）：在終端機旁是側邊欄，在自己的分頁中是表格。
+- 跟隨你的 Herdr 佈景主題（淺色或深色）；版面依寬度而定：寬度小於 720 px 是側邊欄，720 px 以上是表格（在自己的分頁中開啟時會很寬），高度小於 72 px 時是單行報價列。
 
 ## 市場與資料來源
 
@@ -102,7 +102,7 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 - `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Bellwether pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
 - 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod bellwether`。
 - 關閉方式和其他 pane 一樣：用 Herdr 的 pane 標題列，或執行 `pane.close`。
-- 標題列的 **在自己的分頁開啟** 圖示會把 Bellwether 移到名為 `Bellwether` 的分頁並顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側並關閉該分頁。無論哪種方式，都只有一個 copy 在抓報價。
+- 標題列的 **在自己的分頁開啟** 圖示會把 Bellwether 移到名為 `Bellwether` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側並關閉該分頁。無論哪種方式，都只有一個 copy 在抓報價。
 - 放大（zoom）交給 Herdr 自己的 pane 標題列；Bellwether 沒有自己的放大功能。
 
 ## 設定
@@ -124,10 +124,10 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 | `query1.finance.yahoo.com` | 一律，用於股票與指數 |
 | `data-api.binance.vision`，或你設定的 Binance 網址 | 一律，用於加密貨幣交易對 |
 | `mis.twse.com.tw`，或你設定的 MIS 網址 | 只有在你將台股改為證交所 MIS 並勾選同意後（非官方） |
-| `finnhub.io`，或你設定的 Finnhub 網址 | 只有在你將美股改為 Finnhub 並儲存 key 後；key 放在請求標頭中，不會出現在網址裡 |
+| `finnhub.io`，或你設定的 Finnhub 網址 | 只有在你將美股改為 Finnhub 並儲存 API 金鑰後；金鑰放在請求標頭中，不會出現在網址裡 |
 
 - **程式**：不執行任何程式。
-- **儲存**：自選清單存於 Herdr 共用狀態的 `bellwether.watchlist.v1`，設定存於 `bellwether.settings.v1`。你儲存的 Finnhub key 以明文存放在這台電腦上 Herdr 資料夾內的 `data/bellwether/secrets.json`，不會寫入共用狀態；能讀取你檔案的人都能看到它，所以請使用免費方案的 key。不讀寫其他檔案。
+- **儲存**：自選清單存於 Herdr 共用狀態的 `bellwether.watchlist.v1`，設定存於 `bellwether.settings.v1`。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/bellwether/secrets.json`，不會寫入共用狀態；能讀取你檔案的人都能看到它，所以請使用免費方案的 API 金鑰。不讀寫其他檔案。
 - **Finnhub**：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍。
 - 沒有遙測、沒有分析、沒有中繼伺服器：請求直接從這台電腦送到各個來源。
 - 請只開一個 Bellwether。每個 copy（即使被隱藏）都會跑自己的更新迴圈，開第二個就會讓所有請求加倍。
@@ -150,7 +150,7 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 
 一般免責聲明以英文版為準。
 
-報價來自第三方，不保證正確、即時或可用。此處顯示的任何內容均不構成投資建議。啟用非公開來源或輸入金鑰，屬於你自己的行為，並受該來源的條款規範。請求直接從這台電腦送到各個來源。Bellwether 沒有伺服器，也不傳送任何遙測資料。你儲存的 Finnhub key 以明文存放在這台電腦上。
+報價來自第三方，不保證正確、即時或可用。此處顯示的任何內容均不構成投資建議。啟用非公開來源或輸入 API 金鑰，屬於你自己的行為，並受該來源的條款規範。請求直接從這台電腦送到各個來源。Bellwether 沒有伺服器，也不傳送任何遙測資料。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上。
 
 ## 致謝與授權
 

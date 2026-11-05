@@ -26,7 +26,7 @@
 - Five interface languages: English, 繁體中文, 简体中文, 日本語 and 한국어, with red-up or green-up colors.
 - Drag a row to reorder the list; every open copy follows at once.
 - No programs, no telemetry, no server in between: requests go straight from your computer to each source.
-- Follows your Herdr theme, light or dark: a sidebar beside a terminal, a table in its own tab.
+- Follows your Herdr theme, light or dark, and its width: a sidebar below 720 px, a table from 720 px (it opens wide in its own tab), a one-line band under 72 px tall.
 
 ## Markets and sources
 
@@ -102,7 +102,7 @@ Type a symbol into the add field and press Enter:
 - `ctrl-alt-b` opens Bellwether as a pane to the right of the focused terminal, on any layout. Pressing it again opens another copy, and every copy sends its own requests, so keep one open.
 - To change the key, rename `ctrl-alt-b` in the `global` section of `~/.config/herdr-app/keys.json`; to drop it, delete that line. Without a key: `herdr-app do pane.split --direction right --mod bellwether`.
 - Close it like any pane, from Herdr's pane header or with `pane.close`.
-- The header's **open in its own tab** icon moves Bellwether to a `Bellwether` tab, where it shows the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes the tab. Only one copy fetches either way.
+- The header's **open in its own tab** icon moves Bellwether to a `Bellwether` tab, wide enough for the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes the tab. Only one copy fetches either way.
 - Zoom stays with Herdr's own pane header; Bellwether has no zoom of its own.
 
 ## Settings

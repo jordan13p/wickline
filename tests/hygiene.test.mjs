@@ -145,6 +145,16 @@ test("README and RECIPE show the preview and say how to open Bellwether", () => 
   }
 });
 
+// The settings tab's disclaimer block and the READMEs carry the same sentences.
+test("the READMEs carry the settings tab's disclaimer", () => {
+  const keys = ["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"];
+  for (const [name, lang] of [["README.md", "en"], ["README.zh-TW.md", "zh-TW"]]) {
+    const text = read(new URL(name, ROOT));
+    for (const key of keys) assert.ok(text.includes(STRINGS[lang][key]), `${key} in ${name}`);
+  }
+  assert.ok(read(new URL("main.js", MOD)).includes('"disclaimer.key"'), "the tab shows disclaimer.key");
+});
+
 test("the disclosure names every host and the key file in all four places", () => {
   const docs = ["README.md", "README.zh-TW.md", "RECIPE.md"].map((name) => [name, read(new URL(name, ROOT))]);
   for (const lang of Object.keys(STRINGS)) {

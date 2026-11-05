@@ -1032,7 +1032,7 @@ export default class Bellwether extends View {
     const paragraph = (key) => div().text_color(t.muted).child(this.tx(key));
     return v_flex().gap(10)
       .child(div().font_semibold().child(this.tx("disclaimer.title")))
-      .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct"].map(paragraph))
+      .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"].map(paragraph))
       .child(this.note(t, this.tx("disclaimer.prevails")))
       .child(div().mt(8).font_semibold().child(this.tx("disclaimer.sourcesTitle")))
       .children(["disclaimer.sourcesStocks", "disclaimer.sourcesCrypto"].map(paragraph))
