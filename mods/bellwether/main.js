@@ -13,8 +13,9 @@ import {
 import { detailSource, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
 import {
-  DEFAULT_BINANCE_URL, SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
 } from "./settings.js";
+import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
 import {
@@ -163,7 +164,7 @@ export default class Bellwether extends View {
     this.saving = false;
     this.initFinnhubDraft(cx);
     this.urlFocused = false;
-    this.urlInput = InputState.new({ placeholder: DEFAULT_BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
+    this.urlInput = InputState.new({ placeholder: BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
     // Redraw on every keystroke: the field's error and the Save button follow the draft.
     this.urlInput.on("change", (_e, cx) => { this.draft.sources.crypto.binanceUrl = this.urlInput.value(); cx.notify(); });
     this.urlInput.on("focus", (_e, cx) => { this.urlFocused = true; cx.notify(); });

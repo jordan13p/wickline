@@ -2,6 +2,8 @@
 // No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanSeries, positive } from "../quotes.js";
 
+// Each provider names the hosts it contacts; this is the default Binance host (a public market-data mirror).
+export const BINANCE_URL = "https://data-api.binance.vision";
 const BINANCE_BATCH = 100;
 
 // `base` is the saved Binance URL (the public market-data mirror unless the person set another).

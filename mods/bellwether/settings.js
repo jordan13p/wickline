@@ -2,6 +2,7 @@
 // language prompt was dismissed, and where each source lives. No Herdr imports,
 // so tests run it under Node.
 import { LANGUAGES } from "./i18n.js";
+import { BINANCE_URL } from "./providers/binance.js";
 import { FINNHUB_URL } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 
@@ -9,7 +10,6 @@ import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 export const SETTINGS_KEY = "bellwether.settings.v1";
 // The Finnhub key's name in `data/bellwether/secrets.json`; the key is never put in shared state.
 export const SECRET_KEY_FINNHUB = "finnhub.key";
-export const DEFAULT_BINANCE_URL = "https://data-api.binance.vision";
 const COLORS = ["auto", "red-up", "green-up"];
 // Finnhub's free plan allows 60 requests a minute; each US symbol takes four.
 export const DEFAULT_FINNHUB_BUDGET = 60;
@@ -45,7 +45,7 @@ export function readSettings(value) {
         budgetPerMinute: Number.isInteger(us.budgetPerMinute) && us.budgetPerMinute > 0 ? us.budgetPerMinute : DEFAULT_FINNHUB_BUDGET,
       },
       tw: { provider: tw.provider === "mis" ? "mis" : "yahoo", misUrl: readUrl(tw.misUrl, MIS_URL), misAck: readAck(tw.misAck) },
-      crypto: { binanceUrl: readUrl(crypto.binanceUrl, DEFAULT_BINANCE_URL) },
+      crypto: { binanceUrl: readUrl(crypto.binanceUrl, BINANCE_URL) },
     },
   };
 }
