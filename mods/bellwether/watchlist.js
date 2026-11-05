@@ -30,6 +30,13 @@ const TIMED_OUT = {};
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
 
+// Ends a loop's wait now.
+function wake(state) {
+  const resolve = state.wake;
+  state.wake = null;
+  resolve?.();
+}
+
 /**
  * A real-time overlay's fields over the Yahoo base quote. The line, the trading periods, the
  * currency and the name stay the base's (the overlay's name is kept as `localName`), and
@@ -191,11 +198,7 @@ export class Watchlist {
   }
 
   poke() {
-    for (const state of Object.values(this.sources)) {
-      const wake = state.wake;
-      state.wake = null;
-      wake?.();
-    }
+    for (const state of Object.values(this.sources)) wake(state);
   }
 
   // Drops every round in flight and starts new ones at once.
@@ -344,19 +347,13 @@ export class Watchlist {
           const backoff = Math.min(900_000, 60_000 * 2 ** Math.min(state.failures - 1, 4));
           state.retryAt = this.host.now() + Math.max(backoff, limited.retryAfterMs);
           state.problem = coded(limited);
-          for (const later of requests.slice(index + 1)) {
-            if (later.kind !== "quote") continue;
-            for (const symbol of later.symbols) this.fail(provider, symbol, notice("request.deferred", { source: provider.id }));
-          }
+          this.failRest(provider, requests, index, notice("request.deferred", { source: provider.id }));
           return;
         }
         if (down) {
           // Retry at the next interval; the rest keep their cached quotes, marked with the reason.
           state.problem = coded(down);
-          for (const later of requests.slice(index + 1)) {
-            if (later.kind !== "quote") continue;
-            for (const symbol of later.symbols) this.fail(provider, symbol, coded(down));
-          }
+          this.failRest(provider, requests, index, coded(down));
           return;
         }
         io.changed();
@@ -394,6 +391,14 @@ export class Watchlist {
       delete this.errors[symbol];
     }
     for (const [symbol, error] of Object.entries(result.errors)) this.errors[symbol] = coded(error);
+  }
+
+  // The quote requests after `index`, not sent this round.
+  failRest(provider, requests, index, error) {
+    for (const later of requests.slice(index + 1)) {
+      if (later.kind !== "quote") continue;
+      for (const symbol of later.symbols) this.fail(provider, symbol, error);
+    }
   }
 
   // A symbol whose request was not answered: a base quote stays, marked cached; an overlay goes.
