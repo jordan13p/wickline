@@ -335,14 +335,21 @@ export default class Bellwether extends View {
   }
 
   // Closes `me` once the new copy is seen (in `tab`, when given); the spawned task owns its cx. When the
-  // new copy never shows up, both stay open and the button works again.
+  // new copy never shows up, or looking for it fails, both stay open and the button works again; only a
+  // move whose old pane is closing keeps further clicks out.
   finishMove(cx, before, me, tab = null) {
     this.moving = true;
     cx.spawn(async (cx) => {
-      const closed = await closeOnceOpened(before, me, {
-        panes, sleep: (ms) => cx.sleep(ms), close: (pane) => run("pane.close", { pane }),
-      }, tab);
-      if (!closed) this.moving = false;
+      let closed = false;
+      try {
+        closed = await closeOnceOpened(before, me, {
+          panes, sleep: (ms) => cx.sleep(ms), close: (pane) => run("pane.close", { pane }),
+        }, tab);
+      } catch {
+        // Nothing to undo: nothing was closed.
+      } finally {
+        if (!closed) this.moving = false;
+      }
     });
   }
 

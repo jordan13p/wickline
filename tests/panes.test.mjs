@@ -109,3 +109,12 @@ test("a new copy that never shows up: nothing closes, and the wait is bounded", 
   const waited = host.sleeps.reduce((a, b) => a + b, 0);
   assert.ok(waited >= 1000 && waited <= 2000, `waited ${waited} ms`);
 });
+
+test("own tab: a new Bellwether pane in the moving copy's own tab is not the moved copy", async () => {
+  const me = { pane: "p2", tab: "t1", terminal: null, mod: "bellwether", focused: true };
+  const before = [pane("p1", "t1"), me];
+  // A copy split in beside it (by hand, or another copy's move) shows up in the same tab: nothing closes.
+  const sameTab = fakeHost(before, { pane: "p5", tab: "t1", terminal: null, mod: "bellwether" }, 1);
+  assert.equal(await closeOnceOpened(before, me, sameTab), false);
+  assert.deepEqual(sameTab.closed, []);
+});
