@@ -9,7 +9,7 @@ export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
 export const MIS_BATCH = 50;
 // Raise it with any change in substance to the statement or consent text (zh-TW prevails):
 // a consent given to an older text no longer turns MIS on.
-export const MIS_CONSENT_VERSION = 1;
+export const MIS_CONSENT_VERSION = 2;
 
 /** @typedef {import("./provider.js").Provider} Provider */
 

@@ -1,4 +1,4 @@
-// Which layout Bellwether draws at a size, and which table columns fit a width.
+// Which layout Wickline draws at a size, and which table columns fit a width.
 // No Herdr imports, so tests run it under Node.
 
 // Below this height: the one-line band.

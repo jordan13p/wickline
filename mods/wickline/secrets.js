@@ -1,4 +1,4 @@
-// The Finnhub key, in plaintext, in Bellwether's folder under Herdr's data folder: localStorage is per
+// The Finnhub key, in plaintext, in Wickline's folder under Herdr's data folder: localStorage is per
 // copy, so the dialog could not hand it to the panel there, and shared state is no place for a key.
 // The caller passes in Herdr's `fs/promises`, `system` (`platform()`: Herdr's "macos", "linux" or
 // "windows"; `chmod(path)`: main.js's one chmod 600 through Herdr's exec) and the folder, so tests run this
@@ -20,7 +20,7 @@ async function readSecrets(fs, dir) {
   return value;
 }
 
-// Writes the file, then `chmod 600` on macOS and Linux: the only program Bellwether runs. Resolves false
+// Writes the file, then `chmod 600` on macOS and Linux: the only program Wickline runs. Resolves false
 // when chmod failed or could not start (the file is written all the same), else true.
 async function writeSecrets(fs, system, dir, secrets) {
   await fs.writeFile(file(dir), `${JSON.stringify(secrets, null, 2)}\n`);

@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo-light.svg" width="96" alt="Bellwether">
+    <img src="assets/logo-light.svg" width="96" alt="Wickline">
   </picture>
 </p>
 
-<h1 align="center">Bellwether</h1>
+<h1 align="center">Wickline</h1>
 
 <p align="center">在 Herdr 的 agent 旁看盤：哪些是即時、哪些是延遲，一眼分清楚。</p>
 
@@ -14,10 +14,10 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <a href="https://herdr.dev/mods"><img src="https://img.shields.io/badge/Herdr-mod-555" alt="Herdr mod"></a>
-  <a href="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml"><img src="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml/badge.svg" alt="checks"></a>
+  <a href="https://github.com/jordan13p/wickline/actions/workflows/checks.yml"><img src="https://github.com/jordan13p/wickline/actions/workflows/checks.yml/badge.svg" alt="checks"></a>
 </p>
 
-![Bellwether](preview.png)
+![Wickline](preview.png)
 
 ## 特色
 
@@ -50,10 +50,10 @@
 在 Herdr 中請 agent 執行：
 
 ```text
-Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/jordan13p/bellwether
+Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/jordan13p/wickline
 ```
 
-agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合併它的 `keys.json`（取代你已在使用的按鍵前會先詢問）並檢查。
+agent 會先告訴你 Wickline 會連線到哪些主機，再複製 mod、合併它的 `keys.json`（取代你已在使用的按鍵前會先詢問）並檢查。
 
 <details>
 <summary>手動安裝</summary>
@@ -91,7 +91,7 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 - **調整順序**：滑鼠移到某一列，按住左側的六點把手拖曳；強調色線會標出落點。拖出清單即取消。
 - **詳細資料**：點一下某一列即可查看當天的走勢圖、開盤、最高、最低與昨收、交易時段、報價時間與取得時間。
 - **重新整理與暫停**：標題列的圖示。重新整理會讓 Finnhub 以外的每個來源立即更新一輪，暫停時也可以；暫停會停止每個 copy 的自動更新。
-- **快捷鍵**：Bellwether 接受 `wickline.refresh` 與 `wickline.pause` 兩個指令，預設都沒有綁定。要綁定時，加到 `~/.config/herdr-app/keys.json`：
+- **快捷鍵**：Wickline 接受 `wickline.refresh` 與 `wickline.pause` 兩個指令，預設都沒有綁定。要綁定時，加到 `~/.config/herdr-app/keys.json`：
 
   ```json
   { "global": { "ctrl-alt-r": "wickline.refresh" } }
@@ -99,11 +99,11 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 
 ### 開啟與關閉
 
-- `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Bellwether pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
+- `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Wickline pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
 - 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod wickline`。
 - 關閉方式和其他 pane 一樣：用 Herdr 的 pane 標題列，或執行 `pane.close`。
-- 標題列的 **在自己的分頁開啟** 圖示會把 Bellwether 移到名為 `Bellwether` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。
-- 放大（zoom）交給 Herdr 自己的 pane 標題列；Bellwether 沒有自己的放大功能。
+- 標題列的 **在自己的分頁開啟** 圖示會把 Wickline 移到名為 `Wickline` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。
+- 放大（zoom）交給 Herdr 自己的 pane 標題列；Wickline 沒有自己的放大功能。
 
 ## 設定
 
@@ -126,35 +126,35 @@ agent 會先告訴你 Bellwether 會連線到哪些主機，再複製 mod、合�
 | `mis.twse.com.tw`，或你設定的 MIS 網址 | 只有在你將台股改為證交所 MIS 並勾選同意後（非官方） |
 | `finnhub.io`（Finnhub 網址只能修改路徑） | 只有在你將美股改為 Finnhub 並儲存 API 金鑰後；API 金鑰放在請求標頭中，不會出現在網址裡，且只會送往 `https://finnhub.io`：已儲存的網址若指向其他主機，或回應被轉址到別處，Finnhub 會停止並顯示原因 |
 
-- **程式**：只在 macOS 與 Linux 上、你儲存 Finnhub API 金鑰之後，對 `data/bellwether/secrets.json` 執行 `chmod 600`，讓這台電腦上的其他帳號無法讀取。若執行失敗，設定視窗會提示，API 金鑰仍會保存。除此之外不執行任何程式。
-- **儲存**：自選清單存於 Herdr 共用狀態的 `bellwether.watchlist.v1`，設定存於 `bellwether.settings.v1`。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/bellwether/secrets.json`，不會寫入共用狀態。在 macOS 與 Linux 上，只有你的帳號能讀取這個檔案；但以你的身分執行的程式（包括其他 Herdr mod）仍讀得到，所以請使用免費方案的 API 金鑰。若要移除 API 金鑰，請在「美股」卡片按「移除」後儲存（檔案會被刪除，每個 copy 會在下一次更新內捨棄它），或刪除該檔案；只改回 Yahoo 則會保留 API 金鑰。Time Machine 等備份可能仍留有舊的 API 金鑰：若要徹底撤銷，請到 Finnhub 重新產生 API 金鑰。不讀寫其他檔案。
+- **程式**：只在 macOS 與 Linux 上、你儲存 Finnhub API 金鑰之後，對 `data/wickline/secrets.json` 執行 `chmod 600`，讓這台電腦上的其他帳號無法讀取。若執行失敗，設定視窗會提示，API 金鑰仍會保存。除此之外不執行任何程式。
+- **儲存**：自選清單存於 Herdr 共用狀態的 `wickline.watchlist.v1`，設定存於 `wickline.settings.v1`。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/wickline/secrets.json`，不會寫入共用狀態。在 macOS 與 Linux 上，只有你的帳號能讀取這個檔案；但以你的身分執行的程式（包括其他 Herdr mod）仍讀得到，所以請使用免費方案的 API 金鑰。若要移除 API 金鑰，請在「美股」卡片按「移除」後儲存（檔案會被刪除，每個 copy 會在下一次更新內捨棄它），或刪除該檔案；只改回 Yahoo 則會保留 API 金鑰。Time Machine 等備份可能仍留有舊的 API 金鑰：若要徹底撤銷，請到 Finnhub 重新產生 API 金鑰。不讀寫其他檔案。
 - **Finnhub**：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍。
 - 沒有遙測、沒有分析、沒有中繼伺服器：請求直接從這台電腦送到各個來源。
-- 請只開一個 Bellwether。每個 copy（即使被隱藏）都會跑自己的更新迴圈，開第二個就會讓所有請求加倍。
+- 請只開一個 Wickline。每個 copy（即使被隱藏）都會跑自己的更新迴圈，開第二個就會讓所有請求加倍。
 
 ## 常見問題
 
-**為什麼我的台股報價晚了 20 分鐘？** Yahoo Finance 的台股報價延遲 20 分鐘，Bellwether 會在每一列台股標示 `延遲 20 分鐘`。要看即時台股價格，請在設定中開啟證交所 MIS。
+**為什麼我的台股報價晚了 20 分鐘？** Yahoo Finance 的台股報價延遲 20 分鐘，Wickline 會在每一列台股標示 `延遲 20 分鐘`。要看即時台股價格，請在設定中開啟證交所 MIS。
 
 **為什麼證交所 MIS 預設關閉？** 開啟前，設定中會顯示以下責任聲明（以繁體中文版為準），你必須勾選同意才能使用：
 
-> 證交所 MIS（mis.twse.com.tw）是臺灣證券交易所的基本市況報導網站，並非提供給第三方程式使用的 API。Bellwether 與臺灣證券交易所無任何關聯，亦未獲其授權。啟用後，Bellwether 會從這台電腦直接向 MIS 查詢你清單中的台股（開盤期間約每 10 秒一次），取代延遲約 20 分鐘的 Yahoo 價格；走勢圖仍來自 Yahoo。MIS 資料可能延遲、錯誤或中斷，也可能隨時變更或停止提供。Bellwether 會捨棄超出該股當日漲跌停範圍的價格，但無法保證其他價格正確。是否使用 MIS、使用方式是否符合臺灣證券交易所網站的使用條款，以及使用其資料的一切後果，均由你自行判斷並負責。資料僅供個人參考，不構成投資建議。
+> 證交所 MIS（mis.twse.com.tw）是臺灣證券交易所的基本市況報導網站，並非提供給第三方程式使用的 API。Wickline 與臺灣證券交易所無任何關聯，亦未獲其授權。啟用後，Wickline 會從這台電腦直接向 MIS 查詢你清單中的台股（開盤期間約每 10 秒一次），取代延遲約 20 分鐘的 Yahoo 價格；走勢圖仍來自 Yahoo。MIS 資料可能延遲、錯誤或中斷，也可能隨時變更或停止提供。Wickline 會捨棄超出該股當日漲跌停範圍的價格，但無法保證其他價格正確。是否使用 MIS、使用方式是否符合臺灣證券交易所網站的使用條款，以及使用其資料的一切後果，均由你自行判斷並負責。資料僅供個人參考，不構成投資建議。
 
-**為什麼美股只有 15 檔即時報價？** Finnhub 免費方案每分鐘可發 60 次請求。Bellwether 提供即時報價的美股檔數是額度除以 4，因此每檔約每 30 秒更新一次，並留一半額度給重試與第二個 copy。清單中靠前的美股使用 Finnhub，其餘顯示 Yahoo 並標示超出上限。若你的方案允許，可在設定中調高每分鐘請求數。
+**為什麼美股只有 15 檔即時報價？** Finnhub 免費方案每分鐘可發 60 次請求。Wickline 提供即時報價的美股檔數是額度除以 4，因此每檔約每 30 秒更新一次，並留一半額度給重試與第二個 copy。清單中靠前的美股使用 Finnhub，其餘顯示 Yahoo 並標示超出上限。若你的方案允許，可在設定中調高每分鐘請求數。
 
 **為什麼我無法使用 Binance？** Binance 會拒絕部分地區（例如美國）的請求，此時加密貨幣列會顯示此地區無法使用 Binance。股票不受影響。你可以在設定中改設提供相同 API 的其他 Binance 網址。
 
-**Bellwether 會把我的自選清單傳到任何地方嗎？** 不會。每個代號只會作為請求的一部分，直接從你的電腦送到提供該報價的來源。沒有 Bellwether 伺服器，也沒有遙測；清單本身存放在這台電腦上 Herdr 的共用狀態中。
+**Wickline 會把我的自選清單傳到任何地方嗎？** 不會。每個代號只會作為請求的一部分，直接從你的電腦送到提供該報價的來源。沒有 Wickline 伺服器，也沒有遙測；清單本身存放在這台電腦上 Herdr 的共用狀態中。
 
 ## 免責聲明
 
 一般免責聲明以英文版為準。
 
-報價來自第三方，不保證正確、即時或可用。此處顯示的任何內容均不構成投資建議。啟用非公開來源或輸入 API 金鑰，屬於你自己的行為，並受該來源的條款規範。請求直接從這台電腦送到各個來源。Bellwether 沒有伺服器，也不傳送任何遙測資料。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上。
+報價來自第三方，不保證正確、即時或可用。此處顯示的任何內容均不構成投資建議。啟用非公開來源或輸入 API 金鑰，屬於你自己的行為，並受該來源的條款規範。請求直接從這台電腦送到各個來源。Wickline 沒有伺服器，也不傳送任何遙測資料。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上。
 
 ## 致謝與授權
 
-Bellwether 修改自 [fatwang2/Pulse](https://github.com/fatwang2/Pulse)（MIT）中的 Herdr mod，與 Pulse 無關，亦未獲其背書。
+Wickline 修改自 [fatwang2/Pulse](https://github.com/fatwang2/Pulse)（MIT）中的 Herdr mod，與 Pulse 無關，亦未獲其背書。
 
 以 [MIT License](LICENSE) 授權，著作權 (c) 2026 fatwang2 與 (c) 2026 jordan13p。
 
@@ -165,4 +165,4 @@ node --test tests/
 herdr-app check "$PWD/mods/wickline"
 ```
 
-`RECIPE.md` 是完整的建構說明：Bellwether 畫出什麼、如何運作，以及由哪些檔案組成。
+`RECIPE.md` 是完整的建構說明：Wickline 畫出什麼、如何運作，以及由哪些檔案組成。

@@ -41,7 +41,7 @@ function freshnessLabel(view, quote, fresh, now) {
   }
 }
 
-// One line: Bellwether, then as many quotes as fit.
+// One line: Wickline, then as many quotes as fit.
 export function band(view, root, t) {
   const w = view.watch;
   const symbols = w.preferences.symbols;
@@ -49,7 +49,7 @@ export function band(view, root, t) {
   return root.px(12).gap(14).items_center().overflow_hidden()
     .child(h_flex().flex_none().gap(6).items_center()
       .child(svg(ICON).w(14).h(14).text_color(t.foreground))
-      .child(div().text_color(t.foreground).font_semibold().child("Bellwether")))
+      .child(div().text_color(t.foreground).font_semibold().child("Wickline")))
     .when(w.preferences.paused, (el) => el.child(div().flex_none().text_color(t.blocked).child(view.tx("band.paused"))))
     .when(!symbols.length, (el) => el.child(div().text_color(t.dim).truncate().child(view.tx("band.empty"))))
     .children(symbols.map((symbol) => {
@@ -103,7 +103,7 @@ function brand(view, t) {
     .child(div().relative().flex_none().w(16).h(16)
       .child(svg(icon("mark-sides")).absolute().top(0).left(0).w(16).h(16).text_color(t.foreground))
       .child(svg(icon("mark-center")).absolute().top(0).left(0).w(16).h(16).text_color(t.accent)))
-    .child(div().flex_none().text_size(13).font_semibold().text_color(t.foreground).child("Bellwether"));
+    .child(div().flex_none().text_size(13).font_semibold().text_color(t.foreground).child("Wickline"));
 }
 
 // Refresh, pause or resume, settings, own tab or back; the glyphs' right edge lines up with the content's.

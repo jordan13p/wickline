@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { loadSecret, loadSecretEnding, removeSecret, saveSecret } from "../mods/wickline/secrets.js";
 
-const DIR = "home/data/bellwether";
+const DIR = "home/data/wickline";
 const FILE = `${DIR}/secrets.json`;
 
 // The calls secrets.js makes on Herdr's `fs/promises`; `files` maps a path to its text. `log` keeps their order.

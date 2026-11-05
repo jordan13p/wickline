@@ -2,7 +2,7 @@
 // No Herdr imports, so tests run it under Node. The hosts live in providers/.
 
 export const VERSION = "0.1.0";
-export const USER_AGENT = `Bellwether-Herdr/${VERSION}`;
+export const USER_AGENT = `Wickline-Herdr/${VERSION}`;
 // Sent with every request.
 export const HEADERS = { "User-Agent": USER_AGENT, Accept: "application/json" };
 // Shown until the person saves a watchlist of their own.

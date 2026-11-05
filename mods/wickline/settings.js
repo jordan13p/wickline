@@ -7,8 +7,8 @@ import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 
 // Herdr's shared state (persisted), so every copy uses the same settings.
-export const SETTINGS_KEY = "bellwether.settings.v1";
-// The Finnhub key's name in `data/bellwether/secrets.json`; the key is never put in shared state.
+export const SETTINGS_KEY = "wickline.settings.v1";
+// The Finnhub key's name in `data/wickline/secrets.json`; the key is never put in shared state.
 export const SECRET_KEY_FINNHUB = "finnhub.key";
 const COLORS = ["auto", "red-up", "green-up"];
 // Finnhub's free plan allows 60 requests a minute; each US symbol takes four.

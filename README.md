@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/logo-light.svg" width="96" alt="Bellwether">
+    <img src="assets/logo-light.svg" width="96" alt="Wickline">
   </picture>
 </p>
 
-<h1 align="center">Bellwether</h1>
+<h1 align="center">Wickline</h1>
 
 <p align="center">Stock and crypto quotes beside your agents in Herdr — honest about what is live and what is delayed.</p>
 
@@ -14,10 +14,10 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <a href="https://herdr.dev/mods"><img src="https://img.shields.io/badge/Herdr-mod-555" alt="Herdr mod"></a>
-  <a href="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml"><img src="https://github.com/jordan13p/bellwether/actions/workflows/checks.yml/badge.svg" alt="checks"></a>
+  <a href="https://github.com/jordan13p/wickline/actions/workflows/checks.yml"><img src="https://github.com/jordan13p/wickline/actions/workflows/checks.yml/badge.svg" alt="checks"></a>
 </p>
 
-![Bellwether](preview.png)
+![Wickline](preview.png)
 
 ## Highlights
 
@@ -50,10 +50,10 @@ Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 secon
 Ask the agent in Herdr:
 
 ```text
-Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/jordan13p/bellwether
+Read ~/.config/herdr-app/AGENTS.md, then add this mod: https://github.com/jordan13p/wickline
 ```
 
-The agent tells you what Bellwether reaches on the network, copies the mod, merges its `keys.json` (it asks before replacing a key you already use) and checks it.
+The agent tells you what Wickline reaches on the network, copies the mod, merges its `keys.json` (it asks before replacing a key you already use) and checks it.
 
 <details>
 <summary>Install by hand</summary>
@@ -91,7 +91,7 @@ Type a symbol into the add field and press Enter:
 - **Reorder**: hover a row, press the six-dot handle at its left and drag; an accent line shows where it lands. Leaving the list cancels the drag.
 - **Detail**: click a row for its day: a chart, open, high, low and previous close, the session, the quote time and the fetch time.
 - **Refresh and Pause**: the header icons. Refresh runs one round of every source but Finnhub, also while paused; Pause stops automatic refreshes in every copy.
-- **Keys**: Bellwether answers `wickline.refresh` and `wickline.pause`; neither is bound. To bind one, add it to `~/.config/herdr-app/keys.json`:
+- **Keys**: Wickline answers `wickline.refresh` and `wickline.pause`; neither is bound. To bind one, add it to `~/.config/herdr-app/keys.json`:
 
   ```json
   { "global": { "ctrl-alt-r": "wickline.refresh" } }
@@ -99,11 +99,11 @@ Type a symbol into the add field and press Enter:
 
 ### Open and close
 
-- `ctrl-alt-b` opens Bellwether as a pane to the right of the focused terminal, on any layout. Pressing it again opens another copy, and every copy sends its own requests, so keep one open.
+- `ctrl-alt-b` opens Wickline as a pane to the right of the focused terminal, on any layout. Pressing it again opens another copy, and every copy sends its own requests, so keep one open.
 - To change the key, rename `ctrl-alt-b` in the `global` section of `~/.config/herdr-app/keys.json`; to drop it, delete that line. Without a key: `herdr-app do pane.split --direction right --mod wickline`.
 - Close it like any pane, from Herdr's pane header or with `pane.close`.
-- The header's **open in its own tab** icon moves Bellwether to a `Bellwether` tab, wide enough for the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes only its own pane (the tab too, when it held nothing else; a shell you split in there stays). The old copy closes only once the new one is open, so a refused move leaves everything as it was. Only one copy fetches either way.
-- Zoom stays with Herdr's own pane header; Bellwether has no zoom of its own.
+- The header's **open in its own tab** icon moves Wickline to a `Wickline` tab, wide enough for the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes only its own pane (the tab too, when it held nothing else; a shell you split in there stays). The old copy closes only once the new one is open, so a refused move leaves everything as it was. Only one copy fetches either way.
+- Zoom stays with Herdr's own pane header; Wickline has no zoom of its own.
 
 ## Settings
 
@@ -117,7 +117,7 @@ The gear icon opens a dialog with three tabs. Nothing changes until you press Sa
 
 ## Privacy and security
 
-Hosts, and when Bellwether contacts them:
+Hosts, and when Wickline contacts them:
 
 | Host | When |
 |---|---|
@@ -126,31 +126,31 @@ Hosts, and when Bellwether contacts them:
 | `mis.twse.com.tw`, or the MIS address you set | only after you choose TWSE MIS for Taiwan and tick its consent box (unofficial) |
 | `finnhub.io` (only the path of the Finnhub URL can change) | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address, and only to `https://finnhub.io`: a saved address on any other host, or an answer redirected elsewhere, stops Finnhub and says so |
 
-- **Programs**: only `chmod 600` on `data/bellwether/secrets.json` right after you save a Finnhub key, on macOS and Linux, so other accounts on this computer cannot read it. If it fails, the dialog says so and the key stays saved. Nothing else is run.
-- **Storage**: the watchlist in Herdr's shared state under `bellwether.watchlist.v1`, the settings under `bellwether.settings.v1`. A Finnhub key you save is kept in plaintext in `data/bellwether/secrets.json` in Herdr's folder on this computer, never in the shared state. On macOS and Linux the file is readable by your account only; any program running as you (another Herdr mod included) can still read it, so use a free-plan key. To remove the key, press **Remove** on the United States card and save (the file is deleted and every copy drops the key within one refresh), or delete that file; choosing Yahoo alone keeps it. Backups such as Time Machine may still hold an old key: to revoke it for good, regenerate the key on Finnhub. No other file is read or written.
+- **Programs**: only `chmod 600` on `data/wickline/secrets.json` right after you save a Finnhub key, on macOS and Linux, so other accounts on this computer cannot read it. If it fails, the dialog says so and the key stays saved. Nothing else is run.
+- **Storage**: the watchlist in Herdr's shared state under `wickline.watchlist.v1`, the settings under `wickline.settings.v1`. A Finnhub key you save is kept in plaintext in `data/wickline/secrets.json` in Herdr's folder on this computer, never in the shared state. On macOS and Linux the file is readable by your account only; any program running as you (another Herdr mod included) can still read it, so use a free-plan key. To remove the key, press **Remove** on the United States card and save (the file is deleted and every copy drops the key within one refresh), or delete that file; choosing Yahoo alone keeps it. Backups such as Time Machine may still hold an old key: to revoke it for good, regenerate the key on Finnhub. No other file is read or written.
 - **Finnhub**: only the first US symbols your budget covers are asked (15 at the default 60 requests per minute). Every open copy sends its own requests, so two copies use the budget twice as fast.
 - No telemetry, no analytics and no intermediate server: requests go directly from this computer to each source.
-- Keep one copy of Bellwether open. Each copy, even a hidden one, runs its own refresh loops, so a second copy doubles every request.
+- Keep one copy of Wickline open. Each copy, even a hidden one, runs its own refresh loops, so a second copy doubles every request.
 
 ## FAQ
 
-**Why are my Taiwan quotes 20 minutes late?** Yahoo Finance delays Taiwan quotes by 20 minutes, and Bellwether says so on every Taiwan row (`delayed 20 min`). For real-time Taiwan prices, turn on TWSE MIS in Settings.
+**Why are my Taiwan quotes 20 minutes late?** Yahoo Finance delays Taiwan quotes by 20 minutes, and Wickline says so on every Taiwan row (`delayed 20 min`). For real-time Taiwan prices, turn on TWSE MIS in Settings.
 
-**Why is TWSE MIS off by default?** TWSE MIS is the Taiwan Stock Exchange's market-information website, not an API offered to third-party programs, and nothing about it is promised. Bellwether uses it only after you read its responsibility statement in Settings and tick the consent box; whether to use it, and whether that complies with the exchange website's terms of use, is your own judgment and responsibility. The Traditional Chinese statement prevails.
+**Why is TWSE MIS off by default?** TWSE MIS is the Taiwan Stock Exchange's market-information website, not an API offered to third-party programs, and nothing about it is promised. Wickline uses it only after you read its responsibility statement in Settings and tick the consent box; whether to use it, and whether that complies with the exchange website's terms of use, is your own judgment and responsibility. The Traditional Chinese statement prevails.
 
-**Why only 15 real-time US symbols?** Finnhub's free plan allows 60 requests a minute. Bellwether prices as many US symbols as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US symbols in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
+**Why only 15 real-time US symbols?** Finnhub's free plan allows 60 requests a minute. Wickline prices as many US symbols as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US symbols in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
 
 **Why is Binance unavailable for me?** Binance refuses requests from some regions, such as the United States, and the crypto rows then say Binance is not available in this region. Stocks are unaffected. You can set another Binance address that serves the same API in Settings.
 
-**Does Bellwether send my watchlist anywhere?** No. Each symbol goes only to the source that prices it, as part of that source's request, directly from your computer. There is no Bellwether server and no telemetry; the list itself stays in Herdr's shared state on this computer.
+**Does Wickline send my watchlist anywhere?** No. Each symbol goes only to the source that prices it, as part of that source's request, directly from your computer. There is no Wickline server and no telemetry; the list itself stays in Herdr's shared state on this computer.
 
 ## Disclaimer
 
-Quotes come from third parties and are not guaranteed to be accurate, timely or available. Nothing shown here is investment advice. Turning on a source that is not public, or entering a key, is your own act and is governed by that source's terms. Requests go directly from this computer to each source. Bellwether has no server and sends no telemetry. A Finnhub key you save is stored in plaintext on this computer. The English text prevails over its translations.
+Quotes come from third parties and are not guaranteed to be accurate, timely or available. Nothing shown here is investment advice. Turning on a source that is not public, or entering a key, is your own act and is governed by that source's terms. Requests go directly from this computer to each source. Wickline has no server and sends no telemetry. A Finnhub key you save is stored in plaintext on this computer. The English text prevails over its translations.
 
 ## Credits and license
 
-Bellwether is a modified version of the Herdr mod in [fatwang2/Pulse](https://github.com/fatwang2/Pulse) (MIT). It is not affiliated with or endorsed by Pulse.
+Wickline is a modified version of the Herdr mod in [fatwang2/Pulse](https://github.com/fatwang2/Pulse) (MIT). It is not affiliated with or endorsed by Pulse.
 
 Released under the [MIT License](LICENSE), copyright (c) 2026 fatwang2 and (c) 2026 jordan13p.
 
@@ -161,4 +161,4 @@ node --test tests/
 herdr-app check "$PWD/mods/wickline"
 ```
 
-`RECIPE.md` is the full brief: what Bellwether draws, how it behaves and what it is built from.
+`RECIPE.md` is the full brief: what Wickline draws, how it behaves and what it is built from.

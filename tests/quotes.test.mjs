@@ -14,5 +14,5 @@ test("normalizes symbols", () => {
 });
 
 test("identity", () => {
-  assert.equal(USER_AGENT, "Bellwether-Herdr/0.1.0");
+  assert.equal(USER_AGENT, "Wickline-Herdr/0.1.0");
 });

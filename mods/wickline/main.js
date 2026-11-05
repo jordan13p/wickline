@@ -1,4 +1,4 @@
-// Bellwether: stock and crypto quotes beside your agents. A watchlist panel with an
+// Wickline: stock and crypto quotes beside your agents. A watchlist panel with an
 // add field and a line per ticker; docked as a short strip (top or bottom), it
 // draws one line of quotes. A row opens the ticker's day as a dialog, and the
 // settings button opens the settings: the same mod, given the quote or `settings` in its props.
@@ -25,8 +25,8 @@ import { detailView } from "./ui/detail-dialog.js";
 import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
 // The key file lives in Herdr's data folder (see secrets.js); `appHome()` is called per use, never at the top level.
-const secretsDir = () => `${appHome()}/data/bellwether`;
-// The one program Bellwether runs: `chmod 600` on that file after each write, on macOS and Linux
+const secretsDir = () => `${appHome()}/data/wickline`;
+// The one program Wickline runs: `chmod 600` on that file after each write, on macOS and Linux
 // (secrets.js decides). Both are called per use, never at the top level.
 const system = { platform: () => appWindow().platform, chmod: (path) => exec("chmod", ["600", path]) };
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
@@ -36,7 +36,7 @@ const loadSecretEnding = (name) => secrets.loadSecretEnding(fs, secretsDir(), na
 const saveSecret = (name, value) => secrets.saveSecret(fs, system, secretsDir(), name, value);
 const removeSecret = (name) => secrets.removeSecret(fs, system, secretsDir(), name);
 
-export default class Bellwether extends View {
+export default class Wickline extends View {
   init(_props, cx) {
     const given = props() ?? {};
     this.readSettings();
@@ -282,7 +282,7 @@ export default class Bellwether extends View {
     if (this.inputLang !== this.lang) this.wakeInput?.();
     const layout = layoutFor(this.size);
     const root = (layout === "band" ? h_flex() : v_flex())
-      // `background`, as Herdr's terminals and other panes: Bellwether sits beside them as one more pane.
+      // `background`, as Herdr's terminals and other panes: Wickline sits beside them as one more pane.
       .id("bw").size_full().bg(t.background).text_color(t.foreground).text_size(12.5)
       .on_size_change((size, cx) => { this.size = size; cx.notify(); });
     if (layout === "band") return band(this, root, t);
@@ -298,7 +298,7 @@ export default class Bellwether extends View {
 
   // A pane copy that shares its tab offers its own tab; the copy in that tab offers the way back, when
   // there is a pane to go back beside. Dialog copies draw neither (they never reach the header).
-  // Clicking a mod pane focuses it, so the focused Bellwether pane is the one clicked; each click
+  // Clicking a mod pane focuses it, so the focused Wickline pane is the one clicked; each click
   // checks again. panes() lists the new copy a little after run() returns, so a task looks for it
   // (closeOnceOpened) and only then closes the old copy's own pane, never a shell the person split in
   // beside it. Clicks while a move is under way do nothing, so copies never pile up.
@@ -314,7 +314,7 @@ export default class Bellwether extends View {
           const before = panes();
           const me = ownTabSource(before);
           if (!me) return;
-          run("tab.new", { mod: MOD_ID, name: "Bellwether", props: { from: me.tab } });
+          run("tab.new", { mod: MOD_ID, name: "Wickline", props: { from: me.tab } });
           this.finishMove(cx, before, me);
         },
       };

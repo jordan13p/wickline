@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { MESSAGES_EN } from "../mods/wickline/quotes.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
@@ -111,7 +112,7 @@ test("only main.js wires Herdr's storage, network and files", () => {
   }
 });
 
-// The one program Bellwether runs: `chmod 600` on its key file, through Herdr's `exec`, called once in
+// The one program Wickline runs: `chmod 600` on its key file, through Herdr's `exec`, called once in
 // main.js and handed to secrets.js as `chmod(path)`. No module imports `process` (or `child_process`) or
 // reaches the global of that name; `exec` appears in main.js only in its import and that one call.
 const PROCESS_GLOBAL = /(?<![.\w$])process\b/;
@@ -151,9 +152,9 @@ test("the mod holds only .js modules, its mod.json and SVG icons", () => {
   for (const file of files(MOD)) assert.match(relativeName(file), /\.(js|json|svg)$/, relativeName(file));
 });
 
-// "none": installing never docks Bellwether into the person's layout; the open key or pane.split opens it.
-test("mod.json docks Bellwether nowhere", () => {
-  assert.deepEqual(JSON.parse(read(new URL("mod.json", MOD))), { place: "none", title: "Bellwether" });
+// "none": installing never docks Wickline into the person's layout; the open key or pane.split opens it.
+test("mod.json docks Wickline nowhere", () => {
+  assert.deepEqual(JSON.parse(read(new URL("mod.json", MOD))), { place: "none", title: "Wickline" });
 });
 
 test("keys.json binds only the open key", () => {
@@ -239,7 +240,7 @@ test("READMEs carry the same sections", () => {
   assert.equal(headings("README.zh-TW.md").length, headings("README.md").length);
 });
 
-test("README and RECIPE show the preview and say how to open Bellwether", () => {
+test("README and RECIPE show the preview and say how to open Wickline", () => {
   for (const name of ["README.md", "README.zh-TW.md", "RECIPE.md"]) {
     const text = read(new URL(name, ROOT));
     assert.match(text, /preview\.png/, name);
@@ -270,7 +271,7 @@ test("the disclosure names every host and the key file in all four places", () =
   }
   for (const [name, text] of docs) {
     for (const host of ALLOWED_HOSTS) assert.ok(text.includes(host), `${host} in ${name}`);
-    assert.ok(text.includes("data/bellwether/secrets.json"), `key file in ${name}`);
+    assert.ok(text.includes("data/wickline/secrets.json"), `key file in ${name}`);
     // The default cap, behind the budget and the two-copies warning.
     assert.ok(text.includes("15"), `cap in ${name}`);
   }
@@ -308,5 +309,16 @@ test("the disclosure names the chmod, the fixed Finnhub host and how to revoke t
     assert.match(text, revoke[lang], `revoke in ${name}`);
     if (settable[lang]) assert.doesNotMatch(text, settable[lang], `a settable Finnhub host in ${name}`);
     assert.doesNotMatch(text, /Programs: none|No programs|(?<!除此之外)不執行任何程式|不執行程式|(?<!除此之外)不运行任何程序/, `"no programs" in ${name}`);
+  }
+});
+
+// The product is Wickline; the old working name must not linger anywhere a person or an installing agent reads.
+test("no tracked file names the old working name", () => {
+  const root = new URL("../", import.meta.url);
+  const tracked = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  const old = ["bell", "wether"].join("");
+  for (const name of tracked) {
+    if (name.endsWith(".png")) continue;
+    assert.doesNotMatch(read(new URL(name, root)), new RegExp(old, "i"), name);
   }
 });

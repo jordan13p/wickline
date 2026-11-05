@@ -26,7 +26,7 @@ const row2330 = (fields) => {
 test("constants", () => {
   assert.equal(MIS_URL, "https://mis.twse.com.tw/stock/api/getStockInfo.jsp");
   assert.equal(MIS_BATCH, 50);
-  assert.equal(MIS_CONSENT_VERSION, 1);
+  assert.equal(MIS_CONSENT_VERSION, 2);
   assert.equal(mis.id, "mis");
   assert.deepEqual(mis.markets, ["tw"]);
   assert.equal(mis.overlay, true);

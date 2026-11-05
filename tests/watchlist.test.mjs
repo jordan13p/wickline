@@ -308,5 +308,5 @@ test("crypto requests use the saved Binance URL, also after a change", async () 
 });
 
 test("identity", () => {
-  assert.equal(WATCHLIST_KEY, "bellwether.watchlist.v1");
+  assert.equal(WATCHLIST_KEY, "wickline.watchlist.v1");
 });

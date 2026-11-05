@@ -10,7 +10,7 @@ import { SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettin
 import { yahoo } from "./providers/yahoo.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
-export const WATCHLIST_KEY = "bellwether.watchlist.v1";
+export const WATCHLIST_KEY = "wickline.watchlist.v1";
 // Herdr's fetch cannot be aborted: a request that has not answered by then counts as failed.
 export const REQUEST_TIMEOUT_MS = 10_000;
 // Started in this order, so their first requests go out in this order too.

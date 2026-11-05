@@ -17,7 +17,7 @@ const DEFAULTS = {
 };
 
 test("reads settings defensively", () => {
-  assert.equal(SETTINGS_KEY, "bellwether.settings.v1");
+  assert.equal(SETTINGS_KEY, "wickline.settings.v1");
   assert.deepEqual(readSettings(undefined), DEFAULTS);
   assert.deepEqual(readSettings(null), DEFAULTS);
   assert.deepEqual(readSettings("en"), DEFAULTS);

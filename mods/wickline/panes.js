@@ -1,4 +1,4 @@
-// Pane and tab navigation: where a Bellwether tab goes back to, and when it can get a tab of its own.
+// Pane and tab navigation: where a Wickline tab goes back to, and when it can get a tab of its own.
 // `panes` is what Herdr's panes() gives. No Herdr imports, so tests run it under Node.
 
 // The mod id: Herdr names a mod after its folder, and panes(), pane.split and openOverlay use it.
@@ -7,7 +7,7 @@ export const MOD_ID = "wickline";
 /**
  * Where the copy in its own tab goes back to: a pane of the tab it was opened from (that tab's focused
  * pane, else its first terminal, else any), else the focused pane, else any terminal. Never a
- * Bellwether pane, and never a pane of `ownTab` (the tab about to lose this copy): a shell the person
+ * Wickline pane, and never a pane of `ownTab` (the tab about to lose this copy): a shell the person
  * split in there is not a place to go back beside. `panes` as panes() gives them, `focused` as
  * focused(); null: nowhere to go.
  */
@@ -23,13 +23,13 @@ export function returnPane(panes, fromTab, focused, ownTab = null) {
 // Another pane shares `pane`'s tab.
 const hasCompany = (panes, pane) => panes.some((p) => p.tab === pane.tab && p.pane !== pane.pane);
 
-/** A Bellwether pane in the shown `tab` has another pane beside it: only then can it get a tab of its own. */
+/** A Wickline pane in the shown `tab` has another pane beside it: only then can it get a tab of its own. */
 export function canOpenOwnTab(panes, tab) {
   return panes.some((p) => p.mod === MOD_ID && p.tab === tab && hasCompany(panes, p));
 }
 
 /**
- * The Bellwether pane to move to its own tab: the focused one (clicking a mod pane focuses it), when it
+ * The Wickline pane to move to its own tab: the focused one (clicking a mod pane focuses it), when it
  * is not alone in its tab. Null otherwise, also for a docked block, which is not a pane.
  */
 export function ownTabSource(panes) {
@@ -38,10 +38,10 @@ export function ownTabSource(panes) {
 }
 
 /**
- * The Bellwether pane in `after` that `before` did not have (in `tab`, when given): the new copy is
+ * The Wickline pane in `after` that `before` did not have (in `tab`, when given): the new copy is
  * open, so the old one may close. Null: the command did nothing visible, so nothing closes.
  */
-export function newBellwether(before, after, tab = null) {
+export function newWickline(before, after, tab = null) {
   const old = new Set(before.map((p) => p.pane));
   return after.find((p) => p.mod === MOD_ID && !old.has(p.pane) && (tab === null || p.tab === tab)) ?? null;
 }
@@ -52,14 +52,14 @@ const POLL_MS = 50;
 const WAIT_MS = 1500;
 
 /**
- * Closes `me` (the moving copy's own pane) once the new Bellwether copy shows up in panes() (in `tab`,
+ * Closes `me` (the moving copy's own pane) once the new Wickline copy shows up in panes() (in `tab`,
  * when given, and never in `me`'s own tab: a copy split in beside it is not the moved one), looking
  * every 50 ms for about 1.5 s. `host`: `{ panes, sleep(ms), close(pane) }`.
  * True once closed; false when the new copy never showed up, and then nothing closes.
  */
 export async function closeOnceOpened(before, me, host, tab = null) {
   for (let waited = 0; ; waited += POLL_MS) {
-    if (newBellwether(before, host.panes().filter((p) => p.tab !== me.tab), tab)) {
+    if (newWickline(before, host.panes().filter((p) => p.tab !== me.tab), tab)) {
       host.close(me.pane);
       return true;
     }
