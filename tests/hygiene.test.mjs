@@ -48,8 +48,15 @@ test("main.js imports no program runners from herdr", () => {
   assert.deepEqual(herdrImports('import {\n  theme,\n  exec as run } from "herdr";'), ["theme", "exec"]);
 });
 
-test("mod.json places Bellwether", () => {
-  assert.deepEqual(JSON.parse(read(new URL("mod.json", MOD))), { place: "right", size: 320, title: "Bellwether" });
+// "none": installing never docks Bellwether into the person's layout; the open key or pane.split opens it.
+test("mod.json docks Bellwether nowhere", () => {
+  assert.deepEqual(JSON.parse(read(new URL("mod.json", MOD))), { place: "none", title: "Bellwether" });
+});
+
+test("keys.json binds only the open key", () => {
+  assert.deepEqual(JSON.parse(read(new URL("keys.json", ROOT))), {
+    global: { "ctrl-alt-b": { command: "pane.split", args: { direction: "right", mod: "bellwether" } } },
+  });
 });
 
 test("icon is single-colour", () => {
