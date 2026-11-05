@@ -277,6 +277,15 @@ test("the disclosure names every host and the key file in all four places", () =
 });
 
 // The one program, the owner-only key file, the fixed Finnhub host and the real revoke, in all four places.
+// README and RECIPE name `chmod 600` for technical readers; the app says the same fact in plain words.
+const OWNER_ONLY = {
+  en: /only your account can read it/, "zh-TW": /只有你的帳號能讀取/, "zh-CN": /只有你的账户能读取/,
+  ja: /あなたのアカウントだけが読める/, ko: /내 계정만 읽을 수 있/,
+};
+const NOTHING_ELSE = {
+  en: /No other programs run/, "zh-TW": /不執行其他任何程式/, "zh-CN": /不运行其他任何程序/,
+  ja: /それ以外のプログラムは実行しません/, ko: /그 밖의 프로그램은 실행하지 않습니다/,
+};
 test("the disclosure names the chmod, the fixed Finnhub host and how to revoke the key", () => {
   const docs = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]].map(([name, lang]) => [name, lang, read(new URL(name, ROOT))]);
   for (const lang of Object.keys(STRINGS)) {
@@ -285,7 +294,17 @@ test("the disclosure names the chmod, the fixed Finnhub host and how to revoke t
   const revoke = { en: /regenerat/i, "zh-TW": /重新產生/, "zh-CN": /重新生成/, ja: /再発行/, ko: /재발급/ };
   const settable = { en: /Finnhub address you set/i, "zh-TW": /你設定的 Finnhub 網址/, "zh-CN": /你设置的 Finnhub 网址/ };
   for (const [name, lang, text] of docs) {
-    assert.ok(text.includes("chmod 600"), `chmod 600 in ${name}`);
+    if (name.endsWith(" privacy")) {
+      // The same fact as chmod 600, without the jargon: the key file, after saving, readable by your account only.
+      const programs = STRINGS[lang]["privacy.programs"];
+      assert.doesNotMatch(programs, /chmod/, `no jargon in ${name}`);
+      assert.match(programs, OWNER_ONLY[lang], `owner-only in ${name}`);
+      assert.match(programs, /macOS/, `macOS in ${name}`);
+      assert.match(programs, /Linux/, `Linux in ${name}`);
+      assert.match(programs, NOTHING_ELSE[lang], `nothing else runs in ${name}`);
+    } else {
+      assert.ok(text.includes("chmod 600"), `chmod 600 in ${name}`);
+    }
     assert.match(text, revoke[lang], `revoke in ${name}`);
     if (settable[lang]) assert.doesNotMatch(text, settable[lang], `a settable Finnhub host in ${name}`);
     assert.doesNotMatch(text, /Programs: none|No programs|(?<!除此之外)不執行任何程式|不執行程式|(?<!除此之外)不运行任何程序/, `"no programs" in ${name}`);
