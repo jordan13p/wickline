@@ -21,7 +21,6 @@ test("constants", () => {
   assert.equal(FINNHUB_URL, "https://finnhub.io/api/v1");
   assert.equal(finnhub.id, "finnhub");
   assert.deepEqual(finnhub.markets, ["us"]);
-  assert.equal(finnhub.realtime, true);
   assert.equal(finnhub.overlay, true);
   assert.equal(finnhub.intervalMs("open"), 15_000);
   assert.equal(finnhub.intervalMs("unknown"), 15_000);

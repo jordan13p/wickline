@@ -14,7 +14,6 @@ const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
  * @typedef {{
  *   id: "yahoo"|"binance"|"mis"|"finnhub",
  *   markets: string[],
- *   realtime: boolean,
  *   overlay?: boolean,
  *   manualRefresh?: boolean,
  *   cap?(config: object): number,
@@ -92,7 +91,6 @@ export function decodeYahoo(symbol, response, now) {
 export const yahoo = {
   id: "yahoo",
   markets: ["us", "tw", "hk", "cn", "jp", "kr", "other"],
-  realtime: false,
   // Stock requests are spaced at least this far apart.
   spacingMs: () => 1_000,
   intervalMs: () => 60_000,

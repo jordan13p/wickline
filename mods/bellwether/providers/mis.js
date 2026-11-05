@@ -78,7 +78,6 @@ export function decodeMis(symbols, response, now) {
 export const mis = {
   id: "mis",
   markets: ["tw"],
-  realtime: true,
   overlay: true,
   spacingMs: () => 0,
   intervalMs: (session) => (session === "open" || session === "unknown" ? 10_000 : 60_000),

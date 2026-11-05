@@ -56,7 +56,6 @@ export function decodeFinnhub(symbol, response, now) {
 export const finnhub = {
   id: "finnhub",
   markets: ["us"],
-  realtime: true,
   overlay: true,
   // Refresh never spends the budget: Finnhub keeps its own pace.
   manualRefresh: false,

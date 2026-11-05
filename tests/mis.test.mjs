@@ -28,7 +28,6 @@ test("constants", () => {
   assert.equal(MIS_CONSENT_VERSION, 1);
   assert.equal(mis.id, "mis");
   assert.deepEqual(mis.markets, ["tw"]);
-  assert.equal(mis.realtime, true);
   assert.equal(mis.overlay, true);
   assert.equal(mis.spacingMs(3, 10_000), 0);
   assert.equal(mis.intervalMs("open"), 10_000);
