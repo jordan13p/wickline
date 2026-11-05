@@ -37,8 +37,11 @@ const number = (value) => (positive(value) ? value : null);
 
 /** The overlay for `symbol`; a zero price or time (Finnhub's answer for an unknown symbol) is no quote and no error. */
 export function decodeFinnhub(symbol, response, now) {
-  // Redirected elsewhere: the key may have gone with it, so it is not sent again until the settings change.
-  if (response.url && !FINNHUB_ORIGIN.test(response.url)) throw new QuoteError("finnhub.redirected", {}, { stopsSource: true });
+  // Redirected elsewhere, or no final address to tell: the key may have gone with it, so it is not sent
+  // again until the settings change.
+  if (typeof response.url !== "string" || !FINNHUB_ORIGIN.test(response.url)) {
+    throw new QuoteError("finnhub.redirected", {}, { stopsSource: true });
+  }
   // The key was refused: no point asking again until it changes.
   if (response.status === 401 || response.status === 403) throw new QuoteError("finnhub.invalidKey", {}, { stopsSource: true });
   // No Retry-After in Herdr's fetch: wait at least a minute.

@@ -15,7 +15,11 @@ import { yahoo } from "../mods/bellwether/providers/yahoo.js";
 const KEY = "test-key";
 const cfg = { finnhubUrl: FINNHUB_URL, finnhubKey: KEY };
 const QUOTE = { c: 231.2, pc: 228, o: 229, h: 232, l: 227.5, t: 1_760_000_000 };
-const decode = (symbol, response, now = 1) => finnhub.decode(finnhub.requests([symbol], cfg)[0], response, now);
+// Answered from the request's own address unless the test gives another `url`, as Herdr's fetch does.
+const decode = (symbol, response, now = 1) => {
+  const [request] = finnhub.requests([symbol], cfg);
+  return finnhub.decode(request, { url: request.url, ...response }, now);
+};
 
 test("constants", () => {
   assert.equal(FINNHUB_URL, "https://finnhub.io/api/v1");
@@ -112,9 +116,14 @@ test("an answer from another address stops Finnhub: the key is not sent again", 
     assert.equal(error.code, "finnhub.redirected", finalUrl);
     assert.equal(error.stopsSource, true);
   }
-  // The same host, or no final address given: decoded as usual.
+  // The same host: decoded as usual.
   assert.equal(decode("AAPL", { ...ok(QUOTE), url: `${FINNHUB_URL}/quote?symbol=AAPL` }).quotes.AAPL.price, QUOTE.c);
-  assert.equal(decode("AAPL", ok(QUOTE)).quotes.AAPL.price, QUOTE.c);
+  // No final address, or not a string: fails closed, as a redirect.
+  for (const url of [undefined, null, "", 42]) {
+    const error = decode("AAPL", { ...ok(QUOTE), url }).errors.AAPL;
+    assert.equal(error.code, "finnhub.redirected", String(url));
+    assert.equal(error.stopsSource, true);
+  }
   const host = usHost();
   host.finnhub = (url) => ({ ...ok(QUOTE), url: url.replace("https://finnhub.io", "https://evil.test") });
   const w = new Watchlist(host);

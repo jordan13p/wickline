@@ -18,7 +18,8 @@ export function fakeHost(respond) {
       host.requests.push(url);
       host.headers.push(headers);
       const r = await respond(url);
-      return { ...r, text: async () => r.text };
+      // Herdr's fetch gives the final address; here the one asked, unless the test answers with another.
+      return { url, ...r, text: async () => r.text };
     },
     // The secrets file (main.js reads it from Herdr's data folder): `secret` by name, or a broken file.
     secrets: {}, secretsBroken: false, secretReads: 0,
