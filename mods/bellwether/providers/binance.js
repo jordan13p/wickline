@@ -18,7 +18,10 @@ export function binanceUrl(base, pairs) {
 export function decodeBinance(pairs, response, now) {
   // -1121 Invalid symbol: one unknown or delisted pair fails the whole batch.
   if (response.status === 400) throw new QuoteError("binance.invalidPair", {}, { invalidSymbol: true });
-  if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited");
+  // No headers in Herdr's fetch, so no Retry-After: wait at least a minute.
+  if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
+  // Unavailable for legal reasons: Binance refuses this region.
+  if (response.status === 451) throw new QuoteError("binance.region");
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
   let body;
   try { body = JSON.parse(response.text); } catch { throw new QuoteError("binance.unreadable"); }
@@ -70,9 +73,12 @@ export function decodeKlines(response) {
 /** @type {Provider} */
 export const binance = {
   id: "binance",
+  markets: ["crypto"],
   realtime: true,
   spacingMs: () => 0,
-  intervalMs: () => 60_000,
+  // Tickers; a pair's line is asked again only once `linesMs` has passed.
+  intervalMs: () => 15_000,
+  linesMs: 60_000,
   // Per batch: its quote request, then a line request per pair of that batch.
   requests(pairs, { binanceUrl: base }) {
     const requests = [];

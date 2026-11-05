@@ -1,0 +1,158 @@
+// node --test tests/  (one refresh loop per source, on a fake clock)
+import test from "node:test";
+import assert from "node:assert/strict";
+import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/bellwether/watchlist.js";
+import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
+import { binance } from "../mods/bellwether/providers/binance.js";
+import { yahoo } from "../mods/bellwether/providers/yahoo.js";
+
+const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD" };
+const ticker = (url) => ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1]))
+  .map((symbol) => ({ symbol, lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 })));
+const lines = () => ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"]]);
+const yahooChart = (url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) });
+const never = () => new Promise(() => {});
+
+const count = (host, part) => host.requests.filter((url) => url.includes(part)).length;
+
+test("one loop per source", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  assert.deepEqual(w.providerIds(), ["binance", "yahoo"]);
+  assert.equal(REQUEST_TIMEOUT_MS, 10_000);
+});
+
+test("a hung Yahoo does not delay Binance", async () => {
+  const host = fakeHost(() => ok({}));
+  host.fetch = (url) => {
+    host.requests.push(url);
+    if (url.includes("yahoo")) return never();
+    const r = url.includes("ticker/24hr") ? ticker(url) : lines();
+    return Promise.resolve({ ...r, text: async () => r.text });
+  };
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 31_000);
+  assert.ok(count(host, "ticker/24hr") >= 3, `${count(host, "ticker/24hr")} ticker requests`);
+  // Lines only once a minute.
+  assert.equal(count(host, "klines"), 1);
+  await stop(w, host, runs);
+});
+
+test("a request times out after 10 s", async () => {
+  let answer;
+  const host = fakeHost(() => ok({}));
+  host.fetch = (url) => {
+    host.requests.push(url);
+    return new Promise((resolve) => { answer = () => { const r = yahooChart(url); resolve({ ...r, text: async () => r.text }); }; });
+  };
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const runs = start(w, host);
+  await advance(host, 9_999);
+  assert.equal(w.errors.AAPL, undefined);
+  await advance(host, 10_000);
+  assert.equal(w.errors.AAPL.code, "request.timeout");
+  assert.deepEqual(w.problems(), [{ provider: "yahoo", code: "request.timeout", params: { source: "yahoo", seconds: 10 } }]);
+  answer();
+  await advance(host, 10_001);
+  assert.equal(w.quotes.AAPL, undefined);
+  assert.equal(w.errors.AAPL.code, "request.timeout");
+  await stop(w, host, runs);
+});
+
+test("backoff is per provider", async () => {
+  const host = fakeHost((url) => url.includes("binance") ? { status: 429, ok: false, text: "" } : yahooChart(url));
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.deepEqual(w.problems(), [{ provider: "binance", code: "binance.rateLimited", params: {} }]);
+  assert.ok(w.sources.binance.retryAt >= 60_000);
+  assert.ok(w.quotes.AAPL);
+  await advance(host, 121_000);
+  assert.equal(count(host, "yahoo"), 3);
+  // Binance waited at least a minute, then its second 429 doubled the wait.
+  assert.equal(count(host, "ticker/24hr"), 2);
+  assert.ok(w.sources.binance.retryAt >= 60_000 + 120_000);
+  await stop(w, host, runs);
+});
+
+test("451 says the region is blocked", async () => {
+  const host = fakeHost((url) => url.includes("binance") ? { status: 451, ok: false, text: "" } : yahooChart(url));
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT"); w.add("ETH/USDT");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.errors["BTC/USDT"].code, "binance.region");
+  assert.equal(w.errors["ETH/USDT"].code, "binance.region");
+  assert.equal(w.errors.AAPL, undefined);
+  assert.ok(w.quotes.AAPL);
+  assert.deepEqual(w.problems(), [{ provider: "binance", code: "binance.region", params: {} }]);
+  await stop(w, host, runs);
+});
+
+test("recovers after an outage", async () => {
+  let down = true;
+  const host = fakeHost(() => ok({}));
+  host.fetch = async (url) => {
+    host.requests.push(url);
+    if (down) throw new Error("offline");
+    const r = url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url);
+    return { ...r, text: async () => r.text };
+  };
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.errors.AAPL.code, "yahoo.unreachable");
+  assert.equal(w.errors["BTC/USDT"].code, "binance.unreachable");
+  assert.equal(w.problems().length, 2);
+  down = false;
+  await advance(host, 60_001);
+  assert.ok(w.quotes.AAPL && w.quotes["BTC/USDT"]);
+  assert.equal(w.errors.AAPL, undefined);
+  assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+});
+
+test("the busiest session sets the cadence", async () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  w.add("AAPL"); w.add("MSFT");
+  const day = { pre: [0, 100], regular: [100, 200], post: [200, 300] };
+  w.quotes.AAPL = { symbol: "AAPL", periods: day };
+  w.quotes.MSFT = { symbol: "MSFT", periods: day };
+  assert.equal(w.sessionFor(["AAPL", "MSFT"], 50), "pre");
+  assert.equal(w.sessionFor(["AAPL", "MSFT"], 500), "closed");
+  delete w.quotes.MSFT;
+  // Not known yet beats pre-market and closed.
+  assert.equal(w.sessionFor(["AAPL", "MSFT"], 500), "unknown");
+  assert.equal(w.sessionFor(["AAPL", "MSFT"], 150), "open");
+  assert.equal(w.sessionFor(["BTC/USDT"], 500), "unknown");
+  w.quotes["BTC/USDT"] = { symbol: "BTC/USDT", periods: null };
+  // A pair's "24h" counts as open.
+  assert.equal(w.sessionFor(["AAPL", "BTC/USDT"], 500), "open");
+});
+
+test("each loop asks its provider for the interval of its busiest session", async () => {
+  const host = fakeHost((url) => url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url));
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const asked = { yahoo: [], binance: [] };
+  const original = {};
+  for (const provider of [yahoo, binance]) {
+    original[provider.id] = provider.intervalMs;
+    provider.intervalMs = (session) => { asked[provider.id].push(session); return original[provider.id](session); };
+  }
+  try {
+    const runs = start(w, host);
+    await advance(host, 1);
+    // The Yahoo fixture has no trading periods, so its session is not known yet.
+    assert.ok(asked.yahoo.length > 0 && asked.yahoo.every((session) => session === "unknown"), asked.yahoo.join());
+    // Before its first quote a pair is not known either; once quoted it trades around the clock.
+    assert.deepEqual([asked.binance[0], asked.binance.at(-1)], ["unknown", "open"]);
+    await stop(w, host, runs);
+  } finally {
+    for (const provider of [yahoo, binance]) provider.intervalMs = original[provider.id];
+  }
+});

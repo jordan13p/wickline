@@ -19,15 +19,15 @@ export const MESSAGES_EN = {
   "yahoo.otherTicker": "Yahoo returned a different ticker.",
   "yahoo.incomplete": "Yahoo returned an incomplete quote.",
   "yahoo.unreachable": "Could not reach Yahoo Finance.",
-  "yahoo.deferred": "Refresh deferred: Yahoo rate limited requests.",
-  "yahoo.retryAfter": "Yahoo rate limited requests. Retry after {seconds}s.",
-  "yahoo.retriesDelayed": "Yahoo rate limited requests. Automatic retries are delayed.",
   "binance.invalidPair": "Binance has no Spot pair with this name.",
   "binance.rateLimited": "Binance rate limited requests.",
   "binance.http": "Binance returned HTTP {status}.",
   "binance.unreadable": "Binance returned an unreadable response.",
   "binance.noQuote": "Binance returned no quote for this pair.",
   "binance.unreachable": "Could not reach Binance.",
+  "binance.region": "Binance is not available in this region. Set another Binance URL in Settings.",
+  // `{source}` is a provider id; the view shows its name.
+  "request.timeout": "{source} did not answer within {seconds}s.",
 };
 
 /** Fills `{name}` from params; an unknown name stays as written. */

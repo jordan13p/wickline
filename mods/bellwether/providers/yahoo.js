@@ -13,13 +13,18 @@ const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
  * @typedef {{ quotes: Record<string, Quote>, errors: Record<string, QuoteError>, lines?: Record<string, number[]> }} ProviderResult
  * @typedef {{
  *   id: "yahoo"|"binance"|"mis"|"finnhub",
+ *   markets: string[],
  *   realtime: boolean,
  *   spacingMs(count: number, intervalMs: number): number,
  *   intervalMs(session: string): number,
+ *   linesMs?: number,
  *   requests(symbols: string[], config: object): ProviderRequest[],
  *   decode(request: ProviderRequest, response: ProviderResponse, now: number): ProviderResult,
  * }} Provider
- * `spacingMs` is the gap between this provider's requests in one round. `decode` does not throw
+ * `markets` are the markets (markets.js) whose symbols it quotes. `spacingMs` is the gap between
+ * this provider's quote requests in one round. `intervalMs` is the wait between rounds, given the
+ * busiest session among its symbols ("open" while unknown). A provider with `kind: "line"`
+ * requests asks each line again only once `linesMs` has passed. `decode` does not throw
  * for an HTTP or body problem: the request's symbols each get that error instead.
  */
 
@@ -80,6 +85,7 @@ export function decodeYahoo(symbol, response, now) {
 /** @type {Provider} */
 export const yahoo = {
   id: "yahoo",
+  markets: ["us", "tw", "hk", "cn", "jp", "kr", "other"],
   realtime: false,
   // Stock requests are spaced at least this far apart.
   spacingMs: () => 1_000,

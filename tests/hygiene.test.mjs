@@ -3,6 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { MESSAGES_EN } from "../mods/bellwether/quotes.js";
+import { STRINGS } from "../mods/bellwether/i18n.js";
+import { Watchlist } from "../mods/bellwether/watchlist.js";
 
 const MOD = new URL("../mods/bellwether/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
@@ -71,15 +73,19 @@ test("only allowed hosts", () => {
 
 // QuoteError shows a code it does not know as text, so every code used must have English text.
 test("every error code has English text", () => {
-  const codes = new Set();
+  const errors = new Set();
+  const notices = new Set();
   for (const file of files(MOD).filter((url) => url.pathname.endsWith(".js"))) {
     const text = read(file);
-    for (const [, code] of text.matchAll(/new QuoteError\(\s*"([^"]+)"/g)) codes.add(code);
-    // Codes passed along as arguments, e.g. the unreachable code handed to Watchlist.ask.
-    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance)\.[A-Za-z]+)"/g)) codes.add(code);
+    for (const [, code] of text.matchAll(/new QuoteError\(\s*"([^"]+)"/g)) errors.add(code);
+    // Codes handed to the view as `{ code, params }`, e.g. a deferred refresh.
+    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance|request)\.[A-Za-z]+)"/g)) notices.add(code);
   }
-  assert.ok(codes.size > 0);
-  for (const code of codes) assert.ok(code in MESSAGES_EN, code);
+  // Built from the provider id: `${provider.id}.unreachable`.
+  for (const id of new Watchlist({ load: () => undefined, settings: () => undefined }).providerIds()) errors.add(`${id}.unreachable`);
+  assert.ok(errors.size > 0);
+  for (const code of errors) assert.ok(code in MESSAGES_EN, code);
+  for (const code of notices) assert.ok(code in STRINGS.en, code);
 });
 
 test("READMEs link to each other", () => {

@@ -9,7 +9,7 @@ import { decodeYahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/bellwether/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/bellwether/watchlist.js";
 import { t } from "../mods/bellwether/i18n.js";
-import { chart, fakeHost, ok, tick } from "./helpers.mjs";
+import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 
 const BASE = "https://data-api.binance.vision";
 
@@ -87,35 +87,34 @@ test("refreshes stocks spaced apart and crypto in one batch", async () => {
     : chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
   const w = new Watchlist(host);
   w.add("AAPL"); w.add("MSFT"); w.add("BTC/USDT");
-  const run = w.run();
-  for (let i = 0; i < 6 && host.requests.length < 3; i++) await tick(host);
+  const runs = start(w, host);
+  await advance(host, 1_000);
   assert.equal(host.requests.filter((u) => u.includes("ticker/24hr")).length, 1);
   assert.equal(host.requests.filter((u) => u.includes("yahoo")).length, 2);
   assert.ok(w.quotes.AAPL && w.quotes.MSFT && w.quotes["BTC/USDT"]);
-  w.stop();
-  await tick(host);
-  await run;
+  await stop(w, host, runs);
 });
 
-test("request order and spacing are unchanged", async () => {
+test("each source keeps its request order and spacing", async () => {
   const host = fakeHost((url) => url.includes("ticker/24hr")
     ? ok([{ symbol: "BTCUSDT", lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 }])
     : url.includes("klines") ? ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"]])
     : chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
   const sent = [];
   const fetch = host.fetch;
-  host.fetch = (url, headers) => { sent.push({ at: host.clock, headers }); return fetch(url, headers); };
+  host.fetch = (url, headers) => { sent.push({ url, at: host.clock, headers }); return fetch(url, headers); };
   const w = new Watchlist(host);
   w.add("AAPL"); w.add("MSFT"); w.add("BTC/USDT");
-  const run = w.run();
-  for (let i = 0; i < 6 && host.requests.length < 4; i++) await tick(host);
-  assert.deepEqual(host.requests, [binanceUrl(BASE, ["BTC/USDT"]), binanceKlinesUrl(BASE, "BTC/USDT"), yahooUrl("AAPL"), yahooUrl("MSFT")]);
-  assert.equal(sent[3].at - sent[2].at, 1000);
+  const runs = start(w, host);
+  await advance(host, 1_000);
+  // The sources run side by side; each keeps its own order.
+  assert.deepEqual(host.requests.filter((u) => u.includes("binance")), [binanceUrl(BASE, ["BTC/USDT"]), binanceKlinesUrl(BASE, "BTC/USDT")]);
+  assert.deepEqual(host.requests.filter((u) => u.includes("yahoo")), [yahooUrl("AAPL"), yahooUrl("MSFT")]);
+  const stocks = sent.filter(({ url }) => url.includes("yahoo"));
+  assert.equal(stocks[1].at - stocks[0].at, 1000);
   for (const { headers } of sent) assert.equal(headers["User-Agent"], USER_AGENT);
   assert.deepEqual(w.quotes["BTC/USDT"].series, [1.5, 1.75]);
-  w.stop();
-  await tick(host);
-  await run;
+  await stop(w, host, runs);
 });
 
 test("an unknown pair fails its batch, then pairs are asked one by one", async () => {
@@ -125,7 +124,7 @@ test("an unknown pair fails its batch, then pairs are asked one by one", async (
       ({ symbol, lastPrice: "10", prevClosePrice: "9", closeTime: 5 }))));
   const w = new Watchlist(host);
   w.add("BTC/USDT"); w.add("ETH/USDT"); w.add("BAD/USDT");
-  const run = w.run();
+  const runs = start(w, host);
   // Pairs are not spaced, so one round runs without the clock moving.
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(host.requests, [
@@ -136,33 +135,30 @@ test("an unknown pair fails its batch, then pairs are asked one by one", async (
   assert.deepEqual(w.errors["BAD/USDT"], { code: "binance.invalidPair", params: {} });
   assert.equal(t("en", w.errors["BAD/USDT"].code), "Binance has no Spot pair with this name.");
   assert.ok(w.quotes["BTC/USDT"] && w.quotes["ETH/USDT"]);
-  w.stop();
-  await tick(host);
-  await run;
+  await stop(w, host, runs);
 });
 
 test("a rate limit defers the rest of the round", async () => {
   const host = fakeHost(() => ({ status: 429, ok: false, text: "" }));
   const w = new Watchlist(host);
   w.add("AAPL"); w.add("MSFT");
-  const run = w.run();
+  const runs = start(w, host);
   await new Promise((r) => setImmediate(r));
-  assert.equal(w.errors.MSFT.code, "yahoo.deferred");
+  assert.deepEqual(w.errors.MSFT, { code: "request.deferred", params: { source: "yahoo" } });
+  assert.equal(t("en", w.errors.MSFT.code, { source: "Yahoo" }), "Refresh deferred: Yahoo rate limited requests.");
   assert.equal(w.errors.AAPL.code, "yahoo.rateLimited");
-  assert.equal(t("en", w.message.code, w.message.params), "Yahoo rate limited requests. Automatic retries are delayed.");
+  assert.deepEqual(w.problems(), [{ provider: "yahoo", code: "yahoo.rateLimited", params: {} }]);
   assert.equal(host.requests.length, 1);
-  assert.ok(w.retryAt >= 60_000);
-  w.stop();
-  await tick(host);
-  await run;
+  assert.ok(w.sources.yahoo.retryAt >= 60_000);
+  await stop(w, host, runs);
 });
 
 test("removing a ticker drops its quote; pause stops automatic rounds", async () => {
   const host = fakeHost((url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
   const w = new Watchlist(host);
   w.add("AAPL");
-  const run = w.run();
-  for (let i = 0; i < 3 && !w.quotes.AAPL; i++) await tick(host);
+  const runs = start(w, host);
+  await advance(host, 0);
   assert.ok(w.quotes.AAPL);
   const removed = w.remove("AAPL");
   assert.deepEqual(removed, { code: "notice.removed", params: { symbol: "AAPL" } });
@@ -170,14 +166,12 @@ test("removing a ticker drops its quote; pause stops automatic rounds", async ()
   assert.equal(w.quotes.AAPL, undefined);
   w.add("MSFT");
   w.pause(true);
-  await tick(host);
+  await advance(host, 0);
   const before = host.requests.length;
-  for (let i = 0; i < 3; i++) await tick(host);
+  await advance(host, 300_000);
   assert.equal(host.requests.length, before);
   assert.equal(host.store.paused, true);
-  w.stop();
-  await tick(host);
-  await run;
+  await stop(w, host, runs);
 });
 
 test("edits return notice codes with the old English text", () => {
@@ -188,18 +182,23 @@ test("edits return notice codes with the old English text", () => {
   assert.equal(say(w.remove("MSFT")), "MSFT is not on your watchlist.");
   assert.equal(say(w.pause(true)), "Automatic refresh paused.");
   assert.equal(say(w.pause(false)), "Automatic refresh resumed.");
-  assert.equal(w.message, null);
+  assert.deepEqual(w.problems(), []);
 });
 
-test("a Yahoo cooldown says when stocks retry", async () => {
-  const host = fakeHost(() => ({ status: 429, ok: false, text: "" }));
+test("a Yahoo cooldown holds stocks, also for Refresh", async () => {
+  const host = fakeHost((url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
   const w = new Watchlist(host);
   w.add("AAPL");
-  w.retryAt = 30_000;
-  await w.round(false);
-  assert.deepEqual(w.message, { code: "yahoo.retryAfter", params: { seconds: 30 } });
-  assert.equal(t("en", w.message.code, w.message.params), "Yahoo rate limited requests. Retry after 30s.");
+  w.sources.yahoo.retryAt = 30_000;
+  const runs = start(w, host);
+  await advance(host, 0);
+  w.refreshNow();
+  await advance(host, 29_999);
   assert.equal(host.requests.length, 0);
+  // The next round waits out the cooldown or the interval, whichever is later.
+  await advance(host, 60_000);
+  assert.deepEqual(host.requests, [yahooUrl("AAPL")]);
+  await stop(w, host, runs);
 });
 
 test("another copy's edit is picked up at once", async () => {
@@ -227,7 +226,7 @@ test("crypto requests use the saved Binance URL, also after a change", async () 
   host.prefs = { version: 1, sources: { crypto: { binanceUrl: MIRROR } } };
   const w = new Watchlist(host);
   w.add("BTC/USDT");
-  const run = w.run();
+  const runs = start(w, host);
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(host.requests, [binanceUrl(MIRROR, ["BTC/USDT"]), binanceKlinesUrl(MIRROR, "BTC/USDT")]);
   // A saved change starts a new round against the new address at once.
@@ -238,9 +237,7 @@ test("crypto requests use the saved Binance URL, also after a change", async () 
   host.requests.length = 0;
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(host.requests, [binanceUrl("https://other.test", ["BTC/USDT"]), binanceKlinesUrl("https://other.test", "BTC/USDT")]);
-  w.stop();
-  await tick(host);
-  await run;
+  await stop(w, host, runs);
 });
 
 test("reads today's line, the day's range and the session from Yahoo", () => {
