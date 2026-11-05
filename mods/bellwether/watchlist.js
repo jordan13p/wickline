@@ -126,7 +126,7 @@ export class Watchlist {
     // Per provider: its backoff, its current problem, its round and its own wake-up.
     this.sources = Object.fromEntries(PROVIDERS.map((provider) => [provider.id, {
       retryAt: 0, failures: 0, disabled: false, problem: null,
-      loading: false, manual: false, dirty: true, wake: null,
+      loading: false, manual: false, refreshing: false, dirty: true, wake: null,
       lastRequestAt: -Infinity, linesAt: {}, configKey: null, disabledFor: null,
     }]));
   }
@@ -186,6 +186,11 @@ export class Watchlist {
 
   get loading() {
     return Object.values(this.sources).some((state) => state.loading);
+  }
+
+  /** A round the person asked for (Refresh) is running; automatic rounds do not count. */
+  get refreshing() {
+    return Object.values(this.sources).some((state) => state.loading && state.refreshing);
   }
 
   /**
@@ -384,7 +389,11 @@ export class Watchlist {
       const symbols = this.symbolsFor(provider);
       if (!symbols.length) state.problem = null;
       const { paused } = this.preferences;
-      if (symbols.length && !state.disabled && (manual || !paused)) await this.round(provider, state, symbols, io);
+      if (symbols.length && !state.disabled && (manual || !paused)) {
+        state.refreshing = manual;
+        await this.round(provider, state, symbols, io);
+        state.refreshing = false;
+      }
       if (this.stopped) return;
       io.changed();
       if (state.manual || state.dirty) continue;

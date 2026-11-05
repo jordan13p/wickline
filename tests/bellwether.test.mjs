@@ -174,6 +174,29 @@ test("removing a ticker drops its quote; pause stops automatic rounds", async ()
   await stop(w, host, runs);
 });
 
+test("refreshing means a round the person asked for, not an automatic one", async () => {
+  const host = fakeHost((url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  // What the view would draw on each redraw: [loading, refreshing].
+  const seen = [];
+  host.changed = () => seen.push([w.loading, w.refreshing]);
+  const runs = start(w, host);
+  await advance(host, 1_000);
+  assert.ok(seen.some(([loading]) => loading), "an automatic round ran");
+  assert.ok(seen.every(([, refreshing]) => !refreshing), "an automatic round is not refreshing");
+  seen.length = 0;
+  w.refreshNow();
+  await advance(host, 2_000);
+  assert.ok(seen.some(([loading, refreshing]) => loading && refreshing), "the asked-for round is refreshing");
+  assert.equal(w.refreshing, false);
+  seen.length = 0;
+  await advance(host, 200_000);
+  assert.ok(seen.some(([loading]) => loading));
+  assert.ok(seen.every(([, refreshing]) => !refreshing), "the next automatic round is not");
+  await stop(w, host, runs);
+});
+
 test("edits return notice codes with the old English text", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
   const say = (n) => t("en", n.code, n.params);

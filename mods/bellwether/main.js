@@ -396,8 +396,8 @@ export default class Bellwether extends View {
     const w = this.watch;
     const { paused, symbols } = w.preferences;
     const now = Date.now();
-    const statusColor = paused ? t.blocked : w.loading ? t.working : t.done;
-    const status = paused ? this.tx("status.paused") : w.loading ? this.tx("status.refreshing") : this.tx("status.on");
+    const statusColor = paused ? t.blocked : w.refreshing ? t.working : t.done;
+    const status = paused ? this.tx("status.paused") : w.refreshing ? this.tx("status.refreshing") : this.tx("status.on");
 
     const header = v_flex().flex_none().px(12).pt(12).gap(6)
       .child(h_flex().items_center().gap(7)
@@ -411,7 +411,7 @@ export default class Bellwether extends View {
         .child(this.button(t, "bw-settings", this.tx("button.settings"), () => this.openSettings("sources"))))
       .child(h_flex().items_center().gap(6)
         .child(div().flex_none().w(6).h(6).rounded_full().bg(statusColor)
-          .when(w.loading, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 1200 })))
+          .when(w.refreshing, (el) => el.loop("opacity", { from: 0.35, to: 1, period: 1200 })))
         .child(div().text_size(11.5).text_color(statusColor).child(status)))
       // One line per source with a problem: rate limited, unreachable, timed out, refused.
       .children(w.problems().map((problem) => div().text_size(11.5).text_color(t.blocked).child(this.say(problem))));
