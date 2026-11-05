@@ -55,7 +55,7 @@ test("no module imports program runners from herdr", () => {
 
 // Every module specifier, whether it is imported with a list, a namespace, a default or `import("…")`.
 function importSpecifiers(source) {
-  return [...source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g)].map(([, specifier]) => specifier);
+  return [...source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["'`]([^"'`]+)["'`]/g)].map(([, specifier]) => specifier);
 }
 
 // The layer rule. The core imports only other modules of the mod, so `node --test` can load it. ui/ adds
@@ -74,17 +74,20 @@ test("core modules import only relative modules; ui/ adds the view libraries", (
     else ui += 1;
     for (const specifier of importSpecifiers(read(file))) {
       assert.ok(specifier.startsWith("./") || specifier.startsWith("../") || allowed.includes(specifier), `${specifier} in ${name}`);
+      // main.js is the shell: importing it would bring Herdr in by a relative path.
+      assert.doesNotMatch(specifier, /(^|\/)main\.js$/, `${specifier} in ${name}`);
     }
   }
   assert.ok(core > 0, "no core module found");
   assert.ok(ui > 0, "no ui module found");
-  assert.deepEqual(importSpecifiers('import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";\nawait import ( "herdr" );'),
-    ["./a.js", "fs/promises", "gpui-kit", "herdr"]);
+  assert.deepEqual(importSpecifiers('import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";\nawait import ( "herdr" );\nawait import(`herdr`);'),
+    ["./a.js", "fs/promises", "gpui-kit", "herdr", "herdr"]);
 });
 
-// Herdr's globals reach no module but main.js either: `fetch` (the core gets it as `host.fetch`),
-// `localStorage`, and `globalThis`, through which a module could find anything else.
-const HERDR_GLOBALS = /(?<![.\w])(?:fetch\s*\(|localStorage\b|globalThis\b)/;
+// Herdr's globals reach no module but main.js either: `fetch` (the core gets it as `host.fetch`), also
+// aliased or through `window` / `self` (also destructured), `localStorage`, and `globalThis`, through which a module could
+// find anything else. `fetch:` as an object key and `fetchedAt` are not the global.
+const HERDR_GLOBALS = /(?<![.\w$])(?:fetch\b(?!\s*:)|localStorage\b|globalThis\b)|\b(?:window|self)\s*\.\s*fetch\b|\}\s*=\s*(?:window|self)\b/;
 // The source without comments, which may name these; a `//` after `:` or a quote is a URL, not a comment.
 const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
 test("only main.js wires Herdr's storage, network and files", () => {
@@ -99,7 +102,11 @@ test("only main.js wires Herdr's storage, network and files", () => {
   assert.ok(importSpecifiers(main).includes("fs/promises"), "main.js imports fs/promises");
   assert.match(code(main), /(?<![.\w])fetch\s*\(/, "main.js calls fetch");
   assert.doesNotMatch(code("this.host.fetch(url); // fetch(url)\n/* localStorage */"), HERDR_GLOBALS);
+  assert.doesNotMatch(code("const host = { fetch: (url) => url }; quote.fetchedAt; window.paint_path(p)"), HERDR_GLOBALS);
   assert.match(code('const u = "https://x"; globalThis'), HERDR_GLOBALS);
+  for (const source of ["const get = fetch;", "window.fetch(url)", "self . fetch(url)", "const { fetch: get } = window;"]) {
+    assert.match(code(source), HERDR_GLOBALS, source);
+  }
 });
 
 // The one program Bellwether runs: `chmod 600` on its key file (secrets.js), with Herdr's `process` module
@@ -125,6 +132,11 @@ test("the only program is chmod 600 on the key file", () => {
   for (const file of jsFiles().filter((url) => relativeName(url) !== "secrets.js")) {
     assert.doesNotMatch(code(read(file)), /\brunProgram\s*\(|\bsystem\.run\b/, relativeName(file));
   }
+});
+
+// Every module is a .js file: an .mjs, .cjs or .ts one would escape the scans above.
+test("the mod holds only .js modules, its mod.json and SVG icons", () => {
+  for (const file of files(MOD)) assert.match(relativeName(file), /\.(js|json|svg)$/, relativeName(file));
 });
 
 // "none": installing never docks Bellwether into the person's layout; the open key or pane.split opens it.
