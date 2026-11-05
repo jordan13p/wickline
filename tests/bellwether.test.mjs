@@ -218,6 +218,64 @@ test("another copy's edit is picked up at once", async () => {
   assert.equal(b.quotes.AAPL, undefined);
 });
 
+function listed(symbols) {
+  const host = fakeHost(() => chart(AAPL));
+  host.store = { version: 1, symbols, paused: false };
+  return host;
+}
+
+test("move before another", () => {
+  const host = listed(["AAPL", "NVDA", "2330.TW"]);
+  const w = new Watchlist(host);
+  const moved = w.move("2330.TW", "AAPL");
+  assert.deepEqual(moved, { code: "notice.moved", params: { symbol: "2330.TW" } });
+  assert.equal(t("en", moved.code, moved.params), "Moved 2330.TW.");
+  assert.deepEqual(host.store.symbols, ["2330.TW", "AAPL", "NVDA"]);
+  assert.deepEqual(w.preferences.symbols, ["2330.TW", "AAPL", "NVDA"]);
+  w.move("2330.TW", null);
+  assert.deepEqual(host.store.symbols, ["AAPL", "NVDA", "2330.TW"]);
+  w.move("AAPL", null);
+  assert.deepEqual(host.store.symbols, ["NVDA", "2330.TW", "AAPL"]);
+});
+
+test("move after a concurrent removal", () => {
+  const host = listed(["AAPL", "NVDA", "2330.TW"]);
+  const a = new Watchlist(host);
+  const b = new Watchlist(host);
+  b.remove("AAPL");
+  const saved = JSON.stringify(host.store);
+  // Copy A has not synced: its drop target is gone.
+  assert.equal(a.move("NVDA", "AAPL"), null);
+  assert.equal(JSON.stringify(host.store), saved);
+  // The dragged symbol is gone.
+  b.remove("NVDA");
+  const savedAgain = JSON.stringify(host.store);
+  assert.equal(a.move("NVDA", "2330.TW"), null);
+  assert.equal(JSON.stringify(host.store), savedAgain);
+});
+
+test("a drop lands next to its symbol, not at a stale index", () => {
+  const host = listed(["AAPL", "NVDA", "2330.TW"]);
+  const a = new Watchlist(host);
+  const b = new Watchlist(host);
+  b.remove("AAPL");
+  a.move("2330.TW", "NVDA");
+  assert.deepEqual(host.store.symbols, ["2330.TW", "NVDA"]);
+});
+
+test("no-op move saves nothing", () => {
+  const host = listed(["AAPL", "NVDA", "2330.TW"]);
+  const w = new Watchlist(host);
+  let writes = 0;
+  const save = host.save;
+  host.save = (value) => { writes++; save(value); };
+  assert.equal(w.move("AAPL", "AAPL"), null);
+  assert.equal(w.move("AAPL", "NVDA"), null);
+  assert.equal(w.move("2330.TW", null), null);
+  assert.equal(w.move("MSFT", "AAPL"), null);
+  assert.equal(writes, 0);
+});
+
 test("crypto requests use the saved Binance URL, also after a change", async () => {
   const MIRROR = "https://mirror.test";
   const host = fakeHost((url) => url.includes("ticker/24hr")

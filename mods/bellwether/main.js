@@ -72,6 +72,10 @@ export default class Bellwether extends View {
       return;
     }
     this.size = null;
+    // The row under the pointer (shows its drag handle) and a drag in progress: `{ symbol, before }`,
+    // `before` being the symbol the dragged one would land in front of (null: at the end).
+    this.hovered = null;
+    this.drag = null;
     this.typed = "";
     // `{ code, params }` or null, translated when drawn.
     this.notice = null;
@@ -419,7 +423,7 @@ export default class Bellwether extends View {
       .when(Boolean(this.error), (el) => el.child(div().text_size(11.5).text_color(t.ansi1).child(this.say(this.error))))
       .when(!this.error && Boolean(this.notice), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(this.say(this.notice))));
 
-    const rows = symbols.map((symbol) => {
+    const rows = symbols.map((symbol, index) => {
       const quote = w.shown(symbol);
       const failed = w.errors[symbol];
       // The real-time source failed for this symbol: the base quote shows, with the reason.
@@ -433,7 +437,39 @@ export default class Bellwether extends View {
         .join(" · ") : "";
       const dot = quote && this.dot(t, fresh.state);
       const color = quote ? this.changeColor(t, quote.changePercent) : t.dim;
-      return h_flex().pl(12).pr(10).gap(6).items_center().hover((s) => s.bg(t.hover))
+      const dragged = this.drag?.symbol === symbol;
+      const next = symbols[index + 1] ?? null;
+      return h_flex().id(`bw-line-${symbol}`).relative().pl(2).pr(10).gap(6).items_center()
+        .when(dragged, (el) => el.bg(t.raised))
+        .when(!this.drag, (el) => el.hover((s) => s.bg(t.hover)))
+        .on_hover((hovered, cx) => {
+          if (hovered) this.hovered = symbol;
+          else if (this.hovered === symbol) this.hovered = null;
+          cx.notify();
+        })
+        .on_mouse_move((e, cx) => {
+          if (!this.drag || !e.bounds) return;
+          // Upper half: in front of this row; lower half: in front of the next one.
+          const before = e.local_position.y < e.bounds.height / 2 ? symbol : next;
+          if (before === this.drag.before) return;
+          this.drag.before = before;
+          cx.notify();
+        })
+        // Where the dragged row would land: a 2 px accent bar in front of `before`, or after the last row.
+        .when(this.drag && this.drag.before !== this.drag.symbol && this.drag.before === symbol, (el) => el.child(this.dropBar(t).top(0)))
+        .when(this.drag && this.drag.before === null && next === null && !dragged, (el) => el.child(this.dropBar(t).bottom(0)))
+        .when(dragged, (el) => el.child(div().absolute().top(0).left(0).right(0).bottom(0).border_1().border_color(t.border)))
+        // The handle takes its place only under the pointer; the slot stays so the row does not shift.
+        .child(div().id(`bw-handle-${symbol}`).flex_none().w(10).text_size(11).text_color(t.dim)
+          .when(dragged || (!this.drag && this.hovered === symbol), (el) => el
+            .when(dragged, (h) => h.cursor_grabbing())
+            .when(!dragged, (h) => h.cursor_grab())
+            .on_mouse_down("left", (_e, cx) => {
+              cx.stop_propagation();
+              this.drag = { symbol, before: symbol };
+              cx.notify();
+            })
+            .child("⋮⋮")))
         // The row opens the ticker's day; × sits beside it, not inside it.
         .child(v_flex().id(`bw-row-${symbol}`).flex_1().min_w(0).py(7).gap(3).when(Boolean(quote), (el) => el.cursor_pointer())
           .on_click(() => this.openDetail(symbol))
@@ -461,6 +497,18 @@ export default class Bellwether extends View {
     });
 
     const list = v_flex().id("bw-list").flex_1().min_h(0).pt(8).overflow_y_scrollbar()
+      // No pointer capture: a release outside the list never arrives, so leaving the list cancels.
+      .on_hover((hovered, cx) => {
+        if (hovered || !this.drag) return;
+        this.drag = null;
+        cx.notify();
+      })
+      .on_mouse_up("left", (_e, cx) => {
+        const drag = this.drag;
+        if (!drag) return;
+        this.drag = null;
+        this.act(cx, () => this.watch.move(drag.symbol, drag.before));
+      })
       .when(!symbols.length, (el) => el.child(div().px(12).py(6).text_color(t.dim)
         .child(this.tx("list.empty"))))
       .children(rows);
@@ -473,6 +521,10 @@ export default class Bellwether extends View {
       .child(div().text_size(10.5).text_color(t.dim).child(this.tx(crypto ? "footer.sourcesCrypto" : "footer.sources")));
 
     return root.child(header).child(field).child(list).child(footer);
+  }
+
+  dropBar(t) {
+    return div().absolute().left(0).right(0).h(2).bg(t.accent);
   }
 
   // "Showing Yahoo · <reason>": a real-time price was dropped, so the row shows its base quote.

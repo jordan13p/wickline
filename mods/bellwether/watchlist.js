@@ -202,10 +202,11 @@ export class Watchlist {
   }
 
   // Edits are synchronous (the store is Herdr's shared state) and return a short notice,
-  // `{ code, params }`, for the view to translate.
+  // `{ code, params }`, for the view to translate. A change that returns null changed nothing: no save.
   edit(change) {
     const preferences = readPreferences(this.host.load());
     const message = change(preferences);
+    if (message === null) return null;
     this.host.save(preferences);
     this.adopt(preferences);
     this.restart();
@@ -228,6 +229,23 @@ export class Watchlist {
       if (!p.symbols.includes(symbol)) return notice("notice.notListed", { symbol });
       p.symbols = p.symbols.filter((s) => s !== symbol);
       return notice("notice.removed", { symbol });
+    });
+  }
+
+  /**
+   * Moves `symbol` before `beforeSymbol` (null: to the end), judged against the list as saved now,
+   * so a drop in a copy that has not synced yet still lands beside the symbol it was dropped on.
+   * Null, and nothing saved, when either symbol is gone or the order would stay.
+   */
+  move(symbol, beforeSymbol) {
+    return this.edit((p) => {
+      const rest = p.symbols.filter((s) => s !== symbol);
+      const at = beforeSymbol === null ? rest.length : rest.indexOf(beforeSymbol);
+      if (rest.length === p.symbols.length || at < 0 || beforeSymbol === symbol) return null;
+      rest.splice(at, 0, symbol);
+      if (rest.every((s, i) => s === p.symbols[i])) return null;
+      p.symbols = rest;
+      return notice("notice.moved", { symbol });
     });
   }
 

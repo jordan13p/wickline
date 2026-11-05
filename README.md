@@ -21,6 +21,10 @@ Every row shows a dot and a label:
 
 A Yahoo price is never shown as live. With TWSE MIS on, a Taiwan row takes its price from MIS and keeps Yahoo's line; if MIS fails, or its price falls outside the stock's daily price limits, the row falls back to Yahoo's delayed quote at once and says why (`Showing Yahoo · …`). Finnhub works the same way for US rows. If Finnhub refuses your key (HTTP 401 or 403), Bellwether stops asking Finnhub, says the key is invalid and shows Yahoo until you save a new key or change the US source settings. The detail dialog gives the quote time and the fetch time to the second. Keep one copy of Bellwether shown: each shown copy (even a hidden one) runs its own loops, so a second copy doubles the requests. With Finnhub that means two copies use up its per-minute limit twice as fast, and it answers with rate limits.
 
+## Reordering
+
+Hover a row and a `⋮⋮` handle appears at its left. Press it, drag to where the row should go and release: a thin accent line shows the spot, and the row you are moving looks lifted. Moving the pointer out of the list cancels the drag and changes nothing. The order is saved with your watchlist, so every copy shows it at once and it survives a restart. It also decides which US symbols use Finnhub's request budget (the first ones in the list).
+
 ## Languages and colors
 
 The interface is in English, 繁體中文, 简体中文, 日本語 or 한국어. Until you answer it, a line above the add field reads `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`: pick a language to switch, or press `×` (or add a ticker) to stay in English. The line does not come back. The language is your choice only; it never follows the markets you watch or your system language. By default, gains show red and losses green in the four Asian languages, and green-up in English.
