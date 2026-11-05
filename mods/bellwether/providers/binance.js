@@ -9,7 +9,7 @@ const BINANCE_BATCH = 100;
 // `base` is the saved Binance URL (the public market-data mirror unless the person set another).
 const endpoint = (base, path) => `${base.replace(/\/+$/, "")}/api/v3/${path}`;
 
-/** @typedef {import("./yahoo.js").Provider} Provider */
+/** @typedef {import("./provider.js").Provider} Provider */
 
 /** One request for up to BINANCE_BATCH pairs: `?symbols=["BTCUSDT","ETHUSDT"]`. */
 export function binanceUrl(base, pairs) {

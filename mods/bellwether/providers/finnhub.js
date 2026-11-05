@@ -5,7 +5,7 @@ import { HEADERS, QuoteError, positive } from "../quotes.js";
 
 export const FINNHUB_URL = "https://finnhub.io/api/v1";
 
-/** @typedef {import("./yahoo.js").Provider} Provider */
+/** @typedef {import("./provider.js").Provider} Provider */
 
 /** Yahoo's class-share dash is a dot on Finnhub: `BRK-B` → `BRK.B`. */
 export function finnhubSymbol(symbol) {

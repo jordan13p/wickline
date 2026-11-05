@@ -9,7 +9,7 @@ export const MIS_BATCH = 50;
 // a consent given to an older text no longer turns MIS on.
 export const MIS_CONSENT_VERSION = 1;
 
-/** @typedef {import("./yahoo.js").Provider} Provider */
+/** @typedef {import("./provider.js").Provider} Provider */
 
 /** `2330.TW` → `tse_2330.tw`, `6488.TWO` → `otc_6488.tw`; a code with letters keeps its case, or MIS returns nothing. */
 export function misChannel(symbol) {
