@@ -137,17 +137,20 @@ export default class Bellwether extends View {
     this.error = null;
     this.saving = false;
     this.initFinnhubDraft(cx);
-    this.urlFocused = false;
     this.urlInput = InputState.new({ placeholder: BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
     // Redraw on every keystroke: the field's error and the Save button follow the draft.
     this.urlInput.on("change", (_e, cx) => { this.draft.sources.crypto.binanceUrl = this.urlInput.value(); cx.notify(); });
-    this.urlInput.on("focus", (_e, cx) => { this.urlFocused = true; cx.notify(); });
-    this.urlInput.on("blur", (_e, cx) => { this.urlFocused = false; cx.notify(); });
-    this.misUrlFocused = false;
+    this.trackFocus(this.urlInput, "urlFocused");
     this.misUrlInput = InputState.new({ placeholder: MIS_URL, value: this.draft.sources.tw.misUrl });
     this.misUrlInput.on("change", (_e, cx) => { this.draft.sources.tw.misUrl = this.misUrlInput.value(); cx.notify(); });
-    this.misUrlInput.on("focus", (_e, cx) => { this.misUrlFocused = true; cx.notify(); });
-    this.misUrlInput.on("blur", (_e, cx) => { this.misUrlFocused = false; cx.notify(); });
+    this.trackFocus(this.misUrlInput, "misUrlFocused");
+  }
+
+  // `this[flag]` follows whether `input` has the focus, redrawing on each change: a field's border shows it.
+  trackFocus(input, flag) {
+    this[flag] = false;
+    input.on("focus", (_e, cx) => { this[flag] = true; cx.notify(); });
+    input.on("blur", (_e, cx) => { this[flag] = false; cx.notify(); });
   }
 
   // The key input starts empty and masked; the saved key fills it once read. Save waits for that read,
@@ -159,15 +162,10 @@ export default class Bellwether extends View {
     this.keyInput = InputState.new({ placeholder: this.tx("sources.us.key") });
     this.keyInput.set_masked(true);
     this.keyInput.on("change", (_e, cx) => cx.notify());
-    this.keyFocused = false;
-    this.keyInput.on("focus", (_e, cx) => { this.keyFocused = true; cx.notify(); });
-    this.keyInput.on("blur", (_e, cx) => { this.keyFocused = false; cx.notify(); });
-    this.finnhubUrlFocused = false;
+    this.trackFocus(this.keyInput, "keyFocused");
     this.finnhubUrlInput = InputState.new({ placeholder: FINNHUB_URL, value: this.draft.sources.us.finnhubUrl });
     this.finnhubUrlInput.on("change", (_e, cx) => { this.draft.sources.us.finnhubUrl = this.finnhubUrlInput.value(); cx.notify(); });
-    this.finnhubUrlInput.on("focus", (_e, cx) => { this.finnhubUrlFocused = true; cx.notify(); });
-    this.finnhubUrlInput.on("blur", (_e, cx) => { this.finnhubUrlFocused = false; cx.notify(); });
-    this.budgetFocused = false;
+    this.trackFocus(this.finnhubUrlInput, "finnhubUrlFocused");
     this.budgetInput = InputState.new({ value: String(this.draft.sources.us.budgetPerMinute) });
     // A whole number once it reads as one; until then the text, which validation refuses.
     this.budgetInput.on("change", (_e, cx) => {
@@ -175,8 +173,7 @@ export default class Bellwether extends View {
       this.draft.sources.us.budgetPerMinute = /^\d+$/.test(typed) ? Number(typed) : typed;
       cx.notify();
     });
-    this.budgetInput.on("focus", (_e, cx) => { this.budgetFocused = true; cx.notify(); });
-    this.budgetInput.on("blur", (_e, cx) => { this.budgetFocused = false; cx.notify(); });
+    this.trackFocus(this.budgetInput, "budgetFocused");
     cx.spawn(async (cx) => {
       try {
         this.savedKey = await loadSecret(SECRET_KEY_FINNHUB);
@@ -195,15 +192,10 @@ export default class Bellwether extends View {
   makeInput() {
     this.input?.release();
     this.inputLang = this.lang;
-    this.inputFocused = false;
     this.input = InputState.new({ placeholder: this.tx("input.placeholder"), value: this.typed });
     this.input.on("change", () => { this.typed = this.input.value(); });
     this.input.on("submit", (_e, cx) => this.add(cx));
-    this.input.on("focus", (_e, cx) => {
-      this.inputFocused = true;
-      cx.notify();
-    });
-    this.input.on("blur", (_e, cx) => { this.inputFocused = false; cx.notify(); });
+    this.trackFocus(this.input, "inputFocused");
   }
 
   chooseLanguage(cx, language) {
@@ -979,11 +971,7 @@ export default class Bellwether extends View {
     return this.card(t, this.tx("sources.tw.title"), this.tx(chosen ? "sources.tw.misSource" : "sources.tw.yahooSource"),
       this.segmented(t, "bw-tw", [["yahoo", this.tx("src.yahoo")], ["mis", this.tx("src.mis")]], tw.provider,
         (provider) => { tw.provider = provider; }),
-      chosen && div().text_size(11).text_color(t.muted).child(this.tx("sources.tw.url")),
-      chosen && Input.new(this.misUrlInput).h(30).px(8).rounded(6).border_1()
-        .border_color(urlError ? t.ansi1 : this.misUrlFocused ? t.accent : t.input)
-        .bg(t.background).text_size(12).text_color(t.foreground),
-      chosen && urlError ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(urlError)) : null,
+      ...(chosen ? this.field(t, this.tx("sources.tw.url"), this.misUrlInput, this.misUrlFocused, urlError) : []),
       // The statement in the reader's language; the Traditional Chinese text prevails.
       chosen && div().text_size(11.5).text_color(t.muted).child(this.tx("mis.statement")),
       chosen && this.note(t, this.tx("mis.prevails")),
@@ -993,17 +981,12 @@ export default class Bellwether extends View {
   }
 
   sourcesTab(t, errors) {
-    const field = "sources.crypto.binanceUrl";
     return v_flex().gap(12)
       .child(this.usCard(t, errors))
       .child(this.taiwanCard(t, errors))
       .child(this.card(t, this.tx("sources.other.title"), this.tx("sources.other.body"), this.healthLine(t, "yahoo")))
       .child(this.card(t, this.tx("sources.crypto.title"), this.tx("sources.crypto.source"),
-        div().text_size(11).text_color(t.muted).child(this.tx("sources.crypto.url")),
-        Input.new(this.urlInput).h(30).px(8).rounded(6).border_1()
-          .border_color(errors[field] ? t.ansi1 : this.urlFocused ? t.accent : t.input)
-          .bg(t.background).text_size(12).text_color(t.foreground),
-        errors[field] ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(errors[field])) : null,
+        ...this.field(t, this.tx("sources.crypto.url"), this.urlInput, this.urlFocused, errors["sources.crypto.binanceUrl"]),
         this.note(t, this.tx("sources.crypto.region")),
         this.healthLine(t, "binance")));
   }
