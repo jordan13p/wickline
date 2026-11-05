@@ -12,7 +12,7 @@ import { QuoteError, isCryptoPair } from "./quotes.js";
 import {
   displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta,
 } from "./format.js";
-import { detailSource, freshness, sessionOf } from "./freshness.js";
+import { freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
 import {
   SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
@@ -22,7 +22,8 @@ import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
 import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, layoutFor, nameWidth, tableColumns } from "./layout.js";
 import { canOpenOwnTab, newBellwether, ownTabSource, returnPane } from "./panes.js";
-import { button, card, chart, dot, icon, iconButton, note, segmented, segments } from "./ui/parts.js";
+import { button, card, chart, dot, icon, iconButton, note, segmented } from "./ui/parts.js";
+import { detailView } from "./ui/detail-dialog.js";
 
 const ICON = "mods/bellwether/icon.svg";
 // Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
@@ -263,7 +264,7 @@ export default class Bellwether extends View {
   render() {
     const t = theme();
     this.readSettings();
-    if (this.detail) return this.detailView(t);
+    if (this.detail) return detailView(this, t);
     if (this.draft) return this.settingsView(t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
@@ -709,49 +710,14 @@ export default class Bellwether extends View {
     return div().absolute().left(GUTTER).right(GUTTER).h(2).bg(t.accent);
   }
 
+  // The dialogs' close: Herdr names the overlay in the props it opened the copy with.
+  closeDialog() {
+    closeOverlay(this.overlay);
+  }
+
   // "Showing Yahoo · <reason>": a real-time price was dropped, so the row shows its base quote.
   fallbackText(quote, error) {
     return this.tx("quote.fallback", { source: this.tx(`src.${quote.source}`), reason: this.say(error) });
-  }
-
-  // The dialog a row opens: the day's chart, its range and the session.
-  detailView(t) {
-    const q = this.detail;
-    const now = Date.now();
-    const color = this.changeColor(t, q.changePercent);
-    const session = sessionOf(q, now);
-    const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
-    const stale = formatStaleDate(q.timestamp, now, this.lang);
-    const source = detailSource(q, session, now, (key, params) => this.tx(key, params));
-    const times = [this.tx("detail.quoted", { time: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}` }),
-      this.tx("detail.fetched", { time: formatTime(q.fetchedAt, true) })];
-    const stat = (label, price) => v_flex().flex_1().gap(2)
-      .child(div().text_size(10.5).text_color(t.dim).child(this.tx(label)))
-      .child(div().font_semibold().child(value(price)));
-
-    return v_flex().id("bw-detail").w_full().p(18).gap(14).text_color(t.foreground).text_size(12.5)
-      .child(h_flex().items_center().gap(10)
-        .child(v_flex().flex_1().min_w(0).gap(2)
-          .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
-          .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, this.lang) ?? "")))
-        // The session as plain text: a filled dot means a live quote, everywhere.
-        .child(div().flex_none().text_size(11).text_color(t.muted).child(this.tx(`session.${session}`)))
-        .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
-          .hover((s) => s.text_color(t.foreground)).on_click(() => closeOverlay(this.overlay)).child("×")))
-      .child(h_flex().gap(10).items_end()
-        .child(div().text_size(26).font_semibold().child(formatPrice(q)))
-        .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent))))
-      .child(q.series?.length > 1
-        ? chart(q, color, t, { width: "full", height: 140, fill: true })
-        : div().h(60).flex().items_center().justify_center().text_color(t.dim).child(this.tx("detail.noLine")))
-      .child(isCryptoPair(q.symbol)
-        ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
-          .child(stat("detail.low24h", q.low))
-        : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
-          .child(stat("detail.prevClose", q.previousClose)))
-      .child(v_flex().gap(2).child(segments(t, source)).child(segments(t, times)))
-      .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.tx("quote.cached", { reason: this.say(q.error) }))))
-      .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.fallbackText(q, q.fallback))));
   }
 
   // The settings dialog: tabs on the left, the tab on the right, Cancel / Save below.

@@ -1,0 +1,48 @@
+// The detail dialog: a copy whose props carry `detail` draws only this, and starts no loop.
+import { div } from "gpui-kit";
+import { h_flex, v_flex } from "gpui-base";
+import { isCryptoPair } from "../quotes.js";
+import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime } from "../format.js";
+import { detailSource, sessionOf } from "../freshness.js";
+import { chart, segments } from "./parts.js";
+
+// The dialog a row opens: the day's chart, its range and the session.
+export function detailView(view, t) {
+  const q = view.detail;
+  const now = Date.now();
+  const color = view.changeColor(t, q.changePercent);
+  const session = sessionOf(q, now);
+  const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
+  const stale = formatStaleDate(q.timestamp, now, view.lang);
+  const source = detailSource(q, session, now, (key, params) => view.tx(key, params));
+  const times = [view.tx("detail.quoted", { time: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}` }),
+    view.tx("detail.fetched", { time: formatTime(q.fetchedAt, true) })];
+  const stat = (label, price) => v_flex().flex_1().gap(2)
+    .child(div().text_size(10.5).text_color(t.dim).child(view.tx(label)))
+    .child(div().font_semibold().child(value(price)));
+
+  return v_flex().id("bw-detail").w_full().p(18).gap(14).text_color(t.foreground).text_size(12.5)
+    .child(h_flex().items_center().gap(10)
+      .child(v_flex().flex_1().min_w(0).gap(2)
+        .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
+        .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, view.lang) ?? "")))
+      // The session as plain text: a filled dot means a live quote, everywhere.
+      .child(div().flex_none().text_size(11).text_color(t.muted).child(view.tx(`session.${session}`)))
+      .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
+        .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×")))
+    .child(h_flex().gap(10).items_end()
+      .child(div().text_size(26).font_semibold().child(formatPrice(q)))
+      .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent))))
+    .child(q.series?.length > 1
+      ? chart(q, color, t, { width: "full", height: 140, fill: true })
+      : div().h(60).flex().items_center().justify_center().text_color(t.dim).child(view.tx("detail.noLine")))
+    .child(isCryptoPair(q.symbol)
+      ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
+        .child(stat("detail.low24h", q.low))
+      : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
+        .child(stat("detail.prevClose", q.previousClose)))
+    .child(v_flex().gap(2).child(segments(t, source)).child(segments(t, times)))
+    .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.tx("quote.cached", { reason: view.say(q.error) }))))
+    .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback))));
+}
+
