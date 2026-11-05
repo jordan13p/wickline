@@ -17,11 +17,10 @@ import {
 } from "./settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
+import { layoutFor } from "./layout.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
-// Below this height the panel draws the one-line band.
-const BAND_HEIGHT = 72;
 const ICON = "mods/bellwether/icon.svg";
 // Below this panel width the footer shows the short disclaimer.
 const SHORT_FOOTER_WIDTH = 360;
@@ -278,10 +277,11 @@ export default class Bellwether extends View {
     if (this.draft) return this.settingsView(t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
-    const root = (this.size && this.size.height < BAND_HEIGHT ? h_flex() : v_flex())
+    const layout = layoutFor(this.size);
+    const root = (layout === "band" ? h_flex() : v_flex())
       .id("bw").size_full().bg(t.chrome).text_color(t.foreground).text_size(12.5)
       .on_size_change((size, cx) => { this.size = size; cx.notify(); });
-    return this.size && this.size.height < BAND_HEIGHT ? this.band(root, t) : this.panel(root, t);
+    return layout === "band" ? this.band(root, t) : this.panel(root, t);
   }
 
   // Red-up or green-up, by the color setting (automatic: red-up in every language but English).
