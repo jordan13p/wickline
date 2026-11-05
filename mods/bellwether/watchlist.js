@@ -196,10 +196,6 @@ export class Watchlist {
     return PROVIDERS.map((provider) => provider.id);
   }
 
-  get loading() {
-    return Object.values(this.sources).some((state) => state.loading);
-  }
-
   /** A round the person asked for (Refresh) is running; automatic rounds do not count. */
   get refreshing() {
     return Object.values(this.sources).some((state) => state.loading && state.refreshing);

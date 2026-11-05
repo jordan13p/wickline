@@ -12,7 +12,7 @@ export const SETTINGS_KEY = "bellwether.settings.v1";
 export const SECRET_KEY_FINNHUB = "finnhub.key";
 const COLORS = ["auto", "red-up", "green-up"];
 // Finnhub's free plan allows 60 requests a minute; each US symbol takes four.
-export const DEFAULT_FINNHUB_BUDGET = 60;
+const DEFAULT_FINNHUB_BUDGET = 60;
 const MIN_FINNHUB_BUDGET = 4;
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);

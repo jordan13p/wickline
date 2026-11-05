@@ -118,7 +118,7 @@ test("refreshing means a round the person asked for, not an automatic one", asyn
   w.add("AAPL");
   // What the view would draw on each redraw: [loading, refreshing].
   const seen = [];
-  host.changed = () => seen.push([w.loading, w.refreshing]);
+  host.changed = () => seen.push([Object.values(w.sources).some((state) => state.loading), w.refreshing]);
   const runs = start(w, host);
   await advance(host, 1_000);
   assert.ok(seen.some(([loading]) => loading), "an automatic round ran");
