@@ -7,7 +7,7 @@ import { v_flex, h_flex, Checkbox, InputState, Input } from "gpui-base";
 import { closeOverlay, nextCommand, openOverlay, props, run, setShared, shared, theme } from "herdr";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import {
-  QuoteError, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair, rowMeta,
+  QuoteError, chartGeometry, displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair, rowMeta,
 } from "./quotes.js";
 import { REALTIME_SOURCES, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
@@ -351,7 +351,7 @@ export default class Bellwether extends View {
       const fresh = quote && freshness(quote, sessionOf(quote, now), now);
       // A closed label carries its own date; any other quote from an earlier day gets one.
       const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, this.lang) : "";
-      const meta = quote ? rowMeta(symbol, [this.freshnessLabel(quote, fresh, now), stale && this.tx("quote.asOf", { date: stale }), quote.name])
+      const meta = quote ? rowMeta(symbol, [this.freshnessLabel(quote, fresh, now), stale && this.tx("quote.asOf", { date: stale }), displayName(quote, this.lang)])
         .join(" · ") : "";
       const dot = quote && this.dot(t, fresh.state);
       const color = quote ? this.changeColor(t, quote.changePercent) : t.dim;
@@ -431,7 +431,7 @@ export default class Bellwether extends View {
       .child(h_flex().items_center().gap(10)
         .child(v_flex().flex_1().min_w(0).gap(2)
           .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
-          .child(div().text_size(11.5).text_color(t.dim).truncate().child(q.name)))
+          .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, this.lang) ?? "")))
         .child(h_flex().flex_none().gap(6).items_center().px(8).h(22).rounded(11).border_1().border_color(t.border)
           .child(div().w(6).h(6).rounded_full().bg(sessionColor))
           .child(div().text_size(11).text_color(sessionColor).child(this.tx(`session.${session}`))))

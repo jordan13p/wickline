@@ -31,8 +31,9 @@ const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
 
 /**
- * A real-time overlay's fields over the Yahoo base quote. The line, the trading periods and the
- * currency stay the base's, and `chartSource` names where the line came from. Works with no base yet.
+ * A real-time overlay's fields over the Yahoo base quote. The line, the trading periods, the
+ * currency and the name stay the base's (the overlay's name is kept as `localName`), and
+ * `chartSource` names where the line came from. Works with no base yet.
  */
 export function mergeOverlay(base, overlay) {
   if (!overlay) return base;
@@ -43,6 +44,8 @@ export function mergeOverlay(base, overlay) {
     ...merged,
     previousClose,
     changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
+    name: base?.name ?? null,
+    localName: overlay.name ?? null,
     currency: base?.currency ?? null,
     delaySeconds: 0,
     series: base?.series ?? [],

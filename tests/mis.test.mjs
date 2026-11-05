@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { USER_AGENT } from "../mods/bellwether/quotes.js";
+import { USER_AGENT, displayName } from "../mods/bellwether/quotes.js";
 import { Watchlist, mergeOverlay } from "../mods/bellwether/watchlist.js";
 import { advance, chart, fakeHost, start, stop } from "./helpers.mjs";
 import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel, withinLimits } from "../mods/bellwether/providers/mis.js";
@@ -129,7 +129,9 @@ test("overlay merges over Yahoo", () => {
   assert.equal(merged.timestamp, 5_000);
   assert.equal(merged.fetchedAt, 5_500);
   assert.equal(merged.source, "mis");
-  assert.equal(merged.name, "台積電");
+  // The name stays Yahoo's; MIS's Chinese name rides along for the Chinese interfaces.
+  assert.equal(merged.name, "Taiwan Semiconductor");
+  assert.equal(merged.localName, "台積電");
   assert.equal(merged.high, 2285);
   // A field MIS did not send keeps Yahoo's.
   assert.equal(merged.low, 2180);
@@ -145,6 +147,8 @@ test("overlay merges over Yahoo", () => {
   assert.deepEqual(alone.series, []);
   assert.equal(alone.periods, null);
   assert.equal(alone.chartSource, null);
+  assert.equal(alone.name, null);
+  assert.equal(alone.localName, "台積電");
   assert.equal(mergeOverlay(YAHOO_2330, undefined), YAHOO_2330);
   assert.equal(mergeOverlay(undefined, undefined), undefined);
 });
@@ -367,4 +371,18 @@ test("a later batch loses its overlays when an earlier one fails", async () => {
     assert.equal(w.overlayErrors[symbols[50]].code, later);
     await stop(w, host, runs);
   }
+});
+
+test("a Taiwan name follows the interface language", () => {
+  const merged = mergeOverlay(YAHOO_2330, MIS_2330);
+  for (const lang of ["zh-TW", "zh-CN"]) assert.equal(displayName(merged, lang), "台積電", lang);
+  // English, Japanese and Korean keep Yahoo's name, with MIS on or off.
+  for (const lang of ["en", "ja", "ko"]) {
+    assert.equal(displayName(merged, lang), "Taiwan Semiconductor", lang);
+    assert.equal(displayName(YAHOO_2330, lang), "Taiwan Semiconductor", lang);
+  }
+  assert.equal(displayName(YAHOO_2330, "zh-TW"), "Taiwan Semiconductor");
+  const alone = mergeOverlay(undefined, MIS_2330);
+  assert.equal(displayName(alone, "zh-TW"), "台積電");
+  assert.equal(displayName(alone, "en"), null);
 });

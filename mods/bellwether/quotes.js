@@ -168,6 +168,14 @@ export function rowMeta(symbol, [label, date, name]) {
   return [named && label && named.startsWith(label) ? "" : label, date, named].filter(Boolean);
 }
 
+// The interfaces that read a Taiwan stock's Chinese name; the others keep the base quote's name.
+const LOCAL_NAME_LANGUAGES = ["zh-TW", "zh-CN"];
+
+/** The instrument name a row shows: an overlay's local name (MIS) in Chinese, else the base's. */
+export function displayName(quote, lang) {
+  return LOCAL_NAME_LANGUAGES.includes(lang) && quote.localName ? quote.localName : quote.name ?? null;
+}
+
 const two = (n) => String(n).padStart(2, "0");
 
 /** Local wall-clock time, 24-hour: "15:04", or "15:04:05" with seconds. */
