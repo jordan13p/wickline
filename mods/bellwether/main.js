@@ -4,9 +4,10 @@
 // settings button opens the settings: the same mod, given the quote or `settings` in its props.
 import { View } from "gpui-kit";
 import { v_flex, h_flex, InputState } from "gpui-base";
-import { appHome, closeOverlay, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme } from "herdr";
+import {
+  appHome, closeOverlay, exec, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme, window as appWindow,
+} from "herdr";
 import * as fs from "fs/promises";
-import { platform, run as runProgram } from "process";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
@@ -25,8 +26,9 @@ import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
 // The key file lives in Herdr's data folder (see secrets.js); `appHome()` is called per use, never at the top level.
 const secretsDir = () => `${appHome()}/data/bellwether`;
-// Herdr's process runner, for the one program Bellwether runs: `chmod 600` on that file after each write.
-const system = { platform, run: runProgram };
+// The one program Bellwether runs: `chmod 600` on that file after each write, on macOS and Linux
+// (secrets.js decides). Both are called per use, never at the top level.
+const system = { platform: () => appWindow().platform, chmod: (path) => exec("chmod", ["600", path]) };
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
 // The dialog reads only what it may show of a saved key, never the key.
 const loadSecretEnding = (name) => secrets.loadSecretEnding(fs, secretsDir(), name);

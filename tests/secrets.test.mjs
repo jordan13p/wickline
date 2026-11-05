@@ -1,4 +1,4 @@
-// node --test tests/  (the Finnhub key file, over an in-memory fs and a fake program runner)
+// node --test tests/  (the Finnhub key file, over an in-memory fs and a fake chmod runner)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { loadSecret, loadSecretEnding, removeSecret, saveSecret } from "../mods/bellwether/secrets.js";
@@ -19,13 +19,15 @@ function fakeFs(files = {}, log = []) {
   return fs;
 }
 
-// Herdr's `process` module: `platform` and `run(command, args)`, answering with `answer` (or throwing it).
-function fakeSystem(platform = "darwin", answer = { code: 0, stdout: "", stderr: "" }, log = []) {
+// What main.js hands over: Herdr's `window().platform` and `chmod(path)`, its one `exec("chmod", ["600", path])`,
+// answering with `answer` (or throwing it).
+function fakeSystem(platform = "macos", answer = { code: 0, stdout: "", stderr: "" }, log = []) {
   const system = {
-    platform, runs: [], log,
-    run: async (command, args) => {
-      system.runs.push([command, args]);
-      log.push(["run", command, ...args]);
+    runs: [], log,
+    platform: () => platform,
+    chmod: async (path) => {
+      system.runs.push(path);
+      log.push(["chmod", path]);
       if (answer instanceof Error) throw answer;
       return answer;
     },
@@ -76,17 +78,17 @@ test("save: a file that cannot be read is replaced by one holding only this key"
 });
 
 test("save: on macOS and Linux the file is made owner-only right after it is written", async () => {
-  for (const platform of ["darwin", "linux"]) {
+  for (const platform of ["macos", "linux"]) {
     const log = [];
     const system = fakeSystem(platform, undefined, log);
     assert.equal(await saveSecret(fakeFs({}, log), system, DIR, "finnhub.key", "test-key"), true, platform);
-    assert.deepEqual(system.runs, [["chmod", ["600", FILE]]], platform);
-    assert.deepEqual(log, [["write", FILE], ["run", "chmod", "600", FILE]], platform);
+    assert.deepEqual(system.runs, [FILE], platform);
+    assert.deepEqual(log, [["write", FILE], ["chmod", FILE]], platform);
   }
 });
 
 test("save: elsewhere no program runs", async () => {
-  for (const platform of ["win32", "freebsd", ""]) {
+  for (const platform of ["windows", "freebsd", ""]) {
     const system = fakeSystem(platform);
     assert.equal(await saveSecret(fakeFs(), system, DIR, "finnhub.key", "test-key"), true, String(platform));
     assert.deepEqual(system.runs, [], String(platform));
@@ -96,7 +98,7 @@ test("save: elsewhere no program runs", async () => {
 test("save: a chmod that fails or cannot start still keeps the key, and says so", async () => {
   for (const answer of [{ code: 1, stdout: "", stderr: "denied" }, new Error("not found")]) {
     const fs = fakeFs();
-    assert.equal(await saveSecret(fs, fakeSystem("darwin", answer), DIR, "finnhub.key", "test-key"), false);
+    assert.equal(await saveSecret(fs, fakeSystem("macos", answer), DIR, "finnhub.key", "test-key"), false);
     assert.equal(await loadSecret(fs, DIR, "finnhub.key"), "test-key");
   }
 });
@@ -120,8 +122,8 @@ test("remove: other keys stay, written again and made owner-only", async () => {
   const system = fakeSystem("linux");
   assert.equal(await removeSecret(fs, system, DIR, "finnhub.key"), true);
   assert.equal(fs.files[FILE], '{\n  "other": "x"\n}\n');
-  assert.deepEqual(system.runs, [["chmod", ["600", FILE]]]);
-  assert.equal(await removeSecret(fakeFs({ [FILE]: '{"other":"x"}' }), fakeSystem("darwin", new Error("x")), DIR, "finnhub.key"), false);
+  assert.deepEqual(system.runs, [FILE]);
+  assert.equal(await removeSecret(fakeFs({ [FILE]: '{"other":"x"}' }), fakeSystem("macos", new Error("x")), DIR, "finnhub.key"), false);
 });
 
 test("remove: an unreadable file rejects and is left as it is", async () => {

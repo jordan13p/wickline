@@ -28,7 +28,8 @@ test("no Pulse branding, programs or hc in the mod", () => {
   for (const file of files(MOD)) {
     const text = read(file);
     assert.doesNotMatch(text, /pulse|pulseticker/i, file.pathname);
-    assert.doesNotMatch(text, /\bexec\(/, file.pathname);
+    // main.js's one exec is pinned by "the only program is chmod 600 on the key file".
+    if (!file.pathname.endsWith("/bellwether/main.js")) assert.doesNotMatch(text, /\bexec\(/, file.pathname);
     assert.doesNotMatch(text, /\bhc\(/, file.pathname);
   }
 });
@@ -44,11 +45,12 @@ function herdrImports(source) {
 const jsFiles = () => files(MOD).filter((url) => url.pathname.endsWith(".js"));
 const relativeName = (url) => url.pathname.slice(MOD.pathname.length);
 
-test("no module imports program runners from herdr", () => {
+test("no module imports program runners from herdr, but main.js its one exec", () => {
   const importers = jsFiles().filter((file) => herdrImports(read(file)).length > 0);
   assert.ok(importers.length > 0, "no herdr import found");
   for (const file of importers) {
-    for (const banned of ["exec", "hc"]) assert.ok(!herdrImports(read(file)).includes(banned), `${banned} in ${relativeName(file)}`);
+    const banned = relativeName(file) === "main.js" ? ["hc"] : ["exec", "hc"];
+    for (const name of banned) assert.ok(!herdrImports(read(file)).includes(name), `${name} in ${relativeName(file)}`);
   }
   assert.deepEqual(herdrImports('import {\n  theme,\n  exec as run } from "herdr";'), ["theme", "exec"]);
 });
@@ -109,28 +111,24 @@ test("only main.js wires Herdr's storage, network and files", () => {
   }
 });
 
-// The one program Bellwether runs: `chmod 600` on its key file (secrets.js), with Herdr's `process` module
-// handed over by main.js. No other module imports `process` or reaches the global of that name, and
-// main.js hands `run` over once, to secrets.js.
+// The one program Bellwether runs: `chmod 600` on its key file, through Herdr's `exec`, called once in
+// main.js and handed to secrets.js as `chmod(path)`. No module imports `process` (or `child_process`) or
+// reaches the global of that name; `exec` appears in main.js only in its import and that one call.
 const PROCESS_GLOBAL = /(?<![.\w$])process\b/;
+const withoutStrings = (source) => source.replace(/"[^"\n]*"/g, '""');
 test("the only program is chmod 600 on the key file", () => {
   for (const file of jsFiles()) {
     const name = relativeName(file);
-    if (name === "main.js") continue;
-    assert.ok(!importSpecifiers(read(file)).includes("process"), `process imported in ${name}`);
-    assert.doesNotMatch(code(read(file)).replace(/"[^"\n]*"/g, '""'), PROCESS_GLOBAL, name);
+    for (const banned of ["process", "child_process"]) assert.ok(!importSpecifiers(read(file)).includes(banned), `${banned} imported in ${name}`);
+    assert.doesNotMatch(withoutStrings(code(read(file))), PROCESS_GLOBAL, name);
   }
   const main = code(read(new URL("main.js", MOD)));
-  const imported = [...main.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']process["']/g)].flatMap(([, list]) => list.split(","))
-    .map((entry) => entry.trim()).filter(Boolean);
-  assert.deepEqual(imported.sort(), ["platform", "run as runProgram"]);
-  assert.doesNotMatch(main, /import\s+(?:\*|\w+)[^;]*from\s*["']process["']/, "process imported whole");
-  assert.doesNotMatch(main.replace(/"[^"\n]*"/g, '""'), PROCESS_GLOBAL, "the process global in main.js");
-  assert.equal([...main.matchAll(/\brunProgram\b/g)].length, 2, "runProgram imported and handed over once");
-  const runs = [...code(read(new URL("secrets.js", MOD))).matchAll(/\.run\b[^\n]*?(?:\]\)|$)/gm)].map(([call]) => call);
-  assert.deepEqual(runs, ['.run("chmod", ["600", file(dir)])']);
-  for (const file of jsFiles().filter((url) => relativeName(url) !== "secrets.js")) {
-    assert.doesNotMatch(code(read(file)), /\brunProgram\s*\(|\bsystem\.run\b/, relativeName(file));
+  assert.ok(herdrImports(main).includes("exec"), "main.js imports exec");
+  assert.doesNotMatch(main, /\bexec\s+as\b/, "exec imported under another name");
+  assert.equal([...main.matchAll(/\bexec\b/g)].length, 2, "exec imported and called once");
+  assert.deepEqual([...main.matchAll(/\bexec\s*\(.*?\]\)/g)].map(([call]) => call), ['exec("chmod", ["600", path])']);
+  for (const file of jsFiles().filter((url) => relativeName(url) !== "main.js")) {
+    assert.doesNotMatch(code(read(file)), /\bexec\b|\.run\s*\(/, relativeName(file));
   }
 });
 
