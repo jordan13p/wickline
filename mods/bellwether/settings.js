@@ -5,7 +5,7 @@ import { LANGUAGES } from "./i18n.js";
 
 // Herdr's shared state (persisted), so every copy uses the same settings.
 export const SETTINGS_KEY = "bellwether.settings.v1";
-// The Finnhub key is kept in Bellwether's own local storage under this name, never in shared state.
+// The Finnhub key's name in `data/bellwether/secrets.json`; the key is never put in shared state.
 export const SECRET_KEY_FINNHUB = "finnhub.key";
 export const DEFAULT_BINANCE_URL = "https://data-api.binance.vision";
 const COLORS = ["auto", "red-up", "green-up"];

@@ -81,6 +81,7 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 ## Watch out
 
 - The mod reaches the network (Yahoo Finance and Binance, or the Binance address the person set, nothing else) and runs no programs.
+- `localStorage` is per copy in Herdr 0.1.12 (each opened copy gets its own `data/bellwether/store-<hash>.json`), so a value one copy writes is not readable by another. Settings that must reach every copy go through shared state; the Finnhub key, when it arrives, will be kept in a file in Bellwether's data folder instead.
 - A saved Binance URL is used as written: whoever can edit Herdr's shared state can point the crypto requests at another host. The dialog only accepts `https://` addresses.
 - Herdr's shipped layouts (`main`) don't take a new mod's `mod.json` dock (Herdr 0.1.12); only a layout of the person's own does. On `main`, open it with `pane.split`.
 - Without `sync()` on render, a copy kept its old list and paused state until its next round, up to 60 seconds.
