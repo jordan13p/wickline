@@ -439,8 +439,8 @@ export class Watchlist {
     const configKey = JSON.stringify(config);
     // A new address asks every line again.
     if (state.configKey !== configKey) { state.configKey = configKey; state.linesAt = {}; }
-    // Only the requests carry the key.
-    const asked = { ...config, finnhubKey: this.finnhubKey };
+    // Only Finnhub's requests carry the key; no other source is ever handed it.
+    const asked = provider === finnhub ? { ...config, finnhubKey: this.finnhubKey } : config;
     const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));

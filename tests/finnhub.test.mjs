@@ -7,6 +7,9 @@ import { Watchlist } from "../mods/bellwether/watchlist.js";
 import { SECRET_KEY_FINNHUB } from "../mods/bellwether/settings.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/bellwether/providers/finnhub.js";
+import { binance } from "../mods/bellwether/providers/binance.js";
+import { MIS_CONSENT_VERSION, mis } from "../mods/bellwether/providers/mis.js";
+import { yahoo } from "../mods/bellwether/providers/yahoo.js";
 
 // An obvious fake: no real key is ever in a test.
 const KEY = "test-key";
@@ -304,6 +307,49 @@ test("turning Finnhub off drops the overlay at once", async () => {
   await advance(host, 61_000);
   assert.equal(finnhubCount(host), sent);
   await stop(w, host, runs);
+});
+
+test("only Finnhub's requests carry the key", async () => {
+  // Every source on: Finnhub with a key, MIS with consent (answering 500), Binance and Yahoo.
+  const host = fakeHost((url) => {
+    if (url.includes("/quote?symbol=")) return ok(QUOTE);
+    if (url.includes("mis.twse")) return { status: 500, ok: false, text: "" };
+    if (url.includes("ticker/24hr")) {
+      return ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1]))
+        .map((symbol) => ({ symbol, lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 })));
+    }
+    if (url.includes("klines")) return ok([[1, "1", "2", "0.5", "1.5"]]);
+    return yahooUs(url);
+  });
+  host.prefs = { version: 1, keyRev: 0, sources: { us: { provider: "finnhub" }, tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
+  host.secrets = { [SECRET_KEY_FINNHUB]: KEY };
+  const saved = [];
+  const save = host.save;
+  host.save = (p) => { saved.push(JSON.stringify(p)); save(p); };
+  // What each other provider is handed to build its requests.
+  const given = [];
+  const originals = [yahoo, mis, binance].map((provider) => [provider, provider.requests]);
+  for (const [provider, requests] of originals) {
+    provider.requests = (symbols, config) => { given.push([provider.id, JSON.stringify(config)]); return requests(symbols, config); };
+  }
+  try {
+    const w = new Watchlist(host);
+    for (const symbol of ["AAPL", "2330.TW", "BTC/USDT"]) w.add(symbol);
+    const runs = start(w, host);
+    await advance(host, 61_000);
+    assert.ok(finnhubCount(host) > 0);
+    for (const id of ["yahoo", "mis", "binance"]) assert.ok(given.some(([p]) => p === id), id);
+    for (const [id, config] of given) assert.ok(!config.includes(KEY), id);
+    for (const [i, url] of host.requests.entries()) {
+      assert.ok(!url.includes(KEY), url);
+      if (!url.includes("/quote?symbol=")) assert.ok(!JSON.stringify(host.headers[i]).includes(KEY), url);
+    }
+    assert.ok(Object.keys(w.overlayErrors).length > 0);
+    for (const exposed of [w.problems(), w.errors, w.overlayErrors, saved]) assert.ok(!JSON.stringify(exposed).includes(KEY));
+    await stop(w, host, runs);
+  } finally {
+    for (const [provider, requests] of originals) provider.requests = requests;
+  }
 });
 
 // ---- helpers ----
