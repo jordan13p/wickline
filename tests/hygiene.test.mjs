@@ -132,6 +132,20 @@ test("the only program is chmod 600 on the key file", () => {
   }
 });
 
+// The settings dialog learns only that a key is saved and its ending: the full-key loader is wired to the
+// panel's watchlist alone, and the dialog's loader goes through loadSecretEnding.
+test("the settings dialog never loads the full key", () => {
+  const main = code(read(new URL("main.js", MOD)));
+  assert.deepEqual([...main.matchAll(/\bloadSecret\b.*$/gm)].map(([line]) => line.trim()),
+    ["loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);", "loadSecret,"]);
+  assert.match(main, /const loadSecretEnding = \(name\) => secrets\.loadSecretEnding\(fs, secretsDir\(\), name\);/);
+  const reader = main.match(/async readKeyEnding\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(reader, "readKeyEnding found");
+  assert.match(reader[0], /\bloadSecretEnding\(SECRET_KEY_FINNHUB\)/);
+  assert.doesNotMatch(reader[0], /\bloadSecret\b|secrets\./);
+  for (const name of ["ui/settings-dialog.js", "settings.js"]) assert.doesNotMatch(code(read(new URL(name, MOD))), /\bloadSecret|secrets\./, name);
+});
+
 // Every module is a .js file: an .mjs, .cjs or .ts one would escape the scans above.
 test("the mod holds only .js modules, its mod.json and SVG icons", () => {
   for (const file of files(MOD)) assert.match(relativeName(file), /\.(js|json|svg)$/, relativeName(file));
