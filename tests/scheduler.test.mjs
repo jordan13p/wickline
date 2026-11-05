@@ -244,3 +244,36 @@ test("a rate-limited line request backs Binance off and ends the round", async (
     await stop(w, host, runs);
   }
 });
+
+test("an unexpected error in a loop shows as the source's problem and the loop goes on", async () => {
+  const host = fakeHost(yahooChart);
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const decode = yahoo.decode;
+  // A decoder bug that escapes the request's own handling: an answer with no `errors`.
+  let broken = true;
+  yahoo.decode = (...args) => (broken ? { quotes: {} } : decode(...args));
+  try {
+    const runs = start(w, host);
+    await advance(host, 1);
+    assert.deepEqual(w.problems(), [{ provider: "yahoo", code: "yahoo.unreachable", params: {} }]);
+    assert.equal(count(host, "yahoo"), 1);
+    // A Refresh that fails the same way does not stay "refreshing".
+    w.refreshNow();
+    await advance(host, 1_001);
+    assert.equal(count(host, "yahoo"), 2);
+    assert.equal(w.refreshing, false);
+    assert.equal(w.sources.yahoo.refreshing, false);
+    broken = false;
+    // The next round comes after the interval and recovers.
+    await advance(host, 60_000);
+    assert.equal(count(host, "yahoo"), 2);
+    await advance(host, 62_000);
+    assert.equal(count(host, "yahoo"), 3);
+    assert.ok(w.quotes.AAPL);
+    assert.deepEqual(w.problems(), []);
+    await stop(w, host, runs);
+  } finally {
+    yahoo.decode = decode;
+  }
+});

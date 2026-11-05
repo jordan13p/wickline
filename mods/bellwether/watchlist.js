@@ -375,26 +375,33 @@ export class Watchlist {
       const manual = state.manual;
       state.manual = false;
       state.dirty = false;
-      const settings = readSettings(this.host.settings());
-      if (provider === finnhub) await this.loadKey(settings);
-      if (this.stopped) return;
-      // A refused key stops the source until its own settings change (a new key, address or budget).
-      if (state.disabled && state.disabledFor !== SWITCHES[id]?.retryOn?.(settings)) {
-        state.disabled = false;
-        state.problem = null;
-      }
-      // Another copy may have edited the shared list.
-      this.adopt(readPreferences(this.host.load()));
-      this.configKey = JSON.stringify(this.config());
-      const symbols = this.symbolsFor(provider);
-      if (!symbols.length) state.problem = null;
-      const { paused } = this.preferences;
-      if (symbols.length && !state.disabled && (manual || !paused)) {
-        state.refreshing = manual;
-        await this.round(provider, state, symbols, io);
+      let symbols = [];
+      try {
+        const settings = readSettings(this.host.settings());
+        if (provider === finnhub) await this.loadKey(settings);
+        if (this.stopped) return;
+        // A refused key stops the source until its own settings change (a new key, address or budget).
+        if (state.disabled && state.disabledFor !== SWITCHES[id]?.retryOn?.(settings)) {
+          state.disabled = false;
+          state.problem = null;
+        }
+        // Another copy may have edited the shared list.
+        this.adopt(readPreferences(this.host.load()));
+        this.configKey = JSON.stringify(this.config());
+        symbols = this.symbolsFor(provider);
+        if (!symbols.length) state.problem = null;
+        if (symbols.length && !state.disabled && (manual || !this.preferences.paused)) {
+          state.refreshing = manual;
+          await this.round(provider, state, symbols, io);
+        }
+      } catch {
+        // A bug must not end the loop unseen: the source shows a problem and tries again after its interval.
+        state.problem = notice(`${id}.unreachable`);
+      } finally {
         state.refreshing = false;
       }
       if (this.stopped) return;
+      const { paused } = this.preferences;
       io.changed();
       if (state.manual || state.dirty) continue;
       const idle = paused || !symbols.length || state.disabled;
