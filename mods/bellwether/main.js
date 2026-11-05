@@ -2,7 +2,7 @@
 // add field and a line per ticker; docked as a short strip (top or bottom), it
 // draws one line of quotes. A row opens the ticker's day as a dialog, and the
 // settings button opens the settings: the same mod, given the quote or `settings` in its props.
-import { View, div, svg, PathBuilder, Background } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Checkbox, InputState, Input } from "gpui-base";
 import { appHome, closeOverlay, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme } from "herdr";
 import * as fs from "fs/promises";
@@ -10,7 +10,7 @@ import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError, isCryptoPair } from "./quotes.js";
 import {
-  chartGeometry, displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta,
+  displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta,
 } from "./format.js";
 import { detailSource, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
@@ -22,11 +22,9 @@ import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
 import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, layoutFor, nameWidth, tableColumns } from "./layout.js";
 import { canOpenOwnTab, newBellwether, ownTabSource, returnPane } from "./panes.js";
+import { button, card, chart, dot, icon, iconButton, note, segmented, segments } from "./ui/parts.js";
 
-// Freshness states drawn with a hollow dot: the price may not be current.
-const HOLLOW = ["unconfirmed", "stalled", "delayed"];
 const ICON = "mods/bellwether/icon.svg";
-const icon = (name) => `mods/bellwether/icons/${name}.svg`;
 // Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
 // The right group keeps this width, so a wider pane gives its room to the name.
 const SPARK = { width: 56, height: 20 };
@@ -286,42 +284,6 @@ export default class Bellwether extends View {
     return change >= 0 ? up : down;
   }
 
-  // The day's line, scaled to its box; the previous close is a dashed rule.
-  chart(quote, color, t, { width, height, fill }) {
-    const box = div().relative().flex_none().h(height);
-    const sized = width === "full" ? box.w_full() : box.w(width);
-    const g = chartGeometry(quote.series, quote.previousClose);
-    if (!g) return sized;
-    const layer = (path, paint) => window.paint_path(path, paint).absolute().top(0).left(0).size_full();
-    let line = PathBuilder.stroke(fill ? 2 : 1.25);
-    g.points.forEach(([x, y], i) => { line = i ? line.line_to(`${x}%`, `${y}%`) : line.move_to(`${x}%`, `${y}%`); });
-    return sized
-      .when(g.reference !== null, (el) => el.child(layer(
-        PathBuilder.stroke(1).dash_array([3, 3]).move_to("0%", `${g.reference}%`).line_to("100%", `${g.reference}%`).build(),
-        t.border)))
-      .when(Boolean(fill), (el) => {
-        let area = PathBuilder.fill().move_to("0%", "100%");
-        for (const [x, y] of g.points) area = area.line_to(`${x}%`, `${y}%`);
-        return el.child(layer(area.line_to("100%", "100%").close().build(),
-          Background.solid(color).opacity(0.16)));
-      })
-      .child(layer(line.build(), color));
-  }
-
-  // 6px: filled for a live quote, a 1px ring when the price may not be current, none for a session.
-  dot(t, state) {
-    const dot = div().flex_none().w(6).h(6).rounded_full();
-    if (state === "live") return dot.bg(t.foreground);
-    return HOLLOW.includes(state) ? dot.border_1().border_color(t.dim) : null;
-  }
-
-  // `a · b · c` that wraps only between parts: each part stays whole, the `·` ends the line it is on.
-  segments(t, parts) {
-    const shown = parts.filter(Boolean);
-    return h_flex().flex_wrap().gap_x(4).text_size(11).text_color(t.dim)
-      .children(shown.map((part, i) => div().whitespace_nowrap().child(i < shown.length - 1 ? `${part} ·` : part)));
-  }
-
   // The source for a real-time price, the delay for Yahoo's, or the session when it is not trading.
   freshnessLabel(quote, fresh, now) {
     switch (fresh.state) {
@@ -356,20 +318,14 @@ export default class Bellwether extends View {
       .children(symbols.map((symbol) => {
         const quote = w.shown(symbol);
         const failed = Boolean(w.errors[symbol]);
-        const dot = quote && this.dot(t, freshness(quote, sessionOf(quote, now), now).state);
+        const mark = quote && dot(t, freshness(quote, sessionOf(quote, now), now).state);
         return h_flex().flex_none().gap(5).items_center().whitespace_nowrap()
           .child(div().font_semibold().child(symbol))
-          .when(Boolean(dot), (el) => el.child(dot))
+          .when(Boolean(mark), (el) => el.child(mark))
           .child(div().text_color(quote && !failed ? t.foreground : t.dim).child(quote ? formatBandPrice(quote) : failed ? this.tx("band.unavailable") : "…"))
           .when(Boolean(quote), (el) => el.child(div().text_color(this.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
           .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(this.tx("band.cached"))));
       }));
-  }
-
-  button(t, id, label, onClick) {
-    return h_flex().id(id).flex_none().h(22).px(8).items_center().rounded(5).border_1().border_color(t.border)
-      .text_size(11).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-      .on_click((_e, cx) => onClick(cx)).child(label);
   }
 
   // Until answered: `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`. A label switches and
@@ -413,14 +369,6 @@ export default class Bellwether extends View {
       .child(div().flex_none().text_size(13).font_semibold().text_color(t.foreground).child("Bellwether"));
   }
 
-  // A header action: a 16 px single-color icon in a 28 × 28 target, named by its tooltip.
-  iconButton(t, id, name, label, onClick) {
-    return h_flex().id(id).flex_none().w(28).h(28).items_center().justify_center().rounded(6)
-      .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-      .tooltip(label).on_click((_e, cx) => onClick(cx))
-      .child(svg(icon(name)).w(16).h(16));
-  }
-
   // A pane copy that shares its tab offers its own tab; the copy in that tab offers the way back, when
   // there is a pane to go back beside. Dialog copies draw neither (they never reach the header).
   // Clicking a mod pane focuses it, so the focused Bellwether pane is the one clicked; each click
@@ -462,11 +410,11 @@ export default class Bellwether extends View {
     const { paused } = this.watch.preferences;
     const own = this.ownTabAction();
     return h_flex().flex_none().items_center().mr(-6)
-      .child(this.iconButton(t, "bw-refresh", "refresh", this.tx("button.refresh"), (cx) => { this.watch.refreshNow(); cx.notify(); }))
-      .child(this.iconButton(t, "bw-pause", paused ? "play" : "pause", this.tx(paused ? "button.resume" : "button.pause"),
+      .child(iconButton(t, "bw-refresh", "refresh", this.tx("button.refresh"), (cx) => { this.watch.refreshNow(); cx.notify(); }))
+      .child(iconButton(t, "bw-pause", paused ? "play" : "pause", this.tx(paused ? "button.resume" : "button.pause"),
         (cx) => this.act(cx, () => this.togglePause())))
-      .child(this.iconButton(t, "bw-settings", "settings", this.tx("button.settings"), () => this.openSettings("sources")))
-      .when(Boolean(own), (el) => el.child(this.iconButton(t, "bw-own-tab", own.icon, this.tx(own.label), () => own.go())));
+      .child(iconButton(t, "bw-settings", "settings", this.tx("button.settings"), () => this.openSettings("sources")))
+      .when(Boolean(own), (el) => el.child(iconButton(t, "bw-own-tab", own.icon, this.tx(own.label), () => own.go())));
   }
 
   // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves
@@ -505,7 +453,7 @@ export default class Bellwether extends View {
       label: quote ? this.freshnessLabel(quote, fresh, now) : "",
       date: stale ? this.tx("quote.asOf", { date: stale }) : "",
       name: quote ? displayName(quote, this.lang) : null,
-      dot: quote && this.dot(t, fresh.state),
+      dot: quote && dot(t, fresh.state),
       color: quote ? this.changeColor(t, quote.changePercent) : t.dim,
     };
   }
@@ -660,7 +608,7 @@ export default class Bellwether extends View {
           .when(Boolean(meta), (el) => el.child(h_flex().gap(6).items_center()
             .when(Boolean(row.dot), (line) => line.child(row.dot))
             .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(meta)))))
-        .child(row.quote ? this.chart(row.quote, row.color, t, SPARK) : div().flex_none().w(SPARK.width).h(SPARK.height))
+        .child(row.quote ? chart(row.quote, row.color, t, SPARK) : div().flex_none().w(SPARK.width).h(SPARK.height))
         .child(this.priceStack(t, row)))
       .children(this.rowNotes(t, row));
     return this.rowFrame(t, symbol, index, symbols, body, Boolean(row.quote));
@@ -730,7 +678,7 @@ export default class Bellwether extends View {
       state: () => h_flex().flex_none().w(columnWidth("state")).gap(6).items_center()
         .child(div().flex_none().w(6).h(6).when(Boolean(row.dot), (el) => el.child(row.dot)))
         .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(state)),
-      line: () => (quote ? this.chart(quote, color, t, TABLE_SPARK) : cell("line")),
+      line: () => (quote ? chart(quote, color, t, TABLE_SPARK) : cell("line")),
       price: () => (quote
         ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
           .child(div().flex_1().min_w(0).text_right().whitespace_nowrap().text_color(row.failed ? t.dim : t.foreground).child(this.number(quote)))
@@ -794,14 +742,14 @@ export default class Bellwether extends View {
         .child(div().text_size(26).font_semibold().child(formatPrice(q)))
         .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent))))
       .child(q.series?.length > 1
-        ? this.chart(q, color, t, { width: "full", height: 140, fill: true })
+        ? chart(q, color, t, { width: "full", height: 140, fill: true })
         : div().h(60).flex().items_center().justify_center().text_color(t.dim).child(this.tx("detail.noLine")))
       .child(isCryptoPair(q.symbol)
         ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
           .child(stat("detail.low24h", q.low))
         : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
           .child(stat("detail.prevClose", q.previousClose)))
-      .child(v_flex().gap(2).child(this.segments(t, source)).child(this.segments(t, times)))
+      .child(v_flex().gap(2).child(segments(t, source)).child(segments(t, times)))
       .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.tx("quote.cached", { reason: this.say(q.error) }))))
       .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.fallbackText(q, q.fallback))));
   }
@@ -880,28 +828,6 @@ export default class Bellwether extends View {
     });
   }
 
-  // One group of choices: the chosen one filled, the rest muted.
-  segmented(t, id, choices, current, onPick) {
-    return h_flex().flex_none().rounded(6).border_1().border_color(t.border).overflow_hidden()
-      .children(choices.map(([value, label]) => h_flex().id(`${id}-${value}`).h(28).px(12).items_center().cursor_pointer()
-        .text_color(value === current ? t.foreground : t.muted).when(value === current, (el) => el.bg(t.hover).font_semibold())
-        .hover((s) => s.text_color(t.foreground))
-        .on_click((_e, cx) => { onPick(value); cx.notify(); }).child(label)));
-  }
-
-  // A source's card: its name and kind, then whatever it lets the person set.
-  card(t, title, source, ...children) {
-    return v_flex().gap(8).p(12).rounded(8).border_1().border_color(t.border)
-      .child(h_flex().gap(8).items_center()
-        .child(div().flex_1().min_w(0).font_semibold().child(title))
-        .child(div().flex_none().text_size(11).text_color(t.dim).child(source)))
-      .children(children.filter(Boolean));
-  }
-
-  note(t, text) {
-    return div().text_size(11.5).text_color(t.dim).child(text);
-  }
-
   // The source's problem when the dialog opened, if it had one.
   healthLine(t, provider) {
     const problem = this.health.find((entry) => entry.provider === provider);
@@ -928,7 +854,7 @@ export default class Bellwether extends View {
       .child(Input.new(this.keyInput).flex_1().min_w(0).h(30).px(8).rounded(6).border_1()
         .border_color(keyError ? t.ansi1 : this.keyFocused ? t.accent : t.input)
         .bg(t.background).text_size(12).text_color(t.foreground))
-      .child(this.button(t, "bw-key-show", this.tx(this.keyShown ? "sources.us.hide" : "sources.us.show"), (cx) => {
+      .child(button(t, "bw-key-show", this.tx(this.keyShown ? "sources.us.hide" : "sources.us.show"), (cx) => {
         this.keyShown = !this.keyShown;
         this.keyInput.set_masked(!this.keyShown);
         cx.notify();
@@ -937,19 +863,19 @@ export default class Bellwether extends View {
       div().text_size(11).text_color(t.muted).child(this.tx("sources.us.key")),
       key,
       keyError ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(keyError)) : null,
-      this.note(t, this.tx("sources.us.keyNote")),
+      note(t, this.tx("sources.us.keyNote")),
       ...this.field(t, this.tx("sources.us.url"), this.finnhubUrlInput, this.finnhubUrlFocused, errors["sources.us.finnhubUrl"]),
       ...this.field(t, this.tx("sources.us.budget"), this.budgetInput, this.budgetFocused, budgetError),
-      budgetError ? null : this.note(t, this.tx("sources.us.cap", { cap: finnhubCap(us.budgetPerMinute) })),
-      this.note(t, this.tx("sources.us.copies")),
+      budgetError ? null : note(t, this.tx("sources.us.cap", { cap: finnhubCap(us.budgetPerMinute) })),
+      note(t, this.tx("sources.us.copies")),
     ] : this.savedKey ? [
       // Yahoo keeps a saved key; clearing the field and saving removes it.
       div().text_size(11).text_color(t.muted).child(this.tx("sources.us.key")),
       key,
-      this.note(t, this.tx("sources.us.keyRemove")),
+      note(t, this.tx("sources.us.keyRemove")),
     ] : [];
-    return this.card(t, this.tx("sources.us.title"), this.tx(chosen ? "sources.us.finnhubSource" : "sources.us.yahooSource"),
-      this.segmented(t, "bw-us", [["yahoo", this.tx("src.yahoo")], ["finnhub", this.tx("src.finnhub")]], us.provider,
+    return card(t, this.tx("sources.us.title"), this.tx(chosen ? "sources.us.finnhubSource" : "sources.us.yahooSource"),
+      segmented(t, "bw-us", [["yahoo", this.tx("src.yahoo")], ["finnhub", this.tx("src.finnhub")]], us.provider,
         (provider) => { us.provider = provider; }),
       ...finnhubParts,
       this.healthLine(t, "finnhub"));
@@ -968,15 +894,15 @@ export default class Bellwether extends View {
           .flex().items_center().justify_center().text_size(10).text_color(t.background)
           .when(agreed, (el) => el.bg(t.accent).child("✓")))
         .child(div().flex_1().min_w(0).font_semibold().child(this.tx("mis.consent"))));
-    return this.card(t, this.tx("sources.tw.title"), this.tx(chosen ? "sources.tw.misSource" : "sources.tw.yahooSource"),
-      this.segmented(t, "bw-tw", [["yahoo", this.tx("src.yahoo")], ["mis", this.tx("src.mis")]], tw.provider,
+    return card(t, this.tx("sources.tw.title"), this.tx(chosen ? "sources.tw.misSource" : "sources.tw.yahooSource"),
+      segmented(t, "bw-tw", [["yahoo", this.tx("src.yahoo")], ["mis", this.tx("src.mis")]], tw.provider,
         (provider) => { tw.provider = provider; }),
       ...(chosen ? this.field(t, this.tx("sources.tw.url"), this.misUrlInput, this.misUrlFocused, urlError) : []),
       // The statement in the reader's language; the Traditional Chinese text prevails.
       chosen && div().text_size(11.5).text_color(t.muted).child(this.tx("mis.statement")),
-      chosen && this.note(t, this.tx("mis.prevails")),
+      chosen && note(t, this.tx("mis.prevails")),
       chosen && consent,
-      chosen && !agreed ? this.note(t, this.tx("mis.consentNeeded")) : null,
+      chosen && !agreed ? note(t, this.tx("mis.consentNeeded")) : null,
       this.healthLine(t, "mis"));
   }
 
@@ -984,10 +910,10 @@ export default class Bellwether extends View {
     return v_flex().gap(12)
       .child(this.usCard(t, errors))
       .child(this.taiwanCard(t, errors))
-      .child(this.card(t, this.tx("sources.other.title"), this.tx("sources.other.body"), this.healthLine(t, "yahoo")))
-      .child(this.card(t, this.tx("sources.crypto.title"), this.tx("sources.crypto.source"),
+      .child(card(t, this.tx("sources.other.title"), this.tx("sources.other.body"), this.healthLine(t, "yahoo")))
+      .child(card(t, this.tx("sources.crypto.title"), this.tx("sources.crypto.source"),
         ...this.field(t, this.tx("sources.crypto.url"), this.urlInput, this.urlFocused, errors["sources.crypto.binanceUrl"]),
-        this.note(t, this.tx("sources.crypto.region")),
+        note(t, this.tx("sources.crypto.region")),
         this.healthLine(t, "binance")));
   }
 
@@ -995,18 +921,18 @@ export default class Bellwether extends View {
   displayTab(t) {
     return v_flex().gap(12)
       .child(div().font_semibold().child(this.tx("display.language")))
-      .child(this.segmented(t, "bw-language", LANGUAGES.map((language) => [language, LANGUAGE_LABELS[language]]), this.draft.language,
+      .child(segmented(t, "bw-language", LANGUAGES.map((language) => [language, LANGUAGE_LABELS[language]]), this.draft.language,
         (language) => { this.draft.language = language; }))
-      .child(this.note(t, this.tx("display.languageHint")))
+      .child(note(t, this.tx("display.languageHint")))
       .child(div().mt(8).font_semibold().child(this.tx("display.colors")))
-      .child(this.segmented(t, "bw-colors", COLOR_CHOICES.map(([value, key]) => [value, this.tx(key)]), this.draft.colors,
+      .child(segmented(t, "bw-colors", COLOR_CHOICES.map(([value, key]) => [value, this.tx(key)]), this.draft.colors,
         (colors) => { this.draft.colors = colors; }))
-      .child(this.note(t, this.tx("display.colorsHint")))
-      .child(h_flex().mt(8).child(this.button(t, "bw-appearance", this.tx("display.appearance"), () => {
+      .child(note(t, this.tx("display.colorsHint")))
+      .child(h_flex().mt(8).child(button(t, "bw-appearance", this.tx("display.appearance"), () => {
         closeOverlay(this.overlay);
         run("app.settings", { section: "look" });
       })))
-      .child(this.note(t, this.tx("display.appearanceHint")));
+      .child(note(t, this.tx("display.appearanceHint")));
   }
 
   disclaimerTab(t) {
@@ -1014,7 +940,7 @@ export default class Bellwether extends View {
     return v_flex().gap(10)
       .child(div().font_semibold().child(this.tx("disclaimer.title")))
       .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"].map(paragraph))
-      .child(this.note(t, this.tx("disclaimer.prevails")))
+      .child(note(t, this.tx("disclaimer.prevails")))
       .child(div().mt(8).font_semibold().child(this.tx("disclaimer.sourcesTitle")))
       .children(["disclaimer.sourcesStocks", "disclaimer.sourcesCrypto"].map(paragraph))
       .child(div().mt(8).font_semibold().child(this.tx("privacy.title")))
