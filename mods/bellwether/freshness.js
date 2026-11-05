@@ -37,3 +37,22 @@ export function freshness(quote, session, now) {
     : marketOf(quote.symbol) === "tw" ? TAIWAN_YAHOO_DELAY_S : null;
   return result("delayed", seconds === null ? null : Math.ceil(seconds / 60));
 }
+
+/**
+ * The detail dialog's source line as parts (joined with ` · `). A real-time price over another
+ * source's line names both and puts the delay on the line, from the line's own source: `Price: TWSE
+ * MIS`, `Line: Yahoo (delayed 20 min)`. Otherwise the source and, for a delayed one, its delay.
+ * `tx(key, params)` translates; a `src.<id>` key names a provider.
+ */
+export function detailSource(quote, session, now, tx) {
+  const minutes = (delayMinutes) => delayMinutes === null ? tx("freshness.delayUnknown")
+    : tx("freshness.delayedMinutes", { minutes: delayMinutes });
+  if (REALTIME_SOURCES.has(quote.source) && !isCryptoPair(quote.symbol)) {
+    const price = tx("detail.priceFrom", { source: tx(`src.${quote.source}`) });
+    if (!quote.chartSource) return [price];
+    const chart = { ...quote, source: quote.chartSource, delaySeconds: quote.chartDelaySeconds ?? null };
+    return [price, tx("detail.lineFrom", { source: tx(`src.${quote.chartSource}`), delay: minutes(freshness(chart, session, now).delayMinutes) })];
+  }
+  if (isCryptoPair(quote.symbol)) return [tx("detail.sourceCrypto")];
+  return [tx("detail.sourceStock"), minutes(freshness(quote, session, now).delayMinutes)];
+}

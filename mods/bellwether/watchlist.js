@@ -48,6 +48,7 @@ export function mergeOverlay(base, overlay) {
     localName: overlay.name ?? null,
     currency: base?.currency ?? null,
     delaySeconds: 0,
+    chartDelaySeconds: base?.delaySeconds ?? null,
     series: base?.series ?? [],
     periods: base?.periods ?? null,
     chartSource: base?.source ?? null,
@@ -88,6 +89,8 @@ export class Watchlist {
     // By symbol: the base quote (Yahoo for stocks, Binance for pairs) and a real-time overlay over it.
     this.quotes = {};
     this.overlays = {};
+    // By symbol: the last name an overlay gave (MIS's Chinese name), kept while that source fails.
+    this.localNames = {};
     // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart, since
     // its symbol still has the base quote.
     this.errors = {};
@@ -114,7 +117,9 @@ export class Watchlist {
 
   /** What a row shows: the base quote with its overlay, if any. */
   shown(symbol) {
-    return mergeOverlay(this.quotes[symbol], this.overlays[symbol]);
+    const quote = mergeOverlay(this.quotes[symbol], this.overlays[symbol]);
+    const localName = this.localNames[symbol];
+    return quote && localName && !quote.localName ? { ...quote, localName } : quote;
   }
 
   providerIds() {
@@ -223,7 +228,7 @@ export class Watchlist {
     // An overlay goes as soon as its source no longer covers the symbol (removed, or turned off).
     const config = this.config();
     const covered = new Set(PROVIDERS.filter((provider) => provider.overlay).flatMap((provider) => this.symbolsFor(provider, config)));
-    for (const record of [this.overlays, this.overlayErrors]) {
+    for (const record of [this.overlays, this.overlayErrors, this.localNames]) {
       for (const key of Object.keys(record)) if (!covered.has(key)) delete record[key];
     }
   }
@@ -370,7 +375,12 @@ export class Watchlist {
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
       for (const symbol of request.symbols) {
         const overlay = result.quotes[symbol];
-        if (overlay) { this.overlays[symbol] = overlay; delete this.overlayErrors[symbol]; continue; }
+        if (overlay) {
+          this.overlays[symbol] = overlay;
+          if (overlay.name) this.localNames[symbol] = overlay.name;
+          delete this.overlayErrors[symbol];
+          continue;
+        }
         delete this.overlays[symbol];
         if (result.errors[symbol]) this.overlayErrors[symbol] = coded(result.errors[symbol]);
         else delete this.overlayErrors[symbol];

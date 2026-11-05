@@ -3,6 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { USER_AGENT, displayName } from "../mods/bellwether/quotes.js";
+import { detailSource } from "../mods/bellwether/freshness.js";
+import { t } from "../mods/bellwether/i18n.js";
 import { Watchlist, mergeOverlay } from "../mods/bellwether/watchlist.js";
 import { advance, chart, fakeHost, start, stop } from "./helpers.mjs";
 import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel, withinLimits } from "../mods/bellwether/providers/mis.js";
@@ -385,4 +387,55 @@ test("a Taiwan name follows the interface language", () => {
   const alone = mergeOverlay(undefined, MIS_2330);
   assert.equal(displayName(alone, "zh-TW"), "台積電");
   assert.equal(displayName(alone, "en"), null);
+});
+
+test("the detail line puts the chart's delay on the chart", () => {
+  const say = (lang) => (key, params) => t(lang, key, params);
+  const merged = mergeOverlay(YAHOO_2330, MIS_2330);
+  assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), ["價格：證交所 MIS", "走勢：Yahoo（延遲 20 分鐘）"]);
+  assert.deepEqual(detailSource(merged, "open", 5_000, say("en")), ["Price: TWSE MIS", "Line: Yahoo (delayed 20 min)"]);
+  // The base's own delay is kept for the chart: Yahoo's reported value, or none.
+  const us = { ...YAHOO_2330, symbol: "AAPL", delaySeconds: 900 };
+  // Any real-time overlay over a US Yahoo quote (Finnhub's case).
+  const over = { ...MIS_2330, symbol: "AAPL" };
+  assert.equal(mergeOverlay(us, over).chartDelaySeconds, 900);
+  assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), ["Price: TWSE MIS", "Line: Yahoo (delayed 15 min)"]);
+  assert.deepEqual(detailSource(mergeOverlay({ ...us, delaySeconds: null }, over), "open", 5_000, say("en"))[1], "Line: Yahoo (delay not provided)");
+  // A real-time price before Yahoo's first quote; a plain Yahoo row keeps its wording.
+  assert.deepEqual(detailSource(mergeOverlay(undefined, MIS_2330), "unknown", 5_000, say("en")), ["Price: TWSE MIS"]);
+  assert.deepEqual(detailSource(YAHOO_2330, "open", 5_000, say("en")), ["Yahoo Finance · regular session", "delayed 20 min"]);
+  assert.deepEqual(detailSource({ ...YAHOO_2330, symbol: "BTC/USDT", source: "binance", periods: null }, "24h", 5_000, say("en")), ["Binance Spot · 24h"]);
+});
+
+test("a Chinese interface keeps the last MIS name while MIS fails", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  const yahooName = w.quotes["2330.TW"].name;
+  assert.equal(displayName(w.shown("2330.TW"), "zh-TW"), "台積電");
+  host.mis = () => { throw new Error("offline"); };
+  await advance(host, 10_001);
+  assert.equal(w.shown("2330.TW").source, "yahoo");
+  for (const lang of ["zh-TW", "zh-CN"]) assert.equal(displayName(w.shown("2330.TW"), lang), "台積電", lang);
+  for (const lang of ["en", "ja", "ko"]) assert.equal(displayName(w.shown("2330.TW"), lang), yahooName, lang);
+  // Turned off: Yahoo's name again.
+  host.prefs = { version: 1, sources: { tw: { provider: "yahoo", misAck: { version: MIS_CONSENT_VERSION } } } };
+  w.sync();
+  assert.equal(displayName(w.shown("2330.TW"), "zh-TW"), yahooName);
+  assert.deepEqual(w.localNames, {});
+  await stop(w, host, runs);
+});
+
+test("a removed symbol forgets its MIS name", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.localNames["2330.TW"], "台積電");
+  w.remove("2330.TW");
+  assert.equal(w.localNames["2330.TW"], undefined);
+  await stop(w, host, runs);
 });

@@ -9,7 +9,7 @@ import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import {
   QuoteError, chartGeometry, displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair, rowMeta,
 } from "./quotes.js";
-import { REALTIME_SOURCES, freshness, sessionOf } from "./freshness.js";
+import { detailSource, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
 import { DEFAULT_BINANCE_URL, SETTINGS_KEY, mergeSettings, readSettings, upIsRed, validateSettings } from "./settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
@@ -409,18 +409,7 @@ export default class Bellwether extends View {
     const sessionColor = session === "open" || session === "24h" ? t.ansi2 : session === "closed" || session === "unknown" ? t.dim : t.working;
     const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
     const stale = formatStaleDate(q.timestamp, now, this.lang);
-    const { delayMinutes } = freshness(q, session, now);
-    // A real-time price has no delay to state; Yahoo's is stated as on the row, or said to be unknown.
-    const delay = REALTIME_SOURCES.has(q.source) ? ""
-      : delayMinutes === null ? this.tx("freshness.delayUnknown") : this.tx("freshness.delayedMinutes", { minutes: delayMinutes });
-    // A real-time price over another source's line names both, with the line's delay.
-    const overlaid = Boolean(q.chartSource) && q.chartSource !== q.source;
-    const lineDelay = overlaid && freshness({ ...q, source: q.chartSource, delaySeconds: null }, session, now).delayMinutes;
-    const source = overlaid
-      ? [this.tx("detail.priceFrom", { source: this.tx(`src.${q.source}`) }), this.tx("detail.lineFrom", { source: this.tx(`src.${q.chartSource}`) }),
-        lineDelay === null ? this.tx("freshness.delayUnknown") : this.tx("freshness.delayedMinutes", { minutes: lineDelay })]
-      : REALTIME_SOURCES.has(q.source) && !isCryptoPair(q.symbol) ? [this.tx("detail.priceFrom", { source: this.tx(`src.${q.source}`) })]
-      : [this.tx(isCryptoPair(q.symbol) ? "detail.sourceCrypto" : "detail.sourceStock"), delay];
+    const source = detailSource(q, session, now, (key, params) => this.tx(key, params));
     const times = [this.tx("detail.quoted", { time: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}` }),
       this.tx("detail.fetched", { time: formatTime(q.fetchedAt, true) })];
     const stat = (label, price) => v_flex().flex_1().gap(2)
