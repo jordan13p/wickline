@@ -378,6 +378,31 @@ test("a removed key leaves every copy's memory", async () => {
   }
 });
 
+test("choosing Finnhub again with the same saved key starts it at once", async () => {
+  // A round trip (Finnhub, Yahoo, Finnhub) and a cold start on Yahoo; keyRev never changes.
+  for (const first of ["finnhub", "yahoo"]) {
+    const host = usHost();
+    host.prefs = { version: 1, keyRev: 0, sources: { us: { provider: first } } };
+    const w = new Watchlist(host);
+    w.add("AAPL");
+    const runs = start(w, host);
+    await advance(host, 1_000);
+    if (first === "finnhub") {
+      host.prefs = { version: 1, keyRev: 0, sources: { us: { provider: "yahoo" } } };
+      assert.equal(w.sync(), true);
+      await advance(host, 2_000);
+    }
+    const sent = finnhubCount(host);
+    host.prefs = finnhubOn();
+    assert.equal(w.sync(), true, first);
+    // At once on a cold start; within Finnhub's own request spacing after a round trip.
+    await advance(host, first === "yahoo" ? 3_000 : 32_000);
+    assert.ok(finnhubCount(host) > sent, first);
+    assert.equal(w.shown("AAPL").source, "finnhub", first);
+    await stop(w, host, runs);
+  }
+});
+
 // ---- helpers ----
 
 function finnhubOn(us = {}, keyRev = 0) {

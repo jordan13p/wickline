@@ -143,6 +143,8 @@ export class Watchlist {
       finnhubUrl: settings.sources.us.finnhubUrl,
       budgetPerMinute: settings.sources.us.budgetPerMinute,
       keyRev: settings.keyRev,
+      // Choosing Finnhub must wake its loop to read the key, also when keyRev did not change.
+      usProvider: settings.sources.us.provider,
       on: Object.fromEntries(Object.entries(SWITCHES).map(([id, { on }]) => [id, on(settings, this)])),
     };
   }
