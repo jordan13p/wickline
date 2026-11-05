@@ -53,27 +53,53 @@ test("no module imports program runners from herdr", () => {
   assert.deepEqual(herdrImports('import {\n  theme,\n  exec as run } from "herdr";'), ["theme", "exec"]);
 });
 
-// Every module specifier, whether it is imported with a list, a namespace or a default.
+// Every module specifier, whether it is imported with a list, a namespace, a default or `import("…")`.
 function importSpecifiers(source) {
-  return [...source.matchAll(/(?:\bfrom|\bimport)\s*["']([^"']+)["']/g)].map(([, specifier]) => specifier);
+  return [...source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g)].map(([, specifier]) => specifier);
 }
 
-// The layer rule: the core imports only other modules of the mod, so `node --test` can load it; main.js
-// is the shell that talks to Herdr, and anything under ui/ may add the view libraries.
-const VIEW_LIBRARIES = ["gpui-kit", "gpui-base", "herdr"];
+// The layer rule. The core imports only other modules of the mod, so `node --test` can load it. ui/ adds
+// the two view libraries and nothing from Herdr: whatever it does to storage, the network, files, panes or
+// commands goes through a method of the view in main.js, so what an installing agent must disclose is all
+// in main.js and the core. main.js is the shell that talks to Herdr.
+const UI_LIBRARIES = ["gpui-kit", "gpui-base"];
 test("core modules import only relative modules; ui/ adds the view libraries", () => {
   let core = 0;
+  let ui = 0;
   for (const file of jsFiles()) {
     const name = relativeName(file);
     if (name === "main.js") continue;
-    const allowed = name.startsWith("ui/") ? VIEW_LIBRARIES : [];
+    const allowed = name.startsWith("ui/") ? UI_LIBRARIES : [];
     if (allowed.length === 0) core += 1;
+    else ui += 1;
     for (const specifier of importSpecifiers(read(file))) {
       assert.ok(specifier.startsWith("./") || specifier.startsWith("../") || allowed.includes(specifier), `${specifier} in ${name}`);
     }
   }
   assert.ok(core > 0, "no core module found");
-  assert.deepEqual(importSpecifiers('import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";'), ["./a.js", "fs/promises", "gpui-kit"]);
+  assert.ok(ui > 0, "no ui module found");
+  assert.deepEqual(importSpecifiers('import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";\nawait import ( "herdr" );'),
+    ["./a.js", "fs/promises", "gpui-kit", "herdr"]);
+});
+
+// Herdr's globals reach no module but main.js either: `fetch` (the core gets it as `host.fetch`),
+// `localStorage`, and `globalThis`, through which a module could find anything else.
+const HERDR_GLOBALS = /(?<![.\w])(?:fetch\s*\(|localStorage\b|globalThis\b)/;
+// The source without comments, which may name these; a `//` after `:` or a quote is a URL, not a comment.
+const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+test("only main.js wires Herdr's storage, network and files", () => {
+  for (const file of jsFiles()) {
+    const name = relativeName(file);
+    if (name !== "main.js") assert.doesNotMatch(code(read(file)), HERDR_GLOBALS, name);
+  }
+  const main = read(new URL("main.js", MOD));
+  for (const api of ["shared", "setShared", "appHome", "run", "openOverlay", "closeOverlay"]) {
+    assert.ok(herdrImports(main).includes(api), `main.js imports ${api}`);
+  }
+  assert.ok(importSpecifiers(main).includes("fs/promises"), "main.js imports fs/promises");
+  assert.match(code(main), /(?<![.\w])fetch\s*\(/, "main.js calls fetch");
+  assert.doesNotMatch(code("this.host.fetch(url); // fetch(url)\n/* localStorage */"), HERDR_GLOBALS);
+  assert.match(code('const u = "https://x"; globalThis'), HERDR_GLOBALS);
 });
 
 // "none": installing never docks Bellwether into the person's layout; the open key or pane.split opens it.
