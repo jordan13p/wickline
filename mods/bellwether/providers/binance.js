@@ -1,6 +1,7 @@
 // Binance Spot market data: pairs written BASE/QUOTE, in batches, plus a 24-hour line per pair.
 // No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanSeries, positive } from "../quotes.js";
+import { failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the default Binance host (a public market-data mirror).
 export const BINANCE_URL = "https://data-api.binance.vision";
@@ -25,8 +26,7 @@ export function decodeBinance(pairs, response, now) {
   // Unavailable for legal reasons: Binance refuses this region.
   if (response.status === 451) throw new QuoteError("binance.region");
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("binance.unreadable"); }
+  const body = parseJson(response.text, "binance.unreadable");
   const wanted = new Map(pairs.map((pair) => [pair.replace("/", ""), pair]));
   const quotes = {};
   for (const ticker of Array.isArray(body) ? body : [body]) {
@@ -68,8 +68,7 @@ export function decodeKlines(response) {
   // Rate limited as the tickers are: the same backoff.
   if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("binance.unreadable"); }
+  const body = parseJson(response.text, "binance.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("binance.unreadable");
   return cleanSeries(body.map((bar) => Array.isArray(bar) ? Number(bar[4]) : NaN));
 }
@@ -100,8 +99,7 @@ export const binance = {
       for (const pair of request.symbols) if (!quotes[pair]) errors[pair] = new QuoteError("binance.noQuote");
       return { quotes, errors };
     } catch (error) {
-      if (!(error instanceof QuoteError)) throw error;
-      return { quotes: {}, errors: Object.fromEntries(request.symbols.map((pair) => [pair, error])) };
+      return failEach(request.symbols, error);
     }
   },
 };

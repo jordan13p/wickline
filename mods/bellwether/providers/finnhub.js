@@ -2,6 +2,7 @@
 // Off until the person chooses it and saves a key. One request per symbol, within a per-minute
 // budget. No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, positive } from "../quotes.js";
+import { failEach, parseJson } from "./provider.js";
 
 export const FINNHUB_URL = "https://finnhub.io/api/v1";
 
@@ -31,8 +32,7 @@ export function decodeFinnhub(symbol, response, now) {
   // No Retry-After in Herdr's fetch: wait at least a minute.
   if (response.status === 429) throw new QuoteError("finnhub.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("finnhub.http", { status: response.status });
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("finnhub.unreadable"); }
+  const body = parseJson(response.text, "finnhub.unreadable");
   if (body === null || typeof body !== "object" || Array.isArray(body) || typeof body.c !== "number") {
     throw new QuoteError("finnhub.unreadable");
   }
@@ -77,8 +77,7 @@ export const finnhub = {
     try {
       return { quotes: decodeFinnhub(symbol, response, now), errors: {} };
     } catch (error) {
-      if (!(error instanceof QuoteError)) throw error;
-      return { quotes: {}, errors: { [symbol]: error } };
+      return failEach(request.symbols, error);
     }
   },
 };

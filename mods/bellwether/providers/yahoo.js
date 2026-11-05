@@ -1,6 +1,7 @@
 // Yahoo Finance: stocks, ETFs, indices and currencies, one ticker per request.
 // No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanSeries, cleanText, normalizeSymbol, positive } from "../quotes.js";
+import { failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the only Yahoo host.
 const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
@@ -23,8 +24,7 @@ export function decodeYahoo(symbol, response, now) {
   if (response.status === 429) throw new QuoteError("yahoo.rateLimited", {}, { retryAfterMs: 60_000 });
   if (response.status === 404) throw new QuoteError("yahoo.notFound");
   if (!response.ok) throw new QuoteError("yahoo.http", { status: response.status });
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("yahoo.unreadable"); }
+  const body = parseJson(response.text, "yahoo.unreadable");
   const meta = body?.chart?.result?.[0]?.meta;
   if (body?.chart?.error || !meta) throw new QuoteError("yahoo.noQuote");
   // Never show another instrument's response under the requested ticker.
@@ -74,8 +74,7 @@ export const yahoo = {
     try {
       return { quotes: { [symbol]: decodeYahoo(symbol, response, now) }, errors: {} };
     } catch (error) {
-      if (!(error instanceof QuoteError)) throw error;
-      return { quotes: {}, errors: { [symbol]: error } };
+      return failEach(request.symbols, error);
     }
   },
 };

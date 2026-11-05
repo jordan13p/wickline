@@ -1,4 +1,6 @@
-// The shape every provider shares: JSDoc types only, nothing runs from here. No Herdr imports.
+// What every provider shares: the JSDoc types, and the two helpers their decoders use at the boundary.
+// No Herdr imports, so tests run it under Node.
+import { QuoteError } from "../quotes.js";
 
 /**
  * The shape every provider shares.
@@ -28,4 +30,13 @@
  * for an HTTP or body problem: the request's symbols each get that error instead.
  */
 
-export {};
+/** `JSON.parse` for an answer's body; a body that is not JSON is the provider's `*.unreadable` error. */
+export function parseJson(text, unreadableCode) {
+  try { return JSON.parse(text); } catch { throw new QuoteError(unreadableCode); }
+}
+
+/** A decoder's last step: a QuoteError becomes that error on each requested symbol; anything else is a bug. */
+export function failEach(symbols, error) {
+  if (!(error instanceof QuoteError)) throw error;
+  return { quotes: {}, errors: Object.fromEntries(symbols.map((symbol) => [symbol, error])) };
+}

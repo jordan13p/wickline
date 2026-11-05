@@ -3,6 +3,7 @@
 // the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
 // dialog. No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanText, positive } from "../quotes.js";
+import { failEach, parseJson } from "./provider.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
 export const MIS_BATCH = 50;
@@ -41,8 +42,7 @@ export function decodeMis(symbols, response, now) {
   // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
   if (response.status === 429) throw new QuoteError("mis.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("mis.http", { status: response.status });
-  let body;
-  try { body = JSON.parse(response.text); } catch { throw new QuoteError("mis.unreadable"); }
+  const body = parseJson(response.text, "mis.unreadable");
   if (!Array.isArray(body?.msgArray)) throw new QuoteError("mis.unreadable");
   const wanted = new Map(symbols.map((symbol) => [misChannel(symbol), symbol]));
   const quotes = {};
@@ -94,8 +94,7 @@ export const mis = {
     try {
       return decodeMis(request.symbols, response, now);
     } catch (error) {
-      if (!(error instanceof QuoteError)) throw error;
-      return { quotes: {}, errors: Object.fromEntries(request.symbols.map((symbol) => [symbol, error])) };
+      return failEach(request.symbols, error);
     }
   },
 };
