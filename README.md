@@ -25,7 +25,7 @@
 - Live or delayed at a glance: every row says where its price comes from and how old it is; a delayed or cached price never looks live.
 - Five interface languages: English, 繁體中文, 简体中文, 日本語 and 한국어, with red-up or green-up colors.
 - Drag a row to reorder the list; every open copy follows at once.
-- No programs, no telemetry, no server in between: requests go straight from your computer to each source.
+- No telemetry, no server in between: requests go straight from your computer to each source. The only program run is `chmod 600` on the key file when you save a Finnhub key (macOS and Linux).
 - Follows your Herdr theme, light or dark, and its width: a sidebar below 720 px, a table from 720 px (it opens wide in its own tab), a one-line band under 72 px tall.
 
 ## Markets and sources
@@ -109,7 +109,7 @@ Type a symbol into the add field and press Enter:
 
 The gear icon opens a dialog with three tabs. Nothing changes until you press Save; Cancel or Esc drops your edits.
 
-**Data sources.** Yahoo Finance and Binance Spot need nothing set. The United States card switches US stocks to Finnhub, with your own API key (a free-plan key is enough), the requests per minute and how many symbols that covers. The Taiwan card switches Taiwan stocks to TWSE MIS after you read its statement and tick the consent box. The Crypto card takes another Binance address (`https://` only).
+**Data sources.** Yahoo Finance and Binance Spot need nothing set. The United States card switches US stocks to Finnhub, with your own API key (a free-plan key is enough), the requests per minute and how many symbols that covers. A saved key is never shown again: the card says `Saved ••••` with its last four characters and a **Remove** button; leave the field empty to keep it, or type a new key to replace it. The Finnhub URL stays on `https://finnhub.io`; only its path can change. The Taiwan card switches Taiwan stocks to TWSE MIS after you read its statement and tick the consent box. The Crypto card takes another Binance address (`https://` only).
 
 **Display.** The interface language (it changes only the text, not the quotes), the gain and loss colors (automatic by language, red-up or green-up) and a button to Herdr's own appearance settings; light and dark themes come from Herdr.
 
@@ -124,10 +124,10 @@ Hosts, and when Bellwether contacts them:
 | `query1.finance.yahoo.com` | always, for stocks and indexes |
 | `data-api.binance.vision`, or the Binance address you set | always, for crypto pairs |
 | `mis.twse.com.tw`, or the MIS address you set | only after you choose TWSE MIS for Taiwan and tick its consent box (unofficial) |
-| `finnhub.io`, or the Finnhub address you set | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address |
+| `finnhub.io` (only the path of the Finnhub URL can change) | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address, and only to `https://finnhub.io`: a saved address on any other host, or an answer redirected elsewhere, stops Finnhub and says so |
 
-- **Programs**: none are run.
-- **Storage**: the watchlist in Herdr's shared state under `bellwether.watchlist.v1`, the settings under `bellwether.settings.v1`. A Finnhub key you save is kept in plaintext in `data/bellwether/secrets.json` in Herdr's folder on this computer, never in the shared state; anyone who can read your files can read it, so use a free-plan key. To remove the key, choose Yahoo for US stocks, clear the key field and save (every copy drops it at once), or delete that file; choosing Yahoo alone keeps it. No other file is read or written.
+- **Programs**: only `chmod 600` on `data/bellwether/secrets.json` right after you save a Finnhub key, on macOS and Linux, so other accounts on this computer cannot read it. If it fails, the dialog says so and the key stays saved. Nothing else is run.
+- **Storage**: the watchlist in Herdr's shared state under `bellwether.watchlist.v1`, the settings under `bellwether.settings.v1`. A Finnhub key you save is kept in plaintext in `data/bellwether/secrets.json` in Herdr's folder on this computer, never in the shared state. On macOS and Linux the file is readable by your account only; any program running as you (another Herdr mod included) can still read it, so use a free-plan key. To remove the key, press **Remove** on the United States card and save (the file is deleted and every copy drops the key within one refresh), or delete that file; choosing Yahoo alone keeps it. Backups such as Time Machine may still hold an old key: to revoke it for good, regenerate the key on Finnhub. No other file is read or written.
 - **Finnhub**: only the first US symbols your budget covers are asked (15 at the default 60 requests per minute). Every open copy sends its own requests, so two copies use the budget twice as fast.
 - No telemetry, no analytics and no intermediate server: requests go directly from this computer to each source.
 - Keep one copy of Bellwether open. Each copy, even a hidden one, runs its own refresh loops, so a second copy doubles every request.
