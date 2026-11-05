@@ -7,6 +7,7 @@ import { v_flex, h_flex, Checkbox, InputState, Input } from "gpui-base";
 import { appHome, closeOverlay, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme } from "herdr";
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
+import * as secrets from "./secrets.js";
 import {
   QuoteError, chartGeometry, displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair, rowMeta,
 } from "./quotes.js";
@@ -37,38 +38,11 @@ const SHORT_FOOTER_WIDTH = 480;
 const SETTINGS_TABS = ["sources", "display", "disclaimer"];
 const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
 
-// The Finnhub key, in plaintext, in Bellwether's folder under Herdr's data folder: localStorage is per
-// copy, so the dialog could not hand it to the panel there, and shared state is no place for a key.
+// The key file lives in Herdr's data folder (see secrets.js); `appHome()` is called per use, never at the top level.
 const secretsDir = () => `${appHome()}/data/bellwether`;
-const secretsFile = () => `${secretsDir()}/secrets.json`;
-
-// `{}` when there is no file yet; rejects when the file cannot be read or is not a JSON object.
-async function readSecrets() {
-  if (!(await fs.exists(secretsFile()))) return {};
-  const value = JSON.parse(await fs.readFile(secretsFile(), "utf8"));
-  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("not an object");
-  return value;
-}
-
-async function loadSecret(name) {
-  const value = (await readSecrets())[name];
-  return typeof value === "string" ? value : null;
-}
-
-// A file that cannot be read is replaced by one holding only this key.
-async function saveSecret(name, value) {
-  let secrets = {};
-  try { secrets = await readSecrets(); } catch { /* Replaced below. */ }
-  await fs.mkdir(secretsDir(), { recursive: true });
-  await fs.writeFile(secretsFile(), `${JSON.stringify({ ...secrets, [name]: value }, null, 2)}\n`);
-}
-
-// The file is written again without this key; an unreadable file rejects, so nothing is taken as removed.
-async function removeSecret(name) {
-  if (!(await fs.exists(secretsFile()))) return;
-  const { [name]: _removed, ...rest } = await readSecrets();
-  await fs.writeFile(secretsFile(), `${JSON.stringify(rest, null, 2)}\n`);
-}
+const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
+const saveSecret = (name, value) => secrets.saveSecret(fs, secretsDir(), name, value);
+const removeSecret = (name) => secrets.removeSecret(fs, secretsDir(), name);
 
 export default class Bellwether extends View {
   init(_props, cx) {
