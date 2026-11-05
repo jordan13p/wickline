@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   formatBandPrice, formatChange, formatPrice, formatStaleDate,
-  normalizeSymbol, marketSession, chartGeometry, formatTime, STARTER_SYMBOLS, USER_AGENT,
+  normalizeSymbol, marketSession, chartGeometry, formatTime, rowMeta, STARTER_SYMBOLS, USER_AGENT,
 } from "../mods/bellwether/quotes.js";
 import { decodeYahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/bellwether/providers/binance.js";
@@ -275,6 +275,14 @@ test("scales a line into its box", () => {
   assert.equal(flat.reference, null);
   assert.equal(flat.points[0][1], 50);
   assert.match(formatTime(new Date(2026, 10, 2, 9, 5).getTime()), /^09:05$/);
+});
+
+test("a row names its source once", () => {
+  // The pair's name is the source's own: show it once.
+  assert.deepEqual(rowMeta("BTC/USDT", ["Binance", "", "Binance Spot"]), ["Binance Spot"]);
+  assert.deepEqual(rowMeta("AAPL", ["Yahoo · delayed", "As of Oct 31", "Apple Inc."]), ["Yahoo · delayed", "As of Oct 31", "Apple Inc."]);
+  // A name that only repeats the ticker is left out.
+  assert.deepEqual(rowMeta("^GSPC", ["delayed 15 min", "", "^GSPC"]), ["delayed 15 min"]);
 });
 
 test("identity", () => {

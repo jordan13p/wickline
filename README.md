@@ -12,7 +12,7 @@ Every row shows a dot and a label:
 
 | Dot | Label | Meaning |
 |---|---|---|
-| filled | `Binance` | real-time price, market trading, quote at most 120 seconds old |
+| filled | `Binance Spot` | real-time price, market trading, quote at most 120 seconds old |
 | hollow | source name | real-time price, but the market session is not known yet |
 | hollow | `quote stopped at 13:05` | real-time source, market trading, but the quote is older than 120 seconds |
 | hollow | `delayed 15 min`, `Yahoo · delayed` | Yahoo Finance: minutes when Yahoo reports them (Taiwan is always 20 minutes), otherwise just "delayed" |

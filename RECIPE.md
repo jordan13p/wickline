@@ -13,7 +13,7 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - **Language prompt**, 10px below, until answered: one 11.5px line `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`. `Language:` and the `·` separators in `dim`, each language name in `muted` (`foreground` on hover), the `×` beside them, not inside a name. It names no data source.
 - **Add field**, 6px below the prompt (10px below the status line without it): a 30px input, radius 6, `background` fill, `input` border (`accent` while focused), placeholder `Add a ticker: AAPL, 0700.HK, BTC/USDT`. Under it, one short line when there is something to say: an error in `ansi1` or the last edit's notice (`Added AAPL.`) in `dim`.
 - **Watchlist**, the rest of the height, scrolling. One row per ticker in saved order, 12px left padding, 7px vertical, `hover` background on hover:
-  - left: the ticker (semibold, truncates) and under it the freshness dot (6px: filled `foreground` when live, a 1px `dim` ring when the price may not be current, none when the market is not trading) and, in 11px `dim`, the freshness label (see the table below), `As of Oct 31` when the quote is from an earlier local day (`10/31` in the other four languages; a closed label carries its own date), and the instrument name, joined with ` · `;
+  - left: the ticker (semibold, truncates) and under it the freshness dot (6px: filled `foreground` when live, a 1px `dim` ring when the price may not be current, none when the market is not trading) and, in 11px `dim`, the freshness label (see the table below), `As of Oct 31` when the quote is from an earlier local day (`10/31` in the other four languages; a closed label carries its own date), and the instrument name, joined with ` · `. Nothing is said twice: a pair's name `Binance Spot` replaces the `Binance` label, and a name that only repeats the ticker is left out;
   - a 56×22 sparkline: today's line for a stock (5-minute bars), the last 24 hours for a pair (15-minute bars), 1.25px in the change color, with the previous close as a dashed `border` rule;
   - right-aligned in a 108px column: the price with its currency (`230.10 USD`, `65,000.00 USDT`, `0.00000441`) and under it the signed change (`+1.23%`) in the gain or loss color, `dim` when unknown (`—`). Green-up uses `ansi2` for gains and `ansi1` for losses; red-up swaps them;
   - far right: a `dim` `×` that removes the ticker.
@@ -27,7 +27,7 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 - the price at 26px semibold and the change at 13px in its color.
 - a 140px chart across the width: the same line, 2px, over a fill of the change color at 16% opacity, with the dashed previous close.
 - four columns, 10.5px `dim` labels over semibold values: Open, High, Low, Prev close (a pair: 24h open, 24h high, 24h low).
-- `Yahoo Finance · regular session · Quote at 15:04:05 · fetched 15:04:12 · Delay 15m` in 11px `dim` (`delay not provided` when Yahoo reports none; a pair: `Binance Spot · 24h · Quote at … · fetched …`, no delay), with the date before the quote time when it is not today, and `Cached quote · <reason>` in `blocked` after a failed refresh. The session pill says `Session unknown` (`dim`) for a stock Yahoo gave no trading hours for.
+- two lines in 11px `dim`, 2px apart: `Yahoo Finance · regular session · delayed 15 min` (the same delay words as the row; `delay not provided` when Yahoo reports none; a pair: `Binance Spot · 24h`, no delay), then `Quote at 15:04:05 · Fetched 15:04:12`, with the date before the quote time when it is not today. Each ` · ` part stays whole: a line wraps only between parts, the `·` ending the line it is on. `Cached quote · <reason>` follows in `blocked` after a failed refresh. The session pill says `Session unknown` (`dim`) for a stock Yahoo gave no trading hours for.
 
 **Settings dialog**, 640px by 520px, modal (a click beside it does not close it; Esc does), opened by the header's **Settings** button or the footer's disclaimer line. A column 168px wide on the left with `Settings` (13px semibold, `accent`) over four tabs, 28px high, radius 5: `Data sources`, `Display`, `Language`, `Disclaimer & privacy` (the chosen one on `hover` fill, `foreground`, semibold; the rest `muted`), a `border` rule, then the tab on the right, 18px padding, scrolling. Below, a `border` line above a footer with an `ansi1` message on the left (`Could not save the settings.`) and **Cancel** (outlined) and **Save** (`solid` fill, `solid_foreground` text; `hover` fill and `dim` text while disabled) on the right. Edits wait in a copy until Save; Cancel, Esc or closing drops it.
 
@@ -58,7 +58,7 @@ A panel 320px wide in the theme's `chrome` background with `foreground` text at 
 
   | State | When | Dot | Label |
   |---|---|---|---|
-  | live | real-time source (Binance), trading, quote at most 120 s old | filled | `Binance` |
+  | live | real-time source (Binance), trading, quote at most 120 s old | filled | `Binance` (a pair's row shows `Binance Spot` once) |
   | unconfirmed | real-time source, session not known yet | ring | the source name |
   | stalled | real-time source, trading, quote older than 120 s | ring | `quote stopped at 13:05` |
   | delayed | Yahoo | ring | `delayed 15 min` when Yahoo reports a delay, `delayed 20 min` for Taiwan, otherwise `Yahoo · delayed` |

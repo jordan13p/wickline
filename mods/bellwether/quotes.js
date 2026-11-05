@@ -153,6 +153,16 @@ export function formatStaleDate(timestamp, now, lang = "en") {
   return lang === "en" ? `${MONTHS[quoted.getMonth()]} ${quoted.getDate()}` : `${quoted.getMonth() + 1}/${quoted.getDate()}`;
 }
 
+/**
+ * A row's second line, `[freshness label, date, name]` with empties dropped: a name that begins
+ * with the label (a pair's "Binance Spot" after "Binance") replaces it, and a name that only
+ * repeats the ticker is left out, so nothing on the row says the same thing twice.
+ */
+export function rowMeta(symbol, [label, date, name]) {
+  const named = name && name !== symbol ? name : "";
+  return [named && label && named.startsWith(label) ? "" : label, date, named].filter(Boolean);
+}
+
 const two = (n) => String(n).padStart(2, "0");
 
 /** Local wall-clock time, 24-hour: "15:04", or "15:04:05" with seconds. */

@@ -7,7 +7,7 @@ import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { closeOverlay, nextCommand, openOverlay, props, run, setShared, shared, theme } from "herdr";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import {
-  QuoteError, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair,
+  QuoteError, chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, isCryptoPair, rowMeta,
 } from "./quotes.js";
 import { REALTIME_SOURCES, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
@@ -233,6 +233,13 @@ export default class Bellwether extends View {
     return HOLLOW.includes(state) ? dot.border_1().border_color(t.dim) : null;
   }
 
+  // `a · b · c` that wraps only between parts: each part stays whole, the `·` ends the line it is on.
+  segments(t, parts) {
+    const shown = parts.filter(Boolean);
+    return h_flex().flex_wrap().gap_x(4).text_size(11).text_color(t.dim)
+      .children(shown.map((part, i) => div().whitespace_nowrap().child(i < shown.length - 1 ? `${part} ·` : part)));
+  }
+
   // The source for a real-time price, the delay for Yahoo's, or the session when it is not trading.
   freshnessLabel(quote, fresh, now) {
     switch (fresh.state) {
@@ -335,8 +342,8 @@ export default class Bellwether extends View {
       const fresh = quote && freshness(quote, sessionOf(quote, now), now);
       // A closed label carries its own date; any other quote from an earlier day gets one.
       const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, this.lang) : "";
-      const meta = quote ? [this.freshnessLabel(quote, fresh, now), stale && this.tx("quote.asOf", { date: stale }), quote.name]
-        .filter(Boolean).join(" · ") : "";
+      const meta = quote ? rowMeta(symbol, [this.freshnessLabel(quote, fresh, now), stale && this.tx("quote.asOf", { date: stale }), quote.name])
+        .join(" · ") : "";
       const dot = quote && this.dot(t, fresh.state);
       const color = quote ? this.changeColor(t, quote.changePercent) : t.dim;
       return h_flex().pl(12).pr(10).gap(6).items_center().hover((s) => s.bg(t.hover))
@@ -387,12 +394,12 @@ export default class Bellwether extends View {
     const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
     const stale = formatStaleDate(q.timestamp, now, this.lang);
     const { delayMinutes } = freshness(q, session, now);
-    // A real-time price has no delay to state; Yahoo's is stated, or said to be unknown.
+    // A real-time price has no delay to state; Yahoo's is stated as on the row, or said to be unknown.
     const delay = REALTIME_SOURCES.has(q.source) ? ""
-      : delayMinutes === null ? this.tx("freshness.delayUnknown") : this.tx("quote.delay", { minutes: delayMinutes });
-    const asOf = [this.tx(isCryptoPair(q.symbol) ? "detail.sourceCrypto" : "detail.sourceStock"),
-      this.tx("detail.times", { quoted: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}`, fetched: formatTime(q.fetchedAt, true) }),
-      delay].filter(Boolean).join(" · ");
+      : delayMinutes === null ? this.tx("freshness.delayUnknown") : this.tx("freshness.delayedMinutes", { minutes: delayMinutes });
+    const source = [this.tx(isCryptoPair(q.symbol) ? "detail.sourceCrypto" : "detail.sourceStock"), delay];
+    const times = [this.tx("detail.quoted", { time: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}` }),
+      this.tx("detail.fetched", { time: formatTime(q.fetchedAt, true) })];
     const stat = (label, price) => v_flex().flex_1().gap(2)
       .child(div().text_size(10.5).text_color(t.dim).child(this.tx(label)))
       .child(div().font_semibold().child(value(price)));
@@ -418,7 +425,7 @@ export default class Bellwether extends View {
           .child(stat("detail.low24h", q.low))
         : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
           .child(stat("detail.prevClose", q.previousClose)))
-      .child(div().text_size(11).text_color(t.dim).child(asOf))
+      .child(v_flex().gap(2).child(this.segments(t, source)).child(this.segments(t, times)))
       .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.tx("quote.cached", { reason: this.say(q.error) }))));
   }
 
