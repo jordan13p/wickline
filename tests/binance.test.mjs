@@ -1,22 +1,29 @@
-// node --test tests/  (the providers import nothing from Herdr)
+// node --test tests/  (the Binance provider imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { USER_AGENT } from "../mods/bellwether/quotes.js";
-import { decodeYahoo, yahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
-import { binance, binanceKlinesUrl, binanceUrl } from "../mods/bellwether/providers/binance.js";
+import { binance, binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/bellwether/providers/binance.js";
+import { ok } from "./helpers.mjs";
 
 const BASE = "https://data-api.binance.vision";
 
-test("yahoo requests one symbol at a time", () => {
-  const requests = yahoo.requests(["AAPL", "MSFT"], {});
-  assert.equal(requests.length, 2);
-  assert.equal(requests[0].url, yahooUrl("AAPL"));
-  assert.equal(requests[1].url, yahooUrl("MSFT"));
-  assert.deepEqual(requests.map((r) => r.symbols), [["AAPL"], ["MSFT"]]);
-  for (const request of requests) {
-    assert.equal(request.kind, "quote");
-    assert.equal(request.headers["User-Agent"], USER_AGENT);
-  }
+test("builds the ticker URL", () => {
+  assert.equal(binanceUrl(BASE, ["BTC/USDT", "ETH/USDT"]), "https://data-api.binance.vision/api/v3/ticker/24hr?symbols=" + encodeURIComponent('["BTCUSDT","ETHUSDT"]'));
+});
+
+test("decodes Binance tickers", () => {
+  const quotes = decodeBinance(["BTC/USDT", "ETH/USDT"], ok([
+    { symbol: "BTCUSDT", lastPrice: "65000.5", prevClosePrice: "64000", closeTime: 1_760_000_000_000 },
+  ]), 1);
+  assert.equal(quotes["BTC/USDT"].currency, "USDT");
+  assert.equal(quotes["ETH/USDT"], undefined);
+  assert.throws(() => decodeBinance(["X/Y"], { status: 400, ok: false, text: "" }, 1), (e) => e.invalidSymbol);
+});
+
+test("reads Binance's 24-hour line", () => {
+  assert.equal(binanceKlinesUrl(BASE, "BTC/USDT"), "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96");
+  assert.deepEqual(decodeKlines(ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"], "junk"])), [1.5, 1.75]);
+  assert.throws(() => decodeKlines({ status: 400, ok: false, text: "" }));
 });
 
 test("binance batches quotes and asks lines per pair", () => {
@@ -50,9 +57,4 @@ test("binance uses the configured base for tickers and lines", () => {
   // A trailing slash or a path prefix still makes a clean address.
   assert.ok(binanceUrl("https://mirror.test/", ["BTC/USDT"]).startsWith("https://mirror.test/api/v3/ticker/24hr?"));
   assert.ok(binanceKlinesUrl("https://mirror.test/proxy//", "BTC/USDT").startsWith("https://mirror.test/proxy/api/v3/klines?"));
-});
-
-test("errors carry codes and the old English text", () => {
-  assert.throws(() => decodeYahoo("AAPL", { status: 429, ok: false, text: "" }, 1), (e) =>
-    e.code === "yahoo.rateLimited" && e.message === "Yahoo rate limited requests." && e.retryAfterMs === 60_000);
 });
