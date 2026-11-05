@@ -37,11 +37,10 @@ The interface is in English, 繁體中文, 简体中文, 日本語 or 한국어.
 
 ## Settings
 
-The settings icon (a gear) in the panel header opens a dialog with four tabs; nothing changes until you press Save, and Cancel or Esc drops your edits.
+The settings icon (a gear) in the panel header opens a dialog with three tabs; nothing changes until you press Save, and Cancel or Esc drops your edits.
 
 - **Data sources**: Yahoo Finance for stocks and indexes (delayed, nothing to set) and Binance Spot for crypto pairs. The United States card switches US stocks between Yahoo (the default) and Finnhub, which needs your own API key (a free-plan key is enough and recommended). Choosing Finnhub shows a masked key field with a Show/Hide button, the Finnhub URL, the requests per minute (a whole number of at least 4, default 60) and how many US symbols that covers. Save stays disabled without a key. The key is stored in plaintext on this computer (see below). The Taiwan card switches Taiwan stocks between Yahoo (the default) and TWSE MIS, the Taiwan Stock Exchange's unofficial market-information feed. Choosing TWSE MIS shows its URL, a responsibility statement (the Traditional Chinese text prevails) and a consent box; Save stays disabled until you tick it. Your consent is stored with the statement's version: when the statement changes, Taiwan stocks go back to Yahoo and the card and status line ask you to confirm again. Binance may be unavailable in some regions, such as the United States (crypto rows then say so); the Binance URL can be changed to another address that serves the same API. It must start with `https://`, otherwise Save stays disabled.
-- **Display**: the gain/loss color (automatic by language, red-up or green-up), which applies to the whole list whatever the market, and a button that opens Herdr's own appearance settings. Bellwether has no light/dark setting of its own.
-- **Language**: the interface language.
+- **Display**: the interface language (it changes only the interface text, not the quotes), the gain/loss color (automatic by language, red-up or green-up), which applies to the whole list whatever the market, and a button that opens Herdr's own appearance settings. Bellwether has no light/dark setting of its own.
 - **Disclaimer & privacy**: the full disclaimer, the sources and what their quotes mean (Yahoo Finance: regular-session quotes, exchange delays vary; Binance Spot: crypto pairs with a 24-hour change), the hosts and the storage. The one-line disclaimer in the panel footer opens this tab.
 
 ## Network and storage

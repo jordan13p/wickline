@@ -86,3 +86,11 @@ test("icon tooltips, table labels and the source legend", () => {
     assert.ok(!("footer.sources" in STRINGS[lang]) && !("footer.sourcesCrypto" in STRINGS[lang]), lang);
   }
 });
+
+test("the language choice lives in the Display tab", () => {
+  for (const lang of LANGUAGES) {
+    assert.ok(!("settings.tab.language" in STRINGS[lang]), lang);
+    assert.ok(STRINGS[lang]["display.language"] && STRINGS[lang]["display.languageHint"], lang);
+  }
+  assert.equal(t("zh-TW", "display.languageHint"), "只改變介面文字，不影響報價。");
+});

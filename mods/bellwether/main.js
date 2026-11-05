@@ -31,7 +31,7 @@ const NUMBER_W = 72;
 const CODE_W = 34;
 // Below this panel width the footer shows the short disclaimer.
 const SHORT_FOOTER_WIDTH = 480;
-const SETTINGS_TABS = ["sources", "display", "language", "disclaimer"];
+const SETTINGS_TABS = ["sources", "display", "disclaimer"];
 const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
 
 // The Finnhub key, in plaintext, in Bellwether's folder under Herdr's data folder: localStorage is per
@@ -1010,9 +1010,14 @@ export default class Bellwether extends View {
         this.healthLine(t, "binance")));
   }
 
+  // The interface language, then the gain and loss colors, then Herdr's own appearance settings.
   displayTab(t) {
     return v_flex().gap(12)
-      .child(div().font_semibold().child(this.tx("display.colors")))
+      .child(div().font_semibold().child(this.tx("display.language")))
+      .child(this.segmented(t, "bw-language", LANGUAGES.map((language) => [language, LANGUAGE_LABELS[language]]), this.draft.language,
+        (language) => { this.draft.language = language; }))
+      .child(this.note(t, this.tx("display.languageHint")))
+      .child(div().mt(8).font_semibold().child(this.tx("display.colors")))
       .child(this.segmented(t, "bw-colors", COLOR_CHOICES.map(([value, key]) => [value, this.tx(key)]), this.draft.colors,
         (colors) => { this.draft.colors = colors; }))
       .child(this.note(t, this.tx("display.colorsHint")))
@@ -1021,13 +1026,6 @@ export default class Bellwether extends View {
         run("app.settings", { section: "look" });
       })))
       .child(this.note(t, this.tx("display.appearanceHint")));
-  }
-
-  languageTab(t) {
-    return v_flex().gap(12)
-      .child(div().font_semibold().child(this.tx("settings.tab.language")))
-      .child(this.segmented(t, "bw-language", LANGUAGES.map((language) => [language, LANGUAGE_LABELS[language]]), this.draft.language,
-        (language) => { this.draft.language = language; }));
   }
 
   disclaimerTab(t) {
