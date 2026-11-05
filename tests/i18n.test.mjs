@@ -51,6 +51,11 @@ test("reviewed terms", () => {
   assert.ok(tw["disclaimer.sourcesStocks"].includes("一般交易時段"));
   assert.ok(tw["detail.sourceStock"].includes("一般交易時段"));
   assert.equal(tw["button.refresh"], "重新整理");
+  // The Finnhub key is 「API 金鑰」 throughout, never "key".
+  for (const [key, text] of Object.entries(tw)) assert.ok(!/key/i.test(text), `zh-TW ${key}`);
+  for (const key of ["sources.us.keyNote", "finnhub.noKey", "error.saveKey", "sources.us.finnhubSource"]) {
+    assert.ok(tw[key].includes("API 金鑰"), `zh-TW ${key}`);
+  }
 
   const ko = STRINGS.ko;
   for (const [key, text] of Object.entries(ko)) assert.ok(!text.includes("관심 목록"), `ko ${key}`);
