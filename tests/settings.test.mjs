@@ -175,6 +175,23 @@ test("Finnhub needs an https address and a key to save", () => {
   for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.keyNeeded"], lang);
 });
 
+test("the Finnhub address keeps the host finnhub.io; only its path can change", () => {
+  const check = (finnhubUrl) => validateSettings(us({ provider: "finnhub", finnhubUrl }));
+  for (const good of [FINNHUB_URL, "https://finnhub.io", "https://finnhub.io/", "https://FINNHUB.io/api/v2", " https://finnhub.io/api/v1 "]) {
+    assert.deepEqual(check(good), {}, good);
+  }
+  for (const bad of ["https://evil.test", "https://finnhub.io.evil.test/api/v1", "https://evil.test/finnhub.io", "https://user@finnhub.io/api/v1",
+    "https://finnhub.io:8443/api/v1", "https://finnhub.io./api/v1", "https://finnhub.io/api/v1?x=1", "https://finnhub.io/api/v1#x",
+    "https://finnhub.io/api v1", "https://api.finnhub.io/v1"]) {
+    assert.deepEqual(check(bad), { "sources.us.finnhubUrl": "url.finnhubHost" }, bad);
+  }
+  assert.deepEqual(check("http://finnhub.io/api/v1"), { "sources.us.finnhubUrl": "url.notHttps" });
+  // Not checked while Yahoo is chosen, and kept as written so the dialog can name the problem.
+  assert.deepEqual(validateSettings(us({ provider: "yahoo", finnhubUrl: "https://evil.test" })), {});
+  assert.equal(us({ finnhubUrl: "https://evil.test" }).sources.us.finnhubUrl, "https://evil.test");
+  for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["url.finnhubHost"], lang);
+});
+
 test("what a save does with the key", () => {
   // Finnhub chosen: a new key is written; the same one is not written again.
   assert.equal(keyChange({ provider: "finnhub", typed: "new-key", saved: "old-key" }), "write");

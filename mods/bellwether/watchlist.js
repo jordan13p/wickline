@@ -4,7 +4,7 @@ import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
 import { marketOf } from "./markets.js";
 import { binance } from "./providers/binance.js";
-import { finnhub, finnhubCap } from "./providers/finnhub.js";
+import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
 import { SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
@@ -21,10 +21,13 @@ const PROVIDERS = [binance, mis, finnhub, yahoo];
 const SWITCHES = {
   mis: { on: misEnabled, notice: (settings) => (misReconfirm(settings) ? "mis.reconfirm" : null) },
   finnhub: {
-    on: (settings, w) => finnhubChosen(settings) && Boolean(w.finnhubKey),
-    // Only once this copy has read the key file for the saved keyRev.
+    // The address is checked again here: shared state may hold one the dialog never accepted.
+    on: (settings, w) => finnhubChosen(settings) && finnhubAddressOk(settings.sources.us.finnhubUrl) && Boolean(w.finnhubKey),
+    // The key file's problems only once this copy has read it for the saved keyRev.
     notice: (settings, w) => {
-      if (!finnhubChosen(settings) || w.keyRev !== settings.keyRev) return null;
+      if (!finnhubChosen(settings)) return null;
+      if (!finnhubAddressOk(settings.sources.us.finnhubUrl)) return "finnhub.badUrl";
+      if (w.keyRev !== settings.keyRev) return null;
       if (w.keyUnreadable) return "finnhub.secretUnreadable";
       return w.finnhubKey ? null : "finnhub.noKey";
     },
@@ -589,7 +592,8 @@ export class Watchlist {
 
   async get(request) {
     const response = await this.host.fetch(request.url, request.headers);
-    return { status: response.status, ok: response.ok, text: await response.text() };
+    // `url`: where the answer came from after any redirect.
+    return { status: response.status, ok: response.ok, url: response.url, text: await response.text() };
   }
 
   /**

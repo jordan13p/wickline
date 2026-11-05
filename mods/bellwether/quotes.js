@@ -36,6 +36,7 @@ export const MESSAGES_EN = {
   "finnhub.http": "Finnhub returned HTTP {status}.",
   "finnhub.unreadable": "Finnhub returned an unreadable response.",
   "finnhub.unreachable": "Could not reach Finnhub.",
+  "finnhub.redirected": "Finnhub's answer came from another address. The key is not sent again until you change the US source in Settings.",
   // `{source}` is a provider id; the view shows its name.
   "request.timeout": "{source} did not answer within {seconds}s.",
 };

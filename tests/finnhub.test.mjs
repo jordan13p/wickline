@@ -1,7 +1,7 @@
 // node --test tests/  (providers/finnhub.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USER_AGENT } from "../mods/bellwether/quotes.js";
+import { MESSAGES_EN, USER_AGENT } from "../mods/bellwether/quotes.js";
 import { STRINGS } from "../mods/bellwether/i18n.js";
 import { Watchlist } from "../mods/bellwether/watchlist.js";
 import { SECRET_KEY_FINNHUB } from "../mods/bellwether/settings.js";
@@ -42,8 +42,8 @@ test("key in header, not URL", () => {
   assert.deepEqual(request.symbols, ["AAPL"]);
   assert.equal(request.kind, "quote");
   // One request per symbol; the person's address is used without a trailing slash.
-  const two = finnhub.requests(["AAPL", "BRK-B"], { finnhubUrl: "https://mirror.test/fh/", finnhubKey: "k" });
-  assert.deepEqual(two.map((r) => r.url), ["https://mirror.test/fh/quote?symbol=AAPL", "https://mirror.test/fh/quote?symbol=BRK.B"]);
+  const two = finnhub.requests(["AAPL", "BRK-B"], { finnhubUrl: "https://finnhub.io/api/v2/", finnhubKey: "k" });
+  assert.deepEqual(two.map((r) => r.url), ["https://finnhub.io/api/v2/quote?symbol=AAPL", "https://finnhub.io/api/v2/quote?symbol=BRK.B"]);
 });
 
 test("symbol mapping", () => {
@@ -80,6 +80,53 @@ test("HTML answer fails visibly", () => {
     // The message names no key.
     assert.ok(!error.message.includes(KEY));
   }
+});
+
+test("a saved Finnhub address off https://finnhub.io sends no request: the key never leaves", async () => {
+  for (const finnhubUrl of ["http://finnhub.io/api/v1", "https://evil.test", "https://finnhub.io.evil.test/api/v1", "https://user@finnhub.io/api/v1"]) {
+    const host = usHost({ finnhubUrl });
+    const w = new Watchlist(host);
+    w.add("AAPL");
+    const runs = start(w, host);
+    await advance(host, 62_000);
+    assert.equal(finnhubCount(host), 0, finnhubUrl);
+    for (const headers of host.headers) assert.equal(headers?.["X-Finnhub-Token"], undefined, finnhubUrl);
+    assert.ok(host.requests.length > 0, "Yahoo still asked");
+    assert.equal(w.shown("AAPL").source, "yahoo", finnhubUrl);
+    // On the status line and the US card (the dialog shows problems()).
+    assert.deepEqual(w.problems().filter((p) => p.provider === "finnhub"), [{ provider: "finnhub", code: "finnhub.badUrl", params: {} }], finnhubUrl);
+    // Fixed in Settings: Finnhub runs.
+    host.prefs = finnhubOn({ finnhubUrl: FINNHUB_URL });
+    w.sync();
+    await advance(host, 65_000);
+    assert.ok(finnhubCount(host) > 0, finnhubUrl);
+    assert.deepEqual(w.problems().filter((p) => p.provider === "finnhub"), []);
+    await stop(w, host, runs);
+  }
+  for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.badUrl"], lang);
+});
+
+test("an answer from another address stops Finnhub: the key is not sent again", async () => {
+  for (const finalUrl of ["https://evil.test/quote?symbol=AAPL", "http://finnhub.io/api/v1/quote?symbol=AAPL", "https://finnhub.io.evil.test/x"]) {
+    const error = decode("AAPL", { ...ok(QUOTE), url: finalUrl }).errors.AAPL;
+    assert.equal(error.code, "finnhub.redirected", finalUrl);
+    assert.equal(error.stopsSource, true);
+  }
+  // The same host, or no final address given: decoded as usual.
+  assert.equal(decode("AAPL", { ...ok(QUOTE), url: `${FINNHUB_URL}/quote?symbol=AAPL` }).quotes.AAPL.price, QUOTE.c);
+  assert.equal(decode("AAPL", ok(QUOTE)).quotes.AAPL.price, QUOTE.c);
+  const host = usHost();
+  host.finnhub = (url) => ({ ...ok(QUOTE), url: url.replace("https://finnhub.io", "https://evil.test") });
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("MSFT");
+  const runs = start(w, host);
+  await advance(host, 120_000);
+  assert.equal(finnhubCount(host), 1);
+  assert.equal(w.sources.finnhub.disabled, true);
+  assert.deepEqual(w.problems().find((p) => p.provider === "finnhub"), { provider: "finnhub", code: "finnhub.redirected", params: {} });
+  await stop(w, host, runs);
+  assert.ok("finnhub.redirected" in MESSAGES_EN);
+  for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.redirected"], lang);
 });
 
 test("cap of 15 at the default budget", async () => {
@@ -229,13 +276,13 @@ test("a change to the US source settings also lifts the stop", async () => {
   await advance(host, 1);
   assert.equal(w.sources.finnhub.disabled, true);
   host.finnhub = () => ok(QUOTE);
-  host.prefs = finnhubOn({ finnhubUrl: "https://mirror.test/fh" });
+  host.prefs = finnhubOn({ finnhubUrl: "https://finnhub.io/api/v2" });
   w.sync();
   await advance(host, 2);
   assert.equal(w.sources.finnhub.disabled, false);
   // Still one request per interval since the last one.
   await advance(host, 15_001);
-  assert.ok(host.requests.includes("https://mirror.test/fh/quote?symbol=AAPL"));
+  assert.ok(host.requests.includes("https://finnhub.io/api/v2/quote?symbol=AAPL"));
   await stop(w, host, runs);
 });
 

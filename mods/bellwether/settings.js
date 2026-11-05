@@ -3,7 +3,7 @@
 // so tests run it under Node.
 import { LANGUAGES } from "./i18n.js";
 import { BINANCE_URL } from "./providers/binance.js";
-import { FINNHUB_URL } from "./providers/finnhub.js";
+import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 
 // Herdr's shared state (persisted), so every copy uses the same settings.
@@ -76,6 +76,7 @@ export function misReconfirm(settings) {
 }
 
 // Field path -> error code; an https address, optionally with a path, and no userinfo, query or fragment.
+// Finnhub's keeps the host finnhub.io (it is sent the key).
 // A field is checked only while it is shown: the MIS address only with MIS chosen.
 const URL_FIELDS = [
   ["sources.us.finnhubUrl", (s) => (s.sources.us?.provider === "finnhub" ? s.sources.us.finnhubUrl : null)],
@@ -96,6 +97,7 @@ export function validateSettings(settings, { finnhubKey } = {}) {
     if (value === null) continue;
     const url = value.trim();
     if (!/^https:\/\//i.test(url)) errors[path] = "url.notHttps";
+    else if (path === "sources.us.finnhubUrl") { if (!finnhubAddressOk(url)) errors[path] = "url.finnhubHost"; }
     else if (!HTTPS_ADDRESS.test(url)) errors[path] = "url.invalid";
   }
   if (settings.sources.us?.provider === "finnhub") {
