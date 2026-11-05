@@ -1,0 +1,101 @@
+// TWSE MIS: the exchange's unofficial market-info feed, seconds behind, laid over Yahoo's delayed
+// Taiwan quotes. Off until the person turns it on and consents. This file is the whole source, so
+// one commit can remove it. No Herdr imports, so tests run it under Node.
+import { HEADERS, QuoteError, cleanText, positive } from "../quotes.js";
+
+export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
+export const MIS_BATCH = 50;
+// Raise it with any change in substance to the statement or consent text (zh-TW prevails):
+// a consent given to an older text no longer turns MIS on.
+export const MIS_CONSENT_VERSION = 1;
+
+/** @typedef {import("./yahoo.js").Provider} Provider */
+
+/** `2330.TW` → `tse_2330.tw`, `6488.TWO` → `otc_6488.tw`; a code with letters keeps its case, or MIS returns nothing. */
+export function misChannel(symbol) {
+  const dot = symbol.lastIndexOf(".");
+  return `${symbol.slice(dot + 1) === "TWO" ? "otc" : "tse"}_${symbol.slice(0, dot)}.tw`;
+}
+
+/** MIS's own limit-up and limit-down; a stock without both (or with limit-up ≥ 9999) has none to check. */
+export function withinLimits(price, up, down) {
+  if (!positive(up) || !positive(down) || up >= 9999) return true;
+  return down <= price && price <= up;
+}
+
+const number = (value) => {
+  const n = Number(value);
+  return positive(n) ? n : null;
+};
+
+// The best bid or ask: "2265.0000_2260.0000_..." → 2265.
+const best = (value) => (typeof value === "string" ? number(value.split("_")[0]) : null);
+
+/**
+ * Overlays by requested symbol. The price is the last trade (`z`); when the last 5-second snapshot
+ * had none (`-`), the midpoint of the best bid and ask. A row with neither, or without a time, has
+ * no overlay and no error. A row MIS sent for a symbol that was not asked for is ignored.
+ */
+export function decodeMis(symbols, response, now) {
+  // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
+  if (response.status === 429) throw new QuoteError("mis.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (!response.ok) throw new QuoteError("mis.http", { status: response.status });
+  let body;
+  try { body = JSON.parse(response.text); } catch { throw new QuoteError("mis.unreadable"); }
+  if (!Array.isArray(body?.msgArray)) throw new QuoteError("mis.unreadable");
+  const wanted = new Map(symbols.map((symbol) => [misChannel(symbol), symbol]));
+  const quotes = {};
+  const errors = {};
+  for (const row of body.msgArray) {
+    const symbol = typeof row?.ex === "string" && typeof row.c === "string" ? wanted.get(`${row.ex}_${row.c}.tw`) : undefined;
+    if (!symbol) continue;
+    const bid = best(row.b);
+    const ask = best(row.a);
+    const price = number(row.z) ?? (bid && ask ? (bid + ask) / 2 : null);
+    const time = Number(row.tlong);
+    if (!price || !positive(time)) continue;
+    if (!withinLimits(price, number(row.u), number(row.w))) {
+      errors[symbol] = new QuoteError("mis.outOfLimits");
+      continue;
+    }
+    quotes[symbol] = {
+      symbol,
+      source: "mis",
+      name: cleanText(row.n),
+      price,
+      previousClose: number(row.y),
+      open: number(row.o),
+      high: number(row.h),
+      low: number(row.l),
+      timestamp: time,
+      fetchedAt: now,
+    };
+  }
+  return { quotes, errors };
+}
+
+/** @type {Provider} */
+export const mis = {
+  id: "mis",
+  markets: ["tw"],
+  realtime: true,
+  overlay: true,
+  spacingMs: () => 0,
+  intervalMs: (session) => (session === "open" || session === "unknown" ? 10_000 : 60_000),
+  requests(symbols, { misUrl }) {
+    const requests = [];
+    for (let i = 0; i < symbols.length; i += MIS_BATCH) {
+      const batch = symbols.slice(i, i + MIS_BATCH);
+      requests.push({ url: `${misUrl}?ex_ch=${batch.map(misChannel).join("|")}&json=1&delay=0`, headers: HEADERS, symbols: batch, kind: "quote" });
+    }
+    return requests;
+  },
+  decode(request, response, now) {
+    try {
+      return decodeMis(request.symbols, response, now);
+    } catch (error) {
+      if (!(error instanceof QuoteError)) throw error;
+      return { quotes: {}, errors: Object.fromEntries(request.symbols.map((symbol) => [symbol, error])) };
+    }
+  },
+};

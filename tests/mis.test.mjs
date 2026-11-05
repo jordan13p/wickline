@@ -1,0 +1,292 @@
+// node --test tests/  (providers/mis.js imports nothing from Herdr)
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { USER_AGENT } from "../mods/bellwether/quotes.js";
+import { Watchlist, mergeOverlay } from "../mods/bellwether/watchlist.js";
+import { advance, chart, fakeHost, start, stop } from "./helpers.mjs";
+import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel, withinLimits } from "../mods/bellwether/providers/mis.js";
+
+// Recorded answers from MIS during trading hours (2026-11-05), only these symbols' rows.
+const fixture = (name) => readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8");
+const OPEN = fixture("mis-open");
+const LIMITS = fixture("mis-limits");
+const cfg = { misUrl: MIS_URL };
+const answer = (text) => ({ status: 200, ok: true, text });
+const decode = (symbols, response, now = 1) => mis.decode(mis.requests(symbols, cfg)[0], response, now);
+// The recorded 2330 row with some fields replaced.
+const row2330 = (fields) => {
+  const body = JSON.parse(OPEN);
+  return answer(JSON.stringify({ ...body, msgArray: [{ ...body.msgArray[0], ...fields }] }));
+};
+
+test("constants", () => {
+  assert.equal(MIS_URL, "https://mis.twse.com.tw/stock/api/getStockInfo.jsp");
+  assert.equal(MIS_BATCH, 50);
+  assert.equal(MIS_CONSENT_VERSION, 1);
+  assert.equal(mis.id, "mis");
+  assert.deepEqual(mis.markets, ["tw"]);
+  assert.equal(mis.realtime, true);
+  assert.equal(mis.overlay, true);
+  assert.equal(mis.spacingMs(3, 10_000), 0);
+  assert.equal(mis.intervalMs("open"), 10_000);
+  assert.equal(mis.intervalMs("unknown"), 10_000);
+  for (const session of ["closed", "pre", "post"]) assert.equal(mis.intervalMs(session), 60_000, session);
+});
+
+test("channels keep case", () => {
+  assert.equal(misChannel("2330.TW"), "tse_2330.tw");
+  assert.equal(misChannel("6488.TWO"), "otc_6488.tw");
+  assert.equal(misChannel("00632R.TW"), "tse_00632R.tw");
+});
+
+test("batches of 50 and none when empty", () => {
+  assert.deepEqual(mis.requests([], cfg), []);
+  const symbols = Array.from({ length: 51 }, (_, i) => `${1000 + i}.TW`);
+  const requests = mis.requests(symbols, cfg);
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests.map((r) => r.symbols.length), [50, 1]);
+  for (const request of requests) {
+    assert.ok(request.url.startsWith(cfg.misUrl + "?"), request.url);
+    assert.equal(request.kind, "quote");
+    assert.equal(request.headers["User-Agent"], USER_AGENT);
+  }
+  assert.equal(mis.requests(["2330.TW", "6488.TWO"], cfg)[0].url, `${MIS_URL}?ex_ch=tse_2330.tw|otc_6488.tw&json=1&delay=0`);
+  // The person's address is used as written.
+  assert.ok(mis.requests(["2330.TW"], { misUrl: "https://mirror.test/mis" })[0].url.startsWith("https://mirror.test/mis?ex_ch="));
+});
+
+test("decodes the recorded answer", () => {
+  const body = JSON.parse(OPEN);
+  const result = decode(["2330.TW", "0050.TW"], answer(OPEN), 42);
+  assert.deepEqual(Object.keys(result.quotes).sort(), ["0050.TW", "2330.TW"]);
+  // 00632R.TW is in the answer but was not asked for.
+  assert.equal(result.quotes["00632R.TW"], undefined);
+  assert.deepEqual(result.errors, {});
+  const etf = result.quotes["0050.TW"];
+  const row = body.msgArray[1];
+  assert.equal(etf.price, Number(row.z));
+  assert.equal(etf.timestamp, Number(row.tlong));
+  assert.deepEqual(etf, {
+    symbol: "0050.TW", source: "mis", name: row.n, price: 98.7, previousClose: 99.85,
+    open: 99.4, high: 99.75, low: 97.6, timestamp: Number(row.tlong), fetchedAt: 42,
+  });
+  // No trade in the last snapshot: the best bid/ask midpoint.
+  assert.equal(result.quotes["2330.TW"].price, (2265 + 2270) / 2);
+});
+
+test("midpoint and no price", () => {
+  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "100.5_100_", a: "101.5_102_", u: "-", w: "-" })).quotes["2330.TW"].price, 101);
+  const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000" }));
+  assert.deepEqual(none, { quotes: {}, errors: {} });
+  // One side only is not a midpoint.
+  assert.deepEqual(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2270.0000_" })), { quotes: {}, errors: {} });
+  assert.deepEqual(decode(["2330.TW"], row2330({ tlong: "-" })), { quotes: {}, errors: {} });
+});
+
+test("limit check", () => {
+  assert.equal(withinLimits(2600, 2520, 2070), false);
+  assert.equal(withinLimits(2000, 2520, 2070), false);
+  assert.equal(withinLimits(2500, 2520, 2070), true);
+  assert.equal(withinLimits(2520, 2520, 2070), true);
+  assert.equal(withinLimits(80, 9999.95, null), true);
+  assert.equal(withinLimits(80, null, 70), true);
+  assert.equal(withinLimits(80, undefined, undefined), true);
+  const above = decode(["2330.TW"], row2330({ z: "2600.0000" }));
+  assert.deepEqual(above.quotes, {});
+  assert.equal(above.errors["2330.TW"].code, "mis.outOfLimits");
+  // A fund without limits (limit-up 9999.95, no limit-down) is used unchecked.
+  const free = decode(["00646.TW"], answer(LIMITS));
+  assert.equal(free.quotes["00646.TW"].price, (79.55 + 79.65) / 2);
+  assert.deepEqual(free.errors, {});
+});
+
+test("HTML answer fails visibly", () => {
+  const result = decode(["2330.TW", "0050.TW"], { status: 200, ok: true, text: "<html>" });
+  assert.deepEqual(result.quotes, {});
+  for (const symbol of ["2330.TW", "0050.TW"]) assert.equal(result.errors[symbol].code, "mis.unreadable", symbol);
+  assert.equal(decode(["2330.TW"], answer("{}")).errors["2330.TW"].code, "mis.unreadable");
+  const refused = decode(["2330.TW"], { status: 503, ok: false, text: "" });
+  assert.deepEqual([refused.errors["2330.TW"].code, refused.errors["2330.TW"].params], ["mis.http", { status: 503 }]);
+  assert.equal(decode(["2330.TW"], { status: 429, ok: false, text: "" }).errors["2330.TW"].retryAfterMs, 60_000);
+});
+
+// ---- Overlay over Yahoo, and routing through the scheduler ----
+
+const YAHOO_2330 = {
+  symbol: "2330.TW", source: "yahoo", name: "Taiwan Semiconductor", price: 2200, changePercent: -2.65, currency: "TWD",
+  timestamp: 1_000, fetchedAt: 2_000, delaySeconds: null, series: [2190, 2200], open: 2250, high: 2260, low: 2180,
+  previousClose: 2260, periods: { pre: null, regular: [0, 10_000], post: null },
+};
+const MIS_2330 = {
+  symbol: "2330.TW", source: "mis", name: "台積電", price: 2267.5, previousClose: 2260, open: 2250, high: 2285, low: null,
+  timestamp: 5_000, fetchedAt: 5_500,
+};
+
+test("overlay merges over Yahoo", () => {
+  const merged = mergeOverlay(YAHOO_2330, MIS_2330);
+  assert.equal(merged.price, 2267.5);
+  assert.equal(merged.timestamp, 5_000);
+  assert.equal(merged.fetchedAt, 5_500);
+  assert.equal(merged.source, "mis");
+  assert.equal(merged.name, "台積電");
+  assert.equal(merged.high, 2285);
+  // A field MIS did not send keeps Yahoo's.
+  assert.equal(merged.low, 2180);
+  assert.equal(merged.changePercent, (2267.5 - 2260) / 2260 * 100);
+  assert.equal(merged.delaySeconds, 0);
+  assert.deepEqual(merged.series, YAHOO_2330.series);
+  assert.deepEqual(merged.periods, YAHOO_2330.periods);
+  assert.equal(merged.currency, "TWD");
+  assert.equal(merged.chartSource, "yahoo");
+  // Without a Yahoo quote yet: MIS's price, no line, no session.
+  const alone = mergeOverlay(undefined, MIS_2330);
+  assert.equal(alone.price, MIS_2330.price);
+  assert.deepEqual(alone.series, []);
+  assert.equal(alone.periods, null);
+  assert.equal(alone.chartSource, null);
+  assert.equal(mergeOverlay(YAHOO_2330, undefined), YAHOO_2330);
+  assert.equal(mergeOverlay(undefined, undefined), undefined);
+});
+
+const CONSENTED = { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
+const yahooTw = (url) => chart({
+  symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
+  regularMarketTime: 1, previousClose: 2260, currency: "TWD",
+});
+const misCount = (host) => host.requests.filter((url) => url.startsWith(MIS_URL)).length;
+
+function twHost(prefs, misAnswer = () => answer(OPEN)) {
+  const host = fakeHost((url) => (url.startsWith(MIS_URL) ? host.mis(url) : yahooTw(url)));
+  host.mis = misAnswer;
+  host.prefs = prefs;
+  return host;
+}
+
+test("MIS stays off until the current consent is given", async () => {
+  for (const prefs of [undefined, { version: 1, sources: { tw: { provider: "mis", misAck: null } } },
+    { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION - 1 } } } }]) {
+    const host = twHost(prefs);
+    const w = new Watchlist(host);
+    w.add("2330.TW");
+    const runs = start(w, host);
+    await advance(host, 61_000);
+    assert.equal(misCount(host), 0, JSON.stringify(prefs));
+    assert.equal(w.shown("2330.TW").source, "yahoo");
+    const asked = prefs?.sources.tw.provider === "mis";
+    assert.deepEqual(w.problems(), asked ? [{ provider: "mis", code: "mis.reconfirm", params: {} }] : []);
+    await stop(w, host, runs);
+  }
+});
+
+test("MIS overlays Yahoo every 10 s, even while Yahoo hangs", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW"); w.add("0050.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  // One request for both symbols.
+  assert.equal(host.requests.filter((url) => url.startsWith(MIS_URL))[0], `${MIS_URL}?ex_ch=tse_2330.tw|tse_0050.tw&json=1&delay=0`);
+  const quote = w.shown("2330.TW");
+  assert.deepEqual([quote.source, quote.price, quote.chartSource, quote.currency], ["mis", 2267.5, "yahoo", "TWD"]);
+  assert.equal(w.quotes["2330.TW"].source, "yahoo");
+  assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+
+  const hung = twHost(CONSENTED);
+  const fetch = hung.fetch;
+  hung.fetch = (url, headers) => (url.startsWith(MIS_URL) ? fetch(url, headers) : (hung.requests.push(url), new Promise(() => {})));
+  const v = new Watchlist(hung);
+  v.add("2330.TW");
+  const hungRuns = start(v, hung);
+  await advance(hung, 31_000);
+  assert.ok(misCount(hung) >= 3, `${misCount(hung)} MIS requests`);
+  // No Yahoo quote yet: the MIS price shows, with no session.
+  assert.equal(v.shown("2330.TW").source, "mis");
+  await stop(v, hung, hungRuns);
+});
+
+test("any MIS failure drops the overlay at once", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.shown("2330.TW").source, "mis");
+  host.mis = () => { throw new Error("offline"); };
+  await advance(host, 10_001);
+  assert.equal(w.shown("2330.TW").source, "yahoo");
+  assert.equal(w.shown("2330.TW").price, 2200);
+  assert.equal(w.overlayErrors["2330.TW"].code, "mis.unreachable");
+  // Yahoo's own quote is fine, so the row has no error of its own.
+  assert.equal(w.errors["2330.TW"], undefined);
+  assert.deepEqual(w.problems(), [{ provider: "mis", code: "mis.unreachable", params: {} }]);
+  // Back: the overlay returns, the reason goes.
+  host.mis = () => answer(OPEN);
+  await advance(host, 20_002);
+  assert.equal(w.shown("2330.TW").source, "mis");
+  assert.equal(w.overlayErrors["2330.TW"], undefined);
+  assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+});
+
+test("a price outside the limits falls back for that symbol only", async () => {
+  const host = twHost(CONSENTED, () => {
+    const body = JSON.parse(OPEN);
+    body.msgArray[0].z = "2600.0000";
+    return answer(JSON.stringify(body));
+  });
+  const w = new Watchlist(host);
+  w.add("2330.TW"); w.add("0050.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.shown("2330.TW").source, "yahoo");
+  assert.equal(w.overlayErrors["2330.TW"].code, "mis.outOfLimits");
+  assert.equal(w.shown("0050.TW").source, "mis");
+  // One symbol's price, not the source: no status line for MIS.
+  assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+});
+
+test("no price drops the overlay without an error", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.shown("2330.TW").source, "mis");
+  host.mis = () => row2330({ z: "-", b: "-", a: "0.0000" });
+  await advance(host, 10_001);
+  assert.equal(w.shown("2330.TW").source, "yahoo");
+  assert.equal(w.overlayErrors["2330.TW"], undefined);
+  await stop(w, host, runs);
+});
+
+test("turning MIS off drops the overlay at once", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(w.shown("2330.TW").source, "mis");
+  host.prefs = { version: 1, sources: { tw: { provider: "yahoo", misAck: { version: MIS_CONSENT_VERSION } } } };
+  assert.equal(w.sync(), true);
+  assert.equal(w.shown("2330.TW").source, "yahoo");
+  const sent = misCount(host);
+  await advance(host, 61_000);
+  assert.equal(misCount(host), sent);
+  await stop(w, host, runs);
+});
+
+test("an MIS address change is used at once", async () => {
+  const host = twHost(CONSENTED);
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  host.prefs = { version: 1, sources: { tw: { ...CONSENTED.sources.tw, misUrl: "https://mirror.test/mis" } } };
+  assert.equal(w.sync(), true);
+  await advance(host, 2);
+  assert.ok(host.requests.some((url) => url.startsWith("https://mirror.test/mis?ex_ch=tse_2330.tw")));
+  await stop(w, host, runs);
+});

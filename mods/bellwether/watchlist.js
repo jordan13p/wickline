@@ -4,7 +4,8 @@ import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
 import { marketOf } from "./markets.js";
 import { binance } from "./providers/binance.js";
-import { readSettings } from "./settings.js";
+import { mis } from "./providers/mis.js";
+import { misEnabled, misReconfirm, readSettings } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
@@ -12,7 +13,12 @@ export const WATCHLIST_KEY = "bellwether.watchlist.v1";
 // Herdr's fetch cannot be aborted: a request that has not answered by then counts as failed.
 export const REQUEST_TIMEOUT_MS = 10_000;
 // Started in this order, so their first requests go out in this order too.
-const PROVIDERS = [binance, yahoo];
+const PROVIDERS = [binance, mis, yahoo];
+// Overlay sources the person turns on in Settings: whether each is on now, and what its card and
+// status line say while it is chosen but cannot run.
+const SWITCHES = {
+  mis: { on: misEnabled, notice: (settings) => (misReconfirm(settings) ? "mis.reconfirm" : null) },
+};
 // A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open.
 const SESSION_RANK = { open: 3, "24h": 3, unknown: 2, pre: 1, post: 1, closed: 0 };
 // Errors about the source itself, not one symbol: shown as the source's problem.
@@ -23,6 +29,27 @@ const TIMED_OUT = {};
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
+
+/**
+ * A real-time overlay's fields over the Yahoo base quote. The line, the trading periods and the
+ * currency stay the base's, and `chartSource` names where the line came from. Works with no base yet.
+ */
+export function mergeOverlay(base, overlay) {
+  if (!overlay) return base;
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(overlay)) if (value !== null && value !== undefined) merged[key] = value;
+  const previousClose = merged.previousClose ?? null;
+  return {
+    ...merged,
+    previousClose,
+    changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
+    currency: base?.currency ?? null,
+    delaySeconds: 0,
+    series: base?.series ?? [],
+    periods: base?.periods ?? null,
+    chartSource: base?.source ?? null,
+  };
+}
 
 export function readPreferences(value) {
   // Nothing saved yet: a starter list, until the first edit saves the person's own.
@@ -55,9 +82,13 @@ export class Watchlist {
     this.host = host;
     this.preferences = readPreferences(host.load());
     this.configKey = JSON.stringify(this.config());
+    // By symbol: the base quote (Yahoo for stocks, Binance for pairs) and a real-time overlay over it.
     this.quotes = {};
-    // By symbol: `{ code, params }` for the view to translate.
+    this.overlays = {};
+    // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart, since
+    // its symbol still has the base quote.
     this.errors = {};
+    this.overlayErrors = {};
     this.revision = 0;
     this.stopped = false;
     // Per provider: its backoff, its current problem, its round and its own wake-up.
@@ -68,9 +99,19 @@ export class Watchlist {
     }]));
   }
 
-  /** What the providers are given: the saved addresses. */
+  /** What the providers are given: the saved addresses, and which overlay sources are on. */
   config() {
-    return { binanceUrl: readSettings(this.host.settings()).sources.crypto.binanceUrl };
+    const settings = readSettings(this.host.settings());
+    return {
+      binanceUrl: settings.sources.crypto.binanceUrl,
+      misUrl: settings.sources.tw.misUrl,
+      on: Object.fromEntries(Object.entries(SWITCHES).map(([id, { on }]) => [id, on(settings)])),
+    };
+  }
+
+  /** What a row shows: the base quote with its overlay, if any. */
+  shown(symbol) {
+    return mergeOverlay(this.quotes[symbol], this.overlays[symbol]);
   }
 
   providerIds() {
@@ -81,10 +122,17 @@ export class Watchlist {
     return Object.values(this.sources).some((state) => state.loading);
   }
 
-  /** One entry per provider that has a problem now (rate limited, unreachable, timed out, refused). */
+  /**
+   * One entry per provider that has a problem now (rate limited, unreachable, timed out, refused),
+   * or that is chosen but cannot run (consent to confirm again).
+   */
   problems() {
-    return PROVIDERS.filter((provider) => this.sources[provider.id].problem)
-      .map((provider) => ({ provider: provider.id, ...this.sources[provider.id].problem }));
+    const settings = readSettings(this.host.settings());
+    return PROVIDERS.flatMap((provider) => {
+      const code = SWITCHES[provider.id]?.notice(settings);
+      const problem = code ? notice(code) : this.sources[provider.id].problem;
+      return problem ? [{ provider: provider.id, ...problem }] : [];
+    });
   }
 
   // Edits are synchronous (the store is Herdr's shared state) and return a short notice,
@@ -169,9 +217,17 @@ export class Watchlist {
     for (const record of [this.quotes, this.errors]) {
       for (const key of Object.keys(record)) if (!keep.has(key)) delete record[key];
     }
+    // An overlay goes as soon as its source no longer covers the symbol (removed, or turned off).
+    const config = this.config();
+    const covered = new Set(PROVIDERS.filter((provider) => provider.overlay).flatMap((provider) => this.symbolsFor(provider, config)));
+    for (const record of [this.overlays, this.overlayErrors]) {
+      for (const key of Object.keys(record)) if (!covered.has(key)) delete record[key];
+    }
   }
 
-  symbolsFor(provider) {
+  /** The listed symbols a provider quotes; none for an overlay source that is off. */
+  symbolsFor(provider, config = this.config()) {
+    if (provider.overlay && !config.on[provider.id]) return [];
     return this.preferences.symbols.filter((symbol) => provider.markets.includes(marketOf(symbol)));
   }
 
@@ -179,7 +235,7 @@ export class Watchlist {
   sessionFor(symbols, now) {
     let best = "closed";
     for (const symbol of symbols) {
-      const quote = this.quotes[symbol];
+      const quote = this.shown(symbol);
       const session = quote ? sessionOf(quote, now) : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
@@ -190,7 +246,7 @@ export class Watchlist {
   staleInMs(symbols, now) {
     let wait = LIVE_MAX_AGE_MS;
     for (const symbol of symbols) {
-      const quote = this.quotes[symbol];
+      const quote = this.shown(symbol);
       const left = quote ? quote.timestamp + LIVE_MAX_AGE_MS + 1 - now : 0;
       if (left > 0 && left < wait) wait = left;
     }
@@ -273,7 +329,7 @@ export class Watchlist {
         const limited = failures.find((error) => error.retryAfterMs !== undefined);
         const down = failures.find((error) => SOURCE_DOWN.test(error.code));
         if (!problem) problem = failures.find((error) => SOURCE_FAILURE.test(error.code)) ?? null;
-        this.apply(provider, result);
+        this.apply(provider, request, result);
         if (limited) {
           // Back off this provider only: at least a minute, doubling up to 15 minutes.
           state.failures++;
@@ -282,7 +338,7 @@ export class Watchlist {
           state.problem = coded(limited);
           for (const later of requests.slice(index + 1)) {
             if (later.kind !== "quote") continue;
-            for (const symbol of later.symbols) this.errors[symbol] = notice("request.deferred", { source: provider.id });
+            for (const symbol of later.symbols) this.fail(provider, symbol, notice("request.deferred", { source: provider.id }));
           }
           return;
         }
@@ -291,7 +347,7 @@ export class Watchlist {
           state.problem = coded(down);
           for (const later of requests.slice(index + 1)) {
             if (later.kind !== "quote") continue;
-            for (const symbol of later.symbols) this.errors[symbol] = coded(down);
+            for (const symbol of later.symbols) this.fail(provider, symbol, coded(down));
           }
           return;
         }
@@ -306,7 +362,18 @@ export class Watchlist {
     }
   }
 
-  apply(provider, result) {
+  apply(provider, request, result) {
+    if (provider.overlay) {
+      // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
+      for (const symbol of request.symbols) {
+        const overlay = result.quotes[symbol];
+        if (overlay) { this.overlays[symbol] = overlay; delete this.overlayErrors[symbol]; continue; }
+        delete this.overlays[symbol];
+        if (result.errors[symbol]) this.overlayErrors[symbol] = coded(result.errors[symbol]);
+        else delete this.overlayErrors[symbol];
+      }
+      return;
+    }
     for (const [symbol, quote] of Object.entries(result.quotes)) {
       // A source with its own line requests keeps the last line until a new one arrives.
       if (provider.linesMs) quote.series = this.quotes[symbol]?.series ?? [];
@@ -314,6 +381,13 @@ export class Watchlist {
       delete this.errors[symbol];
     }
     for (const [symbol, error] of Object.entries(result.errors)) this.errors[symbol] = coded(error);
+  }
+
+  // A symbol whose request was not answered: a base quote stays, marked cached; an overlay goes.
+  fail(provider, symbol, error) {
+    if (!provider.overlay) { this.errors[symbol] = error; return; }
+    delete this.overlays[symbol];
+    this.overlayErrors[symbol] = error;
   }
 
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */

@@ -1,11 +1,12 @@
 // node --test tests/  (settings.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SECRET_KEY_FINNHUB, SETTINGS_KEY, mergeSettings, readSettings, upIsRed, validateSettings } from "../mods/bellwether/settings.js";
+import { SECRET_KEY_FINNHUB, SETTINGS_KEY, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings } from "../mods/bellwether/settings.js";
+import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/bellwether/providers/mis.js";
 import { STRINGS } from "../mods/bellwether/i18n.js";
 
 const BINANCE = "https://data-api.binance.vision";
-const DEFAULTS = { version: 1, language: "en", colors: "auto", languagePromptDismissed: false, sources: { crypto: { binanceUrl: BINANCE } } };
+const DEFAULTS = { version: 1, language: "en", colors: "auto", languagePromptDismissed: false, sources: { tw: { provider: "yahoo", misUrl: MIS_URL, misAck: null }, crypto: { binanceUrl: BINANCE } } };
 
 test("reads settings defensively", () => {
   assert.equal(SETTINGS_KEY, "bellwether.settings.v1");
@@ -77,8 +78,39 @@ test("a save keeps sources keys this build does not know", () => {
   const raw = { version: 1, sources: { crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } } };
   const change = { sources: { crypto: { binanceUrl: "https://b.test" } } };
   assert.deepEqual(mergeSettings(raw, change).sources,
-    { crypto: { binanceUrl: "https://b.test", later: 1 }, future: { x: 2 } });
+    { tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://b.test", later: 1 }, future: { x: 2 } });
   // A change without sources leaves them as they were.
   assert.deepEqual(mergeSettings(raw, { language: "ja" }).sources,
-    { crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } });
+    { tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } });
+});
+
+const tw = (fields) => readSettings({ version: 1, sources: { tw: fields } });
+
+test("consent gates MIS", () => {
+  assert.equal(misEnabled(tw({ provider: "mis", misAck: null })), false);
+  assert.equal(misEnabled(tw({ provider: "mis", misAck: { version: 0 } })), false);
+  assert.equal(misEnabled(tw({ provider: "mis", misAck: { version: MIS_CONSENT_VERSION } })), true);
+  // Consent alone does not turn it on.
+  assert.equal(misEnabled(tw({ provider: "yahoo", misAck: { version: MIS_CONSENT_VERSION } })), false);
+  assert.equal(readSettings({ version: 1, sources: { tw: { provider: "bogus" } } }).sources.tw.provider, "yahoo");
+  for (const misAck of [{}, { version: "1" }, [], 1, { version: 1.5 }]) assert.equal(tw({ misAck }).sources.tw.misAck, null, JSON.stringify(misAck));
+  assert.deepEqual(tw({ misAck: { version: 1, extra: true } }).sources.tw.misAck, { version: 1 });
+  // An older consent asks again; Yahoo or a current consent does not.
+  assert.equal(misReconfirm(tw({ provider: "mis", misAck: { version: 0 } })), true);
+  assert.equal(misReconfirm(tw({ provider: "mis", misAck: null })), true);
+  assert.equal(misReconfirm(tw({ provider: "mis", misAck: { version: MIS_CONSENT_VERSION } })), false);
+  assert.equal(misReconfirm(tw({ provider: "yahoo", misAck: { version: 0 } })), false);
+});
+
+test("MIS needs consent and an https address to save", () => {
+  const ack = { version: MIS_CONSENT_VERSION };
+  assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: null })), { "sources.tw.misAck": "mis.consentNeeded" });
+  assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: ack })), {});
+  assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: ack, misUrl: "http://x.test" })), { "sources.tw.misUrl": "url.notHttps" });
+  // A hidden address (Yahoo chosen) does not block a save.
+  assert.deepEqual(validateSettings(tw({ provider: "yahoo", misUrl: "http://x.test" })), {});
+  assert.equal(tw({ misUrl: "https://mirror.test/mis" }).sources.tw.misUrl, "https://mirror.test/mis");
+  for (const lang of Object.keys(STRINGS)) {
+    for (const code of ["mis.consentNeeded", "mis.statement", "mis.consent", "mis.reconfirm"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
+  }
 });

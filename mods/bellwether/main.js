@@ -3,7 +3,7 @@
 // draws one line of quotes. A row opens the ticker's day as a dialog, and the
 // settings button opens the settings: the same mod, given the quote or `settings` in its props.
 import { View, div, svg, PathBuilder, Background } from "gpui-kit";
-import { v_flex, h_flex, InputState, Input } from "gpui-base";
+import { v_flex, h_flex, Checkbox, InputState, Input } from "gpui-base";
 import { closeOverlay, nextCommand, openOverlay, props, run, setShared, shared, theme } from "herdr";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import {
@@ -12,6 +12,7 @@ import {
 import { REALTIME_SOURCES, freshness, sessionOf } from "./freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS, t as translate } from "./i18n.js";
 import { DEFAULT_BINANCE_URL, SETTINGS_KEY, mergeSettings, readSettings, upIsRed, validateSettings } from "./settings.js";
+import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
@@ -51,7 +52,8 @@ export default class Bellwether extends View {
       load: () => shared(WATCHLIST_KEY),
       save: (preferences) => setShared(WATCHLIST_KEY, preferences),
       settings: () => shared(SETTINGS_KEY),
-      // Read-only GETs to Yahoo Finance and Binance (or the Binance address the person set).
+      // Read-only GETs to Yahoo Finance and Binance (or the Binance address the person set), and to
+      // TWSE MIS (or the MIS address the person set) only once the person turned it on and consented.
       fetch: (url, headers) => fetch(url, { headers }),
       now: () => Date.now(),
     });
@@ -97,6 +99,11 @@ export default class Bellwether extends View {
     this.urlInput.on("change", () => { this.draft.sources.crypto.binanceUrl = this.urlInput.value(); });
     this.urlInput.on("focus", (_e, cx) => { this.urlFocused = true; cx.notify(); });
     this.urlInput.on("blur", (_e, cx) => { this.urlFocused = false; cx.notify(); });
+    this.misUrlFocused = false;
+    this.misUrlInput = InputState.new({ placeholder: MIS_URL, value: this.draft.sources.tw.misUrl });
+    this.misUrlInput.on("change", () => { this.draft.sources.tw.misUrl = this.misUrlInput.value(); });
+    this.misUrlInput.on("focus", (_e, cx) => { this.misUrlFocused = true; cx.notify(); });
+    this.misUrlInput.on("blur", (_e, cx) => { this.misUrlFocused = false; cx.notify(); });
   }
 
   // The input's placeholder is fixed when it is made, so a new language needs a new input
@@ -168,11 +175,11 @@ export default class Bellwether extends View {
   }
 
   openDetail(symbol) {
-    const quote = this.watch.quotes[symbol];
+    const quote = this.watch.shown(symbol);
     if (!quote) return;
     openOverlay({
       mod: "bellwether", kind: "dialog", width: 440,
-      props: { detail: { ...quote, error: this.watch.errors[symbol] ?? null } },
+      props: { detail: { ...quote, error: this.watch.errors[symbol] ?? null, fallback: this.watch.overlayErrors[symbol] ?? null } },
     });
   }
 
@@ -272,7 +279,7 @@ export default class Bellwether extends View {
       .when(w.preferences.paused, (el) => el.child(div().flex_none().text_color(t.blocked).child(this.tx("band.paused"))))
       .when(!symbols.length, (el) => el.child(div().text_color(t.dim).truncate().child(this.tx("band.empty"))))
       .children(symbols.map((symbol) => {
-        const quote = w.quotes[symbol];
+        const quote = w.shown(symbol);
         const failed = Boolean(w.errors[symbol]);
         const dot = quote && this.dot(t, freshness(quote, sessionOf(quote, now), now).state);
         return h_flex().flex_none().gap(5).items_center().whitespace_nowrap()
@@ -337,8 +344,10 @@ export default class Bellwether extends View {
       .when(!this.error && Boolean(this.notice), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(this.say(this.notice))));
 
     const rows = symbols.map((symbol) => {
-      const quote = w.quotes[symbol];
+      const quote = w.shown(symbol);
       const failed = w.errors[symbol];
+      // The real-time source failed for this symbol: the base quote shows, with the reason.
+      const fallback = w.overlayErrors[symbol];
       const fresh = quote && freshness(quote, sessionOf(quote, now), now);
       // A closed label carries its own date; any other quote from an earlier day gets one.
       const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, this.lang) : "";
@@ -363,7 +372,9 @@ export default class Bellwether extends View {
               .child(div().text_right().text_size(11).text_color(color)
                 .child(quote ? formatChange(quote.changePercent) : "—"))))
           .when(Boolean(failed), (el) => el.child(div().text_size(11).text_color(t.blocked)
-            .child(quote ? this.tx("quote.cached", { reason: this.say(failed) }) : this.say(failed)))))
+            .child(quote ? this.tx("quote.cached", { reason: this.say(failed) }) : this.say(failed))))
+          .when(Boolean(fallback), (el) => el.child(div().text_size(11).text_color(t.blocked)
+            .child(quote ? this.fallbackText(quote, fallback) : this.say(fallback)))))
         .child(div().id(`bw-remove-${symbol}`).flex_none().w(14).text_right().text_color(t.dim).cursor_pointer()
           .hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => this.act(cx, () => this.watch.remove(symbol)))
           .child("×"));
@@ -384,6 +395,11 @@ export default class Bellwether extends View {
     return root.child(header).child(field).child(list).child(footer);
   }
 
+  // "Showing Yahoo · <reason>": a real-time price was dropped, so the row shows its base quote.
+  fallbackText(quote, error) {
+    return this.tx("quote.fallback", { source: this.tx(`src.${quote.source}`), reason: this.say(error) });
+  }
+
   // The dialog a row opens: the day's chart, its range and the session.
   detailView(t) {
     const q = this.detail;
@@ -397,7 +413,14 @@ export default class Bellwether extends View {
     // A real-time price has no delay to state; Yahoo's is stated as on the row, or said to be unknown.
     const delay = REALTIME_SOURCES.has(q.source) ? ""
       : delayMinutes === null ? this.tx("freshness.delayUnknown") : this.tx("freshness.delayedMinutes", { minutes: delayMinutes });
-    const source = [this.tx(isCryptoPair(q.symbol) ? "detail.sourceCrypto" : "detail.sourceStock"), delay];
+    // A real-time price over another source's line names both, with the line's delay.
+    const overlaid = Boolean(q.chartSource) && q.chartSource !== q.source;
+    const lineDelay = overlaid && freshness({ ...q, source: q.chartSource, delaySeconds: null }, session, now).delayMinutes;
+    const source = overlaid
+      ? [this.tx("detail.priceFrom", { source: this.tx(`src.${q.source}`) }), this.tx("detail.lineFrom", { source: this.tx(`src.${q.chartSource}`) }),
+        lineDelay === null ? this.tx("freshness.delayUnknown") : this.tx("freshness.delayedMinutes", { minutes: lineDelay })]
+      : REALTIME_SOURCES.has(q.source) && !isCryptoPair(q.symbol) ? [this.tx("detail.priceFrom", { source: this.tx(`src.${q.source}`) })]
+      : [this.tx(isCryptoPair(q.symbol) ? "detail.sourceCrypto" : "detail.sourceStock"), delay];
     const times = [this.tx("detail.quoted", { time: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}` }),
       this.tx("detail.fetched", { time: formatTime(q.fetchedAt, true) })];
     const stat = (label, price) => v_flex().flex_1().gap(2)
@@ -426,7 +449,8 @@ export default class Bellwether extends View {
         : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
           .child(stat("detail.prevClose", q.previousClose)))
       .child(v_flex().gap(2).child(this.segments(t, source)).child(this.segments(t, times)))
-      .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.tx("quote.cached", { reason: this.say(q.error) }))));
+      .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.tx("quote.cached", { reason: this.say(q.error) }))))
+      .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(this.fallbackText(q, q.fallback))));
   }
 
   // The settings dialog: tabs on the left, the tab on the right, Cancel / Save below.
@@ -504,9 +528,39 @@ export default class Bellwether extends View {
     return problem ? div().text_size(11.5).text_color(t.blocked).child(this.say(problem)) : null;
   }
 
+  // Taiwan: Yahoo, or TWSE MIS once its statement is read and the box ticked (Save waits for it).
+  taiwanCard(t, errors) {
+    const tw = this.draft.sources.tw;
+    const chosen = tw.provider === "mis";
+    const agreed = tw.misAck?.version === MIS_CONSENT_VERSION;
+    const urlError = errors["sources.tw.misUrl"];
+    const consent = Checkbox.new("bw-mis-consent").checked(agreed).cursor_pointer()
+      .on_change((checked, cx) => { tw.misAck = checked ? { version: MIS_CONSENT_VERSION } : null; cx.notify(); })
+      .child(h_flex().gap(8).items_start()
+        .child(div().flex_none().mt(2).w(14).h(14).rounded(3).border_1().border_color(agreed ? t.accent : t.border)
+          .flex().items_center().justify_center().text_size(10).text_color(t.background)
+          .when(agreed, (el) => el.bg(t.accent).child("✓")))
+        .child(div().flex_1().min_w(0).font_semibold().child(this.tx("mis.consent"))));
+    return this.card(t, this.tx("sources.tw.title"), this.tx(chosen ? "sources.tw.misSource" : "sources.tw.yahooSource"),
+      this.segmented(t, "bw-tw", [["yahoo", this.tx("src.yahoo")], ["mis", this.tx("src.mis")]], tw.provider,
+        (provider) => { tw.provider = provider; }),
+      chosen && div().text_size(11).text_color(t.muted).child(this.tx("sources.tw.url")),
+      chosen && Input.new(this.misUrlInput).h(30).px(8).rounded(6).border_1()
+        .border_color(urlError ? t.ansi1 : this.misUrlFocused ? t.accent : t.input)
+        .bg(t.background).text_size(12).text_color(t.foreground),
+      chosen && urlError ? div().text_size(11.5).text_color(t.ansi1).child(this.tx(urlError)) : null,
+      // The statement in the reader's language; the Traditional Chinese text prevails.
+      chosen && div().text_size(11.5).text_color(t.muted).child(this.tx("mis.statement")),
+      chosen && this.note(t, this.tx("mis.prevails")),
+      chosen && consent,
+      chosen && !agreed ? this.note(t, this.tx("mis.consentNeeded")) : null,
+      this.healthLine(t, "mis"));
+  }
+
   sourcesTab(t, errors) {
     const field = "sources.crypto.binanceUrl";
     return v_flex().gap(12)
+      .child(this.taiwanCard(t, errors))
       .child(this.card(t, this.tx("sources.other.title"), this.tx("sources.other.body"), this.healthLine(t, "yahoo")))
       .child(this.card(t, this.tx("sources.crypto.title"), this.tx("sources.crypto.source"),
         div().text_size(11).text_color(t.muted).child(this.tx("sources.crypto.url")),

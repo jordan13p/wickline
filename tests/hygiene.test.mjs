@@ -8,7 +8,8 @@ import { Watchlist } from "../mods/bellwether/watchlist.js";
 
 const MOD = new URL("../mods/bellwether/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
-const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision"];
+// mis.twse.com.tw only once the person turns TWSE MIS on and consents.
+const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw"];
 // Herdr writes these into the mod folder; they are git-ignored.
 const GENERATED = ["jsconfig.json", "gpui-kit.d.ts"];
 
@@ -79,7 +80,7 @@ test("every error code has English text", () => {
     const text = read(file);
     for (const [, code] of text.matchAll(/new QuoteError\(\s*"([^"]+)"/g)) errors.add(code);
     // Codes handed to the view as `{ code, params }`, e.g. a deferred refresh.
-    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance|request)\.[A-Za-z]+)"/g)) notices.add(code);
+    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance|mis|request)\.[A-Za-z]+)"/g)) notices.add(code);
   }
   // Built from the provider id: `${provider.id}.unreachable`.
   for (const id of new Watchlist({ load: () => undefined, settings: () => undefined }).providerIds()) errors.add(`${id}.unreachable`);

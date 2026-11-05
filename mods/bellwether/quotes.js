@@ -26,6 +26,11 @@ export const MESSAGES_EN = {
   "binance.noQuote": "Binance returned no quote for this pair.",
   "binance.unreachable": "Could not reach Binance.",
   "binance.region": "Binance is not available in this region. Set another Binance URL in Settings.",
+  "mis.rateLimited": "TWSE MIS rate limited requests.",
+  "mis.http": "TWSE MIS returned HTTP {status}.",
+  "mis.unreadable": "TWSE MIS returned an unreadable response.",
+  "mis.outOfLimits": "The TWSE MIS price was outside the stock's daily price limits.",
+  "mis.unreachable": "Could not reach TWSE MIS.",
   // `{source}` is a provider id; the view shows its name.
   "request.timeout": "{source} did not answer within {seconds}s.",
 };
