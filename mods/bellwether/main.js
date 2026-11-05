@@ -19,9 +19,8 @@ import {
 import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL, finnhubCap } from "./providers/finnhub.js";
-import {
-  COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, canOpenOwnTab, layoutFor, nameWidth, newBellwether, ownTabSource, returnPane, tableColumns,
-} from "./layout.js";
+import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, layoutFor, nameWidth, tableColumns } from "./layout.js";
+import { canOpenOwnTab, newBellwether, ownTabSource, returnPane } from "./panes.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
