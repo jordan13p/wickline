@@ -443,7 +443,12 @@ export class Watchlist {
     try {
       for (const [index, request] of requests.entries()) {
         if (!current()) return;
-        if (request.kind === "line") { await this.line(provider, state, request, io, current); continue; }
+        if (request.kind === "line") {
+          const limited = await this.line(provider, state, request, io, current);
+          // A rate-limited line ends the round: no more lines or quotes until the cooldown ends.
+          if (limited) { this.backOff(provider, state, requests, index, limited); return; }
+          continue;
+        }
         const wait = spacing - (this.host.now() - state.lastRequestAt);
         if (wait > 0) await io.sleep(wait);
         if (!current()) return;
@@ -551,14 +556,20 @@ export class Watchlist {
     return merged;
   }
 
-  /** A symbol's line, at most once per `linesMs`; a failure only leaves the line as it was. */
+  /**
+   * A symbol's line, at most once per `linesMs`; a failure only leaves the line as it was. Returns the
+   * error when the source rate limited the request (the caller backs off), else nothing.
+   */
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
     const now = this.host.now();
-    if (!this.quotes[symbol] || now - (state.linesAt[symbol] ?? -Infinity) < provider.linesMs) return;
+    if (!this.quotes[symbol] || now - (state.linesAt[symbol] ?? -Infinity) < provider.linesMs) return null;
     state.linesAt[symbol] = now;
-    const series = (await this.ask(provider, request, io, current))?.lines?.[symbol];
+    const result = await this.ask(provider, request, io, current);
+    const series = result?.lines?.[symbol];
     if (series && current() && this.quotes[symbol]) this.quotes[symbol].series = series;
+    const error = result?.errors?.[symbol];
+    return error?.retryAfterMs !== undefined ? error : null;
   }
 
   async get(request) {

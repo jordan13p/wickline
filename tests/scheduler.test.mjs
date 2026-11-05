@@ -225,3 +225,22 @@ test("a rate-limit cooldown still redraws when a live quote turns stale", async 
   assert.equal(host.requests.length, requests);
   await stop(w, host, runs);
 });
+
+test("a rate-limited line request backs Binance off and ends the round", async () => {
+  for (const status of [429, 418]) {
+    const host = fakeHost((url) => url.includes("klines") ? { status, ok: false, text: "" } : ticker(url));
+    const w = new Watchlist(host);
+    w.add("BTC/USDT"); w.add("ETH/USDT");
+    const runs = start(w, host);
+    await advance(host, 1);
+    // No second line request that round.
+    assert.equal(count(host, "klines"), 1, `${status}`);
+    assert.deepEqual(w.problems(), [{ provider: "binance", code: "binance.rateLimited", params: {} }]);
+    assert.ok(w.sources.binance.retryAt >= 60_000);
+    // The cooldown holds: no ticker request before it ends.
+    await advance(host, 59_000);
+    assert.equal(count(host, "ticker/24hr"), 1);
+    assert.equal(count(host, "klines"), 1);
+    await stop(w, host, runs);
+  }
+});

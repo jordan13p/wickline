@@ -63,6 +63,8 @@ export function binanceKlinesUrl(base, pair) {
 
 /** Closing prices, oldest first; throws when Binance answers with anything else. */
 export function decodeKlines(response) {
+  // Rate limited as the tickers are: the same backoff.
+  if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
   let body;
   try { body = JSON.parse(response.text); } catch { throw new QuoteError("binance.unreadable"); }
