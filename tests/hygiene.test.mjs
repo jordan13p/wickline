@@ -61,7 +61,7 @@ test("keys.json binds only the open key", () => {
 
 test("the repo root is the listing folder", () => {
   const names = readdirSync(ROOT);
-  for (const name of ["mods", "RECIPE.md", "README.md", "README.zh-TW.md", "LICENSE", "keys.json", "assets", "tests"]) {
+  for (const name of ["mods", "RECIPE.md", "preview.png", "README.md", "README.zh-TW.md", "LICENSE", "keys.json", "assets", "tests"]) {
     assert.ok(names.includes(name), name);
   }
   assert.ok(!names.includes("layouts"), "no layouts/");
@@ -146,12 +146,16 @@ test("README and RECIPE show the preview and say how to open Bellwether", () => 
 });
 
 // The settings tab's disclaimer block and the READMEs carry the same sentences.
-test("the READMEs carry the settings tab's disclaimer", () => {
+test("the READMEs and RECIPE carry the settings tab's disclaimer", () => {
   const keys = ["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"];
   for (const [name, lang] of [["README.md", "en"], ["README.zh-TW.md", "zh-TW"]]) {
     const text = read(new URL(name, ROOT));
     for (const key of keys) assert.ok(text.includes(STRINGS[lang][key]), `${key} in ${name}`);
   }
+  // RECIPE paraphrases the rest of the disclaimer, but quotes the key sentence and names no string ids.
+  const recipe = read(new URL("RECIPE.md", ROOT));
+  assert.ok(recipe.includes(STRINGS.en["disclaimer.key"]), "disclaimer.key in RECIPE.md");
+  assert.doesNotMatch(recipe, /`disclaimer\.[a-z]+`/, "string ids in RECIPE.md");
   assert.ok(read(new URL("main.js", MOD)).includes('"disclaimer.key"'), "the tab shows disclaimer.key");
 });
 
