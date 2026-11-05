@@ -113,6 +113,8 @@ The gear icon opens a dialog with three tabs. Nothing changes until you press Sa
 
 **Display.** The interface language (it changes only the text, not the quotes), the gain and loss colors (automatic by language, red-up or green-up) and a button to Herdr's own appearance settings; light and dark themes come from Herdr.
 
+The 简体中文, 日本語 and 한국어 texts are machine-translated and not yet reviewed by native speakers; corrections are welcome as an issue or a pull request.
+
 **Disclaimer & privacy.** The full disclaimer, what each source's quotes mean, and the hosts, programs and storage listed below. The one-line disclaimer in the panel footer opens this tab.
 
 ## Privacy and security
