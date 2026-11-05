@@ -288,7 +288,8 @@ export default class Bellwether extends View {
     this.watch.sync();
     const layout = layoutFor(this.size);
     const root = (layout === "band" ? h_flex() : v_flex())
-      .id("bw").size_full().bg(t.chrome).text_color(t.foreground).text_size(12.5)
+      // `background`, as Herdr's terminals and other panes: Bellwether sits beside them as one more pane.
+      .id("bw").size_full().bg(t.background).text_color(t.foreground).text_size(12.5)
       .on_size_change((size, cx) => { this.size = size; cx.notify(); });
     if (layout === "band") return this.band(root, t);
     return layout === "table" ? this.table(root, t) : this.sidebar(root, t);
@@ -480,10 +481,11 @@ export default class Bellwether extends View {
   }
 
   // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves
-  // the text. `background`, not `hover`, so the field never looks like a hovered row.
+  // the text. `selected` is one step off the panel's `background` in light and dark themes alike, and a step
+  // past `hover`, so the field never looks like a hovered row.
   addField(t) {
     return Input.new(this.input).h(32).px(10).rounded(6).border_1()
-      .border_color(this.inputFocused ? t.accent : t.background).bg(t.background).text_size(12.5).text_color(t.foreground);
+      .border_color(this.inputFocused ? t.accent : t.selected).bg(t.selected).text_size(12.5).text_color(t.foreground);
   }
 
   // What the last edit said, under the add field.
