@@ -1,7 +1,7 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { sessionOf } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
 import { marketOf } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { readSettings } from "./settings.js";
@@ -17,6 +17,8 @@ const PROVIDERS = [binance, yahoo];
 const SESSION_RANK = { open: 3, "24h": 3, unknown: 2, pre: 1, post: 1, closed: 0 };
 // Errors about the source itself, not one symbol: shown as the source's problem.
 const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadable)$/;
+// The source is down or hung: the rest of the round would only wait out more timeouts.
+const SOURCE_DOWN = /\.(unreachable|timeout)$/;
 const TIMED_OUT = {};
 
 const notice = (code, params = {}) => ({ code, params });
@@ -184,6 +186,17 @@ export class Watchlist {
     return symbols.length ? best : "unknown";
   }
 
+  /** How long until the newest of `symbols`' quotes is older than LIVE_MAX_AGE_MS (at most that). */
+  staleInMs(symbols, now) {
+    let wait = LIVE_MAX_AGE_MS;
+    for (const symbol of symbols) {
+      const quote = this.quotes[symbol];
+      const left = quote ? quote.timestamp + LIVE_MAX_AGE_MS + 1 - now : 0;
+      if (left > 0 && left < wait) wait = left;
+    }
+    return wait;
+  }
+
   /**
    * One provider's loop, until stop(). Each round starts the provider's interval after the
    * previous one ends (or when its cooldown ends, if later); an edit starts one at once.
@@ -207,10 +220,12 @@ export class Watchlist {
       if (state.manual || state.dirty) continue;
       const idle = paused || !symbols.length || state.disabled;
       const now = this.host.now();
-      const wait = Math.max(provider.intervalMs(this.sessionFor(symbols, now)), state.retryAt - now);
+      // Idle loops fetch nothing, but still wake to redraw when a live price turns stale.
+      const wait = idle ? this.staleInMs(symbols, now)
+        : Math.max(provider.intervalMs(this.sessionFor(symbols, now)), state.retryAt - now);
       await new Promise((resolve) => {
         state.wake = resolve;
-        if (!idle) io.sleep(wait).then(resolve);
+        io.sleep(wait).then(resolve);
       });
       state.wake = null;
     }
@@ -243,6 +258,7 @@ export class Watchlist {
         if (!result) return;
         const failures = Object.values(result.errors);
         const limited = failures.find((error) => error.retryAfterMs !== undefined);
+        const down = failures.find((error) => SOURCE_DOWN.test(error.code));
         if (!problem) problem = failures.find((error) => SOURCE_FAILURE.test(error.code)) ?? null;
         this.apply(provider, result);
         if (limited) {
@@ -254,6 +270,15 @@ export class Watchlist {
           for (const later of requests.slice(index + 1)) {
             if (later.kind !== "quote") continue;
             for (const symbol of later.symbols) this.errors[symbol] = notice("request.deferred", { source: provider.id });
+          }
+          return;
+        }
+        if (down) {
+          // Retry at the next interval; the rest keep their cached quotes, marked with the reason.
+          state.problem = coded(down);
+          for (const later of requests.slice(index + 1)) {
+            if (later.kind !== "quote") continue;
+            for (const symbol of later.symbols) this.errors[symbol] = coded(down);
           }
           return;
         }

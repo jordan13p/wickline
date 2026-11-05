@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/bellwether/watchlist.js";
+import { LIVE_MAX_AGE_MS, freshness } from "../mods/bellwether/freshness.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 import { binance } from "../mods/bellwether/providers/binance.js";
 import { yahoo } from "../mods/bellwether/providers/yahoo.js";
@@ -155,4 +156,42 @@ test("each loop asks its provider for the interval of its busiest session", asyn
   } finally {
     for (const provider of [yahoo, binance]) provider.intervalMs = original[provider.id];
   }
+});
+
+test("a paused list redraws when a live quote turns stale", async () => {
+  const host = fakeHost((url) => url.includes("ticker/24hr") ? ticker(url) : lines());
+  const redraws = [];
+  host.changed = () => redraws.push(host.clock);
+  const w = new Watchlist(host);
+  w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 0);
+  const quote = w.quotes["BTC/USDT"];
+  assert.equal(freshness(quote, "24h", host.clock).state, "live");
+  w.pause(true);
+  await advance(host, 0);
+  const requests = host.requests.length;
+  redraws.length = 0;
+  await advance(host, 121_000);
+  // No request while paused, but a redraw once the price is too old to read as live.
+  assert.equal(host.requests.length, requests);
+  const turned = redraws.find((at) => freshness(quote, "24h", at).state === "stalled");
+  assert.ok(turned !== undefined && turned <= quote.timestamp + LIVE_MAX_AGE_MS + 1, redraws.join());
+  await stop(w, host, runs);
+});
+
+test("a hung source ends its round at the first timeout", async () => {
+  const host = fakeHost(() => ok({}));
+  host.fetch = (url) => { host.requests.push(url); return never(); };
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("MSFT"); w.add("NVDA");
+  const runs = start(w, host);
+  await advance(host, 69_999);
+  assert.equal(count(host, "yahoo"), 1);
+  assert.deepEqual(w.problems(), [{ provider: "yahoo", code: "request.timeout", params: { source: "yahoo", seconds: 10 } }]);
+  for (const symbol of ["AAPL", "MSFT", "NVDA"]) assert.equal(w.errors[symbol].code, "request.timeout", symbol);
+  // The next round runs one interval after the failed one ended.
+  await advance(host, 70_000);
+  assert.equal(count(host, "yahoo"), 2);
+  await stop(w, host, runs);
 });
