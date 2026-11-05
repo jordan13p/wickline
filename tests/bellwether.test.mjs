@@ -9,11 +9,10 @@ import { decodeYahoo, yahooUrl } from "../mods/bellwether/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/bellwether/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/bellwether/watchlist.js";
 import { t } from "../mods/bellwether/i18n.js";
+import { chart, fakeHost, ok, tick } from "./helpers.mjs";
 
 const BASE = "https://data-api.binance.vision";
 
-const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
-const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
 const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD", longName: "Apple Inc." };
 
 test("normalizes symbols", () => {
@@ -81,35 +80,6 @@ test("reads saved preferences defensively", () => {
   assert.deepEqual(readPreferences({ version: 1, symbols: ["aapl", "AAPL", 5, "bad url"], paused: true }),
     { version: 1, symbols: ["AAPL"], paused: true });
 });
-
-// A fake host: a virtual clock, a scripted network and a shared store.
-function fakeHost(respond) {
-  const host = {
-    store: { version: 1, symbols: [], paused: false }, clock: 0, sleeps: [], requests: [],
-    load: () => host.store,
-    // The saved settings (shared state in Herdr); nothing saved yet.
-    prefs: undefined,
-    settings: () => host.prefs,
-    save: (p) => { host.store = JSON.parse(JSON.stringify(p)); },
-    now: () => host.clock,
-    sleep: (ms) => new Promise((resolve) => host.sleeps.push({ at: host.clock + ms, resolve })),
-    fetch: async (url) => { host.requests.push(url); const r = respond(url); return { ...r, text: async () => r.text }; },
-    changed: () => {},
-  };
-  return host;
-}
-
-// Advance the clock to the next sleeper and let the loop run.
-async function tick(host) {
-  await new Promise((r) => setImmediate(r));
-  host.sleeps.sort((a, b) => a.at - b.at);
-  const next = host.sleeps.shift();
-  if (!next) return false;
-  host.clock = Math.max(host.clock, next.at);
-  next.resolve();
-  await new Promise((r) => setImmediate(r));
-  return true;
-}
 
 test("refreshes stocks spaced apart and crypto in one batch", async () => {
   const host = fakeHost((url) => url.includes("binance")
