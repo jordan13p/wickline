@@ -1,7 +1,10 @@
 // node --test tests/  (markets.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, chosenFilter, filterAfterAdd, filterAfterRemove, marketFilters, marketOf, visibleSymbols } from "../mods/wickline/markets.js";
+import {
+  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, chosenFilter, filterAfterAdd, filterAfterRemove, marketFilters, marketOf, openFilter,
+  visibleSymbols,
+} from "../mods/wickline/markets.js";
 
 test("routes symbols to markets", () => {
   const table = [
@@ -90,4 +93,32 @@ test("a remove returns the filter to All only when its market has no symbol left
   assert.equal(filterAfterRemove(TWELVE, "all"), "all");
   // A list that fell under the thresholds keeps the choice: chosenFilter already reads it as All.
   assert.equal(filterAfterRemove(["2330.TW", "AAPL"], "tw"), "tw");
+});
+
+// A copy's own storage as localStorage gives it, recording each write; `broken` throws on every use.
+function fakeStorage(stored = {}, broken = false) {
+  const storage = { items: { ...stored }, writes: [] };
+  storage.getItem = (key) => { if (broken) throw new Error("broken"); return storage.items[key] ?? null; };
+  storage.setItem = (key, value) => { if (broken) throw new Error("broken"); storage.writes.push([key, value]); storage.items[key] = value; };
+  return storage;
+}
+
+test("a copy opens on its stored filter, else the one it was opened with, else All", () => {
+  assert.equal(FILTER_STORAGE_KEY, "wickline.filter");
+  // A stored choice wins over the props Herdr keeps with the tab.
+  assert.equal(openFilter(fakeStorage({ "wickline.filter": "us" }), "tw"), "us");
+  assert.equal(openFilter(fakeStorage(), "tw"), "tw");
+  assert.equal(openFilter(fakeStorage(), undefined), "all");
+  assert.equal(openFilter(fakeStorage(), 3), "all");
+  // Storage that cannot be read: as nothing stored.
+  assert.equal(openFilter(fakeStorage({}, true), "tw"), "tw");
+});
+
+test("a copy opened with a filter stores it once", () => {
+  const storage = fakeStorage();
+  openFilter(storage, "tw");
+  assert.deepEqual(storage.writes, [["wickline.filter", "tw"]]);
+  const all = fakeStorage();
+  openFilter(all, undefined);
+  assert.deepEqual(all.writes, []);
 });

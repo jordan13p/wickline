@@ -64,3 +64,29 @@ export function filterAfterAdd(symbols, filter, symbol) {
 export function filterAfterRemove(symbols, filter) {
   return filter === "all" || symbols.some((symbol) => marketOf(symbol) === filter) ? filter : "all";
 }
+
+// The key under which a copy keeps its market filter in its own storage (see main.js).
+export const FILTER_STORAGE_KEY = "wickline.filter";
+
+/**
+ * The filter a copy opens with: its stored choice, else `prop` (the one it was opened with), else All.
+ * Nothing stored and given a market, it stores that once. `storage`: the copy's own, with `getItem` and
+ * `setItem`; one that cannot be read reads as nothing stored, and a failed write is only not remembered.
+ */
+export function openFilter(storage, prop) {
+  let stored = null;
+  try {
+    stored = storage.getItem(FILTER_STORAGE_KEY) || null;
+  } catch {
+    // Unreadable: as if nothing were stored.
+  }
+  const filter = stored ?? (typeof prop === "string" ? prop : "all");
+  if (stored === null && filter !== "all") {
+    try {
+      storage.setItem(FILTER_STORAGE_KEY, filter);
+    } catch {
+      // Not remembered after a restart; the copy keeps using it.
+    }
+  }
+  return filter;
+}

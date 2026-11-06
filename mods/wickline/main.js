@@ -11,7 +11,7 @@ import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
-import { filterAfterAdd, filterAfterRemove } from "./markets.js";
+import { FILTER_STORAGE_KEY, filterAfterAdd, filterAfterRemove, openFilter } from "./markets.js";
 import { dropBefore } from "./format.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
@@ -34,8 +34,11 @@ const secretsDir = () => `${appHome()}/data/wickline`;
 // (secrets.js decides). Both are called per use, never at the top level.
 const system = { platform: () => appWindow().platform, chmod: (path) => exec("chmod", ["600", path]) };
 // This copy's market filter lives in its own localStorage (per copy in Herdr 0.1.12, which is the point:
-// the side panel and a pane keep separate choices). Nothing else goes there.
-const FILTER_STORAGE_KEY = "wickline.filter";
+// the side panel and a pane keep separate choices). Nothing else goes there. Read per use, inside a try.
+const filterStorage = {
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value),
+};
 // A new symbol answers the language prompt too, whichever way the add ended well.
 const ADDED = ["notice.added", "notice.overCap", "notice.overCapPushed"];
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
@@ -80,9 +83,7 @@ export default class Wickline extends View {
     // The market filter: this copy's stored choice, else the one it was opened with (props; Herdr keeps them
     // with the tab, so they must never override a later choice), else "all". Rows and the filter row read it
     // through chosenFilter, so a market no longer on the list reads as All.
-    const stored = this.storedFilter();
-    this.filter = stored ?? (typeof given.filter === "string" ? given.filter : "all");
-    if (stored === null && this.filter !== "all") this.setFilter(this.filter);
+    this.filter = openFilter(filterStorage, given.filter);
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};
     this.typed = "";
@@ -166,20 +167,11 @@ export default class Wickline extends View {
     this.readSettings();
   }
 
-  // null: nothing stored (or it cannot be read).
-  storedFilter() {
-    try {
-      return localStorage.getItem(FILTER_STORAGE_KEY) || null;
-    } catch {
-      return null;
-    }
-  }
-
   // The caller redraws. A failed write costs only the memory across restarts, not this choice.
   setFilter(id) {
     this.filter = id;
     try {
-      localStorage.setItem(FILTER_STORAGE_KEY, id);
+      filterStorage.setItem(FILTER_STORAGE_KEY, id);
     } catch {
       // Not remembered after a restart; the copy keeps using it.
     }
