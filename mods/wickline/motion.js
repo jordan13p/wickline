@@ -1,4 +1,5 @@
-// What a row does when the person adds, removes or drops it, apart from drawing it. No Herdr imports.
+// What a row does when the person adds, removes or drops it, apart from drawing it, and how long the refresh
+// icon turns. No Herdr imports.
 import { chosenFilter, marketOf, visibleSymbols } from "./markets.js";
 
 // Every row motion: fade in, fade out and collapse, slide into place.
@@ -8,6 +9,15 @@ export const ROW_MOTION_MS = 150;
 export const MOTION_GAP_MS = 32;
 // After the flip, the time to let the transition finish before the state is dropped.
 export const MOTION_END_MS = ROW_MOTION_MS + 50;
+
+// One turn of the refresh icon.
+export const SPIN_MS = 900;
+
+/**
+ * How many whole turns, counted from the first press, a spin that has run `elapsedMs` must reach for a
+ * press made now to get a whole turn of its own, so the icon always stops upright after one.
+ */
+export const spinTurnsFor = (elapsedMs, turnMs) => Math.ceil((elapsedMs + turnMs) / turnMs);
 
 /**
  * The rows to draw: the shown symbols in order, with each row that is leaving (a ghost, `{ symbol,

@@ -45,15 +45,6 @@ export function layoutFor(size) {
   return size.width < TABLE_MIN_WIDTH ? "sidebar" : "table";
 }
 
-// One turn of the refresh icon.
-export const SPIN_MS = 900;
-
-/**
- * How many whole turns, counted from the first press, a spin that has run `elapsedMs` must reach for a
- * press made now to get a whole turn of its own, so the icon always stops upright after one.
- */
-export const spinTurnsFor = (elapsedMs, turnMs) => Math.ceil((elapsedMs + turnMs) / turnMs);
-
 /**
  * A layout block that docks Wickline beside Herdr's own side panels asks for their rounded, bordered
  * card with `"props": {"card": true}`. Only `true` counts; panes and tabs never ask (Herdr frames them).

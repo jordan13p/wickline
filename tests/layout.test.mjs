@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
-  SPIN_MS, columnWidth, layoutFor, nameWidth, spinTurnsFor, tableColumns, wantsCard,
+  columnWidth, layoutFor, nameWidth, tableColumns, wantsCard,
 } from "../mods/wickline/layout.js";
 
 const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", "high", "low", "prevClose"];
@@ -96,16 +96,4 @@ test("a docked block asks for the card with card: true, and nothing else does", 
   for (const props of [{ card: "true" }, { card: 1 }, { card: false }, {}, null, undefined, { from: "tab-1" }]) {
     assert.equal(wantsCard(props), false, JSON.stringify(props));
   }
-});
-
-test("the refresh icon turns whole turns of 900 ms, a whole one for each press", () => {
-  assert.equal(SPIN_MS, 900);
-  // The first press: one turn.
-  assert.equal(spinTurnsFor(0, SPIN_MS), 1);
-  // A press mid-turn asks a whole turn from there: it ends on the second boundary.
-  assert.equal(spinTurnsFor(500, SPIN_MS), 2);
-  assert.equal(spinTurnsFor(899, SPIN_MS), 2);
-  // On a boundary, the turn that starts there is the next one.
-  assert.equal(spinTurnsFor(900, SPIN_MS), 2);
-  assert.equal(spinTurnsFor(901, SPIN_MS), 3);
 });

@@ -1,7 +1,7 @@
 // node --test tests/  (motion.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rowsWithGhosts, settleOffset } from "../mods/wickline/motion.js";
+import { SPIN_MS, rowsWithGhosts, settleOffset, spinTurnsFor } from "../mods/wickline/motion.js";
 
 const ghost = (symbol, before) => ({ symbol, before });
 const names = (entries) => entries.map(({ symbol, ghost: g }) => (g ? `~${symbol}` : symbol));
@@ -56,4 +56,16 @@ test("no settle when the row stays put on screen, or a height is not known", () 
   assert.equal(settleOffset(["A", "B", "C"], ["C", "A", "B"], "C", { A: 50, C: 70 }), null);
   assert.equal(settleOffset(["A", "B"], ["B", "A"], "A", { A: 50, B: 0 }), null);
   assert.equal(settleOffset(["A", "B"], ["B"], "A", { A: 50, B: 60 }), null);
+});
+
+test("the refresh icon turns whole turns of 900 ms, a whole one for each press", () => {
+  assert.equal(SPIN_MS, 900);
+  // The first press: one turn.
+  assert.equal(spinTurnsFor(0, SPIN_MS), 1);
+  // A press mid-turn asks a whole turn from there: it ends on the second boundary.
+  assert.equal(spinTurnsFor(500, SPIN_MS), 2);
+  assert.equal(spinTurnsFor(899, SPIN_MS), 2);
+  // On a boundary, the turn that starts there is the next one.
+  assert.equal(spinTurnsFor(900, SPIN_MS), 2);
+  assert.equal(spinTurnsFor(901, SPIN_MS), 3);
 });

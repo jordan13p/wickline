@@ -130,9 +130,12 @@ test("the only program is chmod 600 on the key file", () => {
   assert.doesNotMatch(main, /\bexec\s+as\b/, "exec imported under another name");
   assert.equal([...main.matchAll(/\bexec\b/g)].length, 2, "exec imported and called once");
   assert.deepEqual([...main.matchAll(/\bexec\s*\(.*?\]\)/g)].map(([call]) => call), ['exec("chmod", ["600", path])']);
+  // `host.run(...)` is Herdr's `run`, handed in by main.js: a Herdr command (moves.js), not a program.
   for (const file of jsFiles().filter((url) => relativeName(url) !== "main.js")) {
-    assert.doesNotMatch(code(read(file)), /\bexec\b|\.run\s*\(/, relativeName(file));
+    assert.doesNotMatch(code(read(file)), /\bexec\b|(?<!\bhost)\.run\s*\(/, relativeName(file));
   }
+  assert.match("process.run(cmd)", /(?<!\bhost)\.run\s*\(/);
+  assert.doesNotMatch("host.run(\"tab.new\")", /(?<!\bhost)\.run\s*\(/);
 });
 
 // The settings dialog learns only that a key is saved and its ending: the full-key loader is wired to the

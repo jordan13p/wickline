@@ -3,7 +3,7 @@
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { chartGeometry } from "../format.js";
-import { SPIN_MS } from "../layout.js";
+import { SPIN_MS } from "../motion.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
