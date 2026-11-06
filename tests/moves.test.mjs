@@ -239,6 +239,7 @@ test("back to the panel: a refused tab.select still closes the tab's pane", asyn
   ownTabAction(host, v).go(cx);
   await cx.done();
   // Returning to the tab is a courtesy; going back to the panel still finishes.
+  assert.deepEqual(commands(host).slice(-2), ["tab.select", "pane.close"]);
   assert.deepEqual(host.ran.at(-1), ["pane.close", { pane: "p9" }]);
 });
 
