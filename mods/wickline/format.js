@@ -1,6 +1,6 @@
 // How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
 // No Herdr imports, so tests run it under Node.
-import { positive } from "./quotes.js";
+import { isCryptoPair, positive } from "./quotes.js";
 
 /**
  * The line through `series`, scaled into its box as [x%, y%] points, and where
@@ -68,17 +68,13 @@ export function formatStaleDate(timestamp, now, lang = "en") {
 /**
  * What a row shows as its freshness label and its name, so nothing on the row says the same thing
  * twice: a name that begins with the label (a pair's "Binance Spot" after "Binance") replaces it,
- * and a name that only repeats the ticker is left out. `name` is "" when there is none to show.
+ * and a name that only repeats the ticker is left out. A pair has no instrument name (its "name" is
+ * the venue), so it never gets one of its own. `name` is "" when there is none to show.
  */
 export function rowName(symbol, label, name) {
   const named = name && name !== symbol ? name : "";
-  return named && label && named.startsWith(label) ? { label: named, name: "" } : { label, name: named };
-}
-
-/** A row's second line, `[freshness label, date, name]` with empties dropped (see rowName). */
-export function rowMeta(symbol, [label, date, name]) {
-  const shown = rowName(symbol, label, name);
-  return (shown.label !== label ? ["", date, shown.label] : [label, date, shown.name]).filter(Boolean);
+  if (named && label && named.startsWith(label)) return { label: named, name: "" };
+  return { label, name: isCryptoPair(symbol) ? "" : named };
 }
 
 // The interfaces that read a Taiwan stock's Chinese name; the others keep the base quote's name.

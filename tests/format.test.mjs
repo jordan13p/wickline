@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta, rowName } from "../mods/wickline/format.js";
+import { chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../mods/wickline/format.js";
 
 test("formats without Intl", () => {
   assert.equal(formatPrice({ price: 1234567.891, currency: "USD" }), "1,234,567.89 USD");
@@ -42,17 +42,22 @@ test("scales a line into its box", () => {
   assert.match(formatTime(new Date(2026, 10, 2, 9, 5).getTime()), /^09:05$/);
 });
 
-test("a row names its source once", () => {
-  // The pair's name is the source's own: show it once.
-  assert.deepEqual(rowMeta("BTC/USDT", ["Binance", "", "Binance Spot"]), ["Binance Spot"]);
-  assert.deepEqual(rowMeta("AAPL", ["Yahoo · delayed", "As of Oct 31", "Apple Inc."]), ["Yahoo · delayed", "As of Oct 31", "Apple Inc."]);
-  // A name that only repeats the ticker is left out.
-  assert.deepEqual(rowMeta("^GSPC", ["delayed 15 min", "", "^GSPC"]), ["delayed 15 min"]);
-});
-
 test("a row's name and label: a name that begins with the label replaces it", () => {
   assert.deepEqual(rowName("BTC/USDT", "Binance", "Binance Spot"), { label: "Binance Spot", name: "" });
   assert.deepEqual(rowName("AAPL", "Yahoo · delayed", "Apple Inc."), { label: "Yahoo · delayed", name: "Apple Inc." });
+});
+
+test("a pair has no instrument name: its venue never becomes a name line", () => {
+  // Live: the venue merges into the label, as before.
+  assert.deepEqual(rowName("BTC/USDT", "Binance", "Binance Spot"), { label: "Binance Spot", name: "" });
+  // Stalled: the label does not merge, and the venue still is no name.
+  assert.deepEqual(rowName("BTC/USDT", "quote stopped at 13:05", "Binance Spot"), { label: "quote stopped at 13:05", name: "" });
+});
+
+test("a stock's name gets its own line", () => {
+  assert.deepEqual(rowName("2330.TW", "已收盤 · 11/5 13:30", "台積電"), { label: "已收盤 · 11/5 13:30", name: "台積電" });
+  // Finnhub keeps the Yahoo name, so a US row reads the same with either source.
+  assert.deepEqual(rowName("AAPL", "Finnhub", "Apple Inc."), { label: "Finnhub", name: "Apple Inc." });
 });
 
 test("a row's name that only repeats the ticker, or is missing, is left out", () => {

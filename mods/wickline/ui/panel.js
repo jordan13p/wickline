@@ -4,7 +4,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta, rowName } from "../format.js";
+import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { finnhubCap } from "../providers/finnhub.js";
@@ -297,15 +297,18 @@ export function sidebar(view, root, t) {
   return root.child(header).child(field).child(list(view, t, rows).pt(8)).child(footer(view, t));
 }
 
-// Symbol over freshness and name on the left; the line, then the price over the change, at a fixed
-// width on the right, so a wider pane gives its room to the name.
+// Symbol, then its name on a line of its own, then freshness on the left; the line, then the price
+// over the change, at a fixed width on the right, so a wider pane gives its room to the left lines.
+// A row without a name of its own (a pair, a name that repeats the ticker) keeps two lines.
 function sidebarRow(view, t, symbol, index, symbols, now) {
   const row = rowData(view, t, symbol, now);
-  const meta = row.quote ? rowMeta(symbol, [row.label, row.date, row.name]).join(" · ") : "";
+  const shown = row.quote ? rowName(symbol, row.label, row.name) : { label: "", name: "" };
+  const meta = [shown.label, row.date].filter(Boolean).join(" · ");
   const body = v_flex().py(8).gap(2)
     .child(h_flex().gap(12).items_center()
       .child(v_flex().flex_1().min_w(0).gap(2)
         .child(div().font_semibold().truncate().child(symbol))
+        .when(Boolean(shown.name), (el) => el.child(div().text_size(11).text_color(t.muted).truncate().child(shown.name)))
         .when(Boolean(meta), (el) => el.child(h_flex().gap(6).items_center()
           .when(Boolean(row.dot), (line) => line.child(row.dot))
           .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(meta)))))
