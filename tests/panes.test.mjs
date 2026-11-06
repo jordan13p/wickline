@@ -193,6 +193,22 @@ test("isShown: the panel is open and Wickline is the stack's active child", () =
   assert.equal(isShown(tree, dock), false);
 });
 
+test("isShown: a stack with no active child shows its first one", () => {
+  const tree = office();
+  byId(tree, "panel").hidden = false;
+  const dock = dockOf(tree, "wickline");
+  const stack = byId(tree, "panel-body");
+  delete stack.active;
+  // Wickline is the last child: not shown.
+  assert.equal(isShown(tree, dock), false);
+  // Moved to the front, it is the one shown.
+  stack.children = [stack.children.at(-1), ...stack.children.slice(0, -1)];
+  assert.equal(isShown(tree, dock), true);
+  // An active id that names no child is not taken for the first one.
+  stack.active = "gone";
+  assert.equal(isShown(tree, dock), false);
+});
+
 test("a docked block yields while a Wickline pane is in the tab it opened", () => {
   assert.equal(DOCK_TAB_KEY, "wickline.dockTab");
   assert.equal(blockYields({ tab: "t2" }, [{ pane: "p1", tab: "t2", mod: "wickline" }]), true);

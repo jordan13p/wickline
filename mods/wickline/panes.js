@@ -118,14 +118,18 @@ export function dockOf(tree, modId) {
   return { block: path[path.length - 1].id, stack: above[stackAt]?.id ?? null, collapse };
 }
 
+// The child a stack shows: its `active` one, else its first (Herdr's guide does not say which child a
+// stack without `active` shows; the first is assumed, so such a stack never hides every child).
+const shownChild = (stack) => stack.active ?? stack.children?.[0]?.id;
+
 /**
  * The docked block is on screen: nothing from the root down to it is hidden, and each stack on the way
- * has the way's child active. False when the block is gone from the tree.
+ * shows the way's child. False when the block is gone from the tree.
  */
 export function isShown(tree, dock) {
   const path = pathTo(tree, (n) => n.id === dock.block);
   if (!path) return false;
-  return path.every((node, i) => node.hidden !== true && (node.type !== "stack" || node.active === path[i + 1]?.id));
+  return path.every((node, i) => node.hidden !== true && (node.type !== "stack" || shownChild(node) === path[i + 1]?.id));
 }
 
 // Shared state: `{ tab }`, the tab a docked block moved Wickline to (see main.js), or null.
