@@ -462,8 +462,9 @@ export function shownSymbols(view) {
 // one sits on a pill that slides to a new choice: an absolute div whose `left` is the widths of the labels
 // before it plus the gaps, and whose `width` is the chosen label's, both measured from the labels
 // themselves (on_size_change), so the pill follows any language or count. The scrolling area holds the
-// labels in a content box of their own, so the pill scrolls with them; it scrolls sideways, by wheel too,
-// when the labels do not fit. Until every label it needs has been measured there is no pill.
+// labels in a content box of their own, so the pill scrolls with them; it scrolls sideways (natively: a
+// horizontal wheel or a trackpad swipe) when the labels do not fit. Until every label it needs has been
+// measured there is no pill.
 function filterBar(view, t) {
   const filters = marketFilters(view.watch.preferences.symbols, view.lang);
   if (!filters.length) return [];

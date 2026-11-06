@@ -18,8 +18,9 @@ export function marketOf(symbol) {
 export const FILTER_MIN_SYMBOLS = 8;
 export const FILTER_MIN_MARKETS = 2;
 
-// The order of the filters: the language's home market first, then the rest as everywhere else, so it never
-// depends on what the list holds or how it is ordered.
+// The order of the filters, fixed per interface language so it never depends on what the list holds or how
+// it is ordered: Japanese and Korean put their own market first, both Chinese put Taiwan first, and English
+// starts with the US.
 const MARKET_ORDER = {
   en: ["us", "tw", "hk", "cn", "jp", "kr", "crypto", "other"],
   "zh-TW": ["tw", "us", "hk", "cn", "jp", "kr", "crypto", "other"],
