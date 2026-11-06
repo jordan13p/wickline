@@ -86,24 +86,23 @@ function pathTo(node, match) {
   return null;
 }
 
-// The shown tab's terminals live in a `content.tab` block; a node holding one is the work area, not a panel.
-const holdsTab = (node) => pathTo(node, (n) => Boolean(n.content?.tab)) !== null;
-
 /**
  * Where a docked Wickline block sits in the layout tree that layout() gives: the first block that
- * runs `modId` with the `card` prop, its nearest stack, and the nearest ancestor with a `hidden`
- * flag that holds no tab content (the panel that collapses; hiding it hides the block). Null: this
- * copy is not a docked block, or the tree has none. `stack` and `collapse` are null when absent.
+ * runs `modId` with the `card` prop, its nearest stack, and the node to collapse (the stack's nearest
+ * ancestor that is a child of a row or a column, so hiding it leaves the rest of the layout: the
+ * side panel that holds the stack). The tree need not carry `hidden` on it. Null: this copy is not a
+ * docked block, or the tree has none. `stack` and `collapse` are null when absent.
  */
 export function dockOf(tree, modId) {
   const path = pathTo(tree, (n) => n.type === "block" && n.content?.mod === modId && n.content.props?.card === true);
   if (!path) return null;
-  const above = path.slice(0, -1).reverse();
-  return {
-    block: path.at(-1).id,
-    stack: above.find((n) => n.type === "stack")?.id ?? null,
-    collapse: above.find((n) => typeof n.hidden === "boolean" && !holdsTab(n))?.id ?? null,
-  };
+  const above = path.slice(0, -1);
+  const stackAt = above.map((n) => n.type).lastIndexOf("stack");
+  let collapse = null;
+  for (let i = stackAt - 1; stackAt >= 0 && i >= 0 && !collapse; i--) {
+    if (["row", "column"].includes(above[i - 1]?.type)) collapse = above[i].id;
+  }
+  return { block: path[path.length - 1].id, stack: above[stackAt]?.id ?? null, collapse };
 }
 
 /**

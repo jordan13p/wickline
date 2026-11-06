@@ -146,6 +146,12 @@ test("dockOf: the card block, its stack and the panel that collapses", () => {
   assert.deepEqual(dockOf(office(), "wickline"), { block: "wickline", stack: "panel-body", collapse: "panel" });
 });
 
+test("dockOf: the panel is found by structure, even when it carries no hidden key", () => {
+  const tree = office();
+  delete byId(tree, "panel").hidden;
+  assert.deepEqual(dockOf(tree, "wickline"), { block: "wickline", stack: "panel-body", collapse: "panel" });
+});
+
 test("dockOf: a copy without the card prop is not a docked block", () => {
   assert.equal(dockOf(office({}), "wickline"), null);
   assert.equal(dockOf(office({ card: false }), "wickline"), null);
