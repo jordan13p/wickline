@@ -18,18 +18,29 @@ export function marketOf(symbol) {
 export const FILTER_MIN_SYMBOLS = 8;
 export const FILTER_MIN_MARKETS = 2;
 
+// The order of the filters: the language's home market first, then the rest as everywhere else, so it never
+// depends on what the list holds or how it is ordered.
+const MARKET_ORDER = {
+  en: ["us", "tw", "hk", "cn", "jp", "kr", "crypto", "other"],
+  "zh-TW": ["tw", "us", "hk", "cn", "jp", "kr", "crypto", "other"],
+  "zh-CN": ["tw", "us", "hk", "cn", "jp", "kr", "crypto", "other"],
+  ja: ["jp", "us", "tw", "hk", "cn", "kr", "crypto", "other"],
+  ko: ["kr", "us", "tw", "hk", "cn", "jp", "crypto", "other"],
+};
+
 /**
- * The filters to offer: `all` with the list's length, then each market on the list in the order it first
- * appears, with its count (so the counts add up to `all`). Empty below the thresholds.
+ * The filters to offer: `all` with the list's length, then each market on the list in `lang`'s fixed order,
+ * with its count (so the counts add up to `all`). Empty below the thresholds.
  */
-export function marketFilters(symbols) {
-  const counts = new Map();
+export function marketFilters(symbols, lang = "en") {
+  const counts = {};
   for (const symbol of symbols) {
     const market = marketOf(symbol);
-    counts.set(market, (counts.get(market) ?? 0) + 1);
+    counts[market] = (counts[market] ?? 0) + 1;
   }
-  if (symbols.length < FILTER_MIN_SYMBOLS || counts.size < FILTER_MIN_MARKETS) return [];
-  return [{ id: "all", count: symbols.length }, ...[...counts].map(([id, count]) => ({ id, count }))];
+  const listed = (MARKET_ORDER[lang] ?? MARKET_ORDER.en).filter((id) => counts[id]);
+  if (symbols.length < FILTER_MIN_SYMBOLS || listed.length < FILTER_MIN_MARKETS) return [];
+  return [{ id: "all", count: symbols.length }, ...listed.map((id) => ({ id, count: counts[id] }))];
 }
 
 /** The symbols a filter shows, in list order. `all`, an unknown filter or a market not on the list shows everything. */

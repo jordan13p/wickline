@@ -465,7 +465,7 @@ export function shownSymbols(view) {
 // labels in a content box of their own, so the pill scrolls with them; it scrolls sideways, by wheel too,
 // when the labels do not fit. Until every label it needs has been measured there is no pill.
 function filterBar(view, t) {
-  const filters = marketFilters(view.watch.preferences.symbols);
+  const filters = marketFilters(view.watch.preferences.symbols, view.lang);
   if (!filters.length) return [];
   const chosen = chosenFilter(view.watch.preferences.symbols, view.filter);
   const index = filters.findIndex(({ id }) => id === chosen);

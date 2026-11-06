@@ -26,10 +26,35 @@ test("no filters below 8 symbols or 2 markets", () => {
   assert.equal(FILTER_MIN_MARKETS, 2);
 });
 
-test("filters list All, then the markets in first-appearance order, and the counts add up", () => {
-  const filters = marketFilters(TWELVE);
+test("filters list All, then the markets in the language's order, and the counts add up", () => {
+  const filters = marketFilters(TWELVE, "zh-TW");
   assert.deepEqual(filters, [{ id: "all", count: 12 }, { id: "tw", count: 5 }, { id: "us", count: 4 }, { id: "crypto", count: 3 }]);
   assert.equal(filters.slice(1).reduce((sum, { count }) => sum + count, 0), filters[0].count);
+});
+
+test("the order is fixed by the interface language, whatever comes first in the list", () => {
+  const ids = (symbols, lang) => marketFilters(symbols, lang).map(({ id }) => id);
+  // A US symbol first: Chinese still leads with Taiwan, English with the US.
+  const usFirst = ["AAPL", ...TWELVE.filter((symbol) => symbol !== "AAPL")];
+  assert.deepEqual(ids(usFirst, "zh-TW"), ["all", "tw", "us", "crypto"]);
+  assert.deepEqual(ids(usFirst, "zh-CN"), ["all", "tw", "us", "crypto"]);
+  assert.deepEqual(ids(usFirst, "en"), ["all", "us", "tw", "crypto"]);
+  // Japan and Korea lead with their own market.
+  const wide = [...TWELVE, "7203.T", "005930.KS", "0700.HK", "600519.SS", "^GSPC"];
+  assert.deepEqual(ids(wide, "en"), ["all", "us", "tw", "hk", "cn", "jp", "kr", "crypto", "other"]);
+  assert.deepEqual(ids(wide, "zh-TW"), ["all", "tw", "us", "hk", "cn", "jp", "kr", "crypto", "other"]);
+  assert.deepEqual(ids(wide, "ja"), ["all", "jp", "us", "tw", "hk", "cn", "kr", "crypto", "other"]);
+  assert.deepEqual(ids(wide, "ko"), ["all", "kr", "us", "tw", "hk", "cn", "jp", "crypto", "other"]);
+  // Only markets on the list appear.
+  assert.deepEqual(ids(TWELVE, "ja"), ["all", "us", "tw", "crypto"]);
+  assert.deepEqual(ids(TWELVE, "ko"), ["all", "us", "tw", "crypto"]);
+});
+
+test("adding or dragging symbols never reorders the filters", () => {
+  const ids = (symbols) => marketFilters(symbols, "en").map(({ id }) => id);
+  const before = ids(TWELVE);
+  assert.deepEqual(ids(["00878.TW", ...TWELVE]), before);
+  assert.deepEqual(ids([...TWELVE].reverse()), before);
 });
 
 test("a market shows its own symbols in list order", () => {
