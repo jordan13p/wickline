@@ -2,8 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, chosenFilter, filterAfterAdd, filterAfterRemove, marketFilters, marketOf, openFilter,
-  visibleSymbols,
+  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, chosenFilter, dropBefore, filterAfterAdd, filterAfterRemove, marketFilters, marketOf, nextOf,
+  openFilter, visibleSymbols,
 } from "../mods/wickline/markets.js";
 
 test("routes symbols to markets", () => {
@@ -67,6 +67,25 @@ test("a market shows its own symbols in list order", () => {
 
 test("All, an unknown filter and an absent market show everything", () => {
   for (const filter of ["all", "kr", "nonsense"]) assert.deepEqual(visibleSymbols(TWELVE, filter), TWELVE, filter);
+});
+
+test("a drop in the visible list maps to a place in the full list", () => {
+  const full = ["2330.TW", "AAPL", "0050.TW", "NVDA"];
+  const visible = ["2330.TW", "0050.TW"];
+  assert.equal(dropBefore(full, visible, "2330.TW"), "2330.TW");
+  assert.equal(dropBefore(full, visible, "0050.TW"), "0050.TW");
+  // After the last visible row: in front of that row's successor in the full list.
+  assert.equal(dropBefore(full, visible, null), "NVDA");
+  // The last visible row is also the last overall.
+  assert.equal(dropBefore(["AAPL", "2330.TW"], ["2330.TW"], null), null);
+  // No filter: the full list is the visible one.
+  assert.equal(dropBefore(full, full, null), null);
+});
+
+test("the symbol after another in a list, or null", () => {
+  assert.equal(nextOf(["A", "B", "C"], "A"), "B");
+  assert.equal(nextOf(["A", "B", "C"], "C"), null);
+  assert.equal(nextOf([], "A"), null);
 });
 
 test("the chosen filter is the stored one only while it is offered", () => {

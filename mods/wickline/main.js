@@ -11,8 +11,7 @@ import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
-import { FILTER_STORAGE_KEY, filterAfterAdd, filterAfterRemove, openFilter } from "./markets.js";
-import { dropBefore } from "./format.js";
+import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
@@ -191,7 +190,7 @@ export default class Wickline extends View {
     // Taken before the remove, which drops the row's quote at once: the fading row draws from this copy.
     const symbols = this.watch.preferences.symbols;
     const ghost = {
-      symbol, before: symbols[symbols.indexOf(symbol) + 1] ?? null, row: rowSource(this, symbol), height: this.rowHeights[symbol], gone: false,
+      symbol, before: nextOf(symbols, symbol), row: rowSource(this, symbol), height: this.rowHeights[symbol], gone: false,
     };
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);

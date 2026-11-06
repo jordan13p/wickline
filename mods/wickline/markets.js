@@ -51,6 +51,19 @@ export function visibleSymbols(symbols, filter) {
   return shown.length ? shown : symbols;
 }
 
+/** The symbol after `symbol` in `list`, or null (also for the last one). */
+export const nextOf = (list, symbol) => list[list.indexOf(symbol) + 1] ?? null;
+
+/**
+ * Where a drop in the filtered list lands in the full list, as `watch.move`'s `before` (null: the end):
+ * in front of the visible row it was dropped on, or, after the last visible row, in front of that row's
+ * successor in the full list.
+ */
+export function dropBefore(full, visible, before) {
+  if (before !== null) return before;
+  return nextOf(full, visible[visible.length - 1]);
+}
+
 /** A stored choice counts only while the row offers it; otherwise the list reads as All. */
 export function chosenFilter(symbols, filter) {
   return marketFilters(symbols).some(({ id }) => id === filter) ? filter : "all";

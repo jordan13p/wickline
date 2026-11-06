@@ -93,14 +93,3 @@ export function formatTime(timestamp, seconds = false) {
   const time = `${two(date.getHours())}:${two(date.getMinutes())}`;
   return seconds ? `${time}:${two(date.getSeconds())}` : time;
 }
-
-/**
- * Where a drop in the filtered list lands in the full list, as `watch.move`'s `before` (null: the end):
- * in front of the visible row it was dropped on, or, after the last visible row, in front of that row's
- * successor in the full list.
- */
-export function dropBefore(full, visible, before) {
-  if (before !== null) return before;
-  const last = visible[visible.length - 1];
-  return full[full.indexOf(last) + 1] ?? null;
-}

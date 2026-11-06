@@ -6,7 +6,7 @@ import { v_flex, h_flex, Input } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
-import { chosenFilter, marketFilters, visibleSymbols } from "../markets.js";
+import { chosenFilter, marketFilters, nextOf, visibleSymbols } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
@@ -496,7 +496,7 @@ function filterBar(view, t) {
 function dropsInPlace(view) {
   const symbols = shownSymbols(view);
   const { symbol, before } = view.drag;
-  return before === symbol || before === (symbols[symbols.indexOf(symbol) + 1] ?? null);
+  return before === symbol || before === nextOf(symbols, symbol);
 }
 
 function dropBar(t) {
