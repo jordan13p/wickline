@@ -18,7 +18,7 @@ import {
 import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL } from "./providers/finnhub.js";
-import { layoutFor, wantsCard } from "./layout.js";
+import { SPIN_MS, layoutFor, spinTurnsFor, wantsCard } from "./layout.js";
 import {
   DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWicklineTab, ownTabSource, returnPane, waitUntil,
 } from "./panes.js";
@@ -76,6 +76,8 @@ export default class Wickline extends View {
     this.fromDock = given.dock === true;
     // A move to or from the own tab is waiting for the new copy (see finishMove).
     this.moving = false;
+    // The refresh icon is turning (see refresh).
+    this.spinning = false;
     this.makeInput();
 
     this.watch = new Watchlist({
@@ -115,7 +117,7 @@ export default class Wickline extends View {
     cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
-        if (command === "refresh") this.watch.refreshNow();
+        if (command === "refresh") this.refresh(cx);
         else if (command === "pause") this.togglePause();
         cx.notify();
       }
@@ -261,6 +263,33 @@ export default class Wickline extends View {
     try { this.saveSettings({ languagePromptDismissed: true }); } catch {
       this.error = { code: "error.saveSettings", params: {} };
     }
+  }
+
+  /**
+   * Asks every source for a round and turns the refresh icon until it ends, always a whole number of
+   * turns so it stops upright, and at least one whole turn for each press (a round that ends at once
+   * still turns once). One task per spin: a press while it runs only joins it and may ask for one more
+   * turn. Its single sleep per turn is not a poll; it ends with the copy.
+   */
+  refresh(cx) {
+    this.watch.refreshNow();
+    const needed = spinTurnsFor(this.spinning ? Date.now() - this.spinStart : 0, SPIN_MS);
+    if (this.spinning) {
+      this.spinNeeded = Math.max(this.spinNeeded, needed);
+      return;
+    }
+    this.spinning = true;
+    this.spinStart = Date.now();
+    this.spinNeeded = needed;
+    let turned = 0;
+    cx.spawn(async (cx) => {
+      do {
+        await cx.sleep(SPIN_MS);
+        if (this.watch.stopped) return;
+      } while (++turned < this.spinNeeded || this.watch.refreshing);
+      this.spinning = false;
+      cx.notify();
+    });
   }
 
   togglePause() {

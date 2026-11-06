@@ -275,12 +275,17 @@ export class Watchlist {
 
   /**
    * One round of every source now, also while paused; a source's cooldown still holds. A source on
-   * a request budget (Finnhub) keeps its own pace.
+   * a request budget (Finnhub) keeps its own pace. A source already in a round joins it (the round
+   * counts as asked for) instead of queuing another, so a second click costs no extra request.
    */
   refreshNow() {
     for (const provider of PROVIDERS) {
       if (provider.manualRefresh === false) continue;
       const state = this.sources[provider.id];
+      if (state.loading) {
+        state.refreshing = true;
+        continue;
+      }
       state.manual = true;
       wake(state);
     }

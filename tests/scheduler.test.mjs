@@ -408,3 +408,84 @@ test("an edit made while hidden is fetched as soon as the copy is shown", async 
   assert.equal(count(host, "yahoo"), 2);
   await stop(w, host, runs);
 });
+
+// A fetch the test answers itself, so a round stays in flight until `release()`.
+function heldFetch(host) {
+  const held = [];
+  host.fetch = (url) => {
+    host.requests.push(url);
+    return new Promise((resolve) => held.push(() => {
+      const r = url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url);
+      resolve({ url, ...r, text: async () => r.text });
+    }));
+  };
+  // A round asks several times (quote, then line): answer until none is left.
+  return { release: async () => { for (let i = 0; i < 10 && held.length; i++) { held.shift()(); await advance(host, host.clock + 1_100); } } };
+}
+
+test("a refresh asked for during a running round joins it, in every source", async () => {
+  const host = fakeHost(() => ok({}));
+  const gate = heldFetch(host);
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 0);
+  assert.equal(count(host, "yahoo"), 1);
+  assert.equal(count(host, "ticker/24hr"), 1);
+  assert.equal(w.refreshing, false, "the automatic round is not a refresh");
+  // Two clicks while both rounds are out: they join, and the status line follows.
+  w.refreshNow();
+  w.refreshNow();
+  assert.equal(w.refreshing, true);
+  await gate.release();
+  await advance(host, 5_000);
+  assert.equal(count(host, "yahoo"), 1);
+  assert.equal(count(host, "ticker/24hr"), 1);
+  assert.equal(w.refreshing, false, "joined, and done with the round");
+  await stop(w, host, runs);
+});
+
+test("two clicks at once run one round per source", async () => {
+  const host = fakeHost((url) => (url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url)));
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 1_000);
+  const [yahooBefore, binanceBefore] = [count(host, "yahoo"), count(host, "ticker/24hr")];
+  w.refreshNow();
+  w.refreshNow();
+  await advance(host, 2_000);
+  assert.equal(count(host, "yahoo"), yahooBefore + 1);
+  assert.equal(count(host, "ticker/24hr"), binanceBefore + 1);
+  await stop(w, host, runs);
+});
+
+test("a refresh while paused runs exactly one round", async () => {
+  const host = fakeHost(yahooChart);
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  w.pause(true);
+  const runs = start(w, host);
+  await advance(host, 5_000);
+  assert.equal(count(host, "yahoo"), 0);
+  w.refreshNow();
+  w.refreshNow();
+  await advance(host, 10_000);
+  assert.equal(count(host, "yahoo"), 1);
+  assert.equal(w.refreshing, false);
+  await stop(w, host, runs);
+});
+
+test("a refresh in a cooldown asks for nothing and does not hang", async () => {
+  const host = fakeHost(yahooChart);
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  w.sources.yahoo.retryAt = 30_000;
+  const runs = start(w, host);
+  await advance(host, 0);
+  w.refreshNow();
+  await advance(host, 10_000);
+  assert.equal(host.requests.length, 0);
+  assert.equal(w.refreshing, false);
+  await stop(w, host, runs);
+});

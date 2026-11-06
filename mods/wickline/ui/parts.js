@@ -3,6 +3,7 @@
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { chartGeometry } from "../format.js";
+import { SPIN_MS } from "../layout.js";
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
@@ -51,11 +52,11 @@ export function button(t, id, label, onClick) {
 }
 
 // A header action: a 16 px single-color icon in a 28 × 28 target, named by its tooltip.
-export function iconButton(t, id, name, label, onClick) {
+export function iconButton(t, id, name, label, onClick, spinning = false) {
   return h_flex().id(id).flex_none().w(28).h(28).items_center().justify_center().rounded(6)
     .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
     .tooltip(label).on_click((_e, cx) => onClick(cx))
-    .child(svg(icon(name)).w(16).h(16));
+    .child(svg(icon(name)).w(16).h(16).when(spinning, (el) => el.spin(SPIN_MS)));
 }
 
 // One group of choices: the chosen one filled, the rest muted.
