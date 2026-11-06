@@ -14,5 +14,5 @@ test("normalizes symbols", () => {
 });
 
 test("identity", () => {
-  assert.equal(USER_AGENT, "Wickline-Herdr/0.2.0");
+  assert.equal(USER_AGENT, "Wickline-Herdr/0.3.0");
 });
