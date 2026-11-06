@@ -12,6 +12,8 @@ import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
 import { filterAfterAdd, filterAfterRemove } from "./markets.js";
+import { dropBefore } from "./format.js";
+import { MOTION_END_MS, MOTION_GAP_MS, settleOffset } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
   SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
@@ -23,7 +25,7 @@ import { SPIN_MS, layoutFor, spinTurnsFor, wantsCard } from "./layout.js";
 import {
   DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWicklineTab, ownTabSource, returnPane, waitUntil,
 } from "./panes.js";
-import { band, sidebar, table, yieldView } from "./ui/panel.js";
+import { band, rowSource, shownSymbols, sidebar, table, yieldView } from "./ui/panel.js";
 import { detailView } from "./ui/detail-dialog.js";
 import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
@@ -66,6 +68,14 @@ export default class Wickline extends View {
     // `before` being the symbol the dragged one would land in front of (null: at the end).
     this.hovered = null;
     this.drag = null;
+    // Row motion, only for what this copy's person just did (see playRow). Rows from a first load, the
+    // starter list or another copy's edit never move. `added`: symbol -> "new" (drawn transparent) then
+    // "shown"; `leaving`: removed rows still on screen, `{ symbol, before, row, height, gone }`; `settle`: the
+    // dropped row, `{ symbol, from }` (px it starts from, then 0); `rowHeights`: each row's measured height.
+    this.added = new Map();
+    this.leaving = [];
+    this.settle = null;
+    this.rowHeights = {};
     // The market filter: this copy's stored choice, else the one it was opened with (props; Herdr keeps them
     // with the tab, so they must never override a later choice), else "all". Rows and the filter row read it
     // through chosenFilter, so a market no longer on the list reads as All.
@@ -183,12 +193,68 @@ export default class Wickline extends View {
     this.resetFilter(filterAfterAdd(this.watch.preferences.symbols, this.filter, symbol));
   }
 
+  // The row motions start their state inside the action, before `act` redraws, so the first draw is the start.
   removeSymbol(cx, symbol) {
+    // Taken before the remove, which drops the row's quote at once: the fading row draws from this copy.
+    const symbols = this.watch.preferences.symbols;
+    const ghost = {
+      symbol, before: symbols[symbols.indexOf(symbol) + 1] ?? null, row: rowSource(this, symbol), height: this.rowHeights[symbol], gone: false,
+    };
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
       // The chosen market's last symbol went: back to All for good, so it does not filter again the day the market returns.
       this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter));
+      if (notice.code === "notice.removed" && ghost.height > 0) {
+        this.added.delete(symbol);
+        this.leaving.push(ghost);
+        this.playRow(cx, () => { ghost.gone = true; }, () => { this.leaving = this.leaving.filter((g) => g !== ghost); });
+      }
       return notice;
+    });
+  }
+
+  // A symbol this copy's person just added fades in: its first draw is transparent.
+  fadeIn(cx, symbol) {
+    // Added again while its old row is still fading out: that row goes at once.
+    this.leaving = this.leaving.filter((g) => g.symbol !== symbol);
+    this.added.set(symbol, "new");
+    this.playRow(cx, () => { if (this.added.has(symbol)) this.added.set(symbol, "shown"); }, () => this.added.delete(symbol));
+  }
+
+  // Drops `drag.symbol` in front of `drag.before`. A move that changed the order slides the row from where
+  // it was to where it landed (the distance, from the rows' measured heights).
+  dropRow(cx, drag) {
+    const symbols = this.watch.preferences.symbols;
+    const was = shownSymbols(this);
+    this.act(cx, () => {
+      const notice = this.watch.move(drag.symbol, dropBefore(symbols, was, drag.before));
+      const from = notice && settleOffset(was, shownSymbols(this), drag.symbol, this.rowHeights);
+      if (from) {
+        const settle = { symbol: drag.symbol, from };
+        this.settle = settle;
+        this.playRow(cx, () => { if (this.settle === settle) settle.from = 0; }, () => { if (this.settle === settle) this.settle = null; });
+      }
+      return notice;
+    });
+  }
+
+  /**
+   * One row motion, from a click or a drop and never from a round. The row has just been given its start
+   * state (the caller redraws), `flip` moves it to the end state a frame later, which the row's
+   * `transition` animates, and `clear` drops the state once that is done, also when a step throws. One
+   * sleep per step in a task of its own, not a timer: it ends with the copy.
+   */
+  playRow(cx, flip, clear) {
+    cx.spawn(async (cx) => {
+      try {
+        await cx.sleep(MOTION_GAP_MS);
+        flip();
+        cx.notify();
+        await cx.sleep(MOTION_END_MS);
+      } finally {
+        clear();
+        if (!this.watch.stopped) cx.notify();
+      }
     });
   }
 
@@ -310,6 +376,7 @@ export default class Wickline extends View {
       this.input.set_value("");
       this.typed = "";
       this.revealSymbol(notice.params.symbol);
+      if (ADDED.includes(notice.code)) this.fadeIn(cx, notice.params.symbol);
       return notice;
     });
     // A first add answers the language prompt too: it stays English.
