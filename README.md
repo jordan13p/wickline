@@ -104,6 +104,11 @@ Type a symbol into the add field and press Enter:
 - Close it like any pane, from Herdr's pane header or with `pane.close`.
 - The header's **open in its own tab** icon moves Wickline to a `Wickline` tab, wide enough for the table; there, **back beside the terminal** puts it back to the right of a pane in the tab it came from and closes only its own pane (the tab too, when it held nothing else; a shell you split in there stays). The old copy closes only once the new one is open, so a refused move leaves everything as it was. Only one copy fetches either way.
 - Zoom stays with Herdr's own pane header; Wickline has no zoom of its own.
+- **Dock it in your own layout**: Wickline can also be a block in a layout of yours, for example in the stack that holds Files and Changes. `"props": {"card": true}` gives it the rounded, bordered card those side panels draw; a pane doesn't need it, since Herdr already frames panes:
+
+  ```json
+  { "id": "wickline", "type": "block", "content": { "mod": "wickline", "props": { "card": true } } }
+  ```
 
 ## Settings
 

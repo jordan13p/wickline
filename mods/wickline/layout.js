@@ -45,6 +45,12 @@ export function layoutFor(size) {
   return size.width < TABLE_MIN_WIDTH ? "sidebar" : "table";
 }
 
+/**
+ * A layout block that docks Wickline beside Herdr's own side panels asks for their rounded, bordered
+ * card with `"props": {"card": true}`. Only `true` counts; panes and tabs never ask (Herdr frames them).
+ */
+export const wantsCard = (props) => props?.card === true;
+
 // The width `ids` need: their fixed widths, the name at its minimum, the gaps and both gutters.
 function needed(ids) {
   const widths = ids.map((id) => columnWidth(id) ?? NAME_MIN_WIDTH);

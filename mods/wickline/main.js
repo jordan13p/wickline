@@ -18,7 +18,7 @@ import {
 import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL } from "./providers/finnhub.js";
-import { layoutFor } from "./layout.js";
+import { layoutFor, wantsCard } from "./layout.js";
 import { MOD_ID, canOpenOwnTab, closeOnceOpened, ownTabSource, returnPane } from "./panes.js";
 import { band, sidebar, table } from "./ui/panel.js";
 import { detailView } from "./ui/detail-dialog.js";
@@ -64,6 +64,8 @@ export default class Wickline extends View {
     this.error = null;
     // The tab this copy's own tab was opened from (props().from), or null for a pane or block copy.
     this.from = typeof given.from === "string" ? given.from : null;
+    // Docked beside Herdr's Files and Changes, it draws their card (see wantsCard).
+    this.card = wantsCard(given);
     // A move to or from the own tab is waiting for the new copy (see finishMove).
     this.moving = false;
     this.makeInput();
@@ -284,6 +286,7 @@ export default class Wickline extends View {
     const root = (layout === "band" ? h_flex() : v_flex())
       // `background`, as Herdr's terminals and other panes: Wickline sits beside them as one more pane.
       .id("bw").size_full().bg(t.background).text_color(t.foreground).text_size(12.5)
+      .when(this.card, (el) => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
       .on_size_change((size, cx) => { this.size = size; cx.notify(); });
     if (layout === "band") return band(this, root, t);
     return layout === "table" ? table(this, root, t) : sidebar(this, root, t);
