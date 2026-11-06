@@ -80,10 +80,21 @@ test("decodes the recorded answer", () => {
 test("midpoint and no price", () => {
   assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "100.5_100_", a: "101.5_102_", u: "-", w: "-" })).quotes["2330.TW"].price, 101);
   const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000" }));
-  assert.deepEqual(none, { quotes: {}, errors: {} });
+  // No price, but the name still comes through (see "a name without a price").
+  const named = { "2330.TW": "台積電" };
+  assert.deepEqual(none, { quotes: {}, errors: {}, names: named });
   // One side only is not a midpoint.
-  assert.deepEqual(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2270.0000_" })), { quotes: {}, errors: {} });
-  assert.deepEqual(decode(["2330.TW"], row2330({ tlong: "-" })), { quotes: {}, errors: {} });
+  assert.deepEqual(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2270.0000_" })), { quotes: {}, errors: {}, names: named });
+  assert.deepEqual(decode(["2330.TW"], row2330({ tlong: "-" })), { quotes: {}, errors: {}, names: named });
+});
+
+test("a name without a price: before the open MIS sends names only", () => {
+  // As answered at 08:19 on a trading day: no last trade, no bid or ask.
+  const preOpen = decode(["2330.TW"], row2330({ z: "-", b: null, a: null, tlong: "1793922600000" }));
+  assert.deepEqual(preOpen, { quotes: {}, errors: {}, names: { "2330.TW": "台積電" } });
+  // Every requested row gives its name, priced or not; a row nobody asked for gives none.
+  const all = decode(["2330.TW", "0050.TW"], answer(OPEN));
+  assert.deepEqual(all.names, { "2330.TW": "台積電", "0050.TW": "元大台灣50" });
 });
 
 test("limit check", () => {
@@ -265,6 +276,20 @@ test("no price drops the overlay without an error", async () => {
   await advance(host, 10_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");
   assert.equal(w.overlayErrors["2330.TW"], undefined);
+  await stop(w, host, runs);
+});
+
+test("before the open the row keeps Yahoo's quote under MIS's name", async () => {
+  const host = twHost(CONSENTED, () => row2330({ z: "-", b: null, a: null }));
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  await advance(host, 1);
+  const quote = w.shown("2330.TW");
+  assert.deepEqual([quote.source, quote.price, quote.localName], ["yahoo", 2200, "台積電"]);
+  assert.equal(displayName(quote, "zh-TW"), "台積電");
+  assert.equal(w.overlayErrors["2330.TW"], undefined);
+  assert.deepEqual(w.problems(), []);
   await stop(w, host, runs);
 });
 

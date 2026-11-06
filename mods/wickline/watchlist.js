@@ -520,12 +520,13 @@ export class Watchlist {
 
   apply(provider, request, result) {
     if (provider.overlay) {
+      // A name can come without a price (MIS before the open): remember it all the same.
+      for (const symbol of request.symbols) if (result.names?.[symbol]) this.localNames[symbol] = result.names[symbol];
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
       for (const symbol of request.symbols) {
         const overlay = result.quotes[symbol];
         if (overlay) {
           this.overlays[symbol] = overlay;
-          if (overlay.name) this.localNames[symbol] = overlay.name;
           delete this.overlayErrors[symbol];
           continue;
         }

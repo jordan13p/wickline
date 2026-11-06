@@ -47,9 +47,13 @@ export function decodeMis(symbols, response, now) {
   const wanted = new Map(symbols.map((symbol) => [misChannel(symbol), symbol]));
   const quotes = {};
   const errors = {};
+  // Before the open (or for a halted stock) MIS sends a row's name without any price: keep the name.
+  const names = {};
   for (const row of body.msgArray) {
     const symbol = typeof row?.ex === "string" && typeof row.c === "string" ? wanted.get(`${row.ex}_${row.c}.tw`) : undefined;
     if (!symbol) continue;
+    const name = cleanText(row.n);
+    if (name) names[symbol] = name;
     const bid = best(row.b);
     const ask = best(row.a);
     const price = number(row.z) ?? (bid && ask ? (bid + ask) / 2 : null);
@@ -62,7 +66,7 @@ export function decodeMis(symbols, response, now) {
     quotes[symbol] = {
       symbol,
       source: "mis",
-      name: cleanText(row.n),
+      name,
       price,
       previousClose: number(row.y),
       open: number(row.o),
@@ -72,7 +76,7 @@ export function decodeMis(symbols, response, now) {
       fetchedAt: now,
     };
   }
-  return { quotes, errors };
+  return { quotes, errors, names };
 }
 
 /** @type {Provider} */

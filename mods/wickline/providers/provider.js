@@ -7,7 +7,7 @@ import { QuoteError } from "../quotes.js";
  * @typedef {{ url: string, headers: Record<string, string>, symbols: string[], kind: "quote"|"line" }} ProviderRequest
  * @typedef {{ status: number, ok: boolean, text: string }} ProviderResponse
  * @typedef {object} Quote  What decodeYahoo / decodeBinance return, with `source` naming the provider.
- * @typedef {{ quotes: Record<string, Quote>, errors: Record<string, QuoteError>, lines?: Record<string, number[]> }} ProviderResult
+ * @typedef {{ quotes: Record<string, Quote>, errors: Record<string, QuoteError>, lines?: Record<string, number[]>, names?: Record<string, string> }} ProviderResult
  * @typedef {{
  *   id: "yahoo"|"binance"|"mis"|"finnhub",
  *   markets: string[],
