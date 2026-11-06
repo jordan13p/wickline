@@ -70,6 +70,33 @@ test("onScreen: a docked block is shown with its panel open and its tab active, 
   assert.equal(pane.dock, null);
 });
 
+test("onScreen clears a dock tab record left by a closed tab, once", () => {
+  const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }, { pane: "p8", tab: "t9", terminal: "term-8" }] });
+  // The person closed the tab's Wickline pane by hand: a shell is all that is left in t9.
+  host.store[DOCK_TAB_KEY] = { tab: "t9" };
+  const v = view({ card: true });
+  assert.equal(onScreen(host, v), true);
+  assert.deepEqual(host.ran, [["setShared", DOCK_TAB_KEY, { tab: null }]]);
+  onScreen(host, v);
+  onScreen(host, v);
+  assert.equal(host.ran.length, 1);
+  // A Wickline pane opened later in that tab another way (ctrl-alt-b) does not make the block yield.
+  host.list = [...host.list, { pane: "p5", tab: "t9", mod: "wickline" }];
+  assert.equal(onScreen(host, v), true);
+  assert.equal(v.yielding, false);
+  assert.equal(host.ran.length, 1);
+});
+
+test("onScreen keeps a live dock tab record, and a copy that is not docked never clears one", () => {
+  const host = fakeHost({ panes: [{ pane: "p9", tab: "t9", mod: "wickline" }] });
+  host.store[DOCK_TAB_KEY] = { tab: "t9" };
+  onScreen(host, view({ card: true }));
+  assert.deepEqual(host.ran, []);
+  host.list = [];
+  onScreen(host, view());
+  assert.deepEqual(host.ran, []);
+});
+
 test("⤢ from a block: waits for the new tab, then records it and hides the panel", async () => {
   const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }] });
   const v = view({ card: true, filter: "tw" });
@@ -119,7 +146,8 @@ test("back to the panel: waits until the block is shown before closing the tab's
   await cx.sleep();
   assert.equal(commands(host).includes("pane.close"), false);
   await cx.done();
-  assert.deepEqual(host.ran.slice(2), [["setShared", DOCK_TAB_KEY, null], ["pane.close", { pane: "p9" }]]);
+  // Cleared as `{ tab: null }`: Herdr keeps a value set to null.
+  assert.deepEqual(host.ran.slice(2), [["setShared", DOCK_TAB_KEY, { tab: null }], ["pane.close", { pane: "p9" }]]);
   // The tab copy is going away: its icon stays out for good.
   assert.equal(v.moving, true);
 });

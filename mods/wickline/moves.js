@@ -4,7 +4,8 @@
 // set: `card`, `dock`, `yielding`, `fromDock`, `moving`, `filter` and the tab a pane copy came from (view.from).
 // `cx` is the click's; each wait runs in a task spawned from it that owns its own cx.
 import {
-  DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWicklineTab, ownTabSource, returnPane, waitUntil,
+  DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWicklineTab, ownTabSource, returnPane, staleDockTab,
+  waitUntil,
 } from "./panes.js";
 
 /**
@@ -17,8 +18,16 @@ export function onScreen(host, view) {
   // The first card block in the layout is taken to be this copy: Wickline is docked once, as the
   // office layout does, and panes() cannot tell copies apart anyway.
   view.dock = tree && dockOf(tree, MOD_ID);
-  view.yielding = Boolean(view.dock) && blockYields(host.shared(DOCK_TAB_KEY), host.panes());
-  return !view.dock || (isShown(tree, view.dock) && !view.yielding);
+  if (!view.dock) {
+    view.yielding = false;
+    return true;
+  }
+  const dockTab = host.shared(DOCK_TAB_KEY);
+  const all = host.panes();
+  // Written only while stale, so the write (which re-renders every copy) happens once.
+  if (staleDockTab(dockTab, all)) host.setShared(DOCK_TAB_KEY, { tab: null });
+  view.yielding = blockYields(dockTab, all);
+  return isShown(tree, view.dock) && !view.yielding;
 }
 
 /**
@@ -114,7 +123,7 @@ export function backToPanel(host, view, cx, pane, leaving) {
     if (dock.stack) host.run("layout.select", { stack: dock.stack, child: dock.block });
     if (dock.collapse) host.run("layout.show", { id: dock.collapse });
     if (!await waitUntil(() => isShown(host.layout(), dock), { sleep: (ms) => cx.sleep(ms) })) return false;
-    host.setShared(DOCK_TAB_KEY, null);
+    host.setShared(DOCK_TAB_KEY, { tab: null });
     host.run("pane.close", { pane: pane.pane });
     return leaving;
   });

@@ -1,7 +1,9 @@
 // node --test tests/  (panes.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DOCK_TAB_KEY, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, newWicklineTab, ownTabSource, returnPane } from "../mods/wickline/panes.js";
+import {
+  DOCK_TAB_KEY, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, newWicklineTab, ownTabSource, returnPane, staleDockTab,
+} from "../mods/wickline/panes.js";
 
 // Panes as panes() gives them: Wickline's own tab "t9", opened from "t1".
 const pane = (id, tab, extra = {}) => ({ pane: id, tab, terminal: `term-${id}`, focused: false, ...extra });
@@ -220,6 +222,19 @@ test("a docked block yields while a Wickline pane is in the tab it opened", () =
   assert.equal(blockYields(null, [{ pane: "p1", tab: "t2", mod: "wickline" }]), false);
   assert.equal(blockYields(undefined, [{ pane: "p1", tab: "t2", mod: "wickline" }]), false);
   assert.equal(blockYields({}, [{ pane: "p1", tab: undefined, mod: "wickline" }]), false);
+});
+
+test("a dock tab record is stale once its tab holds no Wickline pane", () => {
+  const wickline = { pane: "p1", tab: "t2", mod: "wickline" };
+  assert.equal(staleDockTab({ tab: "t2" }, [wickline]), false);
+  // The person closed the tab, or the Wickline pane in it: stale.
+  assert.equal(staleDockTab({ tab: "t2" }, []), true);
+  assert.equal(staleDockTab({ tab: "t2" }, [{ pane: "p2", tab: "t2", terminal: "term-p2" }, { ...wickline, tab: "t9" }]), true);
+  // Already cleared, never written, or malformed: nothing to clear.
+  assert.equal(staleDockTab({ tab: null }, []), false);
+  assert.equal(staleDockTab(null, []), false);
+  assert.equal(staleDockTab(undefined, []), false);
+  assert.equal(staleDockTab({}, []), false);
 });
 
 test("the docked block's tab: a Wickline pane in a tab that was not there before", () => {

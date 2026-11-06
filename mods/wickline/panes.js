@@ -132,7 +132,8 @@ export function isShown(tree, dock) {
   return path.every((node, i) => node.hidden !== true && (node.type !== "stack" || shownChild(node) === path[i + 1]?.id));
 }
 
-// Shared state: `{ tab }`, the tab a docked block moved Wickline to (see main.js), or null.
+// Shared state: `{ tab }`, the tab a docked block moved Wickline to (see moves.js); `{ tab: null }` once
+// cleared, since Herdr keeps a value set to null.
 export const DOCK_TAB_KEY = "wickline.dockTab";
 
 /**
@@ -142,4 +143,13 @@ export const DOCK_TAB_KEY = "wickline.dockTab";
  */
 export function blockYields(dockTab, panes) {
   return typeof dockTab?.tab === "string" && panes.some((p) => p.mod === MOD_ID && p.tab === dockTab.tab);
+}
+
+/**
+ * The record names a tab that holds no Wickline pane any more (the person closed the tab, or its
+ * Wickline pane): it is cleared, so a Wickline pane opened there later another way never makes the
+ * block yield. False for a record already cleared, or none.
+ */
+export function staleDockTab(dockTab, panes) {
+  return typeof dockTab?.tab === "string" && !blockYields(dockTab, panes);
 }
