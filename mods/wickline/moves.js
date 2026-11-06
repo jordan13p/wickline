@@ -145,8 +145,14 @@ function backToPanel(host, view, cx, pane, leaving) {
     if (!await waitUntil(() => isShown(host.layout(), dock), { sleep: (ms) => cx.sleep(ms) })) return false;
     host.setShared(DOCK_TAB_KEY, { tab: null });
     // Closing the tab would hand the focus to its neighbour, so the tab copy first returns the person to
-    // the tab they opened it from, while that tab is still there.
-    if (leaving && view.from && host.panes().some((p) => p.tab === view.from)) host.run("tab.select", { id: view.from });
+    // the tab they opened it from, while that tab is still there. A refused select still lets the pane close.
+    if (leaving && view.from && host.panes().some((p) => p.tab === view.from)) {
+      try {
+        host.run("tab.select", { id: view.from });
+      } catch {
+        // Herdr's own choice of tab then stands, as before.
+      }
+    }
     host.run("pane.close", { pane: pane.pane });
     return leaving;
   });

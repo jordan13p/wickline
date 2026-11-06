@@ -227,6 +227,32 @@ test("back to the panel: a tab it came from that is gone is not selected", async
   assert.deepEqual(host.ran.at(-1), ["pane.close", { pane: "p9" }]);
 });
 
+test("back to the panel: a refused tab.select still closes the tab's pane", async () => {
+  const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
+  const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p1", tab: "t1" }, tab] });
+  const run = host.run;
+  host.run = (command, args) => { run(command, args); if (command === "tab.select") throw new Error("no such tab"); };
+  host.store[DOCK_TAB_KEY] = { tab: "t9" };
+  const v = view({ fromDock: true, from: "t1" });
+  host.later(2, () => { host.tree = office(); });
+  const cx = fakeCx();
+  ownTabAction(host, v).go(cx);
+  await cx.done();
+  // Returning to the tab is a courtesy; going back to the panel still finishes.
+  assert.deepEqual(host.ran.at(-1), ["pane.close", { pane: "p9" }]);
+});
+
+test("⤢ from a block: with no focused tab, the new tab carries no `from`", async () => {
+  const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }] });
+  host.focused = () => null;
+  const v = view({ card: true });
+  syncDock(host, v);
+  const cx = fakeCx();
+  ownTabAction(host, v).go(cx);
+  assert.deepEqual(host.ran[0], ["tab.new", { mod: "wickline", name: "Wickline", props: { dock: true, filter: "all" } }]);
+  await cx.done();
+});
+
 test("back to the panel: a panel that never shows closes nothing", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
   const host = fakeHost({ tree: office({ hidden: true }), panes: [tab] });
@@ -266,6 +292,8 @@ test("the yield view's way back closes the dock tab's pane and keeps the block's
   backFromYield(host, v, cx);
   await cx.done();
   assert.deepEqual(host.ran.at(-1), ["pane.close", { pane: "p9" }]);
+  // The person stays on the tab they are on: only the tab copy itself returns them anywhere.
+  assert.equal(commands(host).includes("tab.select"), false);
   assert.equal(v.moving, false);
 });
 
