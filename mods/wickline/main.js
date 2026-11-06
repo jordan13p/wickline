@@ -87,7 +87,7 @@ export default class Wickline extends View {
     // `{ code, params }` or null, translated when drawn.
     this.notice = null;
     this.error = null;
-    // The tab this copy's own tab was opened from (props().from), or null for a pane or block copy.
+    // The tab this copy's own tab was opened from (props().from; from a pane or a block), or null.
     this.from = typeof given.from === "string" ? given.from : null;
     // Docked beside Herdr's Files and Changes, it draws their card (see wantsCard).
     this.card = wantsCard(given);

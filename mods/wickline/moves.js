@@ -110,7 +110,9 @@ function dockTabAction(host, view) {
       if (view.moving) return;
       const before = host.panes();
       const { collapse } = view.dock;
-      host.run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true, ...carried(view) } });
+      // The tab the person is on, to return to on the way back.
+      const from = host.focused()?.tab;
+      host.run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true, ...(from && { from }), ...carried(view) } });
       runMove(view, cx, async (cx) => {
         let tab = null;
         const opened = await waitUntil(() => (tab = newWicklineTab(before, host.panes())), { sleep: (ms) => cx.sleep(ms) });
@@ -125,7 +127,8 @@ function dockTabAction(host, view) {
 
 /**
  * Reopens the panel on the Wickline block, and only once it is shown closes `pane`, the Wickline pane
- * of the tab (never the tab, so a shell split in beside it stays), and forgets the tab. The tab's own
+ * of the tab (never the tab, so a shell split in beside it stays), and forgets the tab. The tab copy
+ * selects the tab it was opened from (view.from) before closing. The tab's own
  * copy passes the focused Wickline pane; the block's yield view, which is not focused, the dock tab's.
  * With the panel already open, select and show change nothing. The block is found again in the
  * layout: the person may have moved it since. No pane, nothing happens: never close one unseen.
@@ -141,6 +144,9 @@ function backToPanel(host, view, cx, pane, leaving) {
     if (dock.collapse) host.run("layout.show", { id: dock.collapse });
     if (!await waitUntil(() => isShown(host.layout(), dock), { sleep: (ms) => cx.sleep(ms) })) return false;
     host.setShared(DOCK_TAB_KEY, { tab: null });
+    // Closing the tab would hand the focus to its neighbour, so the tab copy first returns the person to
+    // the tab they opened it from, while that tab is still there.
+    if (leaving && view.from && host.panes().some((p) => p.tab === view.from)) host.run("tab.select", { id: view.from });
     host.run("pane.close", { pane: pane.pane });
     return leaving;
   });

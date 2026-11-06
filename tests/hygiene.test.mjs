@@ -173,7 +173,7 @@ test("only main.js wires Herdr's storage, network and files", () => {
 const PROCESS_GLOBAL = /(?<![.\w$])process\b/;
 // The Herdr commands the moves between a pane, a tab and a docked block run (`host.run` is Herdr's `run`,
 // handed in by main.js): commands, not programs.
-const MOVE_COMMANDS = ["tab.new", "pane.split", "pane.close", "layout.hide", "layout.show", "layout.select"];
+const MOVE_COMMANDS = ["tab.new", "tab.select", "pane.split", "pane.close", "layout.hide", "layout.show", "layout.select"];
 test("the only program is chmod 600 on the key file", () => {
   for (const file of jsFiles()) {
     const name = relativeName(file);

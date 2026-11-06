@@ -103,7 +103,7 @@ agent 會先告訴你 Wickline 會連線到哪些主機，再複製 mod、合併
 - `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Wickline pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
 - 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod wickline`。
 - 關閉方式和其他 pane 一樣：用 Herdr 的 pane 標題列，或執行 `pane.close`。
-- 標題列的 **在自己的分頁開啟** 圖示會把 Wickline 移到名為 `Wickline` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。在停靠的側邊面板裡，同一個圖示會開啟分頁，然後收合面板；在那個分頁裡，按 **回到面板** 會讓面板重新顯示 Wickline，並關閉分頁裡的 Wickline pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。該分頁開著時，面板只顯示一行說明和 **回到面板** 按鈕，也不送出任何請求；以其他方式開啟的 Wickline pane 不會讓面板讓位。
+- 標題列的 **在自己的分頁開啟** 圖示會把 Wickline 移到名為 `Wickline` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。在停靠的側邊面板裡，同一個圖示會開啟分頁，然後收合面板；在那個分頁裡，按 **回到面板** 會讓面板重新顯示 Wickline、回到你原本所在的分頁，並關閉分頁裡的 Wickline pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。該分頁開著時，面板只顯示一行說明和 **回到面板** 按鈕，也不送出任何請求；以其他方式開啟的 Wickline pane 不會讓面板讓位。
 - 放大（zoom）交給 Herdr 自己的 pane 標題列；Wickline 沒有自己的放大功能。
 - **停靠在自己的 layout**：Wickline 也可以當作你 layout 裡的一個區塊，例如放進 Files、Changes 所在的那一組。加上 `"props": {"card": true}`，就會畫出和那些側邊面板一樣的圓角邊框卡片；pane 不需要，因為 Herdr 已經替 pane 畫了外框：
 
