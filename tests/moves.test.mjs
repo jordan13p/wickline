@@ -150,7 +150,7 @@ test("⤢ from a block: waits for the new tab, then records it and hides the pan
   assert.equal(action.label, "button.ownTab");
   const cx = fakeCx();
   action.go(cx);
-  assert.deepEqual(host.ran, [["tab.new", { mod: "wickline", name: "Wickline", props: { dock: true, filter: "tw" } }]]);
+  assert.deepEqual(host.ran, [["tab.new", { mod: "wickline", name: "Wickline", props: { dock: true, from: "t1", filter: "tw" } }]]);
   // The tab shows up in panes() a few looks later; until then nothing is recorded and nothing hides.
   host.later(3, () => { host.list = [...host.list, { pane: "p9", tab: "t9", mod: "wickline" }]; });
   await cx.sleep();
@@ -195,6 +195,36 @@ test("back to the panel: waits until the block is shown before closing the tab's
   assert.deepEqual(host.ran.slice(2), [["setShared", DOCK_TAB_KEY, { tab: null }], ["pane.close", { pane: "p9" }]]);
   // The tab copy is going away: its icon stays out for good.
   assert.equal(v.moving, true);
+});
+
+test("back to the panel: returns to the tab the person moved Wickline from, then closes the tab's pane", async () => {
+  const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
+  const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p1", tab: "t1" }, { pane: "p2", tab: "t2" }, tab] });
+  host.store[DOCK_TAB_KEY] = { tab: "t9" };
+  const v = view({ fromDock: true, from: "t1" });
+  host.later(2, () => { host.tree = office(); });
+  const cx = fakeCx();
+  ownTabAction(host, v).go(cx);
+  await cx.done();
+  // Selected first, so closing the last tab never hands the focus to its neighbour on the way.
+  assert.deepEqual(host.ran.slice(2), [
+    ["setShared", DOCK_TAB_KEY, { tab: null }],
+    ["tab.select", { id: "t1" }],
+    ["pane.close", { pane: "p9" }],
+  ]);
+});
+
+test("back to the panel: a tab it came from that is gone is not selected", async () => {
+  const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
+  const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p2", tab: "t2" }, tab] });
+  host.store[DOCK_TAB_KEY] = { tab: "t9" };
+  const v = view({ fromDock: true, from: "t1" });
+  host.later(2, () => { host.tree = office(); });
+  const cx = fakeCx();
+  ownTabAction(host, v).go(cx);
+  await cx.done();
+  assert.equal(commands(host).includes("tab.select"), false);
+  assert.deepEqual(host.ran.at(-1), ["pane.close", { pane: "p9" }]);
 });
 
 test("back to the panel: a panel that never shows closes nothing", async () => {
