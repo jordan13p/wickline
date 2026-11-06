@@ -187,6 +187,28 @@ test("adding past the cap names the symbol it pushed out", async () => {
   await stop(w, host, runs);
 });
 
+test("only a US symbol is pushed past the cap, and only US symbols count toward it", async () => {
+  // `budget` sets the cap (a quarter of it); `list` is saved in that order; then `symbol` is added on top.
+  const addTo = async (budget, list, symbol) => {
+    const host = usHost({ budgetPerMinute: budget });
+    host.store = { version: 1, symbols: list, paused: false };
+    const w = new Watchlist(host);
+    const runs = start(w, host);
+    await advance(host, 1);
+    const notice = w.add(symbol);
+    await stop(w, host, runs);
+    return notice;
+  };
+  // Cap 3: the third US symbol loses its place; cap 5 has room.
+  assert.deepEqual(await addTo(12, ["AAPL", "MSFT", "NVDA"], "TSLA"), { code: "notice.overCapPushed", params: { symbol: "TSLA", pushed: "NVDA", cap: 3 } });
+  assert.deepEqual(await addTo(20, ["AAPL", "MSFT", "NVDA"], "TSLA"), { code: "notice.added", params: { symbol: "TSLA" } });
+  // Cap 2: a Taiwan stock in between neither counts nor gets pushed.
+  assert.deepEqual(await addTo(8, ["AAPL", "2330.TW", "MSFT"], "NVDA"), { code: "notice.overCapPushed", params: { symbol: "NVDA", pushed: "MSFT", cap: 2 } });
+  assert.deepEqual(await addTo(8, ["AAPL", "MSFT"], "0050.TW"), { code: "notice.added", params: { symbol: "0050.TW" } });
+  // An empty list: nobody to push.
+  assert.deepEqual(await addTo(8, [], "NVDA"), { code: "notice.added", params: { symbol: "NVDA" } });
+});
+
 test("the 16th US symbol at the default budget pushes the old 15th", async () => {
   const host = usHost();
   const w = new Watchlist(host);

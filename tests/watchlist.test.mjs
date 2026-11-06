@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { STARTER_SYMBOLS, USER_AGENT } from "../mods/wickline/quotes.js";
 import { yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
-import { Watchlist, WATCHLIST_KEY, pushedPastCap, readPreferences } from "../mods/wickline/watchlist.js";
+import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 
@@ -156,16 +156,6 @@ test("a new symbol goes to the top; a duplicate stays where it is", () => {
   assert.deepEqual(host.store.symbols, ["NVDA", "AAPL", "2330.TW"]);
   w.add("BTC/USDT");
   assert.deepEqual(host.store.symbols, ["BTC/USDT", "NVDA", "AAPL", "2330.TW"]);
-});
-
-test("pushedPastCap names the US symbol a new top symbol moved past the cap", () => {
-  const isUs = (s) => !s.includes(".") && !s.includes("/");
-  assert.equal(pushedPastCap(["A", "B", "C"], ["N", "A", "B", "C"], 3, isUs), "C");
-  assert.equal(pushedPastCap(["A", "B", "C"], ["N", "A", "B", "C"], 5, isUs), null);
-  // Symbols of other markets neither count nor get pushed.
-  assert.equal(pushedPastCap(["A", "X.TW", "B"], ["N", "A", "X.TW", "B"], 2, isUs), "B");
-  assert.equal(pushedPastCap(["A", "B"], ["X.TW", "A", "B"], 2, isUs), null);
-  assert.equal(pushedPastCap([], ["N"], 2, isUs), null);
 });
 
 test("a Yahoo cooldown holds stocks, also for Refresh", async () => {
