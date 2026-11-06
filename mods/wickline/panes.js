@@ -46,10 +46,22 @@ export function newWickline(before, after, tab = null) {
   return after.find((p) => p.mod === MOD_ID && !old.has(p.pane) && (tab === null || p.tab === tab)) ?? null;
 }
 
-// How often and how long a move looks for the new copy: Herdr lists a new pane in panes() a little after
-// run() returns, not at once.
+// How often and how long a wait looks: Herdr lists a new pane in panes() a little after run() returns,
+// not at once, and a layout click shows in layout() a little after its command.
 const POLL_MS = 50;
 const WAIT_MS = 1500;
+
+/**
+ * Looks at `check()` every 50 ms for about 1.5 s. True once it holds, false when it never did.
+ * `host`: `{ sleep(ms) }`.
+ */
+export async function waitUntil(check, host) {
+  for (let waited = 0; ; waited += POLL_MS) {
+    if (check()) return true;
+    if (waited >= WAIT_MS) return false;
+    await host.sleep(POLL_MS);
+  }
+}
 
 /**
  * Closes `me` (the moving copy's own pane) once the new Wickline copy shows up in panes() (in `tab`,
@@ -58,12 +70,7 @@ const WAIT_MS = 1500;
  * True once closed; false when the new copy never showed up, and then nothing closes.
  */
 export async function closeOnceOpened(before, me, host, tab = null) {
-  for (let waited = 0; ; waited += POLL_MS) {
-    if (newWickline(before, host.panes().filter((p) => p.tab !== me.tab), tab)) {
-      host.close(me.pane);
-      return true;
-    }
-    if (waited >= WAIT_MS) return false;
-    await host.sleep(POLL_MS);
-  }
+  const opened = await waitUntil(() => newWickline(before, host.panes().filter((p) => p.tab !== me.tab), tab), host);
+  if (opened) host.close(me.pane);
+  return opened;
 }
