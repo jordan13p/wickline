@@ -98,6 +98,8 @@ test("a stock locked at its limit is priced at that limit", () => {
   assert.equal(up.quotes["2330.TW"].price, 2485);
   // A limit order queue alone, without market orders, is a lock too.
   assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2035.0000_2040.0000_" })).quotes["2330.TW"].price, 2035);
+  // A side of market orders only is no side: asks waiting at limit-down still lock it.
+  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "0.0000_", a: "0.0000_2035.0000_" })).quotes["2330.TW"].price, 2035);
 });
 
 test("a one-sided book away from the limits, or without limits, has no price", () => {
@@ -108,8 +110,6 @@ test("a one-sided book away from the limits, or without limits, has no price", (
   // Asks only at limit-up, bids only at limit-down: the wrong side.
   none({ z: "-", b: "-", a: "2485.0000_" });
   none({ z: "-", a: "-", b: "2035.0000_" });
-  // A side of market orders only is no side.
-  none({ z: "-", b: "0.0000_", a: "0.0000_2035.0000_" });
   // No limits to match, or limit-up of 9999 or more.
   none({ z: "-", b: "-", a: "0.0000_2035.0000_", u: "-", w: "-" });
   none({ z: "-", b: "-", a: "0.0000_2035.0000_", u: "9999.9500" });

@@ -30,12 +30,25 @@ const number = (value) => {
   return positive(n) ? n : null;
 };
 
-// The best bid or ask: "2265.0000_2260.0000_..." → 2265.
-const best = (value) => (typeof value === "string" ? number(value.split("_")[0]) : null);
+// The best real bid or ask: "2265.0000_2260.0000_..." → 2265. Market orders show as 0.0000 and are skipped.
+const best = (value) => (typeof value === "string" ? value.split("_").map(number).find(Boolean) ?? null : null);
+
+/**
+ * The price from the order book when the snapshot had no trade: the midpoint of the best bid and ask; with
+ * orders on one side only, the stock's limit when that side waits at it (asks only at limit-down, bids only
+ * at limit-up), as a stock locked at its limit trades only there. Anything else has no price.
+ */
+function bookPrice(bid, ask, up, down) {
+  if (bid && ask) return (bid + ask) / 2;
+  if (!positive(up) || !positive(down) || up >= 9999) return null;
+  if (ask && ask === down) return down;
+  if (bid && bid === up) return up;
+  return null;
+}
 
 /**
  * Overlays by requested symbol. The price is the last trade (`z`); when the last 5-second snapshot
- * had none (`-`), the midpoint of the best bid and ask. A row with neither, or without a time, has
+ * had none (`-`), the order book's (bookPrice). A row with neither, or without a time, has
  * no overlay and no error. A row MIS sent for a symbol that was not asked for is ignored.
  */
 export function decodeMis(symbols, response, now) {
@@ -56,7 +69,7 @@ export function decodeMis(symbols, response, now) {
     if (name) names[symbol] = name;
     const bid = best(row.b);
     const ask = best(row.a);
-    const price = number(row.z) ?? (bid && ask ? (bid + ask) / 2 : null);
+    const price = number(row.z) ?? bookPrice(bid, ask, number(row.u), number(row.w));
     const time = Number(row.tlong);
     if (!price || !positive(time)) continue;
     if (!withinLimits(price, number(row.u), number(row.w))) {
