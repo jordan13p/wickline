@@ -354,23 +354,28 @@ export default class Wickline extends View {
     };
   }
 
-  // Closes `me` once the new copy is seen (in `tab`, when given); the spawned task owns its cx. When the
-  // new copy never shows up, or looking for it fails, both stay open and the button works again; only a
-  // move whose old pane is closing keeps further clicks out.
-  finishMove(cx, before, me, tab = null) {
+  // Runs `step(cx)` as a move, in a spawned task that owns its cx. Further clicks do nothing meanwhile.
+  // `step` resolves true once this copy is going away (its pane closed), which keeps them out for good;
+  // false, or a throw, leaves everything as it was and the button works again.
+  runMove(cx, step) {
     this.moving = true;
     cx.spawn(async (cx) => {
-      let closed = false;
+      let leaving = false;
       try {
-        closed = await closeOnceOpened(before, me, {
-          panes, sleep: (ms) => cx.sleep(ms), close: (pane) => run("pane.close", { pane }),
-        }, tab);
+        leaving = await step(cx);
       } catch {
-        // Nothing to undo: nothing was closed.
+        // Nothing to undo: a step closes only after it has seen what it waited for.
       } finally {
-        if (!closed) this.moving = false;
+        if (!leaving) this.moving = false;
       }
     });
+  }
+
+  // Closes `me` once the new copy is seen (in `tab`, when given).
+  finishMove(cx, before, me, tab = null) {
+    this.runMove(cx, (cx) => closeOnceOpened(before, me, {
+      panes, sleep: (ms) => cx.sleep(ms), close: (pane) => run("pane.close", { pane }),
+    }, tab));
   }
 
   // The dialogs' close: Herdr names the overlay in the props it opened the copy with.
