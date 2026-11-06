@@ -4,7 +4,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta } from "../format.js";
+import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowMeta, rowName } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { finnhubCap } from "../providers/finnhub.js";
@@ -368,14 +368,13 @@ function tableRow(view, t, symbol, index, symbols, columns, nameW, now) {
   const row = rowData(view, t, symbol, now);
   const { quote, color } = row;
   // As the sidebar's line: a name that begins with the label (a pair's "Binance Spot") replaces it.
-  const named = row.name && row.name !== symbol ? row.name : "";
-  const merged = Boolean(named && row.label && named.startsWith(row.label));
-  const state = [merged ? named : row.label, row.date].filter(Boolean).join(" · ");
+  const shown = rowName(symbol, row.label, row.name);
+  const state = [shown.label, row.date].filter(Boolean).join(" · ");
   const cell = (id) => tableCell(id, nameW);
   const figure = (id, value) => cell(id).text_right().whitespace_nowrap().text_color(t.muted).child(quote ? number(quote, value) : "");
   const cells = {
     symbol: () => cell("symbol").font_semibold().truncate().child(symbol),
-    name: () => cell("name").text_color(t.muted).truncate().child(merged ? "" : named),
+    name: () => cell("name").text_color(t.muted).truncate().child(shown.name),
     state: () => h_flex().flex_none().w(columnWidth("state")).gap(6).items_center()
       .child(div().flex_none().w(6).h(6).when(Boolean(row.dot), (el) => el.child(row.dot)))
       .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(state)),

@@ -66,13 +66,19 @@ export function formatStaleDate(timestamp, now, lang = "en") {
 }
 
 /**
- * A row's second line, `[freshness label, date, name]` with empties dropped: a name that begins
- * with the label (a pair's "Binance Spot" after "Binance") replaces it, and a name that only
- * repeats the ticker is left out, so nothing on the row says the same thing twice.
+ * What a row shows as its freshness label and its name, so nothing on the row says the same thing
+ * twice: a name that begins with the label (a pair's "Binance Spot" after "Binance") replaces it,
+ * and a name that only repeats the ticker is left out. `name` is "" when there is none to show.
  */
-export function rowMeta(symbol, [label, date, name]) {
+export function rowName(symbol, label, name) {
   const named = name && name !== symbol ? name : "";
-  return [named && label && named.startsWith(label) ? "" : label, date, named].filter(Boolean);
+  return named && label && named.startsWith(label) ? { label: named, name: "" } : { label, name: named };
+}
+
+/** A row's second line, `[freshness label, date, name]` with empties dropped (see rowName). */
+export function rowMeta(symbol, [label, date, name]) {
+  const shown = rowName(symbol, label, name);
+  return (shown.label !== label ? ["", date, shown.label] : [label, date, shown.name]).filter(Boolean);
 }
 
 // The interfaces that read a Taiwan stock's Chinese name; the others keep the base quote's name.
