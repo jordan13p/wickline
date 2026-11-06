@@ -44,6 +44,9 @@ export function syncDock(host, view) {
   view.dockShown = shown;
 }
 
+// What a moved copy is handed in its props besides where it came from: this copy's market filter.
+const carried = (view) => ({ filter: view.filter });
+
 /**
  * The header's own-tab icon, `{ icon, label, go(cx) }`, or null. A pane copy that shares its tab offers
  * its own tab; the copy in that tab offers the way back, when there is a pane to go back beside. A docked
@@ -74,7 +77,7 @@ export function ownTabAction(host, view) {
         const before = host.panes();
         const me = ownTabSource(before);
         if (!me) return;
-        host.run("tab.new", { mod: MOD_ID, name: "Wickline", props: { from: me.tab, filter: view.filter } });
+        host.run("tab.new", { mod: MOD_ID, name: "Wickline", props: { from: me.tab, ...carried(view) } });
         finishMove(host, view, cx, before, me);
       },
     };
@@ -88,7 +91,7 @@ export function ownTabAction(host, view) {
       const me = before.find((p) => p.mod === MOD_ID && p.focused && p.tab !== view.from);
       const target = me && returnPane(before, view.from, host.focused(), me.tab);
       if (!target) return;
-      host.run("pane.split", { pane: target, direction: "right", mod: MOD_ID, props: { filter: view.filter } });
+      host.run("pane.split", { pane: target, direction: "right", mod: MOD_ID, props: carried(view) });
       finishMove(host, view, cx, before, me, before.find((p) => p.pane === target).tab);
     },
   };
@@ -99,7 +102,7 @@ export function ownTabAction(host, view) {
  * if the panel is opened again) and collapses the panel. The block's copy stays, so the button works
  * again afterwards; when the tab never shows up, nothing collapses.
  */
-export function dockTabAction(host, view) {
+function dockTabAction(host, view) {
   if (!view.dockShown) return null;
   return {
     icon: "zoom", label: "button.ownTab",
@@ -107,7 +110,7 @@ export function dockTabAction(host, view) {
       if (view.moving) return;
       const before = host.panes();
       const { collapse } = view.dock;
-      host.run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true, filter: view.filter } });
+      host.run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true, ...carried(view) } });
       runMove(view, cx, async (cx) => {
         let tab = null;
         const opened = await waitUntil(() => (tab = newWicklineTab(before, host.panes())), { sleep: (ms) => cx.sleep(ms) });
@@ -129,7 +132,7 @@ export function dockTabAction(host, view) {
  * `leaving`: `pane` is this copy's own (the tab copy), so the move keeps further clicks out for good;
  * the block's yield view closes another copy's pane and stays, so its buttons keep working.
  */
-export function backToPanel(host, view, cx, pane, leaving) {
+function backToPanel(host, view, cx, pane, leaving) {
   if (view.moving) return;
   const dock = dockOf(host.layout(), MOD_ID);
   if (!dock || !pane) return;
@@ -154,7 +157,7 @@ export function backFromYield(host, view, cx) {
  * `step` resolves true once this copy is going away (its pane closed), which keeps them out for good;
  * false, or a throw, leaves everything as it was and the button works again.
  */
-export function runMove(view, cx, step) {
+function runMove(view, cx, step) {
   view.moving = true;
   cx.spawn(async (cx) => {
     let leaving = false;
@@ -169,7 +172,7 @@ export function runMove(view, cx, step) {
 }
 
 /** Closes `me` once the new copy is seen (in `tab`, when given). */
-export function finishMove(host, view, cx, before, me, tab = null) {
+function finishMove(host, view, cx, before, me, tab = null) {
   runMove(view, cx, (cx) => closeOnceOpened(before, me, {
     panes: host.panes, sleep: (ms) => cx.sleep(ms), close: (pane) => host.run("pane.close", { pane }),
   }, tab));
