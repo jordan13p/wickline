@@ -93,12 +93,14 @@ test("core modules import only relative modules; ui/ adds the view libraries", (
 const HERDR_GLOBALS = /(?<![.\w$])(?:fetch\b(?!\s*:)|localStorage\b|globalThis\b)|\b(?:window|self)\s*\.\s*fetch\b|\}\s*=\s*(?:window|self)\b/;
 // The source without comments, which may name these; a `//` after `:` or a quote is a URL, not a comment.
 const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+const withoutStrings = (source) => source.replace(/"[^"\n]*"/g, '""');
+// What the globals scan reads: the code without its strings, which may name a global (the text table's
+// storage disclosure names `localStorage`) without using it.
+const scanned = (source) => withoutStrings(code(source));
 test("only main.js wires Herdr's storage, network and files", () => {
   for (const file of jsFiles()) {
     const name = relativeName(file);
-    // The text table names `localStorage` in the storage disclosure; its strings are not code.
-    const source = name === "i18n.js" ? withoutStrings(code(read(file))) : code(read(file));
-    if (name !== "main.js") assert.doesNotMatch(source, HERDR_GLOBALS, name);
+    if (name !== "main.js") assert.doesNotMatch(scanned(read(file)), HERDR_GLOBALS, name);
   }
   const main = read(new URL("main.js", MOD));
   for (const api of ["shared", "setShared", "appHome", "run", "openOverlay", "closeOverlay"]) {
@@ -106,11 +108,12 @@ test("only main.js wires Herdr's storage, network and files", () => {
   }
   assert.ok(importSpecifiers(main).includes("fs/promises"), "main.js imports fs/promises");
   assert.match(code(main), /(?<![.\w])fetch\s*\(/, "main.js calls fetch");
-  assert.doesNotMatch(code("this.host.fetch(url); // fetch(url)\n/* localStorage */"), HERDR_GLOBALS);
-  assert.doesNotMatch(code("const host = { fetch: (url) => url }; quote.fetchedAt; window.paint_path(p)"), HERDR_GLOBALS);
-  assert.match(code('const u = "https://x"; globalThis'), HERDR_GLOBALS);
-  for (const source of ["const get = fetch;", "window.fetch(url)", "self . fetch(url)", "const { fetch: get } = window;"]) {
-    assert.match(code(source), HERDR_GLOBALS, source);
+  assert.doesNotMatch(scanned("this.host.fetch(url); // fetch(url)\n/* localStorage */"), HERDR_GLOBALS);
+  assert.doesNotMatch(scanned("const host = { fetch: (url) => url }; quote.fetchedAt; window.paint_path(p)"), HERDR_GLOBALS);
+  assert.doesNotMatch(scanned('const text = "kept in localStorage";'), HERDR_GLOBALS);
+  assert.match(scanned('const u = "https://x"; globalThis'), HERDR_GLOBALS);
+  for (const source of ["const get = fetch;", "window.fetch(url)", "self . fetch(url)", "const { fetch: get } = window;", 'const s = "a"; localStorage.getItem("k")']) {
+    assert.match(scanned(source), HERDR_GLOBALS, source);
   }
 });
 
@@ -118,7 +121,9 @@ test("only main.js wires Herdr's storage, network and files", () => {
 // main.js and handed to secrets.js as `chmod(path)`. No module imports `process` (or `child_process`) or
 // reaches the global of that name; `exec` appears in main.js only in its import and that one call.
 const PROCESS_GLOBAL = /(?<![.\w$])process\b/;
-const withoutStrings = (source) => source.replace(/"[^"\n]*"/g, '""');
+// The Herdr commands the moves between a pane, a tab and a docked block run (`host.run` is Herdr's `run`,
+// handed in by main.js): commands, not programs.
+const MOVE_COMMANDS = ["tab.new", "pane.split", "pane.close", "layout.hide", "layout.show", "layout.select"];
 test("the only program is chmod 600 on the key file", () => {
   for (const file of jsFiles()) {
     const name = relativeName(file);
@@ -130,12 +135,20 @@ test("the only program is chmod 600 on the key file", () => {
   assert.doesNotMatch(main, /\bexec\s+as\b/, "exec imported under another name");
   assert.equal([...main.matchAll(/\bexec\b/g)].length, 2, "exec imported and called once");
   assert.deepEqual([...main.matchAll(/\bexec\s*\(.*?\]\)/g)].map(([call]) => call), ['exec("chmod", ["600", path])']);
-  // `host.run(...)` is Herdr's `run`, handed in by main.js: a Herdr command (moves.js), not a program.
+  // Besides main.js, only moves.js runs anything, and only those commands, each named as it is run.
   for (const file of jsFiles().filter((url) => relativeName(url) !== "main.js")) {
-    assert.doesNotMatch(code(read(file)), /\bexec\b|(?<!\bhost)\.run\s*\(/, relativeName(file));
+    const name = relativeName(file);
+    const source = code(read(file));
+    assert.doesNotMatch(source, /\bexec\b/, name);
+    const runs = [...source.matchAll(/\.run\s*\(/g)].length;
+    if (name !== "moves.js") {
+      assert.equal(runs, 0, `.run( in ${name}`);
+      continue;
+    }
+    const commands = [...source.matchAll(/(?<![.\w$])host\.run\("([^"]*)"/g)].map(([, id]) => id);
+    assert.equal(commands.length, runs, "every run in moves.js is host.run with its command named");
+    assert.deepEqual([...new Set(commands)].sort(), [...MOVE_COMMANDS].sort());
   }
-  assert.match("process.run(cmd)", /(?<!\bhost)\.run\s*\(/);
-  assert.doesNotMatch("host.run(\"tab.new\")", /(?<!\bhost)\.run\s*\(/);
 });
 
 // The settings dialog learns only that a key is saved and its ending: the full-key loader is wired to the
