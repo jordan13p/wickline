@@ -99,3 +99,20 @@ test("the language choice lives in the Display tab", () => {
   }
   assert.equal(t("zh-TW", "display.languageHint"), "只改變介面文字，不影響報價。");
 });
+
+test("the storage disclosure names every key and the per-copy filter in all five languages", () => {
+  for (const lang of LANGUAGES) {
+    const text = STRINGS[lang]["privacy.storage"];
+    for (const name of ["wickline.watchlist.v1", "wickline.settings.v1", "wickline.dockTab", "wickline.filter", "localStorage"]) {
+      assert.ok(text.includes(name), `${lang} ${name}`);
+    }
+  }
+});
+
+test("every market has a label in all five languages", () => {
+  for (const lang of LANGUAGES) {
+    for (const id of ["us", "tw", "hk", "cn", "jp", "kr", "crypto", "other"]) assert.ok(STRINGS[lang][`market.${id}`], `${lang} market.${id}`);
+    assert.ok(STRINGS[lang]["filter.all"], `${lang} filter.all`);
+  }
+  assert.equal(t("zh-TW", "market.tw"), "台股");
+});

@@ -11,6 +11,7 @@ import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
+import { chosenFilter, visibleSymbols } from "./markets.js";
 import { t as translate } from "./i18n.js";
 import {
   SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
@@ -31,6 +32,11 @@ const secretsDir = () => `${appHome()}/data/wickline`;
 // The one program Wickline runs: `chmod 600` on that file after each write, on macOS and Linux
 // (secrets.js decides). Both are called per use, never at the top level.
 const system = { platform: () => appWindow().platform, chmod: (path) => exec("chmod", ["600", path]) };
+// This copy's market filter lives in its own localStorage (per copy in Herdr 0.1.12, which is the point:
+// the side panel and a pane keep separate choices). Nothing else goes there.
+const FILTER_STORAGE_KEY = "wickline.filter";
+// A new symbol answers the language prompt too, whichever way the add ended well.
+const ADDED = ["notice.added", "notice.overCap", "notice.overCapPushed"];
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
 // The dialog reads only what it may show of a saved key, never the key.
 const loadSecretEnding = (name) => secrets.loadSecretEnding(fs, secretsDir(), name);
@@ -60,6 +66,11 @@ export default class Wickline extends View {
     // `before` being the symbol the dragged one would land in front of (null: at the end).
     this.hovered = null;
     this.drag = null;
+    // The market filter: the id this copy was opened with (props), else its stored one, else "all". Rows and the
+    // filter row read it through chosenFilter, so a market no longer on the list reads as All.
+    this.filter = typeof given.filter === "string" ? given.filter : this.storedFilter();
+    // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
+    this.filterWidths = {};
     this.typed = "";
     // `{ code, params }` or null, translated when drawn.
     this.notice = null;
@@ -139,6 +150,40 @@ export default class Wickline extends View {
   saveSettings(change) {
     setShared(SETTINGS_KEY, mergeSettings(shared(SETTINGS_KEY), change));
     this.readSettings();
+  }
+
+  storedFilter() {
+    try {
+      return localStorage.getItem(FILTER_STORAGE_KEY) || "all";
+    } catch {
+      return "all";
+    }
+  }
+
+  // The caller redraws. A failed write costs only the memory across restarts, not this choice.
+  setFilter(id) {
+    this.filter = id;
+    try {
+      localStorage.setItem(FILTER_STORAGE_KEY, id);
+    } catch {
+      // Not remembered after a restart; the copy keeps using it.
+    }
+  }
+
+  // A filter that would hide `symbol` (just added, or already listed) goes back to All, so the person sees it.
+  revealSymbol(symbol) {
+    const { symbols } = this.watch.preferences;
+    if (!visibleSymbols(symbols, chosenFilter(symbols, this.filter)).includes(symbol)) this.setFilter("all");
+  }
+
+  removeSymbol(cx, symbol) {
+    this.act(cx, () => {
+      const notice = this.watch.remove(symbol);
+      // The chosen market is no longer offered (its last symbol went, or the list got short): back to All for
+      // good, so it does not filter again the day the market returns.
+      if (chosenFilter(this.watch.preferences.symbols, this.filter) !== this.filter) this.setFilter("all");
+      return notice;
+    });
   }
 
   // Edits to the settings wait in a copy until Save: Cancel, Esc or closing drops it.
@@ -258,10 +303,11 @@ export default class Wickline extends View {
       const notice = this.watch.add(this.typed);
       this.input.set_value("");
       this.typed = "";
+      this.revealSymbol(notice.params.symbol);
       return notice;
     });
     // A first add answers the language prompt too: it stays English.
-    if (this.notice?.code !== "notice.added" || this.settings.languagePromptDismissed) return;
+    if (!ADDED.includes(this.notice?.code) || this.settings.languagePromptDismissed) return;
     try { this.saveSettings({ languagePromptDismissed: true }); } catch {
       this.error = { code: "error.saveSettings", params: {} };
     }
@@ -386,7 +432,7 @@ export default class Wickline extends View {
           const before = panes();
           const me = ownTabSource(before);
           if (!me) return;
-          run("tab.new", { mod: MOD_ID, name: "Wickline", props: { from: me.tab } });
+          run("tab.new", { mod: MOD_ID, name: "Wickline", props: { from: me.tab, filter: this.filter } });
           this.finishMove(cx, before, me);
         },
       };
@@ -400,7 +446,7 @@ export default class Wickline extends View {
         const me = before.find((p) => p.mod === MOD_ID && p.focused && p.tab !== this.from);
         const target = me && returnPane(before, this.from, focused(), me.tab);
         if (!target) return;
-        run("pane.split", { pane: target, direction: "right", mod: MOD_ID });
+        run("pane.split", { pane: target, direction: "right", mod: MOD_ID, props: { filter: this.filter } });
         this.finishMove(cx, before, me, before.find((p) => p.pane === target).tab);
       },
     };
@@ -417,7 +463,7 @@ export default class Wickline extends View {
         if (this.moving) return;
         const before = panes();
         const { collapse } = this.dock;
-        run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true } });
+        run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true, filter: this.filter } });
         this.runMove(cx, async (cx) => {
           let tab = null;
           const opened = await waitUntil(() => (tab = newWicklineTab(before, panes())), { sleep: (ms) => cx.sleep(ms) });

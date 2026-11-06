@@ -4,8 +4,9 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../format.js";
+import { displayName, dropBefore, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
+import { chosenFilter, marketFilters, visibleSymbols } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, tableColumns } from "../layout.js";
@@ -18,6 +19,10 @@ const SPARK = { width: 56, height: 20 };
 const TABLE_SPARK = { width: columnWidth("line"), height: 20 };
 const NUMBER_W = 72;
 const CODE_W = 34;
+// The filter row: 24 px labels with 2 px between them; the chosen one sits on a pill of the same height.
+const FILTER_H = 24;
+const FILTER_GAP = 2;
+const FILTER_SLIDE = { duration: 180, easing: "ease-out" };
 // Below this panel width the footer shows the short disclaimer.
 const SHORT_FOOTER_WIDTH = 480;
 
@@ -253,7 +258,7 @@ function rowFrame(view, t, symbol, index, symbols, body, clickable) {
     .child(div().id(`bw-remove-${symbol}`).flex_none().w(GUTTER).flex().items_center().justify_center().text_color(t.dim)
       .when(controls && !dragged, (el) => el.cursor_pointer().hover((s) => s.text_color(t.foreground))
         .tooltip(view.tx("button.remove"))
-        .on_click((_e, cx) => view.act(cx, () => view.watch.remove(symbol)))
+        .on_click((_e, cx) => view.removeSymbol(cx, symbol))
         .child(svg(icon("close")).w(12).h(12))));
 }
 
@@ -272,7 +277,7 @@ function list(view, t, rows) {
       view.drag = null;
       // A drop where the row already is changes nothing, and leaves the current notice be.
       if (inPlace) cx.notify();
-      else view.act(cx, () => view.watch.move(drag.symbol, drag.before));
+      else view.act(cx, () => view.watch.move(drag.symbol, dropBefore(view.watch.preferences.symbols, shownSymbols(view), drag.before)));
     })
     .when(!rows.length, (el) => el.child(div().px(GUTTER).py(8).text_color(t.dim).child(view.tx("list.empty"))))
     .children(rows);
@@ -289,7 +294,7 @@ function footer(view, t) {
 
 // Below TABLE_MIN_WIDTH: the header, the status line, the add field, two-line rows, the footer.
 export function sidebar(view, root, t) {
-  const { symbols } = view.watch.preferences;
+  const symbols = shownSymbols(view);
   const now = Date.now();
   const header = v_flex().flex_none().px(GUTTER).pt(10).gap(2)
     .child(h_flex().h(28).items_center().gap(8)
@@ -303,7 +308,7 @@ export function sidebar(view, root, t) {
     .child(addField(view, t))
     .children(messages(view, t));
   const rows = symbols.map((symbol, index) => sidebarRow(view, t, symbol, index, symbols, now));
-  return root.child(header).child(field).child(list(view, t, rows).pt(8)).child(footer(view, t));
+  return root.child(header).child(field).children(filterBar(view, t)).child(list(view, t, rows).pt(8)).child(footer(view, t));
 }
 
 // Symbol, then its name on a line of its own, then freshness on the left; the line, then the price
@@ -335,7 +340,7 @@ function tableCell(id, nameW) {
 // From TABLE_MIN_WIDTH: one header line, column labels that stay while the rows scroll, 36 px rows. At most
 // TABLE_MAX_WIDTH wide, centered; columns drop by DROP_ORDER when the width cannot hold them.
 export function table(view, root, t) {
-  const { symbols } = view.watch.preferences;
+  const symbols = shownSymbols(view);
   const now = Date.now();
   const width = Math.min(view.size.width, TABLE_MAX_WIDTH);
   const columns = tableColumns(width);
@@ -354,6 +359,7 @@ export function table(view, root, t) {
   const frame = v_flex().w(width).flex_1().min_h(0)
     .child(header)
     .when(notes.length > 0, (el) => el.child(v_flex().flex_none().px(GUTTER).pt(8).gap(4).children(notes)))
+    .children(filterBar(view, t))
     .child(tableHead(view, t, columns, nameW))
     .child(list(view, t, rows))
     .child(footer(view, t));
@@ -410,9 +416,48 @@ function tableRow(view, t, symbol, index, symbols, columns, nameW, now) {
   return rowFrame(view, t, symbol, index, symbols, body, Boolean(quote));
 }
 
-// The drag would put the row where it already is: in front of itself or of the row after it.
-function dropsInPlace(view) {
+// The rows a copy draws: the chosen market's, or all of them.
+function shownSymbols(view) {
   const { symbols } = view.watch.preferences;
+  return visibleSymbols(symbols, chosenFilter(symbols, view.filter));
+}
+
+// One row of market filters above the list (a list of one element, as `messages`), or none while the list is short or of one market. The chosen
+// one sits on a pill that slides to a new choice: an absolute div whose `left` is the widths of the labels
+// before it plus the gaps, and whose `width` is the chosen label's, both measured from the labels
+// themselves (on_size_change), so the pill follows any language or count. The scrolling area holds the
+// labels in a content box of their own, so the pill scrolls with them; it scrolls sideways, by wheel too,
+// when the labels do not fit. Until every label it needs has been measured there is no pill.
+function filterBar(view, t) {
+  const filters = marketFilters(view.watch.preferences.symbols);
+  if (!filters.length) return [];
+  const chosen = chosenFilter(view.watch.preferences.symbols, view.filter);
+  const index = filters.findIndex(({ id }) => id === chosen);
+  const widths = view.filterWidths;
+  const measured = filters.slice(0, index + 1).every(({ id }) => widths[id] > 0);
+  const left = filters.slice(0, index).reduce((sum, { id }) => sum + (widths[id] ?? 0) + FILTER_GAP, 0);
+  const label = ({ id, count }) => h_flex().id(`bw-filter-${id}`).flex_none().h(FILTER_H).px(10).gap(5).items_center()
+    .whitespace_nowrap().text_size(11).cursor_pointer()
+    .on_size_change((size, cx) => {
+      if (widths[id] === size.width) return;
+      widths[id] = size.width;
+      cx.notify();
+    })
+    .on_click((_e, cx) => { view.setFilter(id); cx.notify(); })
+    .child(div().text_color(id === chosen ? t.foreground : t.muted).child(view.tx(id === "all" ? "filter.all" : `market.${id}`)))
+    .child(div().text_color(t.dim).child(String(count)));
+  return [div().flex_none().px(GUTTER).pt(10)
+    .child(h_flex().id("bw-filters").w_full().min_w(0).h(FILTER_H).overflow_x_scrollbar()
+      .child(div().relative().flex().flex_none().gap(FILTER_GAP)
+        .when(measured, (el) => el.child(div().id("bw-filter-pill").absolute().top(0).left(left).w(widths[chosen]).h(FILTER_H)
+          .rounded(FILTER_H / 2).bg(t.selected)
+          .transition("left", FILTER_SLIDE).transition("width", FILTER_SLIDE)))
+        .children(filters.map(label))))];
+}
+
+// The drag would put the row where it already is: in front of itself or of the row after it, among the rows shown.
+function dropsInPlace(view) {
+  const symbols = shownSymbols(view);
   const { symbol, before } = view.drag;
   return before === symbol || before === (symbols[symbols.indexOf(symbol) + 1] ?? null);
 }

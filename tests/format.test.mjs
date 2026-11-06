@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../mods/wickline/format.js";
+import { chartGeometry, dropBefore, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../mods/wickline/format.js";
 
 test("formats without Intl", () => {
   assert.equal(formatPrice({ price: 1234567.891, currency: "USD" }), "1,234,567.89 USD");
@@ -63,4 +63,17 @@ test("a stock's name gets its own line", () => {
 test("a row's name that only repeats the ticker, or is missing, is left out", () => {
   assert.deepEqual(rowName("^GSPC", "delayed 15 min", "^GSPC"), { label: "delayed 15 min", name: "" });
   assert.deepEqual(rowName("AAPL", "Yahoo", null), { label: "Yahoo", name: "" });
+});
+
+test("a drop in the visible list maps to a place in the full list", () => {
+  const full = ["2330.TW", "AAPL", "0050.TW", "NVDA"];
+  const visible = ["2330.TW", "0050.TW"];
+  assert.equal(dropBefore(full, visible, "2330.TW"), "2330.TW");
+  assert.equal(dropBefore(full, visible, "0050.TW"), "0050.TW");
+  // After the last visible row: in front of that row's successor in the full list.
+  assert.equal(dropBefore(full, visible, null), "NVDA");
+  // The last visible row is also the last overall.
+  assert.equal(dropBefore(["AAPL", "2330.TW"], ["2330.TW"], null), null);
+  // No filter: the full list is the visible one.
+  assert.equal(dropBefore(full, full, null), null);
 });

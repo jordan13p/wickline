@@ -96,7 +96,9 @@ const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:
 test("only main.js wires Herdr's storage, network and files", () => {
   for (const file of jsFiles()) {
     const name = relativeName(file);
-    if (name !== "main.js") assert.doesNotMatch(code(read(file)), HERDR_GLOBALS, name);
+    // The text table names `localStorage` in the storage disclosure; its strings are not code.
+    const source = name === "i18n.js" ? withoutStrings(code(read(file))) : code(read(file));
+    if (name !== "main.js") assert.doesNotMatch(source, HERDR_GLOBALS, name);
   }
   const main = read(new URL("main.js", MOD));
   for (const api of ["shared", "setShared", "appHome", "run", "openOverlay", "closeOverlay"]) {
