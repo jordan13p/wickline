@@ -53,6 +53,16 @@ function wake(state) {
 }
 
 /**
+ * The US symbol that fell out of Finnhub's first `cap` when `before` became `after`, or null.
+ * `isUs` picks the symbols Finnhub could quote; the rest of the list neither counts nor moves.
+ */
+export function pushedPastCap(before, after, cap, isUs) {
+  const covered = (symbols) => symbols.filter(isUs).slice(0, Math.max(0, cap));
+  const kept = new Set(covered(after));
+  return covered(before).find((symbol) => !kept.has(symbol)) ?? null;
+}
+
+/**
  * A real-time overlay's fields over the Yahoo base quote. The line, the trading periods, the
  * currency and the name stay the base's (the overlay's name is kept as `localName`), and
  * `chartSource` names where the line came from. Works with no base yet.
@@ -232,13 +242,20 @@ export class Watchlist {
 
   add(input) {
     const symbol = normalizeSymbol(input);
+    let before;
     const message = this.edit((p) => {
       if (p.symbols.includes(symbol)) return notice("notice.duplicate", { symbol });
-      p.symbols.push(symbol);
+      before = [...p.symbols];
+      p.symbols.unshift(symbol);
       return notice("notice.added", { symbol });
     });
-    if (message.code !== "notice.added" || !this.overCap(symbol)) return message;
-    return notice("notice.overCap", { symbol, cap: finnhubCap(this.config().budgetPerMinute) });
+    const config = this.config();
+    if (message.code !== "notice.added" || !config.on.finnhub || marketOf(symbol) !== "us") return message;
+    const cap = finnhubCap(config.budgetPerMinute);
+    if (this.overCap(symbol)) return notice("notice.overCap", { symbol, cap });
+    // The symbol went to the top, so another US symbol may have lost its place under the cap.
+    const pushed = pushedPastCap(before, this.preferences.symbols, cap, (s) => marketOf(s) === "us");
+    return pushed ? notice("notice.overCapPushed", { symbol, pushed, cap }) : message;
   }
 
   remove(symbol) {

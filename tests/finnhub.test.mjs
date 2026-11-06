@@ -127,7 +127,7 @@ test("an answer from another address stops Finnhub: the key is not sent again", 
   const host = usHost();
   host.finnhub = (url) => ({ ...ok(QUOTE), url: url.replace("https://finnhub.io", "https://evil.test") });
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("MSFT");
+  w.add("MSFT"); w.add("AAPL");
   const runs = start(w, host);
   await advance(host, 120_000);
   assert.equal(finnhubCount(host), 1);
@@ -147,7 +147,8 @@ test("cap of 15 at the default budget", async () => {
   const us = ["AAPL", "MSFT", "NVDA", "BRK-B", ...Array.from({ length: 12 }, (_, i) => `T${i}`)];
   // An index and a Taiwan stock in between do not count.
   w.add("^GSPC"); w.add("2330.TW");
-  for (const symbol of us) w.add(symbol);
+  // Each add goes to the top, so add them last to first to list them in order.
+  for (const symbol of [...us].reverse()) w.add(symbol);
   const runs = start(w, host);
   await advance(host, 1);
   assert.deepEqual(w.finnhubSymbols(), us.slice(0, 15));
@@ -166,20 +167,58 @@ test("cap of 15 at the default budget", async () => {
   await stop(w, host, runs);
 });
 
-test("adding past the cap says so", async () => {
+test("adding past the cap names the symbol it pushed out", async () => {
   const host = usHost({ budgetPerMinute: 8 });
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, 1);
   assert.deepEqual(w.add("AAPL"), { code: "notice.added", params: { symbol: "AAPL" } });
   assert.deepEqual(w.add("MSFT"), { code: "notice.added", params: { symbol: "MSFT" } });
-  assert.deepEqual(w.add("NVDA"), { code: "notice.overCap", params: { symbol: "NVDA", cap: 2 } });
-  // Not a US stock: no cap.
+  // The new symbol goes to the top, so the one that was last under the cap loses its place.
+  assert.deepEqual(w.add("NVDA"), { code: "notice.overCapPushed", params: { symbol: "NVDA", pushed: "AAPL", cap: 2 } });
+  assert.deepEqual(w.finnhubSymbols(), ["NVDA", "MSFT"]);
+  assert.equal(w.overCap("AAPL"), true);
+  // Not a US stock: no cap, and it pushes nobody.
   assert.deepEqual(w.add("2330.TW"), { code: "notice.added", params: { symbol: "2330.TW" } });
+  assert.deepEqual(w.add("BTC/USDT"), { code: "notice.added", params: { symbol: "BTC/USDT" } });
   for (const lang of Object.keys(STRINGS)) {
-    for (const code of ["notice.overCap", "finnhub.overCap"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
+    for (const code of ["notice.overCap", "notice.overCapPushed", "finnhub.overCap"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
   }
   await stop(w, host, runs);
+});
+
+test("the 16th US symbol at the default budget pushes the old 15th", async () => {
+  const host = usHost();
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, 1);
+  const us = Array.from({ length: 16 }, (_, i) => `T${i}`);
+  for (const symbol of us.slice(0, 15).reverse()) w.add(symbol);
+  assert.deepEqual(w.add(us[15]), { code: "notice.overCapPushed", params: { symbol: us[15], pushed: us[14], cap: 15 } });
+  assert.deepEqual(w.finnhubSymbols(), [us[15], ...us.slice(0, 14)]);
+  await stop(w, host, runs);
+});
+
+test("a new symbol that is itself past the cap keeps the plain over-cap notice", async () => {
+  // A budget under 4 a minute prices no symbol (the settings refuse it, a hand-edited file may not).
+  const host = usHost({ budgetPerMinute: 3 });
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.deepEqual(w.add("AAPL"), { code: "notice.overCap", params: { symbol: "AAPL", cap: 0 } });
+  await stop(w, host, runs);
+});
+
+test("with room under the cap, adding says nothing about it; with Finnhub off, neither", async () => {
+  const host = usHost({ budgetPerMinute: 8 });
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.deepEqual(w.add("AAPL"), { code: "notice.added", params: { symbol: "AAPL" } });
+  await stop(w, host, runs);
+  const off = fakeHost(() => ok({}));
+  const v = new Watchlist(off);
+  for (const symbol of ["AAPL", "MSFT", "NVDA", "BRK-B", "T1", "T2"]) assert.equal(v.add(symbol).code, "notice.added", symbol);
 });
 
 test("Finnhub stays off without its choice and a key", async () => {
@@ -220,7 +259,7 @@ test("an unreadable secrets file is a visible problem", async () => {
 test("Finnhub overlays Yahoo with the key in the header", async () => {
   const host = usHost();
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BRK-B");
+  w.add("BRK-B"); w.add("AAPL");
   const runs = start(w, host);
   // Two symbols: spread over the 15 s interval.
   await advance(host, 7_501);
@@ -270,7 +309,8 @@ test("401 stops Finnhub until the key changes", async () => {
     assert.ok(finnhubCount(host) > 1);
     const last = host.requests.findLastIndex((url) => url.includes("/quote?symbol="));
     assert.equal(host.headers[last]["X-Finnhub-Token"], "test-key-2");
-    assert.equal(w.shown("AAPL").source, "finnhub");
+    // NVDA, added last, is first in list order and so the first one the round quotes.
+    assert.equal(w.shown("NVDA").source, "finnhub");
     assert.deepEqual(w.problems(), []);
     await stop(w, host, runs);
   }

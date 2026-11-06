@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { STARTER_SYMBOLS, USER_AGENT } from "../mods/wickline/quotes.js";
 import { yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
-import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/wickline/watchlist.js";
+import { Watchlist, WATCHLIST_KEY, pushedPastCap, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 
@@ -24,7 +24,7 @@ test("refreshes stocks spaced apart and crypto in one batch", async () => {
     ? ok([{ symbol: "BTCUSDT", lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 }])
     : chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("MSFT"); w.add("BTC/USDT");
+  w.add("BTC/USDT"); w.add("MSFT"); w.add("AAPL");
   const runs = start(w, host);
   await advance(host, 1_000);
   assert.equal(host.requests.filter((u) => u.includes("ticker/24hr")).length, 1);
@@ -42,7 +42,7 @@ test("each source keeps its request order and spacing", async () => {
   const fetch = host.fetch;
   host.fetch = (url, headers) => { sent.push({ url, at: host.clock, headers }); return fetch(url, headers); };
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("MSFT"); w.add("BTC/USDT");
+  w.add("BTC/USDT"); w.add("MSFT"); w.add("AAPL");
   const runs = start(w, host);
   await advance(host, 1_000);
   // The sources run side by side; each keeps its own order.
@@ -61,7 +61,7 @@ test("an unknown pair fails its batch, then pairs are asked one by one", async (
     : ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1])).map((symbol) =>
       ({ symbol, lastPrice: "10", prevClosePrice: "9", closeTime: 5 }))));
   const w = new Watchlist(host);
-  w.add("BTC/USDT"); w.add("ETH/USDT"); w.add("BAD/USDT");
+  w.add("BAD/USDT"); w.add("ETH/USDT"); w.add("BTC/USDT");
   const runs = start(w, host);
   // Pairs are not spaced, so one round runs without the clock moving.
   await new Promise((r) => setImmediate(r));
@@ -79,7 +79,7 @@ test("an unknown pair fails its batch, then pairs are asked one by one", async (
 test("a rate limit defers the rest of the round", async () => {
   const host = fakeHost(() => ({ status: 429, ok: false, text: "" }));
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("MSFT");
+  w.add("MSFT"); w.add("AAPL");
   const runs = start(w, host);
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(w.errors.MSFT, { code: "request.deferred", params: { source: "yahoo" } });
@@ -144,6 +144,28 @@ test("edits return notice codes with the old English text", () => {
   assert.equal(say(w.pause(true)), "Automatic refresh paused.");
   assert.equal(say(w.pause(false)), "Automatic refresh resumed.");
   assert.deepEqual(w.problems(), []);
+});
+
+test("a new symbol goes to the top; a duplicate stays where it is", () => {
+  const host = fakeHost(() => ok({}));
+  host.store = { version: 1, symbols: ["AAPL", "2330.TW"], paused: false };
+  const w = new Watchlist(host);
+  w.add("nvda");
+  assert.deepEqual(host.store.symbols, ["NVDA", "AAPL", "2330.TW"]);
+  assert.equal(w.add("AAPL").code, "notice.duplicate");
+  assert.deepEqual(host.store.symbols, ["NVDA", "AAPL", "2330.TW"]);
+  w.add("BTC/USDT");
+  assert.deepEqual(host.store.symbols, ["BTC/USDT", "NVDA", "AAPL", "2330.TW"]);
+});
+
+test("pushedPastCap names the US symbol a new top symbol moved past the cap", () => {
+  const isUs = (s) => !s.includes(".") && !s.includes("/");
+  assert.equal(pushedPastCap(["A", "B", "C"], ["N", "A", "B", "C"], 3, isUs), "C");
+  assert.equal(pushedPastCap(["A", "B", "C"], ["N", "A", "B", "C"], 5, isUs), null);
+  // Symbols of other markets neither count nor get pushed.
+  assert.equal(pushedPastCap(["A", "X.TW", "B"], ["N", "A", "X.TW", "B"], 2, isUs), "B");
+  assert.equal(pushedPastCap(["A", "B"], ["X.TW", "A", "B"], 2, isUs), null);
+  assert.equal(pushedPastCap([], ["N"], 2, isUs), null);
 });
 
 test("a Yahoo cooldown holds stocks, also for Refresh", async () => {

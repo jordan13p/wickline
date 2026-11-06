@@ -76,7 +76,7 @@ The agent tells you what Wickline reaches on the network, copies the mod, merges
 
 ## Usage
 
-Type a symbol into the add field and press Enter:
+Type a symbol into the add field and press Enter; a new symbol goes to the top of the list:
 
 | Symbol | Market |
 |---|---|

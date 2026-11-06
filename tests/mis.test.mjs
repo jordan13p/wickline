@@ -199,7 +199,7 @@ test("MIS stays off until the current consent is given", async () => {
 test("MIS overlays Yahoo every 10 s, even while Yahoo hangs", async () => {
   const host = twHost(CONSENTED);
   const w = new Watchlist(host);
-  w.add("2330.TW"); w.add("0050.TW");
+  w.add("0050.TW"); w.add("2330.TW");
   const runs = start(w, host);
   await advance(host, 1);
   // One request for both symbols.
@@ -254,7 +254,7 @@ test("a price outside the limits falls back for that symbol only", async () => {
     return answer(JSON.stringify(body));
   });
   const w = new Watchlist(host);
-  w.add("2330.TW"); w.add("0050.TW");
+  w.add("0050.TW"); w.add("2330.TW");
   const runs = start(w, host);
   await advance(host, 1);
   assert.equal(w.shown("2330.TW").source, "yahoo");
@@ -382,7 +382,7 @@ test("a later batch loses its overlays when an earlier one fails", async () => {
   for (const [failure, later] of failures) {
     const host = twHost(CONSENTED, rowsFor);
     const w = new Watchlist(host);
-    for (const symbol of symbols) w.add(symbol);
+    for (const symbol of [...symbols].reverse()) w.add(symbol);
     const runs = start(w, host);
     await advance(host, 1);
     assert.ok(symbols.every((symbol) => w.shown(symbol)?.source === "mis"));
