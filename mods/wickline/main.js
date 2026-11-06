@@ -101,10 +101,9 @@ export default class Wickline extends View {
     this.fromDock = given.dock === true;
     // A move to or from the own tab is waiting for the new copy (see finishMove).
     this.moving = false;
-    // The refresh icon is turning (see refresh), since `spinStart` (ms), until `spinNeeded` whole turns are done.
-    this.spinning = false;
-    this.spinStart = 0;
-    this.spinNeeded = 0;
+    // The refresh icon's turn (see refresh): null at rest, else `{ start, needed }`, turning since `start` (ms)
+    // until `needed` whole turns are done.
+    this.spin = null;
     this.makeInput();
 
     this.watch = new Watchlist({
@@ -392,22 +391,20 @@ export default class Wickline extends View {
    * costs one round per source. Its single sleep per turn is not a poll; it ends with the copy.
    */
   refresh(cx) {
-    const needed = spinTurnsFor(this.spinning ? Date.now() - this.spinStart : 0, SPIN_MS);
-    if (this.spinning) {
-      this.spinNeeded = Math.max(this.spinNeeded, needed);
+    if (this.spin) {
+      this.spin.needed = Math.max(this.spin.needed, spinTurnsFor(Date.now() - this.spin.start, SPIN_MS));
       return;
     }
     this.watch.refreshNow();
-    this.spinning = true;
-    this.spinStart = Date.now();
-    this.spinNeeded = needed;
+    const spin = { start: Date.now(), needed: spinTurnsFor(0, SPIN_MS) };
+    this.spin = spin;
     let turned = 0;
     cx.spawn(async (cx) => {
       do {
         await cx.sleep(SPIN_MS);
         if (this.watch.stopped) return;
-      } while (++turned < this.spinNeeded || this.watch.refreshing);
-      this.spinning = false;
+      } while (++turned < spin.needed || this.watch.refreshing);
+      this.spin = null;
       cx.notify();
     });
   }

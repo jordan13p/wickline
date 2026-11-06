@@ -110,6 +110,8 @@ export function readPreferences(value) {
 export class Watchlist {
   constructor(host) {
     this.host = host;
+    // This copy is on screen; a host without shown() always is.
+    this.isShown = () => host.shown?.() ?? true;
     // The Finnhub key as read from the secrets file for keyRev `keyRev` (null: not read yet). Only in
     // memory: never in the config, the shared state or an error.
     this.finnhubKey = null;
@@ -320,7 +322,7 @@ export class Watchlist {
   wakeMissed() {
     // Most renders find nothing missed: then shown(), which reads the layout for a docked copy, is not asked.
     const missed = Object.values(this.sources).filter((state) => state.missed && state.wake);
-    if (!missed.length || !(this.host.shown?.() ?? true)) return;
+    if (!missed.length || !this.isShown()) return;
     for (const state of missed) {
       state.missed = false;
       wake(state);
@@ -441,7 +443,7 @@ export class Watchlist {
         // A hidden copy never renders (so nothing else tells it), but its loops run: it asks here. A round
         // it skips is marked missed, and it waits as idle until wakeMissed() on the render that shows
         // the copy again.
-        hidden = !(this.host.shown?.() ?? true);
+        hidden = !this.isShown();
         const due = symbols.length && !state.disabled && (manual || !this.preferences.paused);
         state.missed = hidden && Boolean(due);
         if (due && !hidden) {

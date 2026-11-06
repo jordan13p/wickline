@@ -119,7 +119,7 @@ function headerIcons(view, t) {
   const { paused } = view.watch.preferences;
   const own = view.ownTabAction();
   return h_flex().flex_none().items_center().mr(-6)
-    .child(iconButton(t, "bw-refresh", "refresh", view.tx("button.refresh"), (cx) => { view.refresh(cx); cx.notify(); }, view.spinning))
+    .child(iconButton(t, "bw-refresh", "refresh", view.tx("button.refresh"), (cx) => { view.refresh(cx); cx.notify(); }, view.spin !== null))
     .child(iconButton(t, "bw-pause", paused ? "play" : "pause", view.tx(paused ? "button.resume" : "button.pause"),
       (cx) => view.act(cx, () => view.togglePause())))
     .child(iconButton(t, "bw-settings", "settings", view.tx("button.settings"), () => view.openSettings("sources")))
