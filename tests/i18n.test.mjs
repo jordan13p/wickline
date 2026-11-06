@@ -100,12 +100,15 @@ test("the language choice lives in the Display tab", () => {
   assert.equal(t("zh-TW", "display.languageHint"), "只改變介面文字，不影響報價。");
 });
 
+const ONLY_FILTER = { en: /nothing else is kept there/, "zh-TW": /只存這一項/, "zh-CN": /只存这一项/, ja: /これだけ/, ko: /이것만/ };
 test("the storage disclosure names every key and the per-copy filter in all five languages", () => {
   for (const lang of LANGUAGES) {
     const text = STRINGS[lang]["privacy.storage"];
     for (const name of ["wickline.watchlist.v1", "wickline.settings.v1", "wickline.dockTab", "wickline.filter", "localStorage"]) {
       assert.ok(text.includes(name), `${lang} ${name}`);
     }
+    // The filter is the only thing kept in localStorage.
+    assert.match(text, ONLY_FILTER[lang], `${lang} only the filter`);
   }
 });
 

@@ -11,7 +11,7 @@ import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
-import { chosenFilter, visibleSymbols } from "./markets.js";
+import { filterAfterAdd, filterAfterRemove } from "./markets.js";
 import { t as translate } from "./i18n.js";
 import {
   SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
@@ -66,9 +66,12 @@ export default class Wickline extends View {
     // `before` being the symbol the dragged one would land in front of (null: at the end).
     this.hovered = null;
     this.drag = null;
-    // The market filter: the id this copy was opened with (props), else its stored one, else "all". Rows and the
-    // filter row read it through chosenFilter, so a market no longer on the list reads as All.
-    this.filter = typeof given.filter === "string" ? given.filter : this.storedFilter();
+    // The market filter: this copy's stored choice, else the one it was opened with (props; Herdr keeps them
+    // with the tab, so they must never override a later choice), else "all". Rows and the filter row read it
+    // through chosenFilter, so a market no longer on the list reads as All.
+    const stored = this.storedFilter();
+    this.filter = stored ?? (typeof given.filter === "string" ? given.filter : "all");
+    if (stored === null && this.filter !== "all") this.setFilter(this.filter);
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};
     this.typed = "";
@@ -152,11 +155,12 @@ export default class Wickline extends View {
     this.readSettings();
   }
 
+  // null: nothing stored (or it cannot be read).
   storedFilter() {
     try {
-      return localStorage.getItem(FILTER_STORAGE_KEY) || "all";
+      return localStorage.getItem(FILTER_STORAGE_KEY) || null;
     } catch {
-      return "all";
+      return null;
     }
   }
 
@@ -170,18 +174,20 @@ export default class Wickline extends View {
     }
   }
 
+  resetFilter(id) {
+    if (id !== this.filter) this.setFilter(id);
+  }
+
   // A filter that would hide `symbol` (just added, or already listed) goes back to All, so the person sees it.
   revealSymbol(symbol) {
-    const { symbols } = this.watch.preferences;
-    if (!visibleSymbols(symbols, chosenFilter(symbols, this.filter)).includes(symbol)) this.setFilter("all");
+    this.resetFilter(filterAfterAdd(this.watch.preferences.symbols, this.filter, symbol));
   }
 
   removeSymbol(cx, symbol) {
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
-      // The chosen market is no longer offered (its last symbol went, or the list got short): back to All for
-      // good, so it does not filter again the day the market returns.
-      if (chosenFilter(this.watch.preferences.symbols, this.filter) !== this.filter) this.setFilter("all");
+      // The chosen market's last symbol went: back to All for good, so it does not filter again the day the market returns.
+      this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter));
       return notice;
     });
   }

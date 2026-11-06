@@ -1,7 +1,7 @@
 // node --test tests/  (markets.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, chosenFilter, marketFilters, marketOf, visibleSymbols } from "../mods/wickline/markets.js";
+import { FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, chosenFilter, filterAfterAdd, filterAfterRemove, marketFilters, marketOf, visibleSymbols } from "../mods/wickline/markets.js";
 
 test("routes symbols to markets", () => {
   const table = [
@@ -47,4 +47,22 @@ test("the chosen filter is the stored one only while it is offered", () => {
   assert.equal(chosenFilter(TWELVE, "all"), "all");
   // Below the thresholds there is no filter row, so a stored choice must not hide rows.
   assert.equal(chosenFilter(["2330.TW", "AAPL"], "tw"), "all");
+});
+
+test("an add keeps the filter unless it would hide the symbol", () => {
+  // The symbol is already on the list passed in (the list after the add).
+  assert.equal(filterAfterAdd(TWELVE, "tw", "2330.TW"), "tw");
+  assert.equal(filterAfterAdd(TWELVE, "tw", "AAPL"), "all");
+  assert.equal(filterAfterAdd(TWELVE, "all", "AAPL"), "all");
+  // A stored choice the row does not offer reads as All, which hides nothing.
+  assert.equal(filterAfterAdd(TWELVE, "kr", "AAPL"), "kr");
+  assert.equal(filterAfterAdd(["AAPL", "2330.TW"], "tw", "AAPL"), "tw");
+});
+
+test("a remove returns the filter to All only when its market has no symbol left", () => {
+  assert.equal(filterAfterRemove(TWELVE, "tw"), "tw");
+  assert.equal(filterAfterRemove(TWELVE.filter((s) => !s.endsWith("/USDT")), "crypto"), "all");
+  assert.equal(filterAfterRemove(TWELVE, "all"), "all");
+  // A list that fell under the thresholds keeps the choice: chosenFilter already reads it as All.
+  assert.equal(filterAfterRemove(["2330.TW", "AAPL"], "tw"), "tw");
 });

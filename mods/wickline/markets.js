@@ -43,3 +43,13 @@ export function visibleSymbols(symbols, filter) {
 export function chosenFilter(symbols, filter) {
   return marketFilters(symbols).some(({ id }) => id === filter) ? filter : "all";
 }
+
+/** The filter after `symbol` was added (or found already listed) in `symbols`: All when it would hide that symbol. */
+export function filterAfterAdd(symbols, filter, symbol) {
+  return visibleSymbols(symbols, chosenFilter(symbols, filter)).includes(symbol) ? filter : "all";
+}
+
+/** The filter after a remove left `symbols`: All when the chosen market has no symbol left. */
+export function filterAfterRemove(symbols, filter) {
+  return filter === "all" || symbols.some((symbol) => marketOf(symbol) === filter) ? filter : "all";
+}
