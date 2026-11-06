@@ -97,10 +97,11 @@ function pathTo(node, match) {
 
 /**
  * Where a docked Wickline block sits in the layout tree that layout() gives: the first block that
- * runs `modId` with the `card` prop, its nearest stack, and the node to collapse (the stack's nearest
- * ancestor that is a child of a row or a column, so hiding it leaves the rest of the layout: the
- * side panel that holds the stack). The tree need not carry `hidden` on it. Null: this copy is not a
- * docked block, or the tree has none. `stack` and `collapse` are null when absent.
+ * runs `modId` with the `card` prop, its nearest stack, and the node to collapse: the stack itself, or
+ * the wrapper it is the only child of, up to the first node that has a sibling (the side panel that
+ * holds the stack), so hiding it leaves the rest of the layout. The tree need not carry `hidden` on
+ * it. Null: this copy is not a docked block, or the tree has none. `stack` is null when absent;
+ * `collapse` too, and when every node from the stack up to the root is a lone child.
  */
 export function dockOf(tree, modId) {
   const path = pathTo(tree, (n) => n.type === "block" && n.content?.mod === modId && n.content.props?.card === true);
@@ -108,8 +109,11 @@ export function dockOf(tree, modId) {
   const above = path.slice(0, -1);
   const stackAt = above.map((n) => n.type).lastIndexOf("stack");
   let collapse = null;
-  for (let i = stackAt - 1; stackAt >= 0 && i >= 0 && !collapse; i--) {
-    if (["row", "column"].includes(above[i - 1]?.type)) collapse = above[i].id;
+  for (let i = stackAt; i > 0; i--) {
+    if ((above[i - 1].children ?? []).length >= 2) {
+      collapse = above[i].id;
+      break;
+    }
   }
   return { block: path[path.length - 1].id, stack: above[stackAt]?.id ?? null, collapse };
 }

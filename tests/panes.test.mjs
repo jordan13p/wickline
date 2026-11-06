@@ -152,6 +152,26 @@ test("dockOf: the panel is found by structure, even when it carries no hidden ke
   assert.deepEqual(dockOf(tree, "wickline"), { block: "wickline", stack: "panel-body", collapse: "panel" });
 });
 
+test("dockOf: a stack placed straight in a row collapses alone, never the row", () => {
+  const stack = { id: "dock", type: "stack", active: "wickline", children: [
+    block("files", { mod: "files" }), block("wickline", { mod: "wickline", props: { card: true } }),
+  ] };
+  const tree = { id: "root", type: "column", children: [
+    block("tabs", { mod: "tabs" }),
+    { id: "work-body", type: "row", children: [block("main", { tab: "active" }), stack] },
+  ] };
+  assert.deepEqual(dockOf(tree, "wickline"), { block: "wickline", stack: "dock", collapse: "dock" });
+  // Wrapped in a column of its own: the wrapper goes, the row stays.
+  byId(tree, "work-body").children[1] = { id: "wrap", type: "column", children: [stack] };
+  assert.deepEqual(dockOf(tree, "wickline"), { block: "wickline", stack: "dock", collapse: "wrap" });
+});
+
+test("dockOf: nothing to collapse when every node up to the root is a lone child", () => {
+  const stack = { id: "dock", type: "stack", active: "wickline", children: [block("wickline", { mod: "wickline", props: { card: true } })] };
+  assert.deepEqual(dockOf(stack, "wickline"), { block: "wickline", stack: "dock", collapse: null });
+  assert.deepEqual(dockOf({ id: "root", type: "column", children: [stack] }, "wickline"), { block: "wickline", stack: "dock", collapse: null });
+});
+
 test("dockOf: a copy without the card prop is not a docked block", () => {
   assert.equal(dockOf(office({}), "wickline"), null);
   assert.equal(dockOf(office({ card: false }), "wickline"), null);
