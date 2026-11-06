@@ -81,8 +81,8 @@ export default class Wickline extends View {
     this.settle = null;
     this.rowHeights = {};
     // The market filter: this copy's stored choice, else the one it was opened with (props; Herdr keeps them
-    // with the tab, so they must never override a later choice), else "all". Rows and the filter row read it
-    // through chosenFilter, so a market no longer on the list reads as All.
+    // with the tab, so they must never override a later choice), else "all". Only a choice made here is
+    // stored. Rows and the filter row read it through chosenFilter, so a market no longer on the list reads as All.
     this.filter = openFilter(filterStorage, given.filter);
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};

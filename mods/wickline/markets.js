@@ -70,8 +70,10 @@ export const FILTER_STORAGE_KEY = "wickline.filter";
 
 /**
  * The filter a copy opens with: its stored choice, else `prop` (the one it was opened with), else All.
- * Nothing stored and given a market, it stores that once. `storage`: the copy's own, with `getItem` and
- * `setItem`; one that cannot be read reads as nothing stored, and a failed write is only not remembered.
+ * It writes nothing: the props are saved with the tab, so they seed the copy on every start until the
+ * person picks a filter there, and only that choice is stored (a write here would leave a storage file
+ * behind for every moved copy). `storage`: the copy's own, with `getItem`; one that cannot be read reads
+ * as nothing stored.
  */
 export function openFilter(storage, prop) {
   let stored = null;
@@ -80,13 +82,5 @@ export function openFilter(storage, prop) {
   } catch {
     // Unreadable: as if nothing were stored.
   }
-  const filter = stored ?? (typeof prop === "string" ? prop : "all");
-  if (stored === null && filter !== "all") {
-    try {
-      storage.setItem(FILTER_STORAGE_KEY, filter);
-    } catch {
-      // Not remembered after a restart; the copy keeps using it.
-    }
-  }
-  return filter;
+  return stored ?? (typeof prop === "string" ? prop : "all");
 }

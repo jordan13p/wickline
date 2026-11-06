@@ -114,11 +114,12 @@ test("a copy opens on its stored filter, else the one it was opened with, else A
   assert.equal(openFilter(fakeStorage({}, true), "tw"), "tw");
 });
 
-test("a copy opened with a filter stores it once", () => {
-  const storage = fakeStorage();
-  openFilter(storage, "tw");
-  assert.deepEqual(storage.writes, [["wickline.filter", "tw"]]);
-  const all = fakeStorage();
-  openFilter(all, undefined);
-  assert.deepEqual(all.writes, []);
+test("opening a copy writes nothing: only a choice the person makes there is stored", () => {
+  // The props are saved with the tab, so they seed the copy on every start until a choice is stored;
+  // writing them would leave a storage file behind for each moved copy.
+  for (const [stored, prop] of [[{}, "tw"], [{}, undefined], [{ "wickline.filter": "us" }, "tw"]]) {
+    const storage = fakeStorage(stored);
+    openFilter(storage, prop);
+    assert.deepEqual(storage.writes, [], JSON.stringify([stored, prop]));
+  }
 });
