@@ -19,8 +19,10 @@ import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL } from "./providers/finnhub.js";
 import { layoutFor, wantsCard } from "./layout.js";
-import { MOD_ID, canOpenOwnTab, closeOnceOpened, dockOf, isShown, ownTabSource, returnPane } from "./panes.js";
-import { band, sidebar, table } from "./ui/panel.js";
+import {
+  DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, ownTabSource, returnPane, waitUntil,
+} from "./panes.js";
+import { band, sidebar, table, yieldView } from "./ui/panel.js";
 import { detailView } from "./ui/detail-dialog.js";
 import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
@@ -68,6 +70,10 @@ export default class Wickline extends View {
     this.card = wantsCard(given);
     // Where that block sits in the layout (set by onScreen), or null for a copy that is not docked.
     this.dock = null;
+    // The block's tab holds a Wickline pane (set by onScreen): the block shows only a way back.
+    this.yielding = false;
+    // This copy is the own tab a docked block moved to (props().dock), so it goes back to that block.
+    this.fromDock = given.dock === true;
     // A move to or from the own tab is waiting for the new copy (see finishMove).
     this.moving = false;
     this.makeInput();
@@ -278,12 +284,16 @@ export default class Wickline extends View {
     });
   }
 
-  // A docked block is on screen while its panel is open and its tab is the stack's active one. Reads
-  // the layout each time, as the person may move the block or switch layouts.
+  // A docked block is on screen while its panel is open and its tab is the stack's active one, and
+  // draws quotes unless it yields to its own tab (then it fetches nothing either). Reads the layout
+  // each time, as the person may move the block or switch layouts.
   onScreen() {
     const tree = this.card ? layout() : null;
+    // The first card block in the layout is taken to be this copy: Wickline is docked once, as the
+    // office layout does, and panes() cannot tell copies apart anyway.
     this.dock = tree && dockOf(tree, MOD_ID);
-    return !this.dock || isShown(tree, this.dock);
+    this.yielding = Boolean(this.dock) && blockYields(shared(DOCK_TAB_KEY), panes());
+    return !this.dock || (isShown(tree, this.dock) && !this.yielding);
   }
 
   render() {
@@ -296,7 +306,7 @@ export default class Wickline extends View {
     // A hidden docked block never renders, so this render means it was just shown: run the rounds it skipped.
     if (this.card) {
       this.onScreen();
-      this.watch.wakeMissed();
+      if (!this.yielding) this.watch.wakeMissed();
     }
     if (this.inputLang !== this.lang) this.wakeInput?.();
     const form = layoutFor(this.size);
@@ -305,6 +315,7 @@ export default class Wickline extends View {
       .id("bw").size_full().bg(t.background).text_color(t.foreground).text_size(12.5)
       .when(this.card, (el) => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
       .on_size_change((size, cx) => { this.size = size; cx.notify(); });
+    if (this.yielding) return yieldView(this, root, t, form === "band");
     if (form === "band") return band(this, root, t);
     return form === "table" ? table(this, root, t) : sidebar(this, root, t);
   }
@@ -317,12 +328,21 @@ export default class Wickline extends View {
   }
 
   // A pane copy that shares its tab offers its own tab; the copy in that tab offers the way back, when
-  // there is a pane to go back beside. Dialog copies draw neither (they never reach the header).
+  // there is a pane to go back beside. A docked block offers its own tab while it is shown, and its tab
+  // copy offers the way back to the panel. Dialog copies draw neither (they never reach the header).
   // Clicking a mod pane focuses it, so the focused Wickline pane is the one clicked; each click
   // checks again. panes() lists the new copy a little after run() returns, so a task looks for it
   // (closeOnceOpened) and only then closes the old copy's own pane, never a shell the person split in
   // beside it. Clicks while a move is under way do nothing, so copies never pile up.
   ownTabAction() {
+    if (this.fromDock) {
+      if (!dockOf(layout(), MOD_ID)) return null;
+      return {
+        icon: "restore", label: "button.backToPanel",
+        go: (cx) => this.backToPanel(cx, panes().find((p) => p.mod === MOD_ID && p.focused)),
+      };
+    }
+    if (this.dock) return this.dockTabAction();
     const all = panes();
     const shownTab = focused()?.tab ?? null;
     if (!this.from) {
@@ -352,6 +372,55 @@ export default class Wickline extends View {
         this.finishMove(cx, before, me, before.find((p) => p.pane === target).tab);
       },
     };
+  }
+
+  // The block's own tab: opens it, and only once panes() shows it records the tab (so the block yields
+  // if the panel is opened again) and collapses the panel. This copy stays, so the button works again
+  // afterwards; when the tab never shows up, nothing collapses.
+  dockTabAction() {
+    if (this.yielding || !isShown(layout(), this.dock)) return null;
+    return {
+      icon: "zoom", label: "button.ownTab",
+      go: (cx) => {
+        if (this.moving) return;
+        const before = panes();
+        const { collapse } = this.dock;
+        run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true } });
+        this.runMove(cx, async (cx) => {
+          let tab = null;
+          const opened = await waitUntil(() => (tab = newWickline(before, panes())), { sleep: (ms) => cx.sleep(ms) });
+          if (!opened) return false;
+          setShared(DOCK_TAB_KEY, { tab: tab.tab });
+          if (collapse) run("layout.hide", { id: collapse });
+          return false;
+        });
+      },
+    };
+  }
+
+  // Reopens the panel on the Wickline block, and only once it is shown closes `pane`, the Wickline pane
+  // of the tab (never the tab, so a shell split in beside it stays), and forgets the tab. The tab's own
+  // copy passes the focused Wickline pane; the block's yield view, which is not focused, the dock tab's.
+  // With the panel already open, select and show change nothing. The block is found again in the
+  // layout: the person may have moved it since. No pane, nothing happens: never close one unseen.
+  backToPanel(cx, pane) {
+    if (this.moving) return;
+    const dock = dockOf(layout(), MOD_ID);
+    if (!dock || !pane) return;
+    this.runMove(cx, async (cx) => {
+      if (dock.stack) run("layout.select", { stack: dock.stack, child: dock.block });
+      if (dock.collapse) run("layout.show", { id: dock.collapse });
+      if (!await waitUntil(() => isShown(layout(), dock), { sleep: (ms) => cx.sleep(ms) })) return false;
+      setShared(DOCK_TAB_KEY, null);
+      run("pane.close", { pane: pane.pane });
+      return true;
+    });
+  }
+
+  // The yield view's button: the Wickline pane of the tab the block moved to (not the focused one).
+  backFromYield(cx) {
+    const dockTab = shared(DOCK_TAB_KEY);
+    this.backToPanel(cx, panes().find((p) => p.mod === MOD_ID && p.tab === dockTab?.tab));
   }
 
   // Runs `step(cx)` as a move, in a spawned task that owns its cx. Further clicks do nothing meanwhile.

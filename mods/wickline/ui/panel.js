@@ -9,7 +9,7 @@ import { freshness, sessionOf } from "../freshness.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, tableColumns } from "../layout.js";
-import { chart, dot, icon, iconButton } from "./parts.js";
+import { button, chart, dot, icon, iconButton } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
 // Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
@@ -116,6 +116,15 @@ function headerIcons(view, t) {
       (cx) => view.act(cx, () => view.togglePause())))
     .child(iconButton(t, "bw-settings", "settings", view.tx("button.settings"), () => view.openSettings("sources")))
     .when(Boolean(own), (el) => el.child(iconButton(t, "bw-own-tab", own.icon, view.tx(own.label), (cx) => own.go(cx))));
+}
+
+// A docked block whose own tab is open: one line and the way back, no quotes. The band has one line of
+// height, so it gets one row.
+export function yieldView(view, root, t, inBand) {
+  const notice = div().text_color(t.dim).child(view.tx("dock.openInTab"));
+  const back = button(t, "bw-yield-back", view.tx("button.backToPanel"), (cx) => view.backFromYield(cx));
+  if (inBand) return root.px(12).gap(14).items_center().overflow_hidden().child(notice.flex_1().min_w(0).truncate()).child(back);
+  return root.child(v_flex().flex_none().px(GUTTER).py(10).gap(10).items_start().child(brand(view, t)).child(notice.text_size(11)).child(back));
 }
 
 // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves

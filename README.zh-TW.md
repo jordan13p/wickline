@@ -102,7 +102,7 @@ agent 會先告訴你 Wickline 會連線到哪些主機，再複製 mod、合併
 - `ctrl-alt-b` 會在目前 focus 的終端機右側開一個 Wickline pane，任何 layout 皆適用。再按一次會多開一個 copy，而每個 copy 都會各自發出請求，所以請只開一個。
 - 要改按鍵，把 `~/.config/herdr-app/keys.json` `global` 區段中的 `ctrl-alt-b` 改掉；不要這個按鍵，就刪掉那一行。不用快捷鍵時：`herdr-app do pane.split --direction right --mod wickline`。
 - 關閉方式和其他 pane 一樣：用 Herdr 的 pane 標題列，或執行 `pane.close`。
-- 標題列的 **在自己的分頁開啟** 圖示會把 Wickline 移到名為 `Wickline` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。
+- 標題列的 **在自己的分頁開啟** 圖示會把 Wickline 移到名為 `Wickline` 的分頁，那裡夠寬，會顯示表格；在那裡按 **回到側邊**，會把它放回原分頁中某個 pane 的右側，並只關閉它自己的 pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。新的 copy 確實開啟後才會關閉舊的，所以移動失敗時一切維持原樣。無論哪種方式，都只有一個 copy 在抓報價。在停靠的側邊面板裡，同一個圖示會開啟分頁，然後收合面板；在那個分頁裡，按 **回到面板** 會讓面板重新顯示 Wickline，並關閉分頁裡的 Wickline pane（分頁裡沒有其他 pane 時，分頁也會一起關閉；你在那裡另外分割出的 shell 會保留）。該分頁開著時，面板只顯示一行說明和 **回到面板** 按鈕，也不送出任何請求；以其他方式開啟的 Wickline pane 不會讓面板讓位。
 - 放大（zoom）交給 Herdr 自己的 pane 標題列；Wickline 沒有自己的放大功能。
 - **停靠在自己的 layout**：Wickline 也可以當作你 layout 裡的一個區塊，例如放進 Files、Changes 所在的那一組。加上 `"props": {"card": true}`，就會畫出和那些側邊面板一樣的圓角邊框卡片；pane 不需要，因為 Herdr 已經替 pane 畫了外框：
 
@@ -134,7 +134,7 @@ agent 會先告訴你 Wickline 會連線到哪些主機，再複製 mod、合併
 | `finnhub.io`（Finnhub 網址只能修改路徑） | 只有在你將美股改為 Finnhub 並儲存 API 金鑰後；API 金鑰放在請求標頭中，不會出現在網址裡，且只會送往 `https://finnhub.io`：已儲存的網址若指向其他主機，或回應被轉址到別處，Finnhub 會停止並顯示原因 |
 
 - **程式**：只在 macOS 與 Linux 上、你儲存 Finnhub API 金鑰之後，對 `data/wickline/secrets.json` 執行 `chmod 600`，讓這台電腦上的其他帳號無法讀取。若執行失敗，設定視窗會提示，API 金鑰仍會保存。除此之外不執行任何程式。
-- **儲存**：自選清單存於 Herdr 共用狀態的 `wickline.watchlist.v1`，設定存於 `wickline.settings.v1`。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/wickline/secrets.json`，不會寫入共用狀態。在 macOS 與 Linux 上，只有你的帳號能讀取這個檔案；但以你的身分執行的程式（包括其他 Herdr mod）仍讀得到，所以請使用免費方案的 API 金鑰。若要移除 API 金鑰，請在「美股」卡片按「移除」後儲存（檔案會被刪除，每個 copy 會在下一次更新內捨棄它），或刪除該檔案；只改回 Yahoo 則會保留 API 金鑰。Time Machine 等備份可能仍留有舊的 API 金鑰：若要徹底撤銷，請到 Finnhub 重新產生 API 金鑰。不讀寫其他檔案。
+- **儲存**：自選清單存於 Herdr 共用狀態的 `wickline.watchlist.v1`，設定存於 `wickline.settings.v1`，停靠面板把 Wickline 開在哪個分頁則存於 `wickline.dockTab`（讓面板在該分頁開著時讓位）。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/wickline/secrets.json`，不會寫入共用狀態。在 macOS 與 Linux 上，只有你的帳號能讀取這個檔案；但以你的身分執行的程式（包括其他 Herdr mod）仍讀得到，所以請使用免費方案的 API 金鑰。若要移除 API 金鑰，請在「美股」卡片按「移除」後儲存（檔案會被刪除，每個 copy 會在下一次更新內捨棄它），或刪除該檔案；只改回 Yahoo 則會保留 API 金鑰。Time Machine 等備份可能仍留有舊的 API 金鑰：若要徹底撤銷，請到 Finnhub 重新產生 API 金鑰。不讀寫其他檔案。
 - **Finnhub**：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍。
 - 沒有遙測、沒有分析、沒有中繼伺服器：請求直接從這台電腦送到各個來源。
 - 請只開一個 Wickline。每個 copy（即使在背景分頁）都會跑自己的更新迴圈，開第二個就會讓所有請求加倍。停靠（docked）的區塊在未顯示時不會送出任何請求，重新顯示時，會立刻為隱藏期間略過回合的來源更新。

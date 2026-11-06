@@ -114,3 +114,15 @@ export function isShown(tree, dock) {
   if (!path) return false;
   return path.every((node, i) => node.hidden !== true && (node.type !== "stack" || node.active === path[i + 1]?.id));
 }
+
+// Shared state: `{ tab }`, the tab a docked block moved Wickline to (see main.js), or null.
+export const DOCK_TAB_KEY = "wickline.dockTab";
+
+/**
+ * A docked block steps aside while a Wickline pane is still in `dockTab.tab`. A record left behind by a
+ * tab the person closed names a tab with no Wickline in it, so it never makes the block yield; a pane
+ * opened another way (`ctrl-alt-b`) is in some other tab. `dockTab`: what the shared key holds.
+ */
+export function blockYields(dockTab, panes) {
+  return typeof dockTab?.tab === "string" && panes.some((p) => p.mod === MOD_ID && p.tab === dockTab.tab);
+}

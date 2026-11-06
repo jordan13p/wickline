@@ -1,7 +1,7 @@
 // node --test tests/  (panes.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, ownTabSource, returnPane } from "../mods/wickline/panes.js";
+import { DOCK_TAB_KEY, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, ownTabSource, returnPane } from "../mods/wickline/panes.js";
 
 // Panes as panes() gives them: Wickline's own tab "t9", opened from "t1".
 const pane = (id, tab, extra = {}) => ({ pane: id, tab, terminal: `term-${id}`, focused: false, ...extra });
@@ -171,4 +171,17 @@ test("isShown: the panel is open and Wickline is the stack's active child", () =
   // Hiding any ancestor hides it again.
   byId(tree, "work-body").hidden = true;
   assert.equal(isShown(tree, dock), false);
+});
+
+test("a docked block yields while a Wickline pane is in the tab it opened", () => {
+  assert.equal(DOCK_TAB_KEY, "wickline.dockTab");
+  assert.equal(blockYields({ tab: "t2" }, [{ pane: "p1", tab: "t2", mod: "wickline" }]), true);
+  // A stale id: the tab is gone, or holds no Wickline any more.
+  assert.equal(blockYields({ tab: "t2" }, [{ pane: "p1", tab: "t9", mod: "wickline" }]), false);
+  assert.equal(blockYields({ tab: "t2" }, [{ pane: "p1", tab: "t2", terminal: "term-p1" }]), false);
+  assert.equal(blockYields({ tab: "t2" }, []), false);
+  // No record, or a malformed one: never yields.
+  assert.equal(blockYields(null, [{ pane: "p1", tab: "t2", mod: "wickline" }]), false);
+  assert.equal(blockYields(undefined, [{ pane: "p1", tab: "t2", mod: "wickline" }]), false);
+  assert.equal(blockYields({}, [{ pane: "p1", tab: undefined, mod: "wickline" }]), false);
 });
