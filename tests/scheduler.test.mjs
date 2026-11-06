@@ -306,7 +306,7 @@ test("shown again, only the stale sources fetch at once", async () => {
   assert.equal(count(host, "yahoo"), 1);
   shown = true;
   // The render that shows it again wakes the loops.
-  w.wakeIfStale();
+  w.wakeMissed();
   await advance(host, 40_001);
   assert.equal(count(host, "ticker/24hr"), 2);
   assert.equal(count(host, "yahoo"), 1);
@@ -336,10 +336,75 @@ test("shown again while a round just ended, nothing fetches early", async () => 
   shown = false;
   await advance(host, 5_000);
   shown = true;
-  w.wakeIfStale();
+  w.wakeMissed();
   await advance(host, 61_999);
   assert.equal(count(host, "yahoo"), 1);
   await advance(host, 62_100);
+  assert.equal(count(host, "yahoo"), 2);
+  await stop(w, host, runs);
+});
+
+// A shown copy redraws after every change, a little later, and as a card does, asks to catch up on each render.
+function rendering(host, w) {
+  const seen = { changes: 0 };
+  host.changed = () => { seen.changes++; setImmediate(() => w.wakeMissed()); };
+  return seen;
+}
+
+test("a paused card copy that is shown does not redraw in a loop", async () => {
+  const host = fakeHost(yahooChart);
+  host.store.paused = true;
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  host.store.paused = true;
+  w.sync();
+  const seen = rendering(host, w);
+  const runs = start(w, host);
+  await advance(host, 300_000);
+  assert.equal(host.requests.length, 0);
+  assert.ok(seen.changes < 20, `${seen.changes} redraws`);
+  await stop(w, host, runs);
+});
+
+test("a round that threw is not asked again on every render", async () => {
+  const host = fakeHost(yahooChart);
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const seen = rendering(host, w);
+  const redraw = host.changed;
+  let threw = false;
+  // A bug in the first round, once its quote is in (the round's own redraw).
+  host.changed = () => {
+    redraw();
+    if (w.quotes.AAPL && !threw) { threw = true; throw new Error("bug"); }
+  };
+  const runs = start(w, host);
+  await advance(host, 59_000);
+  assert.equal(threw, true);
+  assert.equal(count(host, "yahoo"), 1);
+  assert.ok(seen.changes < 20, `${seen.changes} redraws`);
+  await advance(host, 61_000);
+  assert.equal(count(host, "yahoo"), 2);
+  await stop(w, host, runs);
+});
+
+test("an edit made while hidden is fetched as soon as the copy is shown", async () => {
+  const host = fakeHost(yahooChart);
+  let shown = true;
+  host.shown = () => shown;
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(count(host, "yahoo"), 1);
+  shown = false;
+  await advance(host, 5_000);
+  w.add("NVDA");
+  await advance(host, 6_000);
+  assert.equal(count(host, "yahoo"), 1);
+  shown = true;
+  w.wakeMissed();
+  await advance(host, 6_001);
   assert.equal(count(host, "yahoo"), 2);
   await stop(w, host, runs);
 });

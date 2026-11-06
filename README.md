@@ -137,7 +137,7 @@ Hosts, and when Wickline contacts them:
 - **Storage**: the watchlist in Herdr's shared state under `wickline.watchlist.v1`, the settings under `wickline.settings.v1`. A Finnhub key you save is kept in plaintext in `data/wickline/secrets.json` in Herdr's folder on this computer, never in the shared state. On macOS and Linux the file is readable by your account only; any program running as you (another Herdr mod included) can still read it, so use a free-plan key. To remove the key, press **Remove** on the United States card and save (the file is deleted and every copy drops the key within one refresh), or delete that file; choosing Yahoo alone keeps it. Backups such as Time Machine may still hold an old key: to revoke it for good, regenerate the key on Finnhub. No other file is read or written.
 - **Finnhub**: only the first US symbols your budget covers are asked (15 at the default 60 requests per minute). Every open copy sends its own requests, so two copies use the budget twice as fast.
 - No telemetry, no analytics and no intermediate server: requests go directly from this computer to each source.
-- Keep one copy of Wickline open. Each copy, even one in a background tab, runs its own refresh loops, so a second copy doubles every request. A docked block that is not shown sends nothing, and fetches at once when shown if its quotes are older than the source's interval.
+- Keep one copy of Wickline open. Each copy, even one in a background tab, runs its own refresh loops, so a second copy doubles every request. A docked block that is not shown sends nothing, and, when shown again, fetches at once in the sources that skipped a round while it was hidden.
 
 ## FAQ
 

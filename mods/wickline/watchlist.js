@@ -132,7 +132,7 @@ export class Watchlist {
     this.sources = Object.fromEntries(PROVIDERS.map((provider) => [provider.id, {
       retryAt: 0, failures: 0, disabled: false, problem: null,
       loading: false, manual: false, refreshing: false, dirty: true, wake: null,
-      lastRequestAt: -Infinity, lastRoundEnd: -Infinity, linesAt: {}, configKey: null, disabledFor: null,
+      lastRequestAt: -Infinity, missed: false, linesAt: {}, configKey: null, disabledFor: null,
     }]));
   }
 
@@ -297,17 +297,15 @@ export class Watchlist {
   }
 
   /**
-   * Starts a round at once in each source that has waited its interval since its last round ended
-   * (the main view calls it on render, which is when a hidden docked copy is shown again). A source
-   * that is not due keeps its own pace.
+   * Starts the round a hidden copy skipped, at once, in each source that skipped one (the main view
+   * calls it on render, which is when a hidden docked copy is shown again). A source that missed
+   * nothing keeps its own pace, so a render never starts a round by itself.
    */
-  wakeIfStale() {
-    const now = this.host.now();
-    for (const provider of PROVIDERS) {
-      const state = this.sources[provider.id];
-      const symbols = this.symbolsFor(provider);
-      if (!symbols.length || state.loading) continue;
-      if (now - state.lastRoundEnd >= provider.intervalMs(this.sessionFor(symbols, now))) wake(state);
+  wakeMissed() {
+    for (const state of Object.values(this.sources)) {
+      if (!state.missed || !state.wake) continue;
+      state.missed = false;
+      wake(state);
     }
   }
 
@@ -419,13 +417,15 @@ export class Watchlist {
         this.configKey = JSON.stringify(this.config());
         symbols = this.symbolsFor(provider);
         if (!symbols.length) state.problem = null;
-        // A hidden copy never renders (so nothing else tells it), but its loops run: it asks here, and
-        // waits as idle until wakeIfStale() on the render that shows it again.
+        // A hidden copy never renders (so nothing else tells it), but its loops run: it asks here. A round
+        // it skips is marked missed, and it waits as idle until wakeMissed() on the render that shows
+        // the copy again.
         hidden = !(this.host.shown?.() ?? true);
-        if (symbols.length && !state.disabled && !hidden && (manual || !this.preferences.paused)) {
+        const due = symbols.length && !state.disabled && (manual || !this.preferences.paused);
+        state.missed = hidden && Boolean(due);
+        if (due && !hidden) {
           state.refreshing = manual;
           await this.round(provider, state, symbols, io);
-          state.lastRoundEnd = this.host.now();
         }
       } catch {
         // A bug must not end the loop unseen: the source shows a problem and tries again after its interval.
