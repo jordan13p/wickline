@@ -321,9 +321,12 @@ export class Watchlist {
   /**
    * Starts the round a hidden copy skipped, at once, in each source that skipped one (the main view
    * calls it on render, which is when a hidden docked copy is shown again). A source that missed
-   * nothing keeps its own pace, so a render never starts a round by itself.
+   * nothing keeps its own pace, so a render never starts a round by itself. A copy still judged hidden
+   * wakes nothing: it can render anyway (a second card block, a stack with no active child), and each
+   * wake would mark the round missed again and redraw, in a loop.
    */
   wakeMissed() {
+    if (!(this.host.shown?.() ?? true)) return;
     for (const state of Object.values(this.sources)) {
       if (!state.missed || !state.wake) continue;
       state.missed = false;

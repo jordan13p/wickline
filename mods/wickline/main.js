@@ -448,10 +448,11 @@ export default class Wickline extends View {
     if (this.draft) return settingsView(this, t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
-    // A hidden docked block never renders, so this render means it was just shown: run the rounds it skipped.
+    // A hidden docked block never renders, so a render usually means it was just shown: run the rounds it
+    // skipped. wakeMissed asks shown() itself, so a copy judged hidden or yielding wakes nothing.
     if (this.card) {
       this.onScreen();
-      if (!this.yielding) this.watch.wakeMissed();
+      this.watch.wakeMissed();
     }
     if (this.inputLang !== this.lang) this.wakeInput?.();
     const form = layoutFor(this.size);

@@ -366,6 +366,26 @@ test("a paused card copy that is shown does not redraw in a loop", async () => {
   await stop(w, host, runs);
 });
 
+test("a hidden card copy that renders anyway does not redraw in a loop", async () => {
+  // A copy judged hidden can still render (a second card block, or a stack with no active child):
+  // its render must not wake the loops, or each wake marks a missed round and redraws again.
+  const host = fakeHost(yahooChart);
+  host.shown = () => false;
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const seen = rendering(host, w);
+  const runs = start(w, host);
+  await advance(host, 300_000);
+  assert.equal(host.requests.length, 0);
+  assert.ok(seen.changes < 20, `${seen.changes} redraws`);
+  // Shown again, the same render catches up at once.
+  host.shown = () => true;
+  w.wakeMissed();
+  await advance(host, 300_001);
+  assert.equal(count(host, "yahoo"), 1);
+  await stop(w, host, runs);
+});
+
 test("a round that threw is not asked again on every render", async () => {
   const host = fakeHost(yahooChart);
   const w = new Watchlist(host);
