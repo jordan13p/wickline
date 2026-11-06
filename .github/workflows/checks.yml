@@ -1,7 +1,9 @@
 name: checks
 
 on:
+  # Branches only: a release tag points at a commit its branch push already checked.
   push:
+    branches: ["**"]
   pull_request:
 
 permissions:
