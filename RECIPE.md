@@ -168,7 +168,7 @@ A panel in the theme's `background` (the color of Herdr's terminals and other pa
 - The settings icon opens a modal dialog with three tabs; Cancel or Esc discards edits; an `http://` Binance URL disables Save with an error; Save with a new language switches the panel and every copy at once.
 - The footer's disclaimer line opens the Disclaimer & privacy tab, which also carries the source legend.
 - Resizing the pane below 72px tall shows the one-line band; taller shows the panel again.
-- In 繁中 with TWSE MIS on, a 345px sidebar row reads `2330.TW`, then `台積電`, then `已收盤 · <date> <time>` whole, also when Wickline was opened before the open; `00631L.TW` shows `元大台灣50正2` whole; `AAPL` shows `Apple Inc.` on its own line; `BTC/USDT` keeps two lines.
+- In 繁中 with TWSE MIS on, a 345px sidebar row reads `2330.TW`, then `台積電`, then `已收盤 · <date> <time>` whole, also when Wickline was opened before the open; `00632R.TW` shows `元大台灣50反1` whole; `AAPL` shows `Apple Inc.` on its own line; `BTC/USDT` keeps two lines.
 - A layout block with `"props": {"card": true}` beside Herdr's Files shows the same rounded, bordered card in the sidebar, the table and the band; the same block without the prop, and a pane, show none.
 - Pausing in one copy shows `Auto-refresh paused` in every copy at once.
 - `AAPL` shows a ring and `Yahoo · delayed`, `2330.TW` `delayed 20 min`, `BTC/USDT` a filled dot and `Binance`; a closed market shows no dot and `Market closed` with the time.
