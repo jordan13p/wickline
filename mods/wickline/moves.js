@@ -1,8 +1,8 @@
 // Moving Wickline between a pane, a tab of its own and a docked block, and whether a docked block is on
 // screen. No Herdr imports, so tests run it under Node: main.js hands in `host`, Herdr's functions
 // `{ panes, layout, run, shared, setShared, focused }`, and the view, whose move state these read and
-// set: `card`, `dock`, `yielding`, `dockShown`, `fromDock`, `moving`, `filter` and the tab a pane copy came
-// from (view.from).
+// set: `card`, `dock`, `yielding`, `dockShown`, `fromDock`, `moving`, `filter` and the tab an own-tab copy
+// was opened from (view.from: by a pane or by the docked block).
 // `cx` is the click's; each wait runs in a task spawned from it that owns its own cx.
 import {
   DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWicklineTab, ownTabSource, returnPane, staleDockTab,
@@ -128,8 +128,8 @@ function dockTabAction(host, view) {
 /**
  * Reopens the panel on the Wickline block, and only once it is shown closes `pane`, the Wickline pane
  * of the tab (never the tab, so a shell split in beside it stays), and forgets the tab. The tab copy
- * selects the tab it was opened from (view.from) before closing. The tab's own
- * copy passes the focused Wickline pane; the block's yield view, which is not focused, the dock tab's.
+ * selects the tab it was opened from (view.from) before closing. The tab's own copy passes the focused
+ * Wickline pane; the block's yield view, which is not focused, the dock tab's.
  * With the panel already open, select and show change nothing. The block is found again in the
  * layout: the person may have moved it since. No pane, nothing happens: never close one unseen.
  * `leaving`: `pane` is this copy's own (the tab copy), so the move keeps further clicks out for good;
