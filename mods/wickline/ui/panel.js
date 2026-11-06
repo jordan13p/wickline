@@ -154,17 +154,20 @@ function problemLines(view, t) {
   return view.watch.problems().map((problem) => div().text_size(11).text_color(t.blocked).child(view.say(problem)));
 }
 
-// What a row shows, whichever layout draws it.
-function rowData(view, t, now, source) {
+// What a row shows, whichever layout draws it. `name` and `state` (the freshness label, then an earlier
+// day's date) are as rowName leaves them: a name that begins with the label (a pair's "Binance Spot")
+// replaces it, so nothing on the row says the same thing twice.
+function rowData(view, t, now, symbol, source) {
   const { quote } = source;
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
   // A closed label carries its own date; any other quote from an earlier day gets one.
   const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, view.lang) : "";
+  const label = quote ? freshnessLabel(view, quote, fresh, now) : "";
+  const shown = rowName(symbol, label, quote ? displayName(quote, view.lang) : null);
   return {
     ...source,
-    label: quote ? freshnessLabel(view, quote, fresh, now) : "",
-    date: stale ? view.tx("quote.asOf", { date: stale }) : "",
-    name: quote ? displayName(quote, view.lang) : null,
+    name: shown.name,
+    state: [shown.label, stale ? view.tx("quote.asOf", { date: stale }) : ""].filter(Boolean).join(" · "),
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
   };
@@ -342,17 +345,15 @@ export function sidebar(view, root, t) {
 // over the change, at a fixed width on the right, so a wider pane gives its room to the left lines.
 // A row without a name of its own (a pair, a name that repeats the ticker) keeps two lines.
 function sidebarRow(view, t, symbol, place, now, ghost) {
-  const row = rowData(view, t, now, ghost ? ghost.row : view.rowSource(symbol));
-  const shown = row.quote ? rowName(symbol, row.label, row.name) : { label: "", name: "" };
-  const meta = [shown.label, row.date].filter(Boolean).join(" · ");
+  const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
   const body = v_flex().py(8).gap(2)
     .child(h_flex().gap(12).items_center()
       .child(v_flex().flex_1().min_w(0).gap(2)
         .child(div().font_semibold().truncate().child(symbol))
-        .when(Boolean(shown.name), (el) => el.child(div().text_size(11).text_color(t.muted).truncate().child(shown.name)))
-        .when(Boolean(meta), (el) => el.child(h_flex().gap(6).items_center()
+        .when(Boolean(row.name), (el) => el.child(div().text_size(11).text_color(t.muted).truncate().child(row.name)))
+        .when(Boolean(row.state), (el) => el.child(h_flex().gap(6).items_center()
           .when(Boolean(row.dot), (line) => line.child(row.dot))
-          .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(meta)))))
+          .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state)))))
       .child(row.quote ? chart(row.quote, row.color, t, SPARK) : div().flex_none().w(SPARK.width).h(SPARK.height))
       .child(priceStack(view, t, row)))
     .children(rowNotes(view, t, row));
@@ -410,19 +411,16 @@ function tableHead(view, t, columns, nameW) {
 }
 
 function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
-  const row = rowData(view, t, now, ghost ? ghost.row : view.rowSource(symbol));
+  const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
   const { quote, color } = row;
-  // As the sidebar's line: a name that begins with the label (a pair's "Binance Spot") replaces it.
-  const shown = rowName(symbol, row.label, row.name);
-  const state = [shown.label, row.date].filter(Boolean).join(" · ");
   const cell = (id) => tableCell(id, nameW);
   const figure = (id, value) => cell(id).text_right().whitespace_nowrap().text_color(t.muted).child(quote ? number(quote, value) : "");
   const cells = {
     symbol: () => cell("symbol").font_semibold().truncate().child(symbol),
-    name: () => cell("name").text_color(t.muted).truncate().child(shown.name),
+    name: () => cell("name").text_color(t.muted).truncate().child(row.name),
     state: () => h_flex().flex_none().w(columnWidth("state")).gap(6).items_center()
       .child(div().flex_none().w(6).h(6).when(Boolean(row.dot), (el) => el.child(row.dot)))
-      .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(state)),
+      .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state)),
     line: () => (quote ? chart(quote, color, t, TABLE_SPARK) : cell("line")),
     price: () => (quote
       ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
