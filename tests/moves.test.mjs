@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DOCK_TAB_KEY } from "../mods/wickline/panes.js";
-import { backFromYield, onScreen, ownTabAction } from "../mods/wickline/moves.js";
+import { backFromYield, onScreen, ownTabAction, syncDock } from "../mods/wickline/moves.js";
 
 // The office layout, ids only: Wickline docked as one tab of the collapsible panel's stack.
 const block = (id, content) => ({ id, type: "block", content });
@@ -49,58 +49,101 @@ function fakeCx() {
   return cx;
 }
 
-const view = (extra = {}) => ({ card: false, dock: null, yielding: false, fromDock: false, from: null, moving: false, filter: "all", ...extra });
+const view = (extra = {}) => ({
+  card: false, dock: null, yielding: false, dockShown: false, fromDock: false, from: null, moving: false, filter: "all", ...extra,
+});
 const commands = (host) => host.ran.map(([name]) => name);
 
-test("onScreen: a docked block is shown with its panel open and its tab active, unless it yields", () => {
+test("syncDock: a docked block is shown with its panel open and its tab active, unless it yields", () => {
+  const host = fakeHost();
+  const v = view({ card: true });
+  syncDock(host, v);
+  assert.equal(v.dockShown, true);
+  assert.deepEqual(v.dock, { block: "wickline", stack: "panel-body", collapse: "panel" });
+  byId(host.tree, "panel").hidden = true;
+  syncDock(host, v);
+  assert.equal(v.dockShown, false);
+  byId(host.tree, "panel").hidden = false;
+  host.store[DOCK_TAB_KEY] = { tab: "t7" };
+  host.list = [{ pane: "p7", tab: "t7", mod: "wickline" }];
+  syncDock(host, v);
+  assert.equal(v.dockShown, false);
+  assert.equal(v.yielding, true);
+  // A copy that is not a card never reads the layout and is always on screen.
+  const pane = view();
+  syncDock(host, pane);
+  assert.equal(pane.dockShown, true);
+  assert.equal(pane.dock, null);
+});
+
+test("onScreen gives the loops the same answer and leaves the view as it is", () => {
   const host = fakeHost();
   const v = view({ card: true });
   assert.equal(onScreen(host, v), true);
-  assert.deepEqual(v.dock, { block: "wickline", stack: "panel-body", collapse: "panel" });
   byId(host.tree, "panel").hidden = true;
   assert.equal(onScreen(host, v), false);
   byId(host.tree, "panel").hidden = false;
   host.store[DOCK_TAB_KEY] = { tab: "t7" };
   host.list = [{ pane: "p7", tab: "t7", mod: "wickline" }];
   assert.equal(onScreen(host, v), false);
-  assert.equal(v.yielding, true);
+  assert.deepEqual(v, view({ card: true }));
   // A copy that is not a card never reads the layout and is always on screen.
-  const pane = view();
-  assert.equal(onScreen(host, pane), true);
-  assert.equal(pane.dock, null);
+  const looks = host.looks;
+  assert.equal(onScreen(host, view()), true);
+  assert.equal(host.looks, looks);
 });
 
-test("onScreen clears a dock tab record left by a closed tab, once", () => {
-  const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }, { pane: "p8", tab: "t9", terminal: "term-8" }] });
-  // The person closed the tab's Wickline pane by hand: a shell is all that is left in t9.
-  host.store[DOCK_TAB_KEY] = { tab: "t9" };
+test("a dock tab record left by a closed tab is cleared once, by render and by the loops alike", () => {
+  for (const check of [onScreen, syncDock]) {
+    const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }, { pane: "p8", tab: "t9", terminal: "term-8" }] });
+    // The person closed the tab's Wickline pane by hand: a shell is all that is left in t9.
+    host.store[DOCK_TAB_KEY] = { tab: "t9" };
+    const v = view({ card: true });
+    check(host, v);
+    assert.deepEqual(host.ran, [["setShared", DOCK_TAB_KEY, { tab: null }]], check.name);
+    check(host, v);
+    check(host, v);
+    assert.equal(host.ran.length, 1, check.name);
+    // A Wickline pane opened later in that tab another way (ctrl-alt-b) does not make the block yield.
+    host.list = [...host.list, { pane: "p5", tab: "t9", mod: "wickline" }];
+    assert.equal(onScreen(host, v), true, check.name);
+    syncDock(host, v);
+    assert.equal(v.yielding, false, check.name);
+    assert.equal(host.ran.length, 1, check.name);
+  }
+});
+
+test("a live dock tab record is kept, and a copy that is not docked never clears one", () => {
+  for (const check of [onScreen, syncDock]) {
+    const host = fakeHost({ panes: [{ pane: "p9", tab: "t9", mod: "wickline" }] });
+    host.store[DOCK_TAB_KEY] = { tab: "t9" };
+    check(host, view({ card: true }));
+    assert.deepEqual(host.ran, [], check.name);
+    host.list = [];
+    check(host, view());
+    assert.deepEqual(host.ran, [], check.name);
+  }
+});
+
+test("a docked block offers its own tab only while it is shown and not yielding", () => {
+  const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }] });
   const v = view({ card: true });
-  assert.equal(onScreen(host, v), true);
-  assert.deepEqual(host.ran, [["setShared", DOCK_TAB_KEY, { tab: null }]]);
-  onScreen(host, v);
-  onScreen(host, v);
-  assert.equal(host.ran.length, 1);
-  // A Wickline pane opened later in that tab another way (ctrl-alt-b) does not make the block yield.
-  host.list = [...host.list, { pane: "p5", tab: "t9", mod: "wickline" }];
-  assert.equal(onScreen(host, v), true);
-  assert.equal(v.yielding, false);
-  assert.equal(host.ran.length, 1);
-});
-
-test("onScreen keeps a live dock tab record, and a copy that is not docked never clears one", () => {
-  const host = fakeHost({ panes: [{ pane: "p9", tab: "t9", mod: "wickline" }] });
-  host.store[DOCK_TAB_KEY] = { tab: "t9" };
-  onScreen(host, view({ card: true }));
-  assert.deepEqual(host.ran, []);
-  host.list = [];
-  onScreen(host, view());
-  assert.deepEqual(host.ran, []);
+  syncDock(host, v);
+  assert.equal(ownTabAction(host, v).label, "button.ownTab");
+  byId(host.tree, "panel").hidden = true;
+  syncDock(host, v);
+  assert.equal(ownTabAction(host, v), null);
+  byId(host.tree, "panel").hidden = false;
+  host.store[DOCK_TAB_KEY] = { tab: "t7" };
+  host.list = [...host.list, { pane: "p7", tab: "t7", mod: "wickline" }];
+  syncDock(host, v);
+  assert.equal(ownTabAction(host, v), null);
 });
 
 test("⤢ from a block: waits for the new tab, then records it and hides the panel", async () => {
   const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }] });
   const v = view({ card: true, filter: "tw" });
-  onScreen(host, v);
+  syncDock(host, v);
   const action = ownTabAction(host, v);
   assert.equal(action.label, "button.ownTab");
   const cx = fakeCx();
@@ -120,7 +163,7 @@ test("⤢ from a block: waits for the new tab, then records it and hides the pan
 test("⤢ from a block: a tab that never shows up records nothing and hides nothing", async () => {
   const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }] });
   const v = view({ card: true });
-  onScreen(host, v);
+  syncDock(host, v);
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
   await cx.done();
@@ -169,7 +212,7 @@ test("back to the panel: a panel that never shows closes nothing", async () => {
 test("a click while a move waits does nothing", async () => {
   const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }] });
   const v = view({ card: true });
-  onScreen(host, v);
+  syncDock(host, v);
   const action = ownTabAction(host, v);
   const cx = fakeCx();
   action.go(cx);

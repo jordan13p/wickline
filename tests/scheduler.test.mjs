@@ -316,6 +316,20 @@ test("shown again, only the stale sources fetch at once", async () => {
   await stop(w, host, runs);
 });
 
+test("a render with no round missed does not ask whether the copy is shown", async () => {
+  const host = fakeHost((url) => yahooChart(url));
+  let asked = 0;
+  host.shown = () => { asked++; return true; };
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const runs = start(w, host);
+  await advance(host, 1);
+  const before = asked;
+  w.wakeMissed();
+  assert.equal(asked, before);
+  await stop(w, host, runs);
+});
+
 test("shown again while a round just ended, nothing fetches early", async () => {
   const host = fakeHost((url) => yahooChart(url));
   let shown = true;

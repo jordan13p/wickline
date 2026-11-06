@@ -1,7 +1,8 @@
 // Moving Wickline between a pane, a tab of its own and a docked block, and whether a docked block is on
 // screen. No Herdr imports, so tests run it under Node: main.js hands in `host`, Herdr's functions
 // `{ panes, layout, run, shared, setShared, focused }`, and the view, whose move state these read and
-// set: `card`, `dock`, `yielding`, `fromDock`, `moving`, `filter` and the tab a pane copy came from (view.from).
+// set: `card`, `dock`, `yielding`, `dockShown`, `fromDock`, `moving`, `filter` and the tab a pane copy came
+// from (view.from).
 // `cx` is the click's; each wait runs in a task spawned from it that owns its own cx.
 import {
   DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWicklineTab, ownTabSource, returnPane, staleDockTab,
@@ -9,25 +10,38 @@ import {
 } from "./panes.js";
 
 /**
- * A docked block is on screen while its panel is open and its tab is the stack's active one, and draws
- * quotes unless it yields to its own tab (then it fetches nothing either). Reads the layout each time,
- * as the person may move the block or switch layouts. Sets `view.dock` and `view.yielding`.
+ * Where a docked block sits and whether it is on screen, `{ dock, yielding, shown }`: it is on screen while
+ * its panel is open and its tab is the stack's active one, and draws quotes unless it yields to its own tab
+ * (then it fetches nothing either). A copy that is not a card is not docked and always on screen. Reads the
+ * layout each time, as the person may move the block or switch layouts. On the way it clears a dock tab
+ * record left stale, from the loops too: a hidden block never renders, and the record must be gone before
+ * a Wickline pane opened another way in that tab could make the block yield.
  */
-export function onScreen(host, view) {
-  const tree = view.card ? host.layout() : null;
+function readDock(host, card) {
+  const tree = card ? host.layout() : null;
   // The first card block in the layout is taken to be this copy: Wickline is docked once, as the
   // office layout does, and panes() cannot tell copies apart anyway.
-  view.dock = tree && dockOf(tree, MOD_ID);
-  if (!view.dock) {
-    view.yielding = false;
-    return true;
-  }
+  const dock = tree && dockOf(tree, MOD_ID);
+  if (!dock) return { dock: null, yielding: false, shown: true };
   const dockTab = host.shared(DOCK_TAB_KEY);
   const all = host.panes();
   // Written only while stale, so the write (which re-renders every copy) happens once.
   if (staleDockTab(dockTab, all)) host.setShared(DOCK_TAB_KEY, { tab: null });
-  view.yielding = blockYields(dockTab, all);
-  return isShown(tree, view.dock) && !view.yielding;
+  const yielding = blockYields(dockTab, all);
+  return { dock, yielding, shown: isShown(tree, dock) && !yielding };
+}
+
+/** The loops' check: this copy is on screen. It leaves the view as it is; render keeps it (syncDock). */
+export function onScreen(host, view) {
+  return readDock(host, view.card).shown;
+}
+
+/** On render: sets `view.dock`, `view.yielding` and `view.dockShown`, which that render's drawing and clicks read. */
+export function syncDock(host, view) {
+  const { dock, yielding, shown } = readDock(host, view.card);
+  view.dock = dock;
+  view.yielding = yielding;
+  view.dockShown = shown;
 }
 
 /**
@@ -86,7 +100,7 @@ export function ownTabAction(host, view) {
  * again afterwards; when the tab never shows up, nothing collapses.
  */
 export function dockTabAction(host, view) {
-  if (view.yielding || !isShown(host.layout(), view.dock)) return null;
+  if (!view.dockShown) return null;
   return {
     icon: "zoom", label: "button.ownTab",
     go: (cx) => {

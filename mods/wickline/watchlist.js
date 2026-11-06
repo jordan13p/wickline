@@ -318,9 +318,10 @@ export class Watchlist {
    * wake would mark the round missed again and redraw, in a loop.
    */
   wakeMissed() {
-    if (!(this.host.shown?.() ?? true)) return;
-    for (const state of Object.values(this.sources)) {
-      if (!state.missed || !state.wake) continue;
+    // Most renders find nothing missed: then shown(), which reads the layout for a docked copy, is not asked.
+    const missed = Object.values(this.sources).filter((state) => state.missed && state.wake);
+    if (!missed.length || !(this.host.shown?.() ?? true)) return;
+    for (const state of missed) {
       state.missed = false;
       wake(state);
     }

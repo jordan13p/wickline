@@ -93,10 +93,12 @@ export default class Wickline extends View {
     this.from = typeof given.from === "string" ? given.from : null;
     // Docked beside Herdr's Files and Changes, it draws their card (see wantsCard).
     this.card = wantsCard(given);
-    // Where that block sits in the layout (set by onScreen), or null for a copy that is not docked.
+    // Where that block sits in the layout (set on render by syncDock), or null for a copy that is not docked.
     this.dock = null;
-    // The block's tab holds a Wickline pane (set by onScreen): the block shows only a way back.
+    // The block's tab holds a Wickline pane (set by syncDock): the block shows only a way back.
     this.yielding = false;
+    // The block is on screen and not yielding (set by syncDock): it offers its own tab.
+    this.dockShown = false;
     // This copy is the own tab a docked block moved to (props().dock), so it goes back to that block.
     this.fromDock = given.dock === true;
     // A move to or from the own tab is waiting for the new copy (see finishMove).
@@ -432,9 +434,14 @@ export default class Wickline extends View {
     });
   }
 
-  // Sets this.dock and this.yielding (see moves.js).
+  // Whether this copy is on screen, asked by the loops; it sets nothing (see moves.js).
   onScreen() {
     return moves.onScreen(moveHost, this);
+  }
+
+  // Sets this.dock, this.yielding and this.dockShown for the render under way (see moves.js).
+  syncDock() {
+    moves.syncDock(moveHost, this);
   }
 
   render() {
@@ -447,7 +454,7 @@ export default class Wickline extends View {
     // A hidden docked block never renders, so a render usually means it was just shown: run the rounds it
     // skipped. wakeMissed asks shown() itself, so a copy judged hidden or yielding wakes nothing.
     if (this.card) {
-      this.onScreen();
+      this.syncDock();
       this.watch.wakeMissed();
     }
     if (this.inputLang !== this.lang) this.wakeInput?.();
