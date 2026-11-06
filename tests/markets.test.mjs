@@ -126,7 +126,7 @@ test("a remove returns the filter to All only when its market has no symbol left
   assert.equal(filterAfterRemove(TWELVE, "tw"), "tw");
   assert.equal(filterAfterRemove(TWELVE.filter((s) => !s.endsWith("/USDT")), "crypto"), "all");
   assert.equal(filterAfterRemove(TWELVE, "all"), "all");
-  // A list that fell under the thresholds keeps the choice: chosenFilter already reads it as All.
+  // A list that fell under the thresholds keeps the choice: readFilter already reads it as All.
   assert.equal(filterAfterRemove(["2330.TW", "AAPL"], "tw"), "tw");
 });
 

@@ -101,6 +101,8 @@ test("a dock tab record left by a closed tab is cleared once, by render and by t
     const v = view({ card: true });
     check(host, v);
     assert.deepEqual(host.ran, [["setShared", DOCK_TAB_KEY, { tab: null }]], check.name);
+    // The record was left by a closed tab: the block does not yield to it, and is shown.
+    assert.equal(check === onScreen ? onScreen(host, v) : v.dockShown, true, check.name);
     check(host, v);
     check(host, v);
     assert.equal(host.ran.length, 1, check.name);

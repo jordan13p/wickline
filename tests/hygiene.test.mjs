@@ -93,7 +93,50 @@ test("core modules import only relative modules; ui/ adds the view libraries", (
 const HERDR_GLOBALS = /(?<![.\w$])(?:fetch\b(?!\s*:)|localStorage\b|globalThis\b)|\b(?:window|self)\s*\.\s*fetch\b|\}\s*=\s*(?:window|self)\b/;
 // The source without comments, which may name these; a `//` after `:` or a quote is a URL, not a comment.
 const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
-const withoutStrings = (source) => source.replace(/"[^"\n]*"/g, '""');
+// The source with each string's text left out, quote-aware: '…' and "…" become empty, a template keeps only
+// its `${…}` expressions, which are code. (No module writes a quote inside a regex literal.)
+function withoutStrings(source) {
+  let out = "";
+  // One entry per `${…}` being read: how many `{` deep inside it.
+  const open = [];
+  let i = 0;
+  // Template text from `i` to its closing backtick, or to the next `${`, which opens an expression.
+  const templateText = () => {
+    while (i < source.length && source[i] !== "`" && !(source[i] === "$" && source[i + 1] === "{")) i += source[i] === "\\" ? 2 : 1;
+    if (source[i] === "`") {
+      out += "`";
+      i += 1;
+    } else if (i < source.length) {
+      out += "${";
+      i += 2;
+      open.push(0);
+    }
+  };
+  while (i < source.length) {
+    const c = source[i];
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < source.length && source[j] !== c && source[j] !== "\n") j += source[j] === "\\" ? 2 : 1;
+      out += c + c;
+      i = source[j] === c ? j + 1 : j;
+    } else if (c === "`") {
+      out += "`";
+      i += 1;
+      templateText();
+    } else if (c === "}" && open.length && open[open.length - 1] === 0) {
+      open.pop();
+      out += "}";
+      i += 1;
+      templateText();
+    } else {
+      if (open.length && c === "{") open[open.length - 1] += 1;
+      if (open.length && c === "}") open[open.length - 1] -= 1;
+      out += c;
+      i += 1;
+    }
+  }
+  return out;
+}
 // What the globals scan reads: the code without its strings, which may name a global (the text table's
 // storage disclosure names `localStorage`) without using it.
 const scanned = (source) => withoutStrings(code(source));
@@ -112,7 +155,14 @@ test("only main.js wires Herdr's storage, network and files", () => {
   assert.doesNotMatch(scanned("const host = { fetch: (url) => url }; quote.fetchedAt; window.paint_path(p)"), HERDR_GLOBALS);
   assert.doesNotMatch(scanned('const text = "kept in localStorage";'), HERDR_GLOBALS);
   assert.match(scanned('const u = "https://x"; globalThis'), HERDR_GLOBALS);
-  for (const source of ["const get = fetch;", "window.fetch(url)", "self . fetch(url)", "const { fetch: get } = window;", 'const s = "a"; localStorage.getItem("k")']) {
+  assert.doesNotMatch(scanned("const t = `kept in ${'localStorage'} and \\` fetch(u)`;"), HERDR_GLOBALS);
+  for (const source of [
+    "const get = fetch;", "window.fetch(url)", "self . fetch(url)", "const { fetch: get } = window;", 'const s = "a"; localStorage.getItem("k")',
+    // A quote of the other kind inside a string, or inside a template, hides nothing after it.
+    "const q = '\"'; localStorage.x; const r = '\"';", "const s = `a\"`; fetch(u); const t = \"x\";",
+    // A template's expressions are code, also nested.
+    "const u = `${host}/${fetch(u)}`;", "const v = `a${`b${globalThis}`}c`;", "const w = `${{ a: 1 }.a}`; localStorage.x;",
+  ]) {
     assert.match(scanned(source), HERDR_GLOBALS, source);
   }
 });
