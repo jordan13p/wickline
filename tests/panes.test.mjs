@@ -1,7 +1,7 @@
 // node --test tests/  (panes.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DOCK_TAB_KEY, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, ownTabSource, returnPane } from "../mods/wickline/panes.js";
+import { DOCK_TAB_KEY, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, newWicklineTab, ownTabSource, returnPane } from "../mods/wickline/panes.js";
 
 // Panes as panes() gives them: Wickline's own tab "t9", opened from "t1".
 const pane = (id, tab, extra = {}) => ({ pane: id, tab, terminal: `term-${id}`, focused: false, ...extra });
@@ -184,4 +184,15 @@ test("a docked block yields while a Wickline pane is in the tab it opened", () =
   assert.equal(blockYields(null, [{ pane: "p1", tab: "t2", mod: "wickline" }]), false);
   assert.equal(blockYields(undefined, [{ pane: "p1", tab: "t2", mod: "wickline" }]), false);
   assert.equal(blockYields({}, [{ pane: "p1", tab: undefined, mod: "wickline" }]), false);
+});
+
+test("the docked block's tab: a Wickline pane in a tab that was not there before", () => {
+  const before = [pane("p1", "t1"), { pane: "p2", tab: "t1", mod: "wickline", focused: false }];
+  // A pane split into an existing tab (ctrl-alt-b) never counts.
+  assert.equal(newWicklineTab(before, [...before, { pane: "p3", tab: "t1", mod: "wickline" }]), null);
+  assert.equal(newWicklineTab(before, [...before, { pane: "p3", tab: "t7", mod: "wickline" }]).pane, "p3");
+  // Another new tab with no Wickline in it does not either; the opened one still does.
+  const after = [...before, pane("p4", "t8"), { pane: "p5", tab: "t1", mod: "wickline" }, { pane: "p6", tab: "t9", mod: "wickline" }];
+  assert.equal(newWicklineTab(before, after).pane, "p6");
+  assert.equal(newWicklineTab(before, before), null);
 });

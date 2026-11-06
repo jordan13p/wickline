@@ -46,6 +46,15 @@ export function newWickline(before, after, tab = null) {
   return after.find((p) => p.mod === MOD_ID && !old.has(p.pane) && (tab === null || p.tab === tab)) ?? null;
 }
 
+/**
+ * The Wickline pane of a tab that `before` did not have: the tab a command just opened. A Wickline pane
+ * split into an existing tab (`ctrl-alt-b`) never counts, so it cannot be taken for the docked block's tab.
+ */
+export function newWicklineTab(before, after) {
+  const tabs = new Set(before.map((p) => p.tab));
+  return newWickline(before, after.filter((p) => !tabs.has(p.tab)));
+}
+
 // How often and how long a wait looks: Herdr lists a new pane in panes() a little after run() returns,
 // not at once, and a layout click shows in layout() a little after its command.
 const POLL_MS = 50;
