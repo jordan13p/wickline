@@ -74,3 +74,44 @@ export async function closeOnceOpened(before, me, host, tab = null) {
   if (opened) host.close(me.pane);
   return opened;
 }
+
+// The nodes from the root down to the first node `match` accepts (itself included); null: none does.
+function pathTo(node, match) {
+  if (!node || typeof node !== "object") return null;
+  if (match(node)) return [node];
+  for (const child of node.children ?? []) {
+    const path = pathTo(child, match);
+    if (path) return [node, ...path];
+  }
+  return null;
+}
+
+// The shown tab's terminals live in a `content.tab` block; a node holding one is the work area, not a panel.
+const holdsTab = (node) => pathTo(node, (n) => Boolean(n.content?.tab)) !== null;
+
+/**
+ * Where a docked Wickline block sits in the layout tree that layout() gives: the first block that
+ * runs `modId` with the `card` prop, its nearest stack, and the nearest ancestor with a `hidden`
+ * flag that holds no tab content (the panel that collapses; hiding it hides the block). Null: this
+ * copy is not a docked block, or the tree has none. `stack` and `collapse` are null when absent.
+ */
+export function dockOf(tree, modId) {
+  const path = pathTo(tree, (n) => n.type === "block" && n.content?.mod === modId && n.content.props?.card === true);
+  if (!path) return null;
+  const above = path.slice(0, -1).reverse();
+  return {
+    block: path.at(-1).id,
+    stack: above.find((n) => n.type === "stack")?.id ?? null,
+    collapse: above.find((n) => typeof n.hidden === "boolean" && !holdsTab(n))?.id ?? null,
+  };
+}
+
+/**
+ * The docked block is on screen: nothing from the root down to it is hidden, and each stack on the way
+ * has the way's child active. False when the block is gone from the tree.
+ */
+export function isShown(tree, dock) {
+  const path = pathTo(tree, (n) => n.id === dock.block);
+  if (!path) return false;
+  return path.every((node, i) => node.hidden !== true && (node.type !== "stack" || node.active === path[i + 1]?.id));
+}

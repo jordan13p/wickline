@@ -102,6 +102,8 @@ export function readPreferences(value) {
  *   loadSecret(name): Promise<string|null>             // the secrets file's value (null: no file or no key);
  *                                                      // rejects when the file cannot be read
  *   now(): number
+ *   shown?(): boolean                                  // this copy is on screen (default: yes); a docked
+ *                                                      // copy that is not sends nothing
  * }
  * Each loop gets its own io: { sleep(ms): Promise<void>, changed(): void } (redraw).
  */
@@ -130,7 +132,7 @@ export class Watchlist {
     this.sources = Object.fromEntries(PROVIDERS.map((provider) => [provider.id, {
       retryAt: 0, failures: 0, disabled: false, problem: null,
       loading: false, manual: false, refreshing: false, dirty: true, wake: null,
-      lastRequestAt: -Infinity, linesAt: {}, configKey: null, disabledFor: null,
+      lastRequestAt: -Infinity, lastRoundEnd: -Infinity, linesAt: {}, configKey: null, disabledFor: null,
     }]));
   }
 
@@ -294,6 +296,21 @@ export class Watchlist {
     for (const state of Object.values(this.sources)) wake(state);
   }
 
+  /**
+   * Starts a round at once in each source that has waited its interval since its last round ended
+   * (the main view calls it on render, which is when a hidden docked copy is shown again). A source
+   * that is not due keeps its own pace.
+   */
+  wakeIfStale() {
+    const now = this.host.now();
+    for (const provider of PROVIDERS) {
+      const state = this.sources[provider.id];
+      const symbols = this.symbolsFor(provider);
+      if (!symbols.length || state.loading) continue;
+      if (now - state.lastRoundEnd >= provider.intervalMs(this.sessionFor(symbols, now))) wake(state);
+    }
+  }
+
   // Drops every round in flight and starts new ones at once.
   restart() {
     this.revision++;
@@ -387,6 +404,7 @@ export class Watchlist {
       state.manual = false;
       state.dirty = false;
       let symbols = [];
+      let hidden = false;
       try {
         const settings = readSettings(this.host.settings());
         if (provider === finnhub) await this.loadKey(settings);
@@ -401,9 +419,13 @@ export class Watchlist {
         this.configKey = JSON.stringify(this.config());
         symbols = this.symbolsFor(provider);
         if (!symbols.length) state.problem = null;
-        if (symbols.length && !state.disabled && (manual || !this.preferences.paused)) {
+        // A hidden copy never renders (so nothing else tells it), but its loops run: it asks here, and
+        // waits as idle until wakeIfStale() on the render that shows it again.
+        hidden = !(this.host.shown?.() ?? true);
+        if (symbols.length && !state.disabled && !hidden && (manual || !this.preferences.paused)) {
           state.refreshing = manual;
           await this.round(provider, state, symbols, io);
+          state.lastRoundEnd = this.host.now();
         }
       } catch {
         // A bug must not end the loop unseen: the source shows a problem and tries again after its interval.
@@ -415,7 +437,7 @@ export class Watchlist {
       const { paused } = this.preferences;
       io.changed();
       if (state.manual || state.dirty) continue;
-      const idle = paused || !symbols.length || state.disabled;
+      const idle = paused || !symbols.length || state.disabled || hidden;
       const now = this.host.now();
       const due = now + (idle ? 0 : Math.max(provider.intervalMs(this.sessionFor(symbols, now)), state.retryAt - now));
       await this.rest(state, symbols, due, io);

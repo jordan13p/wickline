@@ -277,3 +277,69 @@ test("an unexpected error in a loop shows as the source's problem and the loop g
     yahoo.decode = decode;
   }
 });
+
+test("a hidden docked copy sends nothing", async () => {
+  const host = fakeHost((url) => url.includes("binance") ? ticker(url) : yahooChart(url));
+  host.shown = () => false;
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 300_000);
+  assert.equal(host.requests.length, 0);
+  await stop(w, host, runs);
+});
+
+test("shown again, only the stale sources fetch at once", async () => {
+  const host = fakeHost((url) => url.includes("binance") ? (url.includes("klines") ? lines() : ticker(url)) : yahooChart(url));
+  let shown = true;
+  host.shown = () => shown;
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(count(host, "yahoo"), 1);
+  assert.equal(count(host, "ticker/24hr"), 1);
+  // Hidden after the first round: at 15 s Binance is due and skips its round, Yahoo (60 s) is not due yet.
+  shown = false;
+  await advance(host, 40_000);
+  assert.equal(count(host, "ticker/24hr"), 1);
+  assert.equal(count(host, "yahoo"), 1);
+  shown = true;
+  // The render that shows it again wakes the loops.
+  w.wakeIfStale();
+  await advance(host, 40_001);
+  assert.equal(count(host, "ticker/24hr"), 2);
+  assert.equal(count(host, "yahoo"), 1);
+  // Yahoo goes on at its own pace.
+  await advance(host, 60_001);
+  assert.equal(count(host, "yahoo"), 2);
+  await stop(w, host, runs);
+});
+
+test("shown again while a round just ended, nothing fetches early", async () => {
+  const host = fakeHost((url) => yahooChart(url));
+  let shown = true;
+  host.shown = () => shown;
+  // Yahoo answers after 2 s.
+  host.fetch = async (url) => {
+    host.requests.push(url);
+    await host.sleep(2_000);
+    const r = yahooChart(url);
+    return { url, ...r, text: async () => r.text };
+  };
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const runs = start(w, host);
+  await advance(host, 1);
+  assert.equal(count(host, "yahoo"), 1);
+  // Hidden while the round is out, shown again at 5 s.
+  shown = false;
+  await advance(host, 5_000);
+  shown = true;
+  w.wakeIfStale();
+  await advance(host, 61_999);
+  assert.equal(count(host, "yahoo"), 1);
+  await advance(host, 62_100);
+  assert.equal(count(host, "yahoo"), 2);
+  await stop(w, host, runs);
+});

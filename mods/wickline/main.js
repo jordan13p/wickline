@@ -5,7 +5,7 @@
 import { View } from "gpui-kit";
 import { v_flex, h_flex, InputState } from "gpui-base";
 import {
-  appHome, closeOverlay, exec, focused, nextCommand, openOverlay, panes, props, run, setShared, shared, theme, window as appWindow,
+  appHome, closeOverlay, exec, focused, layout, nextCommand, openOverlay, panes, props, run, setShared, shared, theme, window as appWindow,
 } from "herdr";
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
@@ -19,7 +19,7 @@ import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL } from "./providers/finnhub.js";
 import { layoutFor, wantsCard } from "./layout.js";
-import { MOD_ID, canOpenOwnTab, closeOnceOpened, ownTabSource, returnPane } from "./panes.js";
+import { MOD_ID, canOpenOwnTab, closeOnceOpened, dockOf, isShown, ownTabSource, returnPane } from "./panes.js";
 import { band, sidebar, table } from "./ui/panel.js";
 import { detailView } from "./ui/detail-dialog.js";
 import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
@@ -66,6 +66,8 @@ export default class Wickline extends View {
     this.from = typeof given.from === "string" ? given.from : null;
     // Docked beside Herdr's Files and Changes, it draws their card (see wantsCard).
     this.card = wantsCard(given);
+    // Where that block sits in the layout (set by onScreen), or null for a copy that is not docked.
+    this.dock = null;
     // A move to or from the own tab is waiting for the new copy (see finishMove).
     this.moving = false;
     this.makeInput();
@@ -81,6 +83,8 @@ export default class Wickline extends View {
       // Read again by each copy when keyRev changes in the shared settings.
       loadSecret,
       now: () => Date.now(),
+      // A docked block that is not on screen sends nothing.
+      shown: () => this.onScreen(),
     });
     // One loop per source, so a slow source never holds up another. Each owns the cx of its own
     // spawn for its whole life: sleeping and redrawing go through it.
@@ -274,6 +278,14 @@ export default class Wickline extends View {
     });
   }
 
+  // A docked block is on screen while its panel is open and its tab is the stack's active one. Reads
+  // the layout each time, as the person may move the block or switch layouts.
+  onScreen() {
+    const tree = this.card ? layout() : null;
+    this.dock = tree && dockOf(tree, MOD_ID);
+    return !this.dock || isShown(tree, this.dock);
+  }
+
   render() {
     const t = theme();
     this.readSettings();
@@ -281,15 +293,20 @@ export default class Wickline extends View {
     if (this.draft) return settingsView(this, t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
+    // A hidden docked block never renders, so this render means it was just shown: catch up if stale.
+    if (this.card) {
+      this.onScreen();
+      this.watch.wakeIfStale();
+    }
     if (this.inputLang !== this.lang) this.wakeInput?.();
-    const layout = layoutFor(this.size);
-    const root = (layout === "band" ? h_flex() : v_flex())
+    const form = layoutFor(this.size);
+    const root = (form === "band" ? h_flex() : v_flex())
       // `background`, as Herdr's terminals and other panes: Wickline sits beside them as one more pane.
       .id("bw").size_full().bg(t.background).text_color(t.foreground).text_size(12.5)
       .when(this.card, (el) => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
       .on_size_change((size, cx) => { this.size = size; cx.notify(); });
-    if (layout === "band") return band(this, root, t);
-    return layout === "table" ? table(this, root, t) : sidebar(this, root, t);
+    if (form === "band") return band(this, root, t);
+    return form === "table" ? table(this, root, t) : sidebar(this, root, t);
   }
 
   // Red-up or green-up, by the color setting (automatic: red-up in every language but English).
