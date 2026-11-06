@@ -38,8 +38,6 @@ const filterStorage = {
   getItem: (key) => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
 };
-// A new symbol answers the language prompt too, whichever way the add ended well.
-const ADDED = ["notice.added", "notice.overCap", "notice.overCapPushed"];
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
 // The dialog reads only what it may show of a saved key, never the key.
 const loadSecretEnding = (name) => secrets.loadSecretEnding(fs, secretsDir(), name);
@@ -369,17 +367,18 @@ export default class Wickline extends View {
     cx.notify();
   }
 
+  // Every notice an add gives but the duplicate's means a new symbol, whatever it says about Finnhub's cap.
   add(cx) {
     this.act(cx, () => {
       const notice = this.watch.add(this.typed);
       this.input.set_value("");
       this.typed = "";
       this.revealSymbol(notice.params.symbol);
-      if (ADDED.includes(notice.code)) this.fadeIn(cx, notice.params.symbol);
+      if (notice.code !== "notice.duplicate") this.fadeIn(cx, notice.params.symbol);
       return notice;
     });
-    // A first add answers the language prompt too: it stays English.
-    if (!ADDED.includes(this.notice?.code) || this.settings.languagePromptDismissed) return;
+    // A first add that went through answers the language prompt too: it stays English.
+    if (!this.notice || this.notice.code === "notice.duplicate" || this.settings.languagePromptDismissed) return;
     try { this.saveSettings({ languagePromptDismissed: true }); } catch {
       this.error = { code: "error.saveSettings", params: {} };
     }
