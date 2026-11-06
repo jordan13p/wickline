@@ -88,6 +88,38 @@ test("midpoint and no price", () => {
   assert.deepEqual(decode(["2330.TW"], row2330({ tlong: "-" })), { quotes: {}, errors: {}, names: named });
 });
 
+test("a stock locked at its limit is priced at that limit", () => {
+  // Locked at limit-down (seen live on 3189): no trade, no bids, market sells (0.0000) queued ahead of limit-down.
+  const down = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000_2035.0000_2040.0000_" }));
+  assert.equal(down.quotes["2330.TW"].price, 2035);
+  assert.equal(down.quotes["2330.TW"].source, "mis");
+  // Locked at limit-up: the mirror image.
+  const up = decode(["2330.TW"], row2330({ z: "-", a: "-", b: "0.0000_2485.0000_2480.0000_" }));
+  assert.equal(up.quotes["2330.TW"].price, 2485);
+  // A limit order queue alone, without market orders, is a lock too.
+  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2035.0000_2040.0000_" })).quotes["2330.TW"].price, 2035);
+});
+
+test("a one-sided book away from the limits, or without limits, has no price", () => {
+  const named = { "2330.TW": "台積電" };
+  const none = (fields) => assert.deepEqual(decode(["2330.TW"], row2330(fields)), { quotes: {}, errors: {}, names: named });
+  // Asks only, above limit-down.
+  none({ z: "-", b: "-", a: "0.0000_2040.0000_" });
+  // Asks only at limit-up, bids only at limit-down: the wrong side.
+  none({ z: "-", b: "-", a: "2485.0000_" });
+  none({ z: "-", a: "-", b: "2035.0000_" });
+  // A side of market orders only is no side.
+  none({ z: "-", b: "0.0000_", a: "0.0000_2035.0000_" });
+  // No limits to match, or limit-up of 9999 or more.
+  none({ z: "-", b: "-", a: "0.0000_2035.0000_", u: "-", w: "-" });
+  none({ z: "-", b: "-", a: "0.0000_2035.0000_", u: "9999.9500" });
+});
+
+test("the midpoint skips market orders on either side", () => {
+  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "0.0000_2260.0000_", a: "2270.0000_" })).quotes["2330.TW"].price, 2265);
+  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "2260.0000_", a: "0.0000_2270.0000_" })).quotes["2330.TW"].price, 2265);
+});
+
 test("a name without a price: before the open MIS sends names only", () => {
   // As answered at 08:19 on a trading day: no last trade, no bid or ask.
   const preOpen = decode(["2330.TW"], row2330({ z: "-", b: null, a: null, tlong: "1793922600000" }));
