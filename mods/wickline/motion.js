@@ -1,6 +1,6 @@
 // What a row does when the person adds, removes or drops it, apart from drawing it, and how long the refresh
 // icon turns. No Herdr imports.
-import { chosenFilter, marketOf, visibleSymbols } from "./markets.js";
+import { inFilter } from "./markets.js";
 
 // Every row motion: fade in, fade out and collapse, slide into place.
 export const ROW_MOTION_MS = 150;
@@ -24,19 +24,19 @@ export const spinTurnsFor = (elapsedMs, turnMs) => Math.ceil((elapsedMs + turnMs
  * before }`, `before` being the symbol that followed it in the full list, null for the end) where it
  * was. A ghost whose `before` is itself leaving sits in front of that ghost, so rows taken one after
  * another keep their order. A ghost is left out when the market filter would not show it, or when
- * nothing it was anchored to is on the list any more. `filter` is the copy's choice, read as the rows
- * read it.
+ * nothing it was anchored to is on the list any more. `filter`: the copy's choice as the rows read it,
+ * `{ chosen, shown }` from readFilter(symbols, …).
  * @returns {{ symbol: string, ghost: object|null }[]}
  */
-export function rowsWithGhosts(symbols, filter, ghosts) {
-  const chosen = chosenFilter(symbols, filter);
-  const shown = new Set(visibleSymbols(symbols, chosen));
+export function rowsWithGhosts(symbols, { chosen, shown }, ghosts) {
+  if (!ghosts.length) return shown.map((symbol) => ({ symbol, ghost: null }));
+  const showing = new Set(shown);
   const leaving = new Map(ghosts.map((g) => [g.symbol, g]));
   const live = new Set(symbols);
   // Each ghost joins the group of the live symbol it ends up in front of, after the ghosts in front of it.
   const groups = new Map();
   ghosts.forEach((ghost, order) => {
-    if (chosen !== "all" && marketOf(ghost.symbol) !== chosen) return;
+    if (!inFilter(ghost.symbol, chosen)) return;
     let anchor = ghost.before;
     let hops = 0;
     while (anchor !== null && !live.has(anchor)) {
@@ -50,7 +50,7 @@ export function rowsWithGhosts(symbols, filter, ghosts) {
     .sort((a, b) => b.hops - a.hops || b.order - a.order)
     .map(({ ghost }) => ({ symbol: ghost.symbol, ghost }));
   return [
-    ...symbols.flatMap((symbol) => [...ghostsIn(symbol), ...(shown.has(symbol) ? [{ symbol, ghost: null }] : [])]),
+    ...symbols.flatMap((symbol) => [...ghostsIn(symbol), ...(showing.has(symbol) ? [{ symbol, ghost: null }] : [])]),
     ...ghostsIn(null),
   ];
 }

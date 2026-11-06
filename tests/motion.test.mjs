@@ -2,45 +2,50 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SPIN_MS, rowsWithGhosts, settleOffset, spinTurnsFor } from "../mods/wickline/motion.js";
+import { readFilter } from "../mods/wickline/markets.js";
 
 const ghost = (symbol, before) => ({ symbol, before });
+// The rows as the panel asks for them: the filter read once, as a render reads it.
+const rows = (symbols, filter, ghosts) => rowsWithGhosts(symbols, readFilter(symbols, filter), ghosts);
 const names = (entries) => entries.map(({ symbol, ghost: g }) => (g ? `~${symbol}` : symbol));
 
 test("a ghost sits where its row was: in front of the symbol that followed it", () => {
   const symbols = ["AAPL", "NVDA", "MSFT"];
-  assert.deepEqual(names(rowsWithGhosts(symbols, "all", [ghost("TSLA", "NVDA")])), ["AAPL", "~TSLA", "NVDA", "MSFT"]);
-  assert.deepEqual(names(rowsWithGhosts(symbols, "all", [ghost("TSLA", null)])), ["AAPL", "NVDA", "MSFT", "~TSLA"]);
-  assert.deepEqual(names(rowsWithGhosts(symbols, "all", [])), symbols);
+  assert.deepEqual(names(rows(symbols, "all", [ghost("TSLA", "NVDA")])), ["AAPL", "~TSLA", "NVDA", "MSFT"]);
+  assert.deepEqual(names(rows(symbols, "all", [ghost("TSLA", null)])), ["AAPL", "NVDA", "MSFT", "~TSLA"]);
+  assert.deepEqual(names(rows(symbols, "all", [])), symbols);
 });
 
 test("two rows removed in a row keep their order, whichever way they were taken", () => {
   // A B C D E: C goes (before D), then D goes (before E): the list is A B E.
   const symbols = ["A", "B", "E"];
   const ghosts = [ghost("C", "D"), ghost("D", "E")];
-  assert.deepEqual(names(rowsWithGhosts(symbols, "all", ghosts)), ["A", "B", "~C", "~D", "E"]);
-  assert.deepEqual(names(rowsWithGhosts(symbols, "all", [...ghosts].reverse())), ["A", "B", "~C", "~D", "E"]);
+  assert.deepEqual(names(rows(symbols, "all", ghosts)), ["A", "B", "~C", "~D", "E"]);
+  assert.deepEqual(names(rows(symbols, "all", [...ghosts].reverse())), ["A", "B", "~C", "~D", "E"]);
   // D goes first (before E), then C, which was above it (before E too): C stays above D.
-  assert.deepEqual(names(rowsWithGhosts(symbols, "all", [ghost("D", "E"), ghost("C", "E")])), ["A", "B", "~C", "~D", "E"]);
+  assert.deepEqual(names(rows(symbols, "all", [ghost("D", "E"), ghost("C", "E")])), ["A", "B", "~C", "~D", "E"]);
   // The last two: D (before E), then E (before null).
-  assert.deepEqual(names(rowsWithGhosts(["A"], "all", [ghost("D", "E"), ghost("E", null)])), ["A", "~D", "~E"]);
+  assert.deepEqual(names(rows(["A"], "all", [ghost("D", "E"), ghost("E", null)])), ["A", "~D", "~E"]);
 });
 
 test("a ghost whose place is gone is not drawn", () => {
-  assert.deepEqual(names(rowsWithGhosts(["A", "B"], "all", [ghost("X", "Z")])), ["A", "B"]);
+  assert.deepEqual(names(rows(["A", "B"], "all", [ghost("X", "Z")])), ["A", "B"]);
 });
 
 test("a ghost is drawn only when its market is the one shown", () => {
   const symbols = ["AAPL", "NVDA", "2330.TW", "0050.TW", "BTC/USDT", "ETH/USDT", "MSFT", "TSLA"];
   const ghosts = [ghost("GOOG", "NVDA"), ghost("2317.TW", "0050.TW")];
-  assert.deepEqual(names(rowsWithGhosts(symbols, "us", ghosts)), ["AAPL", "~GOOG", "NVDA", "MSFT", "TSLA"]);
-  assert.deepEqual(names(rowsWithGhosts(symbols, "tw", ghosts)), ["2330.TW", "~2317.TW", "0050.TW"]);
+  assert.deepEqual(names(rows(symbols, "us", ghosts)), ["AAPL", "~GOOG", "NVDA", "MSFT", "TSLA"]);
+  assert.deepEqual(names(rows(symbols, "tw", ghosts)), ["2330.TW", "~2317.TW", "0050.TW"]);
+  // With no ghost, the shown rows alone.
+  assert.deepEqual(names(rows(symbols, "us", [])), ["AAPL", "NVDA", "MSFT", "TSLA"]);
   // A choice the list no longer offers reads as All, as the rows do.
-  assert.equal(rowsWithGhosts(symbols, "hk", ghosts).length, 10);
+  assert.equal(rows(symbols, "hk", ghosts).length, 10);
 });
 
 test("the row that took the market's last symbol away is drawn once the filter is All again", () => {
   const symbols = ["AAPL", "NVDA", "BTC/USDT"];
-  assert.deepEqual(names(rowsWithGhosts(symbols, "all", [ghost("2330.TW", "BTC/USDT")])), ["AAPL", "NVDA", "~2330.TW", "BTC/USDT"]);
+  assert.deepEqual(names(rows(symbols, "all", [ghost("2330.TW", "BTC/USDT")])), ["AAPL", "NVDA", "~2330.TW", "BTC/USDT"]);
 });
 
 test("the offset a dropped row starts from is how far it moved, by the rows' heights", () => {

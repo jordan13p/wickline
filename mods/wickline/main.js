@@ -11,7 +11,7 @@ import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
-import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter } from "./markets.js";
+import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
@@ -23,7 +23,7 @@ import { FINNHUB_URL } from "./providers/finnhub.js";
 import { layoutFor, wantsCard } from "./layout.js";
 import { MOD_ID } from "./panes.js";
 import * as moves from "./moves.js";
-import { band, rowSource, shownSymbols, sidebar, table, yieldView } from "./ui/panel.js";
+import { band, sidebar, table, yieldView } from "./ui/panel.js";
 import { detailView } from "./ui/detail-dialog.js";
 import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
@@ -81,7 +81,7 @@ export default class Wickline extends View {
     this.rowHeights = {};
     // The market filter: this copy's stored choice, else the one it was opened with (props; Herdr keeps them
     // with the tab, so they must never override a later choice), else "all". Only a choice made here is
-    // stored. Rows and the filter row read it through chosenFilter, so a market no longer on the list reads as All.
+    // stored. Rows and the filter row read it through filterState, so a market no longer on the list reads as All.
     this.filter = openFilter(filterStorage, given.filter);
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};
@@ -180,6 +180,11 @@ export default class Wickline extends View {
     if (id !== this.filter) this.setFilter(id);
   }
 
+  // The market filter as this copy reads it: `{ filters, chosen, shown }` (see readFilter in markets.js).
+  filterState() {
+    return readFilter(this.watch.preferences.symbols, this.filter, this.lang);
+  }
+
   // A filter that would hide `symbol` (just added, or already listed) goes back to All, so the person sees it.
   revealSymbol(symbol) {
     this.resetFilter(filterAfterAdd(this.watch.preferences.symbols, this.filter, symbol));
@@ -190,7 +195,7 @@ export default class Wickline extends View {
     // Taken before the remove, which drops the row's quote at once: the fading row draws from this copy.
     const symbols = this.watch.preferences.symbols;
     const ghost = {
-      symbol, before: nextOf(symbols, symbol), row: rowSource(this, symbol), height: this.rowHeights[symbol], gone: false,
+      symbol, before: nextOf(symbols, symbol), row: this.rowSource(symbol), height: this.rowHeights[symbol], gone: false,
     };
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
@@ -217,10 +222,10 @@ export default class Wickline extends View {
   // it was to where it landed (the distance, from the rows' measured heights).
   dropRow(cx, drag) {
     const symbols = this.watch.preferences.symbols;
-    const was = shownSymbols(this);
+    const was = this.filterState().shown;
     this.act(cx, () => {
       const notice = this.watch.move(drag.symbol, dropBefore(symbols, was, drag.before));
-      const from = notice && settleOffset(was, shownSymbols(this), drag.symbol, this.rowHeights);
+      const from = notice && settleOffset(was, this.filterState().shown, drag.symbol, this.rowHeights);
       if (from) {
         const settle = { symbol: drag.symbol, from };
         this.settle = settle;
@@ -455,6 +460,19 @@ export default class Wickline extends View {
     if (this.yielding) return yieldView(this, root, t, form === "band");
     if (form === "band") return band(this, root, t);
     return form === "table" ? table(this, root, t) : sidebar(this, root, t);
+  }
+
+  // What a row reads from the watchlist. A row being removed draws from the copy taken before its quote went.
+  rowSource(symbol) {
+    const w = this.watch;
+    return {
+      quote: w.shown(symbol),
+      failed: w.errors[symbol],
+      // The real-time source failed for this symbol: the base quote shows, with the reason.
+      fallback: w.overlayErrors[symbol],
+      // A US row past Finnhub's budget stays on Yahoo and says so.
+      overCap: w.overCap(symbol),
+    };
   }
 
   // Red-up or green-up, by the color setting (automatic: red-up in every language but English).

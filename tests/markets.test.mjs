@@ -2,8 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, chosenFilter, dropBefore, filterAfterAdd, filterAfterRemove, marketFilters, marketOf, nextOf,
-  openFilter, visibleSymbols,
+  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, inFilter, marketFilters, marketOf, nextOf,
+  openFilter, readFilter, visibleSymbols,
 } from "../mods/wickline/markets.js";
 
 test("routes symbols to markets", () => {
@@ -89,11 +89,27 @@ test("the symbol after another in a list, or null", () => {
 });
 
 test("the chosen filter is the stored one only while it is offered", () => {
-  assert.equal(chosenFilter(TWELVE, "tw"), "tw");
-  assert.equal(chosenFilter(TWELVE, "kr"), "all");
-  assert.equal(chosenFilter(TWELVE, "all"), "all");
+  const chosen = (symbols, filter) => readFilter(symbols, filter).chosen;
+  assert.equal(chosen(TWELVE, "tw"), "tw");
+  assert.equal(chosen(TWELVE, "kr"), "all");
+  assert.equal(chosen(TWELVE, "all"), "all");
   // Below the thresholds there is no filter row, so a stored choice must not hide rows.
-  assert.equal(chosenFilter(["2330.TW", "AAPL"], "tw"), "all");
+  assert.equal(chosen(["2330.TW", "AAPL"], "tw"), "all");
+  // Whatever the interface language orders the filters by.
+  assert.equal(readFilter(TWELVE, "tw", "ja").chosen, "tw");
+});
+
+test("one read of the filter gives the row, the choice and the rows it shows", () => {
+  assert.deepEqual(readFilter(TWELVE, "tw", "zh-TW"),
+    { filters: marketFilters(TWELVE, "zh-TW"), chosen: "tw", shown: visibleSymbols(TWELVE, "tw") });
+  assert.deepEqual(readFilter(TWELVE, "kr", "en"), { filters: marketFilters(TWELVE, "en"), chosen: "all", shown: TWELVE });
+  assert.deepEqual(readFilter(["2330.TW", "AAPL"], "tw"), { filters: [], chosen: "all", shown: ["2330.TW", "AAPL"] });
+});
+
+test("a symbol is in its own market's filter and in All", () => {
+  assert.equal(inFilter("2330.TW", "tw"), true);
+  assert.equal(inFilter("AAPL", "tw"), false);
+  assert.equal(inFilter("AAPL", "all"), true);
 });
 
 test("an add keeps the filter unless it would hide the symbol", () => {

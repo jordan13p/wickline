@@ -44,11 +44,24 @@ export function marketFilters(symbols, lang = "en") {
   return [{ id: "all", count: symbols.length }, ...listed.map((id) => ({ id, count: counts[id] }))];
 }
 
+/** `symbol` is in the market `filter` names; every symbol is in `all`. */
+export const inFilter = (symbol, filter) => filter === "all" || marketOf(symbol) === filter;
+
 /** The symbols a filter shows, in list order. `all`, an unknown filter or a market not on the list shows everything. */
 export function visibleSymbols(symbols, filter) {
   if (filter === "all") return symbols;
-  const shown = symbols.filter((symbol) => marketOf(symbol) === filter);
+  const shown = symbols.filter((symbol) => inFilter(symbol, filter));
   return shown.length ? shown : symbols;
+}
+
+/**
+ * The market filter as a copy reads it, for one render: the `filters` to offer (marketFilters), the
+ * `chosen` one (the stored `filter` while the row offers it, otherwise All) and the symbols it shows (`shown`).
+ */
+export function readFilter(symbols, filter, lang = "en") {
+  const filters = marketFilters(symbols, lang);
+  const chosen = filters.some(({ id }) => id === filter) ? filter : "all";
+  return { filters, chosen, shown: visibleSymbols(symbols, chosen) };
 }
 
 /** The symbol after `symbol` in `list`, or null (also for the last one). */
@@ -64,19 +77,14 @@ export function dropBefore(full, visible, before) {
   return nextOf(full, visible[visible.length - 1]);
 }
 
-/** A stored choice counts only while the row offers it; otherwise the list reads as All. */
-export function chosenFilter(symbols, filter) {
-  return marketFilters(symbols).some(({ id }) => id === filter) ? filter : "all";
-}
-
 /** The filter after `symbol` was added (or found already listed) in `symbols`: All when it would hide that symbol. */
 export function filterAfterAdd(symbols, filter, symbol) {
-  return visibleSymbols(symbols, chosenFilter(symbols, filter)).includes(symbol) ? filter : "all";
+  return readFilter(symbols, filter).shown.includes(symbol) ? filter : "all";
 }
 
 /** The filter after a remove left `symbols`: All when the chosen market has no symbol left. */
 export function filterAfterRemove(symbols, filter) {
-  return filter === "all" || symbols.some((symbol) => marketOf(symbol) === filter) ? filter : "all";
+  return symbols.some((symbol) => inFilter(symbol, filter)) ? filter : "all";
 }
 
 // The key under which a copy keeps its market filter in its own storage (see main.js).

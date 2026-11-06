@@ -6,7 +6,7 @@ import { v_flex, h_flex, Input } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
-import { chosenFilter, marketFilters, nextOf, visibleSymbols } from "../markets.js";
+import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
@@ -154,19 +154,6 @@ function problemLines(view, t) {
   return view.watch.problems().map((problem) => div().text_size(11).text_color(t.blocked).child(view.say(problem)));
 }
 
-// What a row reads from the watchlist. A row being removed draws from the copy taken before its quote went.
-export function rowSource(view, symbol) {
-  const w = view.watch;
-  return {
-    quote: w.shown(symbol),
-    failed: w.errors[symbol],
-    // The real-time source failed for this symbol: the base quote shows, with the reason.
-    fallback: w.overlayErrors[symbol],
-    // A US row past Finnhub's budget stays on Yahoo and says so.
-    overCap: w.overCap(symbol),
-  };
-}
-
 // What a row shows, whichever layout draws it.
 function rowData(view, t, now, source) {
   const { quote } = source;
@@ -224,12 +211,11 @@ function priceStack(view, t, row) {
 // A row: the drag handle in the left gutter and × in the right one, both only under the pointer; between
 // them the body, which opens the ticker's day. Hairlines between rows span the body only. A row this copy
 // just added starts transparent and fades in; a row just dropped starts where it was and slides to its
-// place (the transition animates the change from the next render on, see main.js `playRow`).
-function rowFrame(view, t, symbol, index, symbols, body, clickable) {
+// place (the transition animates the change from the next render on, see main.js `playRow`). `place`: see drawRows.
+function rowFrame(view, t, symbol, place, body, clickable) {
+  const { next, moving } = place;
   const dragged = view.drag?.symbol === symbol;
-  const next = symbols[index + 1] ?? null;
   const controls = dragged || (!view.drag && view.hovered === symbol);
-  const moving = Boolean(view.drag) && !dropsInPlace(view);
   const arrival = view.added.get(symbol);
   const settling = view.settle?.symbol === symbol;
   return h_flex().id(`bw-line-${symbol}`).relative().items_stretch()
@@ -292,10 +278,15 @@ function ghostFrame(t, ghost, body) {
       .child(div().flex_none().w(GUTTER)));
 }
 
-// The rows to draw, each removed row (a ghost) where it was; `draw` is told a live row's place in `symbols`.
-function drawRows(view, symbols, draw) {
-  return rowsWithGhosts(view.watch.preferences.symbols, view.filter, view.leaving)
-    .map(({ symbol, ghost }) => draw(symbol, symbols.indexOf(symbol), ghost));
+// The rows to draw, each removed row (a ghost) where it was. `filter`: the view's filterState(). A live row is
+// drawn with its `place`, `{ next, moving }`: the row after it among those shown (null: the last one), and
+// whether the drag under way would move a row.
+function drawRows(view, filter, draw) {
+  const { shown } = filter;
+  const moving = Boolean(view.drag) && !dropsInPlace(view.drag, shown);
+  let at = 0;
+  return rowsWithGhosts(view.watch.preferences.symbols, filter, view.leaving)
+    .map(({ symbol, ghost }) => (ghost ? draw(symbol, null, ghost) : draw(symbol, { next: shown[++at] ?? null, moving }, null)));
 }
 
 // The scrolling rows. No pointer capture: a release outside the list never arrives, so leaving it cancels a drag.
@@ -309,7 +300,7 @@ function list(view, t, rows) {
     .on_mouse_up("left", (_e, cx) => {
       const drag = view.drag;
       if (!drag) return;
-      const inPlace = dropsInPlace(view);
+      const inPlace = dropsInPlace(drag, view.filterState().shown);
       view.drag = null;
       // A drop where the row already is changes nothing, and leaves the current notice be.
       if (inPlace) cx.notify();
@@ -330,7 +321,7 @@ function footer(view, t) {
 
 // Below TABLE_MIN_WIDTH: the header, the status line, the add field, two-line rows, the footer.
 export function sidebar(view, root, t) {
-  const symbols = shownSymbols(view);
+  const filter = view.filterState();
   const now = Date.now();
   const header = v_flex().flex_none().px(GUTTER).pt(10).gap(2)
     .child(h_flex().h(28).items_center().gap(8)
@@ -343,15 +334,15 @@ export function sidebar(view, root, t) {
     .when(!view.settings.languagePromptDismissed, (el) => el.child(languagePrompt(view, t)))
     .child(addField(view, t))
     .children(messages(view, t));
-  const rows = drawRows(view, symbols, (symbol, index, ghost) => sidebarRow(view, t, symbol, index, symbols, now, ghost));
-  return root.child(header).child(field).children(filterBar(view, t)).child(list(view, t, rows).pt(8)).child(footer(view, t));
+  const rows = drawRows(view, filter, (symbol, place, ghost) => sidebarRow(view, t, symbol, place, now, ghost));
+  return root.child(header).child(field).children(filterBar(view, t, filter)).child(list(view, t, rows).pt(8)).child(footer(view, t));
 }
 
 // Symbol, then its name on a line of its own, then freshness on the left; the line, then the price
 // over the change, at a fixed width on the right, so a wider pane gives its room to the left lines.
 // A row without a name of its own (a pair, a name that repeats the ticker) keeps two lines.
-function sidebarRow(view, t, symbol, index, symbols, now, ghost) {
-  const row = rowData(view, t, now, ghost ? ghost.row : rowSource(view, symbol));
+function sidebarRow(view, t, symbol, place, now, ghost) {
+  const row = rowData(view, t, now, ghost ? ghost.row : view.rowSource(symbol));
   const shown = row.quote ? rowName(symbol, row.label, row.name) : { label: "", name: "" };
   const meta = [shown.label, row.date].filter(Boolean).join(" · ");
   const body = v_flex().py(8).gap(2)
@@ -365,7 +356,7 @@ function sidebarRow(view, t, symbol, index, symbols, now, ghost) {
       .child(row.quote ? chart(row.quote, row.color, t, SPARK) : div().flex_none().w(SPARK.width).h(SPARK.height))
       .child(priceStack(view, t, row)))
     .children(rowNotes(view, t, row));
-  return ghost ? ghostFrame(t, ghost, body) : rowFrame(view, t, symbol, index, symbols, body, Boolean(row.quote));
+  return ghost ? ghostFrame(t, ghost, body) : rowFrame(view, t, symbol, place, body, Boolean(row.quote));
 }
 
 // A table cell at its column's width.
@@ -376,7 +367,7 @@ function tableCell(id, nameW) {
 // From TABLE_MIN_WIDTH: one header line, column labels that stay while the rows scroll, 36 px rows. At most
 // TABLE_MAX_WIDTH wide, centered; columns drop by DROP_ORDER when the width cannot hold them.
 export function table(view, root, t) {
-  const symbols = shownSymbols(view);
+  const filter = view.filterState();
   const now = Date.now();
   const width = Math.min(view.size.width, TABLE_MAX_WIDTH);
   const columns = tableColumns(width);
@@ -391,11 +382,11 @@ export function table(view, root, t) {
     .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(`${countText(view)} · ${statusText(view)}`))
     .child(div().flex_none().w(320).child(addField(view, t)))
     .child(headerIcons(view, t));
-  const rows = drawRows(view, symbols, (symbol, index, ghost) => tableRow(view, t, symbol, index, symbols, columns, nameW, now, ghost));
+  const rows = drawRows(view, filter, (symbol, place, ghost) => tableRow(view, t, symbol, place, columns, nameW, now, ghost));
   const frame = v_flex().w(width).flex_1().min_h(0)
     .child(header)
     .when(notes.length > 0, (el) => el.child(v_flex().flex_none().px(GUTTER).pt(8).gap(4).children(notes)))
-    .children(filterBar(view, t))
+    .children(filterBar(view, t, filter))
     .child(tableHead(view, t, columns, nameW))
     .child(list(view, t, rows))
     .child(footer(view, t));
@@ -418,8 +409,8 @@ function tableHead(view, t, columns, nameW) {
       })));
 }
 
-function tableRow(view, t, symbol, index, symbols, columns, nameW, now, ghost) {
-  const row = rowData(view, t, now, ghost ? ghost.row : rowSource(view, symbol));
+function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
+  const row = rowData(view, t, now, ghost ? ghost.row : view.rowSource(symbol));
   const { quote, color } = row;
   // As the sidebar's line: a name that begins with the label (a pair's "Binance Spot") replaces it.
   const shown = rowName(symbol, row.label, row.name);
@@ -449,13 +440,7 @@ function tableRow(view, t, symbol, index, symbols, columns, nameW, now, ghost) {
   const body = v_flex()
     .child(h_flex().h(36).items_center().gap(COLUMN_GAP).children(columns.map((id) => cells[id]())))
     .when(notes.length > 0, (el) => el.child(v_flex().pb(8).gap(2).children(notes)));
-  return ghost ? ghostFrame(t, ghost, body) : rowFrame(view, t, symbol, index, symbols, body, Boolean(quote));
-}
-
-// The rows a copy draws: the chosen market's, or all of them.
-export function shownSymbols(view) {
-  const { symbols } = view.watch.preferences;
-  return visibleSymbols(symbols, chosenFilter(symbols, view.filter));
+  return ghost ? ghostFrame(t, ghost, body) : rowFrame(view, t, symbol, place, body, Boolean(quote));
 }
 
 // One row of market filters above the list (a list of one element, as `messages`), or none while the list is short or of one market. The chosen
@@ -464,11 +449,9 @@ export function shownSymbols(view) {
 // themselves (on_size_change), so the pill follows any language or count. The scrolling area holds the
 // labels in a content box of their own, so the pill scrolls with them; it scrolls sideways (natively: a
 // horizontal wheel or a trackpad swipe) when the labels do not fit. Until every label it needs has been
-// measured there is no pill.
-function filterBar(view, t) {
-  const filters = marketFilters(view.watch.preferences.symbols, view.lang);
+// measured there is no pill. `filter`: the view's filterState().
+function filterBar(view, t, { filters, chosen }) {
   if (!filters.length) return [];
-  const chosen = chosenFilter(view.watch.preferences.symbols, view.filter);
   const index = filters.findIndex(({ id }) => id === chosen);
   const widths = view.filterWidths;
   const measured = filters.slice(0, index + 1).every(({ id }) => widths[id] > 0);
@@ -492,11 +475,10 @@ function filterBar(view, t) {
         .children(filters.map(label))))];
 }
 
-// The drag would put the row where it already is: in front of itself or of the row after it, among the rows shown.
-function dropsInPlace(view) {
-  const symbols = shownSymbols(view);
-  const { symbol, before } = view.drag;
-  return before === symbol || before === nextOf(symbols, symbol);
+// `drag` would put the row where it already is: in front of itself or of the row after it, among the rows `shown`.
+function dropsInPlace(drag, shown) {
+  const { symbol, before } = drag;
+  return before === symbol || before === nextOf(shown, symbol);
 }
 
 function dropBar(t) {
