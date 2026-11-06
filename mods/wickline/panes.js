@@ -1,5 +1,6 @@
 // Pane and tab navigation: where a Wickline tab goes back to, and when it can get a tab of its own.
 // `panes` is what Herdr's panes() gives. No Herdr imports, so tests run it under Node.
+import { wantsCard } from "./layout.js";
 
 // The mod id: Herdr names a mod after its folder, and panes(), pane.split and openOverlay use it.
 export const MOD_ID = "wickline";
@@ -97,14 +98,14 @@ function pathTo(node, match) {
 
 /**
  * Where a docked Wickline block sits in the layout tree that layout() gives: the first block that
- * runs `modId` with the `card` prop, its nearest stack, and the node to collapse: the stack itself, or
+ * runs `modId` and asks for the card (wantsCard), its nearest stack, and the node to collapse: the stack itself, or
  * the wrapper it is the only child of, up to the first node that has a sibling (the side panel that
  * holds the stack), so hiding it leaves the rest of the layout. The tree need not carry `hidden` on
  * it. Null: this copy is not a docked block, or the tree has none. `stack` is null when absent;
  * `collapse` too, and when every node from the stack up to the root is a lone child.
  */
 export function dockOf(tree, modId) {
-  const path = pathTo(tree, (n) => n.type === "block" && n.content?.mod === modId && n.content.props?.card === true);
+  const path = pathTo(tree, (n) => n.type === "block" && n.content?.mod === modId && wantsCard(n.content.props));
   if (!path) return null;
   const above = path.slice(0, -1);
   const stackAt = above.map((n) => n.type).lastIndexOf("stack");
