@@ -1,7 +1,7 @@
 // node --test tests/  (providers/yahootw.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USER_AGENT } from "../mods/wickline/quotes.js";
+import { USER_AGENT, priceLimit } from "../mods/wickline/quotes.js";
 import {
   YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, taipeiDay, yahootw,
 } from "../mods/wickline/providers/yahootw.js";
@@ -70,7 +70,7 @@ test("prices today's rows with the answer's newest trade as their time", () => {
   const newest = Date.parse("2026-11-09T01:41:13Z");
   assert.deepEqual(quotes["2330.TW"], {
     symbol: "2330.TW", source: "yahootw", name: "台積電", price: 2240, previousClose: 2135, open: 2210, high: 2240, low: 2190,
-    timestamp: newest, tradeTime: newest, day: taipeiDay(NOW), fetchedAt: NOW,
+    limitUp: 2345, limitDown: 1925, timestamp: newest, tradeTime: newest, day: taipeiDay(NOW), fetchedAt: NOW,
   });
   // A quiet stock is as current as the feed; its own last trade is kept apart.
   assert.equal(quotes["0050.TW"].price, 10.05);
@@ -226,4 +226,19 @@ test("404 gives yahootw.http", () => {
   assert.deepEqual([errors["2330.TW"].code, errors["2330.TW"].params], ["yahootw.http", { status: 404 }]);
   assert.equal(errors["2330.TW"].retryAfterMs, undefined);
   for (const status of [403, 429]) assert.equal(lineOf("2330.TW", { status, ok: false, text: "" }).errors["2330.TW"].retryAfterMs, 60_000);
+});
+
+// The recorded answer has 6488.TWO at its limit-up (563/563) and 2330.TW at +4.9%, short of its 2345 (+9.84%, not 10%).
+test("a Yahoo 奇摩股市 price at its own limit is at the limit", () => {
+  const { quotes } = decode(ok(ROWS));
+  assert.equal(quotes["6488.TWO"].limitUp, 563);
+  assert.equal(quotes["6488.TWO"].limitDown, 461);
+  assert.equal(priceLimit(quotes["6488.TWO"]), "up");
+  assert.equal(priceLimit(quotes["2330.TW"]), null);
+  assert.equal(priceLimit(quotes["0050.TW"]), null);
+  const down = decode(changed({ "2330.TW": { price: { raw: "1925", fmt: "1,925", sort: 1925 } } })).quotes["2330.TW"];
+  assert.equal(priceLimit(down), "down");
+  const none = decode(changed({ "2330.TW": { limitUpPrice: { raw: "-", fmt: "-", sort: null } } })).quotes["2330.TW"];
+  assert.equal(none.limitUp, null);
+  assert.equal(none.limitDown, null);
 });

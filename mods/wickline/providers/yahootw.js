@@ -2,7 +2,7 @@
 // Yahoo Finance's delayed Taiwan quotes ahead of TWSE MIS. Off until the person turns it on and consents.
 // This file holds the host, limits and decoder; the switch and consent live in settings.js and the
 // settings dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, positive, positiveOrNull, withinLimits } from "../quotes.js";
+import { HEADERS, QuoteError, cleanText, limitPair, positive, positiveOrNull, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 // Fixed: the person cannot point it elsewhere.
@@ -81,6 +81,7 @@ export function decodeStockList(symbols, response, now) {
       open: number(row.regularMarketOpen),
       high: number(row.regularMarketDayHigh),
       low: number(row.regularMarketDayLow),
+      ...limitPair(number(row.limitUpPrice), number(row.limitDownPrice)),
       tradeTime,
       day: today,
       fetchedAt: now,

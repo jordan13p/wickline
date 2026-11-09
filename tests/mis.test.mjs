@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { USER_AGENT, withinLimits } from "../mods/wickline/quotes.js";
+import { USER_AGENT, priceLimit, withinLimits } from "../mods/wickline/quotes.js";
 import { displayName } from "../mods/wickline/format.js";
 import { detailSource } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -71,7 +71,7 @@ test("decodes the recorded answer", () => {
   assert.equal(etf.timestamp, Number(row.tlong));
   assert.deepEqual(etf, {
     symbol: "0050.TW", source: "mis", name: row.n, price: 98.7, previousClose: 99.85,
-    open: 99.4, high: 99.75, low: 97.6, timestamp: Number(row.tlong), fetchedAt: 42,
+    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, timestamp: Number(row.tlong), fetchedAt: 42,
   });
   // No trade in the last snapshot: the best bid/ask midpoint.
   assert.equal(result.quotes["2330.TW"].price, (2265 + 2270) / 2);
@@ -505,4 +505,37 @@ test("a removed symbol forgets its MIS name", async () => {
   w.remove("2330.TW");
   assert.equal(w.localNames["2330.TW"], undefined);
   await stop(w, host, runs);
+});
+
+// MIS's own u/w travel with its price, both or neither, so the marker never pairs a price with another answer's limits.
+test("a MIS overlay carries its own limits, and a locked stock is at its limit", () => {
+  const up = decode(["2330.TW"], row2330({ z: "-", a: "-", b: "0.0000_2485.0000_" })).quotes["2330.TW"];
+  assert.equal(up.limitUp, 2485);
+  assert.equal(up.limitDown, 2035);
+  assert.equal(priceLimit(up), "up");
+  const down = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000_2035.0000_" })).quotes["2330.TW"];
+  assert.equal(priceLimit(down), "down");
+  // A trade between the limits is not at one.
+  assert.equal(priceLimit(decode(["2330.TW"], row2330({ z: "2300.0000" })).quotes["2330.TW"]), null);
+});
+
+test("half a tick short of the limit is not at it", () => {
+  // No trade; bid 8.31 and ask 8.32 (limit-up) give the midpoint 8.315000000000001, within 0.005 of 8.32.
+  const quote = decode(["2330.TW"], row2330({ z: "-", b: "8.3100_", a: "8.3200_", u: "8.3200", w: "6.8200", y: "7.5700" })).quotes["2330.TW"];
+  assert.ok(Math.abs(quote.price - 8.32) <= 0.005);
+  assert.equal(priceLimit(quote), null);
+});
+
+test("a stock without both limits carries none", () => {
+  const quote = decode(["2330.TW"], row2330({ z: "2300.0000", u: "9999.9500", w: "-" })).quotes["2330.TW"];
+  assert.equal(quote.limitUp, null);
+  assert.equal(quote.limitDown, null);
+  assert.equal(priceLimit(quote), null);
+});
+
+test("the shown quote's limits are the overlay's own, never the base's", () => {
+  const merged = mergeOverlay({ ...YAHOO_2330, limitUp: 2485, limitDown: 2035 }, { ...MIS_2330, limitUp: null, limitDown: null });
+  assert.equal(merged.limitUp, null);
+  assert.equal(merged.limitDown, null);
+  assert.equal(mergeOverlay(YAHOO_2330, { ...MIS_2330, limitUp: 2485, limitDown: 2035 }).limitUp, 2485);
 });

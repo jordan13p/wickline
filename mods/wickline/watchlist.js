@@ -99,6 +99,9 @@ export function mergeOverlay(base, overlay, line) {
     changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
     name: base?.name ?? null,
     localName: overlay.name ?? null,
+    // A price is never paired with another answer's limits.
+    limitUp: overlay.limitUp ?? null,
+    limitDown: overlay.limitDown ?? null,
     currency: base?.currency ?? null,
     delaySeconds: 0,
     chartDelaySeconds: own ? 0 : base?.delaySeconds ?? null,
