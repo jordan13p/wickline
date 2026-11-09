@@ -447,11 +447,14 @@ export class Watchlist {
     return provider.cap ? symbols.slice(0, Math.max(0, provider.cap(config))) : symbols;
   }
 
-  /** The busiest session among `symbols`: open > unknown (no quote yet) > pre/post > closed. */
+  /**
+   * The busiest session among `symbols`: open > unknown (no quote yet) > pre/post > closed. Read from the
+   * base quotes: an overlay keeps the base's trading periods.
+   */
   sessionFor(symbols, now) {
     let best = "closed";
     for (const symbol of symbols) {
-      const quote = this.shown(symbol, now);
+      const quote = this.quotes[symbol];
       const session = quote ? sessionOf(quote, now) : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
