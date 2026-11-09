@@ -2,8 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings,
-  yahootwEnabled, yahootwReconfirm,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, firstDraftError, keyChange, marketState, mergeSettings,
+  misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
 } from "../mods/wickline/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
@@ -293,11 +293,65 @@ test("the key texts say what lifts a stop, what Remove needs and that a chmod wa
   // Any change to the US settings (or a new key) lifts finnhub.redirected, not only the source.
   assert.match(STRINGS.en["finnhub.redirected"], /US settings/);
   assert.match(STRINGS["zh-TW"]["finnhub.redirected"], /美股設定/);
-  // Remove with Finnhub chosen blocks Save until a key is typed or Yahoo is chosen.
-  assert.match(STRINGS.en["sources.us.keyRemoveHint"], /Yahoo/);
+  // Remove with Finnhub on blocks Save until a key is typed or Finnhub is turned off.
+  assert.match(STRINGS.en["sources.us.keyRemoveHint"], /turn Finnhub off/);
   // The warning comes after both saves, so Cancel is safe.
   assert.match(STRINGS.en["finnhub.keyUnprotected"], /settings and the key are saved/);
   for (const lang of Object.keys(STRINGS)) {
     for (const key of ["sources.us.keyRemoveHint", "finnhub.keyUnprotected", "finnhub.redirected"]) assert.ok(STRINGS[lang][key], `${lang} ${key}`);
   }
+});
+
+test("marketState: Taiwan", () => {
+  const delayed = { live: false, source: "yahoo" };
+  const yahootwAck = { version: YAHOOTW_CONSENT_VERSION };
+  const misAck = { version: MIS_CONSENT_VERSION };
+  assert.deepEqual(marketState(readSettings(undefined), "tw"), delayed);
+  assert.deepEqual(marketState(tw({ yahootw: true }), "tw"), delayed);
+  assert.deepEqual(marketState(tw({ yahootw: true, yahootwAck }), "tw"), { live: true, source: "yahootw" });
+  assert.deepEqual(marketState(tw({ mis: true, misAck }), "tw"), { live: true, source: "mis" });
+  assert.deepEqual(marketState(tw({ yahootw: true, yahootwAck, mis: true, misAck }), "tw"), { live: true, source: "yahootw" });
+  assert.deepEqual(marketState(tw({ mis: true, misAck: { version: MIS_CONSENT_VERSION - 1 } }), "tw"), delayed);
+});
+
+test("marketState: US", () => {
+  assert.deepEqual(marketState(us({ provider: "finnhub" }), "us"), { live: false, source: "yahoo" });
+  assert.deepEqual(marketState(us({ provider: "finnhub" }), "us", { keyAvailable: true }), { live: true, source: "finnhub" });
+  assert.deepEqual(marketState(us({ provider: "yahoo" }), "us", { keyAvailable: true }), { live: false, source: "yahoo" });
+});
+
+test("marketState: crypto and other", () => {
+  assert.deepEqual(marketState(readSettings(undefined), "crypto"), { live: true, source: "binance" });
+  assert.deepEqual(marketState(readSettings(undefined), "other"), { live: false, source: "yahoo" });
+});
+
+test("settingsMarkets follows the language", () => {
+  assert.deepEqual(SETTINGS_MARKETS, ["us", "tw", "crypto", "other"]);
+  assert.deepEqual(settingsMarkets("zh-TW"), ["tw", "us", "crypto", "other"]);
+  for (const lang of ["en", "ja", "ko"]) assert.deepEqual(settingsMarkets(lang), ["us", "tw", "crypto", "other"], lang);
+  assert.deepEqual(settingsMarkets("xx"), settingsMarkets("en"));
+});
+
+test("consentCollapsed", () => {
+  const current = { yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, misAck: { version: MIS_CONSENT_VERSION } };
+  const old = { yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 }, misAck: { version: MIS_CONSENT_VERSION - 1 } };
+  for (const source of ["yahootw", "mis"]) {
+    assert.equal(consentCollapsed(tw(current), tw(current), source), true, source);
+    // Just ticked: the box stays under the pointer until it is saved.
+    assert.equal(consentCollapsed(tw({}), tw(current), source), false, source);
+    assert.equal(consentCollapsed(tw(current), tw({}), source), false, source);
+    assert.equal(consentCollapsed(tw(old), tw(old), source), false, source);
+  }
+  const misOnly = tw({ misAck: current.misAck });
+  assert.equal(consentCollapsed(misOnly, misOnly, "yahootw"), false);
+  assert.equal(consentCollapsed(misOnly, misOnly, "mis"), true);
+});
+
+test("firstDraftError", () => {
+  const order = ["tw", "us", "crypto", "other"];
+  assert.equal(firstDraftError({}, order), null);
+  const errors = { "sources.crypto.binanceUrl": "url.notHttps", "sources.us.budgetPerMinute": "budget.tooSmall" };
+  assert.deepEqual(firstDraftError(errors, order), { code: "budget.tooSmall", market: "us" });
+  assert.deepEqual(firstDraftError(errors, ["crypto"]), { code: "url.notHttps", market: "crypto" });
+  assert.equal(firstDraftError(errors, ["tw"]), null);
 });

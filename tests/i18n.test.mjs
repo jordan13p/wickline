@@ -53,7 +53,7 @@ test("reviewed terms", () => {
   assert.equal(tw["button.refresh"], "重新整理");
   // The Finnhub key is 「API 金鑰」 throughout, never "key".
   for (const [key, text] of Object.entries(tw)) assert.ok(!/key/i.test(text), `zh-TW ${key}`);
-  for (const key of ["sources.us.keyNote", "finnhub.noKey", "error.saveKey", "sources.us.finnhubSource"]) {
+  for (const key of ["sources.us.keyNote", "finnhub.noKey", "error.saveKey", "settings.ownKey"]) {
     assert.ok(tw[key].includes("API 金鑰"), `zh-TW ${key}`);
   }
 

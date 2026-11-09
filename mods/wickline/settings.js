@@ -2,6 +2,7 @@
 // language prompt was dismissed, and where each source lives. No Herdr imports,
 // so tests run it under Node.
 import { LANGUAGES } from "./i18n.js";
+import { marketOrder } from "./markets.js";
 import { BINANCE_URL } from "./providers/binance.js";
 import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
@@ -96,6 +97,48 @@ export function yahootwEnabled(settings) {
 /** Yahoo 奇摩股市 is switched on but its consent is missing or for an older statement. */
 export function yahootwReconfirm(settings) {
   return settings.sources.tw.yahootw === true && !yahootwEnabled(settings);
+}
+
+// The markets with a page of their own in the settings dialog; Hong Kong, China, Japan and Korea share "other".
+export const SETTINGS_MARKETS = ["us", "tw", "crypto", "other"];
+
+/** The settings dialog's market pages, in the order the filter row uses for `lang`. */
+export function settingsMarkets(lang) {
+  return marketOrder(lang).filter((id) => SETTINGS_MARKETS.includes(id));
+}
+
+/**
+ * The source a market would use with `settings`, and whether it is real time: the first real-time source
+ * switched on (and consented to), else Yahoo Finance. `keyAvailable`: a Finnhub key would be there after
+ * Save (the key is never in the settings).
+ */
+export function marketState(settings, market, { keyAvailable = false } = {}) {
+  if (market === "crypto") return { live: true, source: "binance" };
+  if (market === "tw" && yahootwEnabled(settings)) return { live: true, source: "yahootw" };
+  if (market === "tw" && misEnabled(settings)) return { live: true, source: "mis" };
+  if (market === "us" && finnhubChosen(settings) && keyAvailable) return { live: true, source: "finnhub" };
+  return { live: false, source: "yahoo" };
+}
+
+// Each Taiwan source's consent, as [key in sources.tw, current version].
+const CONSENTS = { yahootw: ["yahootwAck", YAHOOTW_CONSENT_VERSION], mis: ["misAck", MIS_CONSENT_VERSION] };
+
+/**
+ * A source's statement folds away once consent to its current version is both saved and still in the
+ * draft: a box just ticked stays where the pointer is until Save.
+ */
+export function consentCollapsed(saved, draft, source) {
+  const [key, version] = CONSENTS[source];
+  return saved.sources.tw[key]?.version === version && draft.sources.tw[key]?.version === version;
+}
+
+/** The first of `errors` (validateSettings) on a page of `markets`, taken in that order, as `{ code, market }`; null when none. */
+export function firstDraftError(errors, markets) {
+  for (const market of markets) {
+    const path = Object.keys(errors).find((key) => key.startsWith(`sources.${market}.`));
+    if (path) return { code: errors[path], market };
+  }
+  return null;
 }
 
 // Field path -> error code; an https address, optionally with a path, and no userinfo, query or fragment.

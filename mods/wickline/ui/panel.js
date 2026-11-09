@@ -102,7 +102,7 @@ function headerIcons(view, t) {
     .child(iconButton(t, "bw-refresh", "refresh", view.tx("button.refresh"), (cx) => { view.refresh(cx); cx.notify(); }, view.spin !== null))
     .child(iconButton(t, "bw-pause", paused ? "play" : "pause", view.tx(paused ? "button.resume" : "button.pause"),
       (cx) => view.act(cx, () => view.togglePause())))
-    .child(iconButton(t, "bw-settings", "settings", view.tx("button.settings"), () => view.openSettings("sources")))
+    .child(iconButton(t, "bw-settings", "settings", view.tx("button.settings"), () => view.openSettings()))
     .when(Boolean(own), (el) => el.child(iconButton(t, "bw-own-tab", own.icon, view.tx(own.label), (cx) => own.go(cx))));
 }
 

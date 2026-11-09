@@ -15,7 +15,7 @@ import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, next
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, upIsRed, validateSettings,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed, validateSettings,
 } from "./settings.js";
 import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
@@ -58,7 +58,8 @@ export default class Wickline extends View {
     }
     if (given.settings) {
       this.overlay = given.overlay;
-      this.tab = SETTINGS_TABS.includes(given.settings.tab) ? given.settings.tab : "sources";
+      // No tab (the settings button) opens the first market page in the person's language.
+      this.tab = SETTINGS_TABS.includes(given.settings.tab) ? given.settings.tab : settingsMarkets(this.lang)[0];
       // Each source's problem as the panel saw it when it opened the dialog.
       this.health = Array.isArray(given.settings.health) ? given.settings.health : [];
       this.initDraft(cx);
@@ -259,6 +260,9 @@ export default class Wickline extends View {
     this.draft = JSON.parse(JSON.stringify(this.settings));
     this.error = null;
     this.saving = false;
+    // Which consented statements are shown again, and which pages' Advanced is open: the dialog's own, never saved.
+    this.statementOpen = new Set();
+    this.advancedOpen = new Set();
     this.initFinnhubDraft(cx);
     this.urlInput = InputState.new({ placeholder: BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
     // Redraw on every keystroke: the field's error and the Save button follow the draft.
@@ -516,6 +520,15 @@ export default class Wickline extends View {
     return validateSettings(this.draft, { finnhubKey: this.keyInput.value(), keySaved: this.keyEnding !== null && !this.keyRemoving });
   }
 
+  // A key Finnhub would use after Save: one typed and well formed, or the saved one while it stays and
+  // Finnhub has not refused it. The dialog reads the US market as live only with one.
+  keyAvailable() {
+    return (this.keyInput.value().trim() !== "" && !this.draftErrors()["sources.us.key"])
+      || (this.keyEnding !== null && !this.keyRemoving
+        && !this.health.some((p) => p.provider === "finnhub"
+          && ["finnhub.invalidKey", "finnhub.redirected", "finnhub.badUrl"].includes(p.code)));
+  }
+
   // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay. A new
   // Finnhub key goes to the secrets file first (or, after Remove, leaves it), then keyRev + 1
   // tells every copy to read it again.
@@ -559,7 +572,7 @@ export default class Wickline extends View {
         this.keyRemoving = false;
         await this.readKeyEnding();
         this.keyWarning = { code: "finnhub.keyUnprotected", params: {} };
-        this.tab = "sources";
+        this.tab = "us";
         cx.notify();
         return;
       }

@@ -1,7 +1,7 @@
 // Stateless drawing helpers shared by the panel and the dialogs: each takes the theme and what it
 // draws, and returns an element. No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
-import { h_flex, v_flex, Checkbox } from "gpui-base";
+import { h_flex, Checkbox, Switch } from "gpui-base";
 import { chartGeometry } from "../format.js";
 import { SPIN_MS } from "../motion.js";
 
@@ -79,13 +79,13 @@ export function checkbox(t, id, checked, label, onChange) {
       .child(div().flex_1().min_w(0).font_semibold().child(label)));
 }
 
-// A source's card: its name and kind, then whatever it lets the person set.
-export function card(t, title, source, ...children) {
-  return v_flex().gap(8).p(12).rounded(8).border_1().border_color(t.border)
-    .child(h_flex().gap(8).items_center()
-      .child(div().flex_1().min_w(0).font_semibold().child(title))
-      .child(div().flex_none().text_size(11).text_color(t.dim).child(source)))
-    .children(children.filter(Boolean));
+// A switch drawn in the theme: a 28 × 16 track, `accent` with the knob at the right while on, `border` with
+// it at the left while off. It draws no label of its own, so `label` is what a screen reader announces.
+export function toggle(t, id, on, label, onChange) {
+  return Switch.new(id).flex_none().checked(on).accessibility_label(label).cursor_pointer()
+    .on_change((value, cx) => { onChange(value); cx.notify(); })
+    .child(h_flex().w(28).h(16).p(2).rounded_full().bg(on ? t.accent : t.border).when(on, (el) => el.justify_end())
+      .child(div().flex_none().w(12).h(12).rounded_full().bg(t.background)));
 }
 
 export function note(t, text) {
