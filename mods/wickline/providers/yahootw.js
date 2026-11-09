@@ -44,7 +44,9 @@ function checkStatus(response) {
  * row (a placeholder `-`, yesterday's close, delayed data), or a requested symbol missing from the answer,
  * has no overlay and no error. Each quote's time is the newest trade among the answer's priced rows (the
  * feed's time), so a quiet stock is as current as the feed; its own last trade is `tradeTime`, and `day`
- * its Taipei day, which a line must share to be drawn with it.
+ * its Taipei day, which a line must share to be drawn with it. An answer with prices but none accepted
+ * (all delayed, or none from today) carries `noLive`, so the source can say why it shows nothing; one
+ * with no price at all (before the open, every stock halted) does not.
  */
 export function decodeStockList(symbols, response, now) {
   checkStatus(response);
@@ -56,12 +58,14 @@ export function decodeStockList(symbols, response, now) {
   const errors = {};
   // A placeholder row still names its stock.
   const names = {};
+  let priced = false;
   for (const row of body) {
     const symbol = typeof row?.symbol === "string" && wanted.has(row.symbol) ? row.symbol : null;
     if (!symbol) continue;
     const name = cleanText(row.symbolName);
     if (name) names[symbol] = name;
     const price = number(row.price);
+    if (price) priced = true;
     const tradeTime = time(row.regularMarketTime);
     if (!price || tradeTime === null || taipeiDay(tradeTime) !== today || row.exchangeDataDelayedBy !== 0) continue;
     if (!withinLimits(price, number(row.limitUpPrice), number(row.limitDownPrice))) {
@@ -85,7 +89,7 @@ export function decodeStockList(symbols, response, now) {
   // Unused when nothing was accepted (Math.max of none is -Infinity, but no quote takes it).
   const feedTime = Math.max(...accepted.map((quote) => quote.tradeTime));
   const quotes = Object.fromEntries(accepted.map((quote) => [quote.symbol, { ...quote, timestamp: feedTime }]));
-  return { quotes, errors, names };
+  return { quotes, errors, names, ...(priced && !accepted.length && { noLive: new QuoteError("yahootw.noLiveRows") }) };
 }
 
 /**

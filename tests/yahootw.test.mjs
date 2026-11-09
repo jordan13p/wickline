@@ -113,6 +113,22 @@ test("yesterday's row and delayed data give no overlay, and do not move the feed
   assert.equal(quotes["6488.TWO"].timestamp, Date.parse("2026-11-09T01:28:59Z"));
 });
 
+test("an answer with prices but none accepted says so; one with no price at all does not", () => {
+  const delayed = decode(changed(Object.fromEntries(SYMBOLS.map((symbol) => [symbol, { exchangeDataDelayedBy: 1200 }]))));
+  assert.deepEqual(delayed.quotes, {});
+  assert.deepEqual(delayed.errors, {});
+  assert.equal(delayed.noLive.code, "yahootw.noLiveRows");
+  assert.equal(t("zh-TW", "yahootw.noLiveRows"), "Yahoo 奇摩股市回傳的報價都不是即時資料，暫時改用其他來源。");
+  assert.equal(t("en", "yahootw.noLiveRows"), "Yahoo TW Stock returned no real-time prices; other sources are used for now.");
+  const yesterday = decode(changed(Object.fromEntries(SYMBOLS.map((symbol) => [symbol, { regularMarketTime: "2026-11-08T05:30:00Z" }]))));
+  assert.equal(yesterday.noLive.code, "yahootw.noLiveRows");
+  // Before the open, or every stock halted: placeholders only.
+  assert.equal(decode(ok([ROWS[1]])).noLive, undefined);
+  // One live row is enough.
+  assert.equal(decode(changed({ "2330.TW": { exchangeDataDelayedBy: 1200 } })).noLive, undefined);
+  assert.equal(decode(ok(ROWS)).noLive, undefined);
+});
+
 test("only requested rows are accepted", () => {
   const { quotes, names } = decode(ok(ROWS), ["2330.TW"]);
   assert.deepEqual(Object.keys(quotes), ["2330.TW"]);

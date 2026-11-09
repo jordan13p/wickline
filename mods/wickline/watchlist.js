@@ -167,8 +167,9 @@ export class Watchlist {
     this.stopped = false;
     // Per provider: its backoff, its current problem, its round and its own wake-up. `lineFailures`, by
     // symbol: the source failure of that symbol's last line request, for a provider with `linesPerRound`.
+    // `noLive`: while the market is open, why an overlay source that answers prices nothing.
     this.sources = Object.fromEntries(PROVIDERS.map((provider) => [provider.id, {
-      retryAt: 0, failures: 0, disabled: false, problem: null,
+      retryAt: 0, failures: 0, disabled: false, problem: null, noLive: null,
       loading: false, manual: false, refreshing: false, dirty: true, wake: null,
       lastRequestAt: -Infinity, missed: false, linesAt: {}, lineFailures: {}, configKey: null, disabledFor: null,
     }]));
@@ -505,6 +506,7 @@ export class Watchlist {
         if (!symbols.length) {
           state.problem = null;
           state.lineFailures = {};
+          state.noLive = null;
         }
         // A hidden copy never renders (so nothing else tells it), but its loops run: it asks here. A round
         // it skips is marked missed, and it waits as idle until wakeMissed() on the render that shows
@@ -567,6 +569,8 @@ export class Watchlist {
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));
     let problem = null;
+    let live = false;
+    let noLive = null;
     // A provider with `linesPerRound` lists its lines after its prices: this loop sends the prices, and
     // the due lines are picked once they are in. Any other provider's requests go out as listed.
     const listed = provider.linesPerRound ? quoteCount : requests.length;
@@ -592,6 +596,8 @@ export class Watchlist {
         const limited = failures.find((error) => error.retryAfterMs !== undefined);
         const down = failures.find((error) => SOURCE_DOWN.test(error.code));
         if (!problem) problem = failures.find((error) => SOURCE_FAILURE.test(error.code)) ?? null;
+        if (Object.keys(result.quotes).length) live = true;
+        else noLive ??= result.noLive ?? null;
         this.apply(provider, request, result);
         if (refused) {
           // No more requests with this key: the rest fall back with the same reason.
@@ -628,7 +634,11 @@ export class Watchlist {
       // A symbol no longer priced by this source (removed, or its price gone) is not asked for a line
       // again, so its failure goes.
       for (const symbol of Object.keys(state.lineFailures)) if (!this.priced(provider, symbol)) delete state.lineFailures[symbol];
-      problem ??= Object.values(state.lineFailures)[0] ?? null;
+      // An answer that prices nothing live while the market is open is shown, or the person sees only
+      // delayed rows with no word why; it stays until an answer prices a row again.
+      if (live || this.sessionFor(symbols, this.host.now()) !== "open") state.noLive = null;
+      else if (noLive) state.noLive = noLive;
+      problem ??= state.noLive ?? Object.values(state.lineFailures)[0] ?? null;
       state.failures = 0;
       state.retryAt = 0;
       state.problem = problem && coded(problem);

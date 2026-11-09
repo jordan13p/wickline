@@ -804,6 +804,57 @@ test("a line that always fails stays the problem through the rounds between, unt
   await stop(w, host, runs);
 });
 
+// Yahoo 奇摩股市's price answers with every row changed by `change(row)`.
+function changeRows(host, change) {
+  const fetch = host.fetch;
+  host.fetch = async (url, headers) => {
+    const response = await fetch(url, headers);
+    if (!url.startsWith(YAHOOTW_BASE) || isLine(url)) return response;
+    const rows = JSON.parse(await response.text()).map((row) => ({ ...row, ...change(row) }));
+    return { ...response, text: async () => JSON.stringify(rows) };
+  };
+}
+
+test("while open, an answer of only delayed prices says so until a row is live again", async () => {
+  const host = yahootwHost(["2330.TW", "0050.TW"]);
+  let delayed = true;
+  changeRows(host, () => (delayed ? { exchangeDataDelayedBy: 1200 } : {}));
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START);
+  assert.equal(w.sessionFor(["2330.TW"], host.clock), "open");
+  assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.noLiveRows", params: {} }]);
+  for (const symbol of ["2330.TW", "0050.TW"]) assert.equal(w.overlays[symbol]?.yahootw, undefined, symbol);
+  await advance(host, TW_START + 10_000);
+  assert.equal(w.problems()[0]?.code, "yahootw.noLiveRows");
+  delayed = false;
+  await advance(host, TW_START + 20_000);
+  assert.deepEqual(w.problems(), []);
+  assert.equal(w.shown("2330.TW").source, "yahootw");
+  await stop(w, host, runs);
+});
+
+test("an answer of placeholders only, or delayed prices outside the session, says nothing", async () => {
+  const host = yahootwHost(["2330.TW", "0050.TW"]);
+  changeRows(host, () => ({ price: { raw: "-" }, regularMarketTime: "-" }));
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START + 10_000);
+  assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+  // 13:40 in Taipei, ten minutes after the close.
+  const closed = TW_PERIODS.regular.end * 1000 + 600_000;
+  const after = yahootwHost(["2330.TW"]);
+  after.clock = closed;
+  changeRows(after, () => ({ exchangeDataDelayedBy: 1200 }));
+  const late = new Watchlist(after);
+  const lateRuns = start(late, after);
+  await advance(after, closed);
+  assert.equal(late.sessionFor(["2330.TW"], after.clock), "closed");
+  assert.deepEqual(late.problems(), []);
+  await stop(late, after, lateRuns);
+});
+
 test("a failing line's problem goes with its symbol", async () => {
   const host = yahootwHost(["2330.TW", "0050.TW"]);
   const line = host.line;
