@@ -2,7 +2,7 @@
 // Taiwan quotes. Off until the person turns it on and consents. This file holds
 // the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
 // dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, positive, positiveOrNull, withinLimits } from "../quotes.js";
+import { HEADERS, QuoteError, cleanText, hasLimits, positive, positiveOrNull, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
@@ -29,7 +29,7 @@ const best = (value) => (typeof value === "string" ? value.split("_").map(positi
  */
 function bookPrice(bid, ask, up, down) {
   if (bid && ask) return (bid + ask) / 2;
-  if (!positive(up) || !positive(down) || up >= 9999) return null;
+  if (!hasLimits(up, down)) return null;
   if (ask && ask === down) return down;
   if (bid && bid === up) return up;
   return null;

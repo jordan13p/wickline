@@ -90,10 +90,12 @@ export const positiveOrNull = (value) => {
   return positive(n) ? n : null;
 };
 
-/** A source's own limit-up and limit-down; a stock without both (or with limit-up ≥ 9999) has none to check. */
+/** A source's own limit-up and limit-down: a stock without both, or with limit-up ≥ 9999, has none. */
+export const hasLimits = (up, down) => positive(up) && positive(down) && up < 9999;
+
+/** A price within its source's limits; a stock without limits has none to check. */
 export function withinLimits(price, up, down) {
-  if (!positive(up) || !positive(down) || up >= 9999) return true;
-  return down <= price && price <= up;
+  return !hasLimits(up, down) || (down <= price && price <= up);
 }
 
 export const cleanText = (value) => typeof value === "string"
