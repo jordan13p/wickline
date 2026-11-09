@@ -6,8 +6,7 @@ import { yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
-import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
-import { readFileSync } from "node:fs";
+import { advance, chart, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 
@@ -328,6 +327,9 @@ test("pickOverlay: first live in order, else newest, ties keep order, none → n
   const pick = (yahootw, mis) => pickOverlay({ yahootw: { timestamp: yahootw }, mis: { timestamp: mis } }, order, NOW)?.id;
   assert.equal(pick(NOW - 10_000, NOW - 5_000), "yahootw");
   assert.equal(pick(NOW - 180_000, NOW - 5_000), "mis");
+  // Live up to LIVE_MAX_AGE_MS old, inclusive.
+  assert.equal(pick(NOW - 120_000, NOW - 5_000), "yahootw");
+  assert.equal(pick(NOW - 120_001, NOW - 5_000), "mis");
   assert.equal(pick(NOW - 180_000, NOW - 300_000), "yahootw");
   assert.equal(pick(NOW - 180_000, NOW - 180_000), "yahootw");
   assert.equal(pickOverlay({}, order, NOW), null);
@@ -335,8 +337,8 @@ test("pickOverlay: first live in order, else newest, ties keep order, none → n
 
 // Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
 const TW_NOW = 1794188480000;
-const TW_ROWS = JSON.parse(readFileSync(new URL("fixtures/yahootw-stocklist.json", import.meta.url), "utf8"));
-const MIS_ROW = JSON.parse(readFileSync(new URL("fixtures/mis-open.json", import.meta.url), "utf8")).msgArray[0];
+const TW_ROWS = jsonFixture("yahootw-stocklist");
+const MIS_ROW = jsonFixture("mis-open").msgArray[0];
 const BOTH = { version: 1, sources: { tw: {
   yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION },
 } } };
@@ -355,8 +357,6 @@ const tickAt = (symbol, time, closes) => ok([{ symbol, chart: {
   meta: { symbol }, timestamp: closes.map((_, i) => Math.floor(time / 1000) - (closes.length - 1 - i) * 60),
   indicators: { quote: [{ close: closes }] },
 } }]);
-const isLine = (url) => isYahootw(url) && url.includes("ApacLibraCharts");
-const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symbols=")[1]))[0];
 // Yahoo Finance's line under every Taiwan row.
 const BASE_SERIES = [2190, 2195];
 
@@ -512,15 +512,6 @@ test("removing a symbol, or turning its source off, drops its Yahoo 奇摩股市
     host.prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootw: false } } };
     w.sync();
     assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
-  });
-});
-
-test("yesterday's line is never drawn with today's price", async () => {
-  await firstRound(taiwanHost(ONLY_YAHOOTW), (w) => {
-    // A copy hidden overnight: the line it kept is yesterday's, the price just arrived is today's.
-    w.lines.yahootw["2330.TW"].day -= 1;
-    assert.equal(w.shown("2330.TW").source, "yahootw");
-    assert.deepEqual(w.shown("2330.TW").series, BASE_SERIES);
   });
 });
 

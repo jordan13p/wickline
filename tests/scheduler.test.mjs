@@ -3,10 +3,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/wickline/watchlist.js";
 import { LIVE_MAX_AGE_MS, freshness } from "../mods/wickline/freshness.js";
-import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
+import { advance, chart, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { yahoo } from "../mods/wickline/providers/yahoo.js";
-import { readFileSync } from "node:fs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 
@@ -528,9 +527,8 @@ test("a refresh in a cooldown asks for nothing and does not hang", async () => {
 });
 
 test("the wake-up when a Yahoo 奇摩股市 price turns stale shows MIS", async () => {
-  const fixture = (name) => JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
-  const [row2330] = fixture("yahootw-stocklist");
-  const misRow = fixture("mis-open").msgArray[0];
+  const [row2330] = jsonFixture("yahootw-stocklist");
+  const misRow = jsonFixture("mis-open").msgArray[0];
   // A trading morning in Taipei. Yahoo 奇摩股市's feed froze 5 s before the first round, so its price
   // turns stale between two rounds; MIS answers every round with a fresh trade.
   const start0 = 1794188480000;
@@ -564,12 +562,10 @@ test("the wake-up when a Yahoo 奇摩股市 price turns stale shows MIS", async 
 // priced 5 s before the clock, except `host.missing`; a line request gets `host.line(symbol)`, by default
 // two of today's minutes. Yahoo Finance answers with the regular session around the clock.
 const TW_START = 1794188480000;
-const TW_ROW = JSON.parse(readFileSync(new URL("fixtures/yahootw-stocklist.json", import.meta.url), "utf8"))[0];
-const TW_PERIODS = JSON.parse(readFileSync(new URL("fixtures/yahootw-tick.json", import.meta.url), "utf8"))[0].chart.meta.currentTradingPeriod;
-const MIS_ROW = JSON.parse(readFileSync(new URL("fixtures/mis-open.json", import.meta.url), "utf8")).msgArray[0];
+const TW_ROW = jsonFixture("yahootw-stocklist")[0];
+const TW_PERIODS = jsonFixture("yahootw-tick")[0].chart.meta.currentTradingPeriod;
+const MIS_ROW = jsonFixture("mis-open").msgArray[0];
 const YAHOOTW_ON = { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } };
-const isLine = (url) => url.startsWith(YAHOOTW_BASE) && url.includes("ApacLibraCharts");
-const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symbols=")[1]))[0];
 const lineSymbols = (host) => host.requests.filter(isLine).map(lineSymbol);
 
 function yahootwHost(symbols, sources = YAHOOTW_ON) {

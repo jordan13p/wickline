@@ -95,18 +95,24 @@ export function formatTime(timestamp, seconds = false) {
 }
 
 /**
+ * A real-time price's state in words, for the row and the detail dialog alike: "Live", the stop time,
+ * else the session (an unconfirmed one reads as unknown). `tx(key, params)` translates.
+ */
+export function stateText(fresh, tx) {
+  if (fresh.state === "live") return tx("freshness.live");
+  if (fresh.state === "stalled") return tx("freshness.stalled", { time: formatTime(fresh.stoppedAt) });
+  return tx(`session.${fresh.state === "unconfirmed" ? "unknown" : fresh.state}`);
+}
+
+/**
  * A row's freshness label: the state for a real-time price ("Live"), its source only while the session
  * is not known, the stop time, the delay, or the session when it is not trading.
  * `tx(key, params)` translates.
  */
 export function freshnessLabel(quote, fresh, now, lang, tx) {
   switch (fresh.state) {
-    case "live":
-      return tx("freshness.live");
     case "unconfirmed":
       return tx(`src.${quote.source}`);
-    case "stalled":
-      return tx("freshness.stalled", { time: formatTime(fresh.stoppedAt) });
     case "delayed":
       return fresh.delayMinutes === null ? tx("freshness.delayed")
         : tx("freshness.delayedMinutes", { minutes: fresh.delayMinutes });
@@ -115,7 +121,7 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
       return `${tx("session.closed")} · ${date ? `${date} ` : ""}${formatTime(quote.timestamp)}`;
     }
     default:
-      return tx(`session.${fresh.state}`);
+      return stateText(fresh, tx);
   }
 }
 

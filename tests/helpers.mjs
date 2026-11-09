@@ -1,7 +1,14 @@
-// Test helpers shared by the watchlist and scheduler tests: canned responses, and a fake host
-// with a virtual clock, a scripted network and a shared store.
+// Test helpers shared by the watchlist, scheduler and provider tests: canned responses, recorded
+// fixtures, and a fake host with a virtual clock, a scripted network and a shared store.
+import { readFileSync } from "node:fs";
+import { YAHOOTW_BASE } from "../mods/wickline/providers/yahootw.js";
 
 export const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
+// A recorded answer under tests/fixtures/, parsed.
+export const jsonFixture = (name) => JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
+// A Yahoo 奇摩股市 line request, and the one symbol it asks for.
+export const isLine = (url) => url.startsWith(YAHOOTW_BASE) && url.includes("ApacLibraCharts");
+export const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symbols=")[1]))[0];
 export const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
 
 export function fakeHost(respond) {

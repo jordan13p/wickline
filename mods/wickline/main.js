@@ -468,11 +468,12 @@ export default class Wickline extends View {
   // What a row reads from the watchlist. A row being removed draws from the copy taken before its quote went.
   rowSource(symbol) {
     const w = this.watch;
+    const now = Date.now();
     return {
-      quote: w.shown(symbol),
+      quote: w.shown(symbol, now),
       failed: w.errors[symbol],
       // The real-time source failed for this symbol: the base quote shows, with the reason.
-      fallback: w.overlayError(symbol),
+      fallback: w.overlayError(symbol, now),
       // A US row past Finnhub's budget stays on Yahoo and says so.
       overCap: w.overCap(symbol),
     };

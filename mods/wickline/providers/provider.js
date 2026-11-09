@@ -7,7 +7,7 @@ import { QuoteError } from "../quotes.js";
  * @typedef {{ url: string, headers: Record<string, string>, symbols: string[], kind: "quote"|"line" }} ProviderRequest
  * @typedef {{ status: number, ok: boolean, text: string }} ProviderResponse
  * @typedef {object} Quote  What decodeYahoo / decodeBinance return, with `source` naming the provider.
- * @typedef {{ quotes: Record<string, Quote>, errors: Record<string, QuoteError>, lines?: Record<string, number[]>, names?: Record<string, string> }} ProviderResult
+ * @typedef {{ quotes: Record<string, Quote>, errors: Record<string, QuoteError>, lines?: Record<string, number[] | { day: number, series: number[] }>, names?: Record<string, string> }} ProviderResult
  * @typedef {{
  *   id: "yahoo"|"binance"|"mis"|"yahootw"|"finnhub",
  *   markets: string[],
@@ -27,7 +27,8 @@ import { QuoteError } from "../quotes.js";
  * requests asks each line again only once `linesMs(session)` has passed; with `linesPerRound`, its line
  * requests follow all its quote requests and a round sends at most that many due ones, longest-waiting
  * first. An `overlay` provider (Yahoo 奇摩股市,
- * TWSE MIS) is off until the person turns it on, and lays its prices over the base quote instead of replacing it.
+ * TWSE MIS) is off until the person turns it on, and lays its prices over the base quote instead of replacing it;
+ * its line, if any, is `{ day, series }`, drawn only with a price (`quote.day`) of the same Taipei day.
  * `cap` limits it to that many of its symbols, in list order; `manualRefresh: false` keeps Refresh
  * from starting an extra round (a request budget). `decode` does not throw
  * for an HTTP or body problem: the request's symbols each get that error instead.

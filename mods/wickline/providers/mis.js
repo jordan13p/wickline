@@ -2,7 +2,7 @@
 // Taiwan quotes. Off until the person turns it on and consents. This file holds
 // the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
 // dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, positive, withinLimits } from "../quotes.js";
+import { HEADERS, QuoteError, cleanText, positive, positiveOrNull, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
@@ -19,13 +19,8 @@ export function misChannel(symbol) {
   return `${symbol.slice(dot + 1) === "TWO" ? "otc" : "tse"}_${symbol.slice(0, dot)}.tw`;
 }
 
-const number = (value) => {
-  const n = Number(value);
-  return positive(n) ? n : null;
-};
-
 // The best real bid or ask: "2265.0000_2260.0000_..." → 2265. Market orders show as 0.0000 and are skipped.
-const best = (value) => (typeof value === "string" ? value.split("_").map(number).find(Boolean) ?? null : null);
+const best = (value) => (typeof value === "string" ? value.split("_").map(positiveOrNull).find(Boolean) ?? null : null);
 
 /**
  * The price from the order book when the snapshot had no trade: the midpoint of the best bid and ask; with
@@ -63,10 +58,10 @@ export function decodeMis(symbols, response, now) {
     if (name) names[symbol] = name;
     const bid = best(row.b);
     const ask = best(row.a);
-    const price = number(row.z) ?? bookPrice(bid, ask, number(row.u), number(row.w));
+    const price = positiveOrNull(row.z) ?? bookPrice(bid, ask, positiveOrNull(row.u), positiveOrNull(row.w));
     const time = Number(row.tlong);
     if (!price || !positive(time)) continue;
-    if (!withinLimits(price, number(row.u), number(row.w))) {
+    if (!withinLimits(price, positiveOrNull(row.u), positiveOrNull(row.w))) {
       errors[symbol] = new QuoteError("mis.outOfLimits");
       continue;
     }
@@ -75,10 +70,10 @@ export function decodeMis(symbols, response, now) {
       source: "mis",
       name,
       price,
-      previousClose: number(row.y),
-      open: number(row.o),
-      high: number(row.h),
-      low: number(row.l),
+      previousClose: positiveOrNull(row.y),
+      open: positiveOrNull(row.o),
+      high: positiveOrNull(row.h),
+      low: positiveOrNull(row.l),
       timestamp: time,
       fetchedAt: now,
     };

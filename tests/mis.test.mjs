@@ -198,6 +198,16 @@ test("overlay merges over Yahoo", () => {
   assert.equal(mergeOverlay(undefined, undefined), undefined);
 });
 
+test("an overlay's own line is drawn only on its price's Taipei day", () => {
+  const own = { ...MIS_2330, source: "yahootw", day: 20_766 };
+  const series = [2250, 2260];
+  const today = mergeOverlay(YAHOO_2330, own, { day: own.day, series });
+  assert.deepEqual([today.series, today.chartSource], [[2250, 2260, 2267.5], "yahootw"]);
+  // A copy hidden overnight: the line it kept is yesterday's, the price just arrived is today's.
+  const overnight = mergeOverlay(YAHOO_2330, own, { day: own.day - 1, series });
+  assert.deepEqual([overnight.series, overnight.chartSource], [YAHOO_2330.series, "yahoo"]);
+});
+
 const CONSENTED = { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
 const yahooTw = (url) => chart({
   symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,

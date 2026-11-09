@@ -2,7 +2,7 @@
 // Yahoo Finance's delayed Taiwan quotes ahead of TWSE MIS. Off until the person turns it on and consents.
 // This file holds the host, limits and decoder; the switch and consent live in settings.js and the
 // settings dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, positive, withinLimits } from "../quotes.js";
+import { HEADERS, QuoteError, cleanText, positive, positiveOrNull, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 // Fixed: the person cannot point it elsewhere.
@@ -23,28 +23,31 @@ export function taipeiDay(ms) {
 }
 
 // `{ raw: "2240" }` → 2240; `"-"` (no value yet) or anything not positive → null.
-const number = (field) => {
-  const n = Number(field?.raw);
-  return positive(n) ? n : null;
-};
+const number = (field) => positiveOrNull(field?.raw);
 
 const time = (value) => {
   const ms = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(ms) ? ms : null;
 };
 
+// Both requests' status codes. A refusal (403) is backed off like a rate limit; Herdr's fetch has no
+// Retry-After, so wait at least a minute.
+function checkStatus(response) {
+  if (response.status === 403) throw new QuoteError("yahootw.refused", {}, { retryAfterMs: 60_000 });
+  if (response.status === 429) throw new QuoteError("yahootw.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (!response.ok) throw new QuoteError("yahootw.http", { status: response.status });
+}
+
 /**
  * Overlays by requested symbol. A row is priced only when its price is positive, its trade is from today
  * in Taipei and it is not delayed; a price outside the row's own limits gets an error instead. Any other
  * row (a placeholder `-`, yesterday's close, delayed data), or a requested symbol missing from the answer,
  * has no overlay and no error. Each quote's time is the newest trade among the answer's priced rows (the
- * feed's time), so a quiet stock is as current as the feed; its own last trade is `tradeTime`.
+ * feed's time), so a quiet stock is as current as the feed; its own last trade is `tradeTime`, and `day`
+ * its Taipei day, which a line must share to be drawn with it.
  */
 export function decodeStockList(symbols, response, now) {
-  // A refusal (403) is backed off like a rate limit; Herdr's fetch has no Retry-After, so wait at least a minute.
-  if (response.status === 403) throw new QuoteError("yahootw.refused", {}, { retryAfterMs: 60_000 });
-  if (response.status === 429) throw new QuoteError("yahootw.rateLimited", {}, { retryAfterMs: 60_000 });
-  if (!response.ok) throw new QuoteError("yahootw.http", { status: response.status });
+  checkStatus(response);
   const body = parseJson(response.text, "yahootw.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("yahootw.unreadable");
   const wanted = new Set(symbols);
@@ -75,6 +78,7 @@ export function decodeStockList(symbols, response, now) {
       high: number(row.regularMarketDayHigh),
       low: number(row.regularMarketDayLow),
       tradeTime,
+      day: today,
       fetchedAt: now,
     });
   }
@@ -85,13 +89,12 @@ export function decodeStockList(symbols, response, now) {
 }
 
 /**
- * One symbol's line: today's (Taipei) one-minute closes, oldest first. A minute without a trade carries
- * the previous close; minutes before the first trade are dropped. With no point from today, no line.
+ * One symbol's line, `{ day, series }`: today's (Taipei) one-minute closes, oldest first, and today as
+ * its day. A minute without a trade carries the previous close; minutes before the first trade are
+ * dropped. With no point from today, no line.
  */
 export function decodeTick(symbol, response, now) {
-  if (response.status === 403) throw new QuoteError("yahootw.refused", {}, { retryAfterMs: 60_000 });
-  if (response.status === 429) throw new QuoteError("yahootw.rateLimited", {}, { retryAfterMs: 60_000 });
-  if (!response.ok) throw new QuoteError("yahootw.http", { status: response.status });
+  checkStatus(response);
   const body = parseJson(response.text, "yahootw.unreadable");
   const chart = Array.isArray(body) ? body[0]?.chart : null;
   if (!chart) throw new QuoteError("yahootw.unreadable");
@@ -107,7 +110,7 @@ export function decodeTick(symbol, response, now) {
     if (positive(closes?.[i])) last = closes[i];
     if (last !== null) series.push(last);
   });
-  return { quotes: {}, errors: {}, ...(series.length && { lines: { [symbol]: series } }) };
+  return { quotes: {}, errors: {}, ...(series.length && { lines: { [symbol]: { day: today, series } } }) };
 }
 
 /** @type {Provider} */

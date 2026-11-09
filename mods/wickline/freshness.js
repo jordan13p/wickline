@@ -1,6 +1,6 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
-import { formatTime } from "./format.js";
+import { stateText } from "./format.js";
 import { marketOf } from "./markets.js";
 import { isCryptoPair } from "./quotes.js";
 
@@ -63,10 +63,7 @@ export function detailSource(quote, session, now, tx) {
   const minutes = (delayMinutes) => delayMinutes === null ? tx("freshness.delayUnknown")
     : tx("freshness.delayedMinutes", { minutes: delayMinutes });
   if (REALTIME_SOURCES.has(quote.source) && !isCryptoPair(quote.symbol)) {
-    const { state, stoppedAt } = freshness(quote, session, now);
-    const own = state === "live" ? tx("freshness.live")
-      : state === "stalled" ? tx("freshness.stalled", { time: formatTime(stoppedAt) })
-        : tx(`session.${state === "unconfirmed" ? "unknown" : state}`);
+    const own = stateText(freshness(quote, session, now), tx);
     const price = tx("detail.priceFrom", { state: own, source: tx(`src.${quote.source}`) });
     if (!quote.chartSource) return [price];
     if (quote.chartSource === quote.source) return [price, tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })];

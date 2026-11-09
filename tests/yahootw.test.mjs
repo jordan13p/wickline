@@ -1,21 +1,20 @@
 // node --test tests/  (providers/yahootw.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { USER_AGENT } from "../mods/wickline/quotes.js";
 import {
   YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, taipeiDay, yahootw,
 } from "../mods/wickline/providers/yahootw.js";
 import { t } from "../mods/wickline/i18n.js";
+import { jsonFixture, ok } from "./helpers.mjs";
 
 // A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads.
-const ROWS = JSON.parse(readFileSync(new URL("fixtures/yahootw-stocklist.json", import.meta.url), "utf8"));
+const ROWS = jsonFixture("yahootw-stocklist");
 // 09:41:20 in Taipei, seven seconds after the answer's newest trade.
 const NOW = 1794188480000;
 const SYMBOLS = ["2330.TW", "0056.TW", "0050.TW", "6488.TWO"];
-const answer = (rows) => ({ status: 200, ok: true, text: JSON.stringify(rows) });
 // The recorded rows with some rows' fields replaced, by symbol.
-const changed = (bySymbol) => answer(ROWS.map((row) => ({ ...row, ...bySymbol[row.symbol] })));
+const changed = (bySymbol) => ok(ROWS.map((row) => ({ ...row, ...bySymbol[row.symbol] })));
 const decode = (response, symbols = SYMBOLS) => yahootw.decode(yahootw.requests(symbols)[0], response, NOW);
 
 test("constants and cadence", () => {
@@ -67,11 +66,11 @@ test("requests: batches of 50 to the fixed host, then one line request per symbo
 });
 
 test("prices today's rows with the answer's newest trade as their time", () => {
-  const { quotes } = decode(answer(ROWS));
+  const { quotes } = decode(ok(ROWS));
   const newest = Date.parse("2026-11-09T01:41:13Z");
   assert.deepEqual(quotes["2330.TW"], {
     symbol: "2330.TW", source: "yahootw", name: "台積電", price: 2240, previousClose: 2135, open: 2210, high: 2240, low: 2190,
-    timestamp: newest, tradeTime: newest, fetchedAt: NOW,
+    timestamp: newest, tradeTime: newest, day: taipeiDay(NOW), fetchedAt: NOW,
   });
   // A quiet stock is as current as the feed; its own last trade is kept apart.
   assert.equal(quotes["0050.TW"].price, 10.05);
@@ -84,14 +83,14 @@ test("prices today's rows with the answer's newest trade as their time", () => {
 });
 
 test("a placeholder row gives a name only", () => {
-  const { quotes, errors, names } = decode(answer(ROWS));
+  const { quotes, errors, names } = decode(ok(ROWS));
   assert.equal(quotes["0056.TW"], undefined);
   assert.equal(errors["0056.TW"], undefined);
   assert.equal(names["0056.TW"], "元大高股息");
 });
 
 test("a stock locked at limit-up is priced at the limit", () => {
-  assert.equal(decode(answer(ROWS)).quotes["6488.TWO"].price, 563);
+  assert.equal(decode(ok(ROWS)).quotes["6488.TWO"].price, 563);
 });
 
 test("a price above limit-up is refused with a reason", () => {
@@ -115,13 +114,13 @@ test("yesterday's row and delayed data give no overlay, and do not move the feed
 });
 
 test("only requested rows are accepted", () => {
-  const { quotes, names } = decode(answer(ROWS), ["2330.TW"]);
+  const { quotes, names } = decode(ok(ROWS), ["2330.TW"]);
   assert.deepEqual(Object.keys(quotes), ["2330.TW"]);
   assert.deepEqual(Object.keys(names), ["2330.TW"]);
 });
 
 test("a symbol missing from the answer has no overlay and no error", () => {
-  const { quotes, errors } = decode(answer(ROWS), ["2936.TW"]);
+  const { quotes, errors } = decode(ok(ROWS), ["2936.TW"]);
   assert.deepEqual(quotes, {});
   assert.deepEqual(errors, {});
 });
@@ -149,34 +148,34 @@ test("an unreadable answer", () => {
 
 test("decodeStockList throws what the round shows for each symbol", () => {
   assert.throws(() => decodeStockList(SYMBOLS, { status: 200, ok: true, text: "<html>" }, NOW), (e) => e.code === "yahootw.unreadable");
-  assert.equal(decodeStockList(SYMBOLS, answer(ROWS), NOW).quotes["2330.TW"].price, 2240);
+  assert.equal(decodeStockList(SYMBOLS, ok(ROWS), NOW).quotes["2330.TW"].price, 2240);
 });
 
 // A line answer: one minute per close from 09:00 Taipei on the clock's day (`start`, epoch seconds).
 const TODAY_0900 = 1794186000;
-const tick = (symbol, closes, start = TODAY_0900, answered = symbol) => answer([{
+const tick = (symbol, closes, start = TODAY_0900, answered = symbol) => ok([{
   symbol, chart: { meta: { symbol: answered }, timestamp: closes.map((_, i) => start + i * 60), indicators: { quote: [{ close: closes }] } },
 }]);
-const TICK = readFileSync(new URL("fixtures/yahootw-tick.json", import.meta.url), "utf8");
-const TICK_QUIET = readFileSync(new URL("fixtures/yahootw-tick-quiet.json", import.meta.url), "utf8");
 const lineOf = (symbol, response) => yahootw.decode(yahootw.requests([symbol]).find((r) => r.kind === "line"), response, NOW);
 
 test("keeps today's minutes, carrying the last close over quiet minutes", () => {
   assert.deepEqual(lineOf("2330.TW", tick("2330.TW", [null, 10.05, null, null, 10.10])).lines,
-    { "2330.TW": [10.05, 10.05, 10.05, 10.10] });
+    { "2330.TW": { day: taipeiDay(NOW), series: [10.05, 10.05, 10.05, 10.10] } });
 });
 
 test("the liquid fixture", () => {
-  const { quotes, errors, lines } = lineOf("2330.TW", { status: 200, ok: true, text: TICK });
+  const { quotes, errors, lines } = lineOf("2330.TW", ok(jsonFixture("yahootw-tick")));
   assert.deepEqual([quotes, errors], [{}, {}]);
+  const { day, series } = lines["2330.TW"];
+  assert.equal(day, taipeiDay(NOW));
   // 31 minutes, the first without a trade.
-  assert.equal(lines["2330.TW"].length, 30);
-  assert.equal(lines["2330.TW"][0], 2200);
-  assert.equal(lines["2330.TW"].at(-1), 2210);
+  assert.equal(series.length, 30);
+  assert.equal(series[0], 2200);
+  assert.equal(series.at(-1), 2210);
 });
 
 test("the quiet fixture", () => {
-  assert.deepEqual(lineOf("0050.TW", { status: 200, ok: true, text: TICK_QUIET }).lines, { "0050.TW": [10.05] });
+  assert.deepEqual(lineOf("0050.TW", ok(jsonFixture("yahootw-tick-quiet"))).lines, { "0050.TW": { day: taipeiDay(NOW), series: [10.05] } });
 });
 
 test("yesterday's points are dropped", () => {
@@ -184,10 +183,10 @@ test("yesterday's points are dropped", () => {
   assert.deepEqual(errors, {});
   assert.equal(lines?.["2330.TW"], undefined);
   // Yesterday's last close is not carried into today's first quiet minute.
-  assert.deepEqual(decodeTick("2330.TW", answer([{ symbol: "2330.TW", chart: {
+  assert.deepEqual(decodeTick("2330.TW", ok([{ symbol: "2330.TW", chart: {
     meta: { symbol: "2330.TW" }, timestamp: [TODAY_0900 - 86_400, TODAY_0900, TODAY_0900 + 60],
     indicators: { quote: [{ close: [2200, null, 2210] }] },
-  } }]), NOW).lines, { "2330.TW": [2210] });
+  } }]), NOW).lines["2330.TW"].series, [2210]);
 });
 
 test("another symbol is refused", () => {
@@ -199,7 +198,7 @@ test("another symbol is refused", () => {
 
 test("a line answer that is empty or has no chart is unreadable", () => {
   for (const body of [[], [{ symbol: "2330.TW" }], { chart: {} }]) {
-    assert.equal(lineOf("2330.TW", answer(body)).errors["2330.TW"].code, "yahootw.unreadable", JSON.stringify(body));
+    assert.equal(lineOf("2330.TW", ok(body)).errors["2330.TW"].code, "yahootw.unreadable", JSON.stringify(body));
   }
 });
 
