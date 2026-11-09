@@ -89,7 +89,7 @@ test("midpoint and no price", () => {
 });
 
 test("a stock locked at its limit is priced at that limit", () => {
-  // Locked at limit-down (seen live on 3189): no trade, no bids, market sells (0.0000) queued ahead of limit-down.
+  // Locked at limit-down (seen live on a stock locked at limit-down): no trade, no bids, market sells (0.0000) queued ahead of limit-down.
   const down = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000_2035.0000_2040.0000_" }));
   assert.equal(down.quotes["2330.TW"].price, 2035);
   assert.equal(down.quotes["2330.TW"].source, "mis");
