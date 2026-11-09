@@ -712,3 +712,27 @@ test("a hung line costs one timeout per round, and the next price round keeps it
   assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } }]);
   await stop(w, host, runs);
 });
+
+test("a hung line after a backoff still ends it, so the next 429 waits 60 s again", async () => {
+  const host = yahootwHost(["2330.TW"]);
+  host.line = never;
+  let limited = true;
+  const fetch = host.fetch;
+  host.fetch = async (url, headers) => {
+    const response = await fetch(url, headers);
+    return limited && url.startsWith(YAHOOTW_BASE) && !isLine(url) ? { ...response, status: 429, ok: false } : response;
+  };
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START);
+  assert.equal(w.sources.yahootw.retryAt, TW_START + 60_000);
+  limited = false;
+  // At 60 s the prices come in and the first line hangs until 70 s.
+  await advance(host, TW_START + 70_000);
+  assert.ok(w.overlays["2330.TW"]?.yahootw);
+  assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } }]);
+  limited = true;
+  await advance(host, TW_START + 80_000);
+  assert.equal(w.sources.yahootw.retryAt, TW_START + 80_000 + 60_000);
+  await stop(w, host, runs);
+});

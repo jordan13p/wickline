@@ -638,10 +638,15 @@ export class Watchlist {
   }
 
   // A line that ends the round. Rate limited: the source backs off. Down or hung: its prices are in, so
-  // the round ends with the problem shown.
+  // a backoff ends as after a clean round, and the round ends with the problem shown.
   endOnLine(provider, state, requests, index, failed) {
-    if (failed.retryAfterMs !== undefined) this.backOff(provider, state, requests, index, failed);
-    else state.problem = coded(failed);
+    if (failed.retryAfterMs !== undefined) {
+      this.backOff(provider, state, requests, index, failed);
+      return;
+    }
+    state.failures = 0;
+    state.retryAt = 0;
+    state.problem = coded(failed);
   }
 
   // Back off this provider only: at least a minute, doubling up to 15 minutes; the rest of the
