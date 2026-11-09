@@ -138,3 +138,14 @@ test("zh-CN Undo is 撤销, not the resume verb", () => {
   assert.equal(t("zh-CN", "notice.undo"), "撤销");
   assert.equal(t("zh-CN", "notice.restored", { symbol: "AAPL" }), "已撤销移除 AAPL。");
 });
+
+// The words a lit price says on hover, as each market's traders say them.
+test("a price at its limit is named in every language", () => {
+  const words = { en: ["Limit up 563.00", "Limit down 461.00"], "zh-TW": ["漲停 563.00", "跌停 461.00"], "zh-CN": ["涨停 563.00", "跌停 461.00"],
+    ja: ["ストップ高 563.00", "ストップ安 461.00"], ko: ["상한가 563.00", "하한가 461.00"] };
+  for (const [lang, [up, down]] of Object.entries(words)) {
+    assert.equal(t(lang, "quote.limitUp", { price: "563.00" }), up, lang);
+    assert.equal(t(lang, "quote.limitDown", { price: "461.00" }), down, lang);
+  }
+});
+

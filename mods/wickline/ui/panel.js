@@ -11,7 +11,7 @@ import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, REMOVE_W, RIGHT_INSET, SCROLL_LANE, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, sparkWidth, tableColumns } from "../layout.js";
-import { button, chart, dot, icon, iconButton, link } from "./parts.js";
+import { button, chart, dot, icon, iconButton, link, priceBox } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
 // Sidebar rows: three lines (16, 14 and 14 px, 2 px apart) on each side of the day line, which spans them.
@@ -47,7 +47,9 @@ export function band(view, root, t) {
       return h_flex().flex_none().gap(5).items_center().whitespace_nowrap()
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
-        .child(div().text_color(quote && !failed ? t.foreground : t.dim).child(quote ? formatBandPrice(quote) : failed ? view.tx("band.unavailable") : "…"))
+        .child(quote
+          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed))
+          : div().text_color(t.dim).child(failed ? view.tx("band.unavailable") : "…"))
         .when(Boolean(quote), (el) => el.child(div().text_color(view.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
         .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
     }));
@@ -153,6 +155,8 @@ function rowData(view, t, now, symbol, source) {
     state: [shown.label, stale ? view.tx("quote.asOf", { date: stale }) : ""].filter(Boolean).join(" · "),
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
+    mark: quote ? view.limitMark(t, quote, source.failed) : null,
+    symbol,
   };
 }
 
@@ -187,7 +191,8 @@ function priceStack(view, t, row) {
   const figure = (text) => lineBox(14).w(NUMBER_W).text_right().whitespace_nowrap().text_size(11).text_color(color).child(text);
   return column
     .child(lineBox(16, h_flex().items_baseline())
-      .child(div().flex_none().w(NUMBER_W).text_right().whitespace_nowrap().text_color(failed ? t.dim : t.foreground).child(number(quote)))
+      .child(h_flex().flex_none().w(NUMBER_W).justify_end()
+        .child(priceBox(`bw-price-${row.symbol}`, number(quote), failed ? t.dim : t.foreground, row.mark)))
       .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? "")))
     .child(figure(signed(quote)))
     .child(figure(formatChange(quote.changePercent)));
@@ -414,7 +419,8 @@ function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
     line: () => (quote ? chart(quote, color, t, { ...TABLE_SPARK, fill: true, stroke: 1.5 }) : cell("line")),
     price: () => (quote
       ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
-        .child(div().flex_1().min_w(0).text_right().whitespace_nowrap().text_color(row.failed ? t.dim : t.foreground).child(number(quote)))
+        .child(h_flex().flex_1().min_w(0).justify_end()
+          .child(priceBox(`bw-price-${symbol}`, number(quote), row.failed ? t.dim : t.foreground, row.mark)))
         .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? ""))
       : cell("price").pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row))),
     change: () => cell("change").text_right().whitespace_nowrap().text_color(color).child(quote ? signed(quote) : ""),

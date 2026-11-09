@@ -10,8 +10,8 @@ import {
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
-import { QuoteError } from "./quotes.js";
-import { changeTone } from "./format.js";
+import { QuoteError, priceLimit } from "./quotes.js";
+import { changeTone, number } from "./format.js";
 import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
@@ -527,6 +527,22 @@ export default class Wickline extends View {
       fallback: w.overlayError(symbol, now),
       // A US row past Finnhub's budget stays on Yahoo and says so.
       overCap: w.overCap(symbol),
+    };
+  }
+
+  /**
+   * A price at its own source's limit, as drawn: null for any other, and for a price shown as cached (`failed`).
+   * Its color is the gain or loss color by the limit's side, whatever the %: an ex-dividend day's limits are
+   * set from a reference price, not the previous close.
+   */
+  limitMark(t, quote, failed) {
+    const limit = !failed && priceLimit(quote);
+    if (!limit) return null;
+    const up = limit === "up";
+    return {
+      limit,
+      color: this.changeColor(t, up ? 1 : -1),
+      tip: this.tx(up ? "quote.limitUp" : "quote.limitDown", { price: number(quote, up ? quote.limitUp : quote.limitDown) }),
     };
   }
 

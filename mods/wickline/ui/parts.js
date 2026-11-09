@@ -2,8 +2,11 @@
 // draws, and returns an element. No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, Checkbox, Switch } from "gpui-base";
-import { chartGeometry } from "../format.js";
+import { chartGeometry, tint } from "../format.js";
 import { SPIN_MS } from "../motion.js";
+
+// The soft fill under a line chart and behind a lit price.
+export const AREA_OPACITY = 0.16;
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
@@ -27,7 +30,7 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
       let area = PathBuilder.fill().move_to("0%", "100%");
       for (const [x, y] of g.points) area = area.line_to(`${x}%`, `${y}%`);
       return el.child(layer(area.line_to("100%", "100%").close().build(),
-        Background.solid(color).opacity(0.16)));
+        Background.solid(color).opacity(AREA_OPACITY)));
     })
     .child(layer(line.build(), color));
 }
@@ -53,6 +56,17 @@ export function button(t, id, label, onClick) {
 }
 
 // A text link: `muted`, `foreground` under the pointer.
+/**
+ * A price in a content-sized box whose padding and negative margin cancel, so its digits stay put, lit or not.
+ * `mark` (a price at its limit, from the view's limitMark): the text in its color, on that color at
+ * AREA_OPACITY, the limit in words on hover.
+ */
+export function priceBox(id, text, color, mark, pad = 4) {
+  const fill = mark && tint(mark.color, AREA_OPACITY);
+  return div().id(id).flex_none().whitespace_nowrap().px(pad).mx(-pad).rounded(3).text_color(mark ? mark.color : color)
+    .when(Boolean(fill), (el) => el.bg(fill)).when(Boolean(mark), (el) => el.tooltip(mark.tip)).child(text);
+}
+
 export function link(t, id, label, onClick) {
   return div().id(id).flex_none().cursor_pointer().text_color(t.muted).hover((s) => s.text_color(t.foreground))
     .on_click((_e, cx) => onClick(cx)).child(label);
