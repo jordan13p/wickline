@@ -55,15 +55,18 @@ export function layoutFor(size) {
   return size.width < TABLE_MIN_WIDTH ? "sidebar" : "table";
 }
 
+// The sidebar line's narrowest width.
+export const SPARK_MIN = 32;
+
 /**
- * A sidebar row's day line in px for a copy `width` px wide: 32, growing with the pane to 120 only once the
+ * A sidebar row's day line in px for a copy `width` px wide: SPARK_MIN, growing with the pane to 120 only once the
  * left lines keep NAME_ROOM beside the gutter, the right inset, the price column and the gaps on each side
- * of the line. 32 before the copy is laid out.
+ * of the line. SPARK_MIN before the copy is laid out.
  */
 export function sparkWidth(width) {
-  if (!(width > 0)) return 32;
+  if (!(width > 0)) return SPARK_MIN;
   const room = width - GUTTER - RIGHT_INSET - (NUMBER_W + CODE_W) - 2 * COLUMN_GAP - NAME_ROOM;
-  return Math.max(32, Math.min(120, room));
+  return Math.max(SPARK_MIN, Math.min(120, room));
 }
 
 /**

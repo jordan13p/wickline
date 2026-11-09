@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, REMOVE_W, RIGHT_INSET, SCROLL_LANE, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
+  BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, REMOVE_W, RIGHT_INSET, SCROLL_LANE, SPARK_MIN, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
   columnWidth, layoutFor, nameWidth, sparkWidth, tableColumns, wantsCard,
 } from "../mods/wickline/layout.js";
 
@@ -47,7 +47,6 @@ test("the columns, in display order, with the name the only flexible one", () =>
 test("a wide table shows every column", () => {
   assert.deepEqual(tableColumns(1100), ALL);
   assert.deepEqual(tableColumns(2000), ALL);
-  assert.equal(tableColumns(1100).length, 10);
   assert.ok(tableColumns(1099).length < 10);
 });
 
@@ -97,7 +96,8 @@ test("the sidebar line leaves the lane and the name their room", () => {
   // The lane must hold the theme's bar (about 5 px, inset about 4 px), and the × keeps its 16 px column.
   assert.equal(REMOVE_W, 16);
   assert.equal(SCROLL_LANE, 12);
-  assert.equal(RIGHT_INSET, 28);
+  assert.equal(RIGHT_INSET, REMOVE_W + SCROLL_LANE);
+  assert.equal(SPARK_MIN, 32);
   assert.equal(sparkWidth(280), 32);
   assert.equal(sparkWidth(345), 32);
   assert.equal(sparkWidth(400), 72);
