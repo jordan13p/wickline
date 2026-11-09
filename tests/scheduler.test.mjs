@@ -762,7 +762,7 @@ test("after the close, today's line is not asked again; a missing one still is",
   await stop(w, host, runs);
 });
 
-test("a line that keeps failing shows on the status line until a clean round", async () => {
+test("a line that keeps failing shows on the status line", async () => {
   const host = yahootwHost(["2330.TW", "0050.TW"]);
   host.line = () => ({ status: 404, ok: false, text: "" });
   const w = new Watchlist(host);
@@ -775,7 +775,44 @@ test("a line that keeps failing shows on the status line until a clean round", a
   assert.deepEqual(w.lines.yahootw ?? {}, {});
   for (const symbol of ["2330.TW", "0050.TW"]) assert.equal(w.shown(symbol).source, "yahootw", symbol);
   assert.equal(w.shown("2330.TW").chartSource, "yahoo");
-  // The next round asks no line (not due yet), so it is clean.
+  await stop(w, host, runs);
+});
+
+test("a line that always fails stays the problem through the rounds between, until it comes in", async () => {
+  const symbols = ["2330.TW", "0050.TW", "6488.TWO", "1101.TW", "1102.TW"];
+  const host = yahootwHost(symbols);
+  const line = host.line;
+  host.line = (symbol) => symbol === "2330.TW" ? { status: 404, ok: false, text: "" } : line(symbol);
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  const failing = [{ provider: "yahootw", code: "yahootw.http", params: { status: 404 } }];
+  await advance(host, TW_START);
+  assert.deepEqual(w.problems(), failing);
+  // The next round asks the other two lines, which come in; the rounds after it ask prices only.
+  for (const at of [10_000, 20_000, 60_000, 110_000]) {
+    await advance(host, TW_START + at);
+    assert.deepEqual(w.problems(), failing, `${at}`);
+  }
+  assert.deepEqual(lineSymbols(host), symbols);
+  // Asked again at 120 s, it fails again; at 240 s it comes in.
+  await advance(host, TW_START + 130_000);
+  assert.deepEqual(w.problems(), failing);
+  host.line = line;
+  await advance(host, TW_START + 240_000);
+  assert.equal(lineSymbols(host).filter((symbol) => symbol === "2330.TW").length, 3);
+  assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+});
+
+test("a failing line's problem goes with its symbol", async () => {
+  const host = yahootwHost(["2330.TW", "0050.TW"]);
+  const line = host.line;
+  host.line = (symbol) => symbol === "2330.TW" ? { status: 404, ok: false, text: "" } : line(symbol);
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START);
+  assert.equal(w.problems()[0]?.code, "yahootw.http");
+  w.remove("2330.TW");
   await advance(host, TW_START + 10_000);
   assert.deepEqual(w.problems(), []);
   await stop(w, host, runs);

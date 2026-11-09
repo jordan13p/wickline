@@ -572,7 +572,7 @@ test("a line never outlives its price", async () => {
   });
 });
 
-test("a hung line keeps the price, drops the line and shows the problem until a clean round", async () => {
+test("a hung line keeps the price, drops the line and shows the problem until a line comes in", async () => {
   const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(host.clock - 5_000) });
   await firstRound(host, async (w) => {
     assert.ok(w.lines.yahootw["2330.TW"]);
@@ -583,9 +583,12 @@ test("a hung line keeps the price, drops the line and shows the problem until a 
     assert.equal(w.shown("2330.TW").source, "yahootw");
     assert.deepEqual(w.shown("2330.TW").series, BASE_SERIES);
     assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } }]);
-    // The next round sends no line (not due), so it is clean.
+    // The rounds that send no line (not due) keep it; the next line clears it.
     host.line = (symbol) => tickAt(symbol, host.clock - 60_000, [2200, 2205]);
     await advance(host, TW_NOW + 141_000);
+    assert.equal(w.problems()[0]?.code, "request.timeout");
+    await advance(host, TW_NOW + 241_000);
+    assert.ok(w.lines.yahootw["2330.TW"]);
     assert.deepEqual(w.problems(), []);
   });
 });

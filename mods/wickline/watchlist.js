@@ -165,11 +165,12 @@ export class Watchlist {
     this.overlayErrors = {};
     this.revision = 0;
     this.stopped = false;
-    // Per provider: its backoff, its current problem, its round and its own wake-up.
+    // Per provider: its backoff, its current problem, its round and its own wake-up. `lineFailures`, by
+    // symbol: the source failure of that symbol's last line request, for a provider with `linesPerRound`.
     this.sources = Object.fromEntries(PROVIDERS.map((provider) => [provider.id, {
       retryAt: 0, failures: 0, disabled: false, problem: null,
       loading: false, manual: false, refreshing: false, dirty: true, wake: null,
-      lastRequestAt: -Infinity, missed: false, linesAt: {}, configKey: null, disabledFor: null,
+      lastRequestAt: -Infinity, missed: false, linesAt: {}, lineFailures: {}, configKey: null, disabledFor: null,
     }]));
   }
 
@@ -501,7 +502,10 @@ export class Watchlist {
         this.adopt(readPreferences(this.host.load()));
         this.configKey = JSON.stringify(this.config());
         symbols = this.symbolsFor(provider);
-        if (!symbols.length) state.problem = null;
+        if (!symbols.length) {
+          state.problem = null;
+          state.lineFailures = {};
+        }
         // A hidden copy never renders (so nothing else tells it), but its loops run: it asks here. A round
         // it skips is marked missed, and it waits as idle until wakeMissed() on the render that shows
         // the copy again.
@@ -613,10 +617,18 @@ export class Watchlist {
         if (!current()) return;
         const failed = await this.line(provider, state, request, io, current);
         if (this.endsRound(provider, failed)) { this.endOnLine(provider, state, requests, requests.indexOf(request), failed); return; }
+        if (!current()) return;
         // A failure of the source itself (an HTTP error, an unreadable answer) shows, as a price's would.
-        if (!problem && failed && SOURCE_FAILURE.test(failed.code)) problem = failed;
+        // A line is asked only every `linesMs`, so it stays shown through the rounds between, until
+        // that symbol's next line comes in; otherwise a line that always fails would blink.
+        if (failed && SOURCE_FAILURE.test(failed.code)) state.lineFailures[request.symbols[0]] = failed;
+        else delete state.lineFailures[request.symbols[0]];
       }
       if (!current()) return;
+      // A symbol no longer priced by this source (removed, or its price gone) is not asked for a line
+      // again, so its failure goes.
+      for (const symbol of Object.keys(state.lineFailures)) if (!this.priced(provider, symbol)) delete state.lineFailures[symbol];
+      problem ??= Object.values(state.lineFailures)[0] ?? null;
       state.failures = 0;
       state.retryAt = 0;
       state.problem = problem && coded(problem);
@@ -674,6 +686,7 @@ export class Watchlist {
     state.failures = 0;
     state.retryAt = 0;
     state.problem = coded(failed);
+    state.lineFailures[requests[index].symbols[0]] = failed;
   }
 
   // Back off this provider only: at least a minute, doubling up to 15 minutes; the rest of the
