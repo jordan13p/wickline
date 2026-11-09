@@ -11,7 +11,7 @@ import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, REMOVE_W, RIGHT_INSET, SCROLL_LANE, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, sparkWidth, tableColumns } from "../layout.js";
-import { button, chart, dot, icon, iconButton } from "./parts.js";
+import { button, chart, dot, icon, iconButton, link } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
 // Sidebar rows: three lines (16, 14 and 14 px, 2 px apart) on each side of the day line, which spans them.
@@ -53,16 +53,14 @@ export function band(view, root, t) {
 // Until answered: `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`. A label switches and
 // dismisses; × only dismisses, and sits beside the labels, not inside one.
 function languagePrompt(view, t) {
-  const link = (id, label, onClick) => div().id(id).flex_none().text_color(t.muted).cursor_pointer()
-    .hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => onClick(cx)).child(label);
   const choices = LANGUAGES.flatMap((language, i) => [
     ...(i ? [div().flex_none().text_color(t.dim).child("·")] : []),
-    link(`bw-lang-${language}`, LANGUAGE_LABELS[language], (cx) => view.chooseLanguage(cx, language)),
+    link(t, `bw-lang-${language}`, LANGUAGE_LABELS[language], (cx) => view.chooseLanguage(cx, language)),
   ]);
   return h_flex().items_center().gap(6).text_size(11)
     .child(div().flex_none().text_color(t.dim).child(view.tx("prompt.language")))
     .child(h_flex().flex_1().min_w(0).items_center().gap(5).overflow_hidden().children(choices))
-    .child(link("bw-lang-dismiss", "×", (cx) => view.act(cx, () => view.saveSettings({ languagePromptDismissed: true }), "error.saveSettings")));
+    .child(link(t, "bw-lang-dismiss", "×", (cx) => view.act(cx, () => view.saveSettings({ languagePromptDismissed: true }), "error.saveSettings")));
 }
 
 // The text for the header's count: `8 tickers`.

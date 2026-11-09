@@ -8,7 +8,7 @@ import { finnhubCap } from "../providers/finnhub.js";
 import {
   CONSENTS, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, marketStatus, settingsMarkets,
 } from "../settings.js";
-import { button, checkbox, dot, note, segmented, toggle } from "./parts.js";
+import { button, checkbox, dot, link, note, segmented, toggle } from "./parts.js";
 
 export const SETTINGS_TABS = [...SETTINGS_MARKETS, "display", "disclaimer"];
 // Each tab's drawing, by its name in SETTINGS_TABS.
@@ -154,12 +154,6 @@ function advanced(view, t, market, fields, error) {
     .child(div().flex_none().w(10).when(forced, (el) => el.text_color(t.dim)).child(open ? "⌄" : "›"))
     .child(view.tx("settings.advanced"));
   return [header, ...(open ? fields : [])];
-}
-
-// A text link: `muted`, `foreground` under the pointer.
-function link(t, id, label, onClick) {
-  return div().id(id).flex_none().cursor_pointer().text_color(t.muted).hover((s) => s.text_color(t.foreground))
-    .on_click((_e, cx) => onClick(cx)).child(label);
 }
 
 // A Taiwan source switched on: once consent to its current statement is saved, one line, "✓ Consented ·

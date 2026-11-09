@@ -52,6 +52,12 @@ export function button(t, id, label, onClick) {
     .on_click((_e, cx) => onClick(cx)).child(label);
 }
 
+// A text link: `muted`, `foreground` under the pointer.
+export function link(t, id, label, onClick) {
+  return div().id(id).flex_none().cursor_pointer().text_color(t.muted).hover((s) => s.text_color(t.foreground))
+    .on_click((_e, cx) => onClick(cx)).child(label);
+}
+
 // A header action: a 16 px single-color icon in a 28 × 28 target, named by its tooltip.
 export function iconButton(t, id, name, label, onClick, spinning = false) {
   return h_flex().id(id).flex_none().w(28).h(28).items_center().justify_center().rounded(6)
