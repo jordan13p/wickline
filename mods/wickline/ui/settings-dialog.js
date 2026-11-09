@@ -139,20 +139,19 @@ function fallback(view, t, market) {
   ];
 }
 
-// The page's address fields, folded away until the person opens them. A refused address opens them by
-// itself and keeps them open, so fixing it never hides the field being typed in: adding to
-// `view.advancedOpen` while drawing is on purpose, since the open state has to outlive the error.
+// The page's address fields, folded away until the person opens them. A refused address holds them open,
+// its header dimmed and not clickable meanwhile; typing in a field keeps them open after (main.js), so
+// fixing an address never hides the field being typed in.
 function advanced(view, t, market, fields, error) {
-  if (error) view.advancedOpen.add(market);
-  const open = view.advancedOpen.has(market);
-  const header = h_flex().id(`bw-${market}-advanced`).gap(6).items_center().cursor_pointer().text_size(11).font_semibold()
-    .text_color(t.muted).hover((s) => s.text_color(t.foreground))
-    .on_click((_e, cx) => {
+  const forced = Boolean(error);
+  const open = view.advancedOpen.has(market) || forced;
+  const header = h_flex().id(`bw-${market}-advanced`).gap(6).items_center().text_size(11).font_semibold().text_color(t.muted)
+    .when(!forced, (el) => el.cursor_pointer().hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => {
       if (open) view.advancedOpen.delete(market);
       else view.advancedOpen.add(market);
       cx.notify();
-    })
-    .child(div().flex_none().w(10).child(open ? "⌄" : "›"))
+    }))
+    .child(div().flex_none().w(10).when(forced, (el) => el.text_color(t.dim)).child(open ? "⌄" : "›"))
     .child(view.tx("settings.advanced"));
   return [header, ...(open ? fields : [])];
 }
