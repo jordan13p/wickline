@@ -98,11 +98,15 @@ test("the sidebar line leaves the lane and the name their room", () => {
   assert.equal(SCROLL_LANE, 12);
   assert.equal(RIGHT_INSET, REMOVE_W + SCROLL_LANE);
   assert.equal(SPARK_MIN, 32);
+  // The left lines need about 80px ("元大台灣50正2", "已收盤 · 14:30"): 110 leaves them room and gives the
+  // line the rest, so a 366px sidebar draws a 78px line, not 38.
   assert.equal(sparkWidth(280), 32);
-  assert.equal(sparkWidth(345), 32);
-  assert.equal(sparkWidth(400), 72);
-  assert.equal(sparkWidth(447), 119);
-  assert.equal(sparkWidth(448), 120);
+  assert.equal(sparkWidth(320), 32);
+  assert.equal(sparkWidth(345), 57);
+  assert.equal(sparkWidth(366), 78);
+  assert.equal(sparkWidth(400), 112);
+  assert.equal(sparkWidth(407), 119);
+  assert.equal(sparkWidth(408), 120);
   assert.equal(sparkWidth(700), 120);
   // Not laid out yet.
   assert.equal(sparkWidth(null), 32);

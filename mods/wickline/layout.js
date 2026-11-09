@@ -21,7 +21,7 @@ export const NUMBER_W = 68;
 // 8px of it before the code, so a price lit at its limit (4px past its digits) keeps 4px clear of it.
 export const CODE_W = 38;
 // The room a sidebar row's left lines keep before its day line grows past its narrowest.
-export const NAME_ROOM = 150;
+export const NAME_ROOM = 110;
 // The name takes what the fixed columns leave, within these bounds; below the minimum it drops.
 export const NAME_MIN_WIDTH = 120;
 export const NAME_MAX_WIDTH = 320;
