@@ -434,3 +434,12 @@ test("the list's scrollbar has its own lane", () => {
   assert.doesNotMatch(panel, /px\(GUTTER\)|pr\(GUTTER\)|right\(GUTTER\)/);
   assert.doesNotMatch(panel, /\.p[xr]\(20\)/);
 });
+
+// The notice ends with its own full stop (。 in Chinese and Japanese), so a separator before Undo would sit
+// right after it; the link follows the text with only the gap between them.
+test("Undo follows the notice with no separator", () => {
+  const panel = read(new URL("ui/panel.js", MOD));
+  const messages = panel.slice(panel.indexOf("function messages("), panel.indexOf("function problemLines("));
+  assert.match(messages, /link\(t, "bw-undo"/);
+  assert.doesNotMatch(messages, /"·"/);
+});

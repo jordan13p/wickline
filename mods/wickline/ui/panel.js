@@ -122,7 +122,7 @@ function addField(view, t) {
 }
 
 // What the last edit said, under the add field. A removal's notice offers Undo right after its text
-// (`Removed 2330.TW. · Undo`), which wraps at its natural width rather than pushing the link to the edge.
+// (`Removed 2330.TW.  Undo`, no separator after its full stop), which wraps at its natural width rather than pushing the link to the edge.
 function messages(view, t) {
   if (view.error) return [div().text_size(11).text_color(t.ansi1).child(view.say(view.error))];
   if (!view.notice) return [];
@@ -130,7 +130,6 @@ function messages(view, t) {
   if (!view.notice.undo) return [text];
   return [h_flex().items_start().gap(6).text_size(11)
     .child(text.flex_initial().min_w(0))
-    .child(div().flex_none().text_color(t.dim).child("·"))
     .child(link(t, "bw-undo", view.tx("notice.undo"), (cx) => view.undoRemove(cx)))];
 }
 
