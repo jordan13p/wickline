@@ -43,7 +43,7 @@ Each row has a dot and a label:
 - **Ring**: delayed or stalled. Yahoo's prices (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds (`quote stopped at 13:05`), or a session not known yet.
 - **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`).
 
-Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, Yahoo TW Stock and TWSE MIS every 10 seconds while Taiwan trades, Finnhub about every 30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
+Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, Yahoo TW Stock and TWSE MIS every 10 seconds while Taiwan trades (60 otherwise), Finnhub about every 30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
 
 ## Install
 
@@ -147,7 +147,7 @@ Hosts, and when Wickline contacts them:
 
 **Why is TWSE MIS off by default?** TWSE MIS is the Taiwan Stock Exchange's market-information website, not an API offered to third-party programs, and nothing about it is promised. Wickline uses it only after you read its responsibility statement in Settings and tick the consent box; whether to use it, and whether that complies with the exchange website's terms of use, is your own judgment and responsibility. The Traditional Chinese statement prevails.
 
-**Why is Yahoo TW Stock off by default?** Its quote interface is one that tw.stock.yahoo.com uses internally, not offered publicly to third-party programs, and the site's robots.txt disallows automated access to it; it may change, be blocked or stop at any time. Wickline uses it only after you read its own responsibility statement in Settings and tick its consent box; whether to use it, and whether that complies with Yahoo's terms of service, is your own judgment and responsibility. The Traditional Chinese statement prevails.
+**Why is Yahoo TW Stock off by default?** Its quote interface is one that tw.stock.yahoo.com uses internally, not offered publicly to third-party programs, and the site's robots.txt disallows automated access to it; it may change, be blocked or stop at any time. When on, it is asked for prices about every 10 seconds while the market is open (about every 60 seconds otherwise) and for each stock's intraday chart about every 2 minutes (otherwise about every 10 minutes until the day's chart is complete). Wickline uses it only after you read its own responsibility statement in Settings and tick its consent box; whether to use it, and whether that complies with Yahoo's terms of service, is your own judgment and responsibility. The Traditional Chinese statement prevails.
 
 **Why only 15 real-time US symbols?** Finnhub's free plan allows 60 requests a minute. Wickline prices as many US symbols as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US symbols in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
 
