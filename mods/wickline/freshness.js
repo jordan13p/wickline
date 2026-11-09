@@ -52,15 +52,21 @@ export function freshness(quote, session, now) {
   return result("delayed", seconds === null ? null : Math.ceil(seconds / 60));
 }
 
+// After the close, how long a price still belongs to the session: TWSE's fixed-price trades end an hour later.
+const AFTER_CLOSE_MS = 90 * 60_000;
+
 /**
  * A quote's limit as drawn: "up", "down" or null (see priceLimit), only while it still holds: live, or once
- * the market is not open (closed, after hours) for a price from today's regular session. Never stalled (the
- * lock may have opened since), unconfirmed, or before the open: Yahoo gives Taiwan no pre-market period, so
- * MIS's trial match at 08:45 reads "closed", and only its time, before the session's start, tells it apart.
+ * the market is not open (closed, after hours) for a price from the regular session its periods describe.
+ * Never stalled (the lock may have opened since), unconfirmed, or before the open: Yahoo gives Taiwan no
+ * pre-market period, so MIS's trial match at 08:45 reads "closed", and only its time, outside the session,
+ * tells it apart, also while a copy that slept still holds yesterday's periods. The time may be the feed's
+ * (Yahoo 奇摩股市), which is never earlier than the stock's own trade today.
  */
 export function shownLimit(quote, session, now) {
   const { state } = freshness(quote, session, now);
-  const traded = quote.timestamp >= (quote.periods?.regular?.[0] ?? Infinity);
+  const regular = quote.periods?.regular;
+  const traded = Boolean(regular) && quote.timestamp >= regular[0] && quote.timestamp <= regular[1] + AFTER_CLOSE_MS;
   return state === "live" || ((state === "closed" || state === "post") && traded) ? priceLimit(quote) : null;
 }
 

@@ -43,6 +43,7 @@ export function band(view, root, t) {
     .children(symbols.map((symbol) => {
       const quote = w.shown(symbol);
       const failed = Boolean(w.errors[symbol]);
+      const code = quote && bandCurrency(quote);
       const mark = quote && dot(t, freshness(quote, sessionOf(quote, now), now).state);
       return h_flex().flex_none().gap(5).items_center().whitespace_nowrap()
         .child(div().font_semibold().child(symbol))
@@ -51,7 +52,7 @@ export function band(view, root, t) {
           ? priceBox(`bw-band-price-${symbol}`, number(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed, now), { pad: 3 })
           : div().text_color(t.dim).child(failed ? view.tx("band.unavailable") : "…"))
         // Its own `dim` text, 2px further out than the gap, so a lit price's 3px block keeps 4px clear of it.
-        .when(Boolean(quote && bandCurrency(quote)), (el) => el.child(div().ml(2).text_color(t.dim).child(bandCurrency(quote))))
+        .when(Boolean(code), (el) => el.child(div().ml(2).text_color(t.dim).child(code)))
         .when(Boolean(quote), (el) => el.child(div().text_color(view.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
         .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
     }));

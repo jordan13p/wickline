@@ -108,5 +108,14 @@ test("MIS's trial match before the open is not lit, a close at the limit is", ()
   assert.equal(shownLimit(tw(before), sessionOf(tw(before), before), before), null);
   const later = Date.parse("2026-11-09T07:00:00Z");
   assert.equal(shownLimit(tw(close), sessionOf(tw(close), later), later), "up");
+  // After hours: TWSE's fixed-price trades end 14:30, an hour past the close.
+  const fixed = Date.parse("2026-11-09T06:30:00Z");
+  assert.equal(shownLimit(tw(fixed), sessionOf(tw(fixed), later), later), "up");
+  // A copy that slept overnight still holds yesterday's periods when today's trial match arrives at 08:45.
+  const nextMorning = Date.parse("2026-11-10T00:45:00Z");
+  assert.equal(shownLimit(tw(nextMorning), sessionOf(tw(nextMorning), nextMorning), nextMorning), null);
+  // Yesterday's close under today's periods is not today's limit.
+  const today = { pre: null, regular: [open + 86_400_000, close + 86_400_000], post: null };
+  assert.equal(shownLimit({ ...tw(close), periods: today }, "closed", nextMorning), null);
 });
 
