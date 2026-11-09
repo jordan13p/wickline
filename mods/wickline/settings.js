@@ -145,45 +145,44 @@ export function marketState(settings, market, { keyAvailable = false, failing = 
   return { live: true, source: sources.find((source) => !failing.includes(source)) ?? sources[0] };
 }
 
+// The settings each source reads, as [section, field]: its problem holds while they are as saved. Yahoo
+// Finance reads none, so no edit drops its problem; Finnhub also reads the key (`keyEdited`).
+const SOURCE_FIELDS = {
+  yahootw: [["tw", "yahootw"], ["tw", "yahootwAck"]],
+  mis: [["tw", "mis"], ["tw", "misAck"], ["tw", "misUrl"]],
+  finnhub: [["us", "provider"], ["us", "finnhubUrl"], ["us", "budgetPerMinute"]],
+  binance: [["crypto", "binanceUrl"]],
+};
+// A Finnhub stop lifts only by what caused it, so a refused key never reads live after another edit:
+// these (an address the key may not be sent to) by a new address; any other (the key refused, missing
+// or unreadable) by a key typed or removed.
+const FINNHUB_ADDRESS_STOPS = ["finnhub.redirected", "finnhub.badUrl"];
+
 /**
- * The health the dialog was given still describes `market`: its section of the draft equals the saved
- * one, and for the US the key is as saved too (`keyEdited`: a key typed or Remove pressed). Once the
- * person changes anything there, the dialog cannot know the result before Save.
+ * The entries of `health` (each source's problem when the dialog opened) that still describe `draft`:
+ * a source's problem holds while the settings it reads are as in `saved`. `keyEdited`: a key typed or
+ * Remove pressed (or, in a dialog left open after Save, a key written or removed).
  */
-export function marketUnchanged({ saved, draft, market, keyEdited }) {
-  if (market === "us" && keyEdited) return false;
-  return JSON.stringify(saved.sources[market]) === JSON.stringify(draft.sources[market]);
+export function currentHealth({ health, saved, draft, keyEdited }) {
+  const same = ([section, field]) => JSON.stringify(saved.sources[section][field]) === JSON.stringify(draft.sources[section][field]);
+  return health.filter((entry) => {
+    if (entry.provider !== "finnhub") return (SOURCE_FIELDS[entry.provider] ?? []).every(same);
+    if (!entry.stopped) return !keyEdited && SOURCE_FIELDS.finnhub.every(same);
+    return FINNHUB_ADDRESS_STOPS.includes(entry.code) ? same(["us", "finnhubUrl"]) : !keyEdited;
+  });
 }
 
 /**
  * A market's status in the settings dialog: what it would use after Save (marketState over `draft`)
  * and `problem`, every source it could use failing, so it never reads live while it does not work.
- * `health` (each source's problem when the dialog opened) counts only while the market is unchanged; a
- * changed market is judged by the choice alone. `key`: the Finnhub key fields finnhubKeyUsable takes,
- * less `health`.
+ * Of `health`, only currentHealth counts: a source whose settings changed is judged by the choice
+ * alone. `key`: the Finnhub key fields finnhubKeyUsable takes, less `health`.
  */
 export function marketStatus({ saved, draft, health, market, key }) {
-  const unchanged = marketUnchanged({ saved, draft, market, keyEdited: key.typed !== "" || key.removing });
-  const counted = unchanged ? health : [];
+  const counted = currentHealth({ health, saved, draft, keyEdited: key.typed !== "" || key.removing });
   const failing = counted.map((entry) => entry.provider);
   const state = marketState(draft, market, { keyAvailable: finnhubKeyUsable({ ...key, health: counted }), failing });
   return { ...state, problem: failing.includes(state.source) };
-}
-
-// The market page whose settings each source reads; Yahoo Finance takes none.
-const SOURCE_MARKETS = { finnhub: "us", yahootw: "tw", mis: "tw", binance: "crypto" };
-
-/**
- * What a dialog left open after Save (the key file could not be made owner-only) keeps of `health`: a
- * source whose market changed in that save has not run with its new settings yet, so its old problem
- * goes. `saved`: the settings before Save; `draft`: what was saved; `keyChanged`: Save wrote or removed
- * the key.
- */
-export function healthAfterSave({ health, saved, draft, keyChanged }) {
-  return health.filter((entry) => {
-    const market = SOURCE_MARKETS[entry.provider];
-    return !market || marketUnchanged({ saved, draft, market, keyEdited: keyChanged });
-  });
 }
 
 /**

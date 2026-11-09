@@ -15,7 +15,7 @@ import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, next
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, healthAfterSave, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, currentHealth, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed,
   validateSettings,
 } from "./settings.js";
 import { BINANCE_URL } from "./providers/binance.js";
@@ -584,7 +584,8 @@ export default class Wickline extends View {
       if (!ownerOnly) {
         // Saved, but other accounts may read the file: the dialog stays open to say so, and Save closes it.
         this.saving = false;
-        this.health = healthAfterSave({ health: this.health, saved: before, draft: this.draft, keyChanged: change !== null });
+        // Sources whose settings this save changed have not run with them yet: their old problems go.
+        this.health = currentHealth({ health: this.health, saved: before, draft: this.draft, keyEdited: change !== null });
         this.keyInput.set_value("");
         this.keyRemoving = false;
         await this.readKeyEnding();

@@ -2,8 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, finnhubKeyUsable, firstDraftError, healthAfterSave, keyChange, marketState, marketStatus,
-  marketUnchanged,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, currentHealth, finnhubKeyUsable, firstDraftError, keyChange, marketState, marketStatus,
   mergeSettings,
   misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
 } from "../mods/wickline/settings.js";
@@ -375,7 +374,7 @@ test("marketStatus: the source in use and whether it is failing", () => {
   assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us" }), { live: false, source: "yahoo", problem: false });
 });
 
-test("marketStatus: health counts only while the market is as saved", () => {
+test("marketStatus: health counts only while its source's settings are as saved", () => {
   const finnhub = us({ provider: "finnhub" });
   const savedKey = { ...NO_KEY, saved: true };
   const stop = (code) => [{ provider: "finnhub", code, params: {}, stopped: true }];
@@ -402,6 +401,20 @@ test("marketStatus: health counts only while the market is as saved", () => {
     { live: false, source: "yahoo", problem: false });
   assert.deepEqual(status({ saved: finnhub, health: [{ provider: "finnhub", code: "finnhub.rateLimited", params: {} }], market: "us", key: savedKey }),
     { live: true, source: "finnhub", problem: true });
+  // A Finnhub stop lifts only by what caused it: a budget edit keeps a refused key refused.
+  const budget = copy(finnhub);
+  budget.sources.us.budgetPerMinute = 30;
+  for (const code of ["finnhub.invalidKey", "finnhub.noKey", "finnhub.secretUnreadable", "finnhub.redirected", "finnhub.badUrl"]) {
+    assert.deepEqual(status({ saved: finnhub, draft: budget, health: stop(code), market: "us", key: savedKey }),
+      { live: false, source: "yahoo", problem: false }, code);
+  }
+  // A new address does not lift a refused key; a key typed does not lift a refused address.
+  assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.invalidKey"), market: "us", key: savedKey }),
+    { live: false, source: "yahoo", problem: false });
+  assert.deepEqual(currentHealth({ saved: finnhub, draft: copy(finnhub), health: stop("finnhub.badUrl"), keyEdited: true }), stop("finnhub.badUrl"));
+  // Yahoo Finance reads no settings: no edit drops its problem, so a delayed market it serves reads Problem.
+  const yahooDown = [{ provider: "yahoo", code: "yahoo.unreachable", params: {} }];
+  assert.deepEqual(status({ saved: finnhub, draft: budget, health: yahooDown, market: "us" }), { live: false, source: "yahoo", problem: true });
   // A change on another market's page leaves this one's health in force.
   const elsewhere = copy(crypto);
   elsewhere.sources.tw.mis = true;
@@ -418,44 +431,43 @@ test("marketStatus: a failing source hands the market to the next one switched o
   // Yahoo Finance failing too changes nothing: the problem is the real-time sources'.
   assert.deepEqual(status({ saved: both, health: [down("yahootw"), down("mis"), down("yahoo")], market: "tw" }),
     { live: true, source: "yahootw", problem: true });
-  // A changed market is judged by the choice alone, so the first source is named.
+  // Health is kept per source: a new MIS address says nothing about Yahoo 奇摩股市, which still fails.
   const edited = copy(both);
   edited.sources.tw.misUrl = "https://example.com";
-  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw")], market: "tw" }), { live: true, source: "yahootw", problem: false });
+  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw")], market: "tw" }), { live: true, source: "mis", problem: false });
+  // MIS failing too: its own edit drops its problem, so the choice says MIS.
+  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw"), down("mis")], market: "tw" }), { live: true, source: "mis", problem: false });
+  assert.deepEqual(currentHealth({ saved: both, draft: edited, health: [down("yahootw"), down("mis")], keyEdited: false }), [down("yahootw")]);
 });
 
-test("marketUnchanged", () => {
-  const saved = readSettings(undefined);
-  for (const market of SETTINGS_MARKETS) assert.equal(marketUnchanged({ saved, draft: copy(saved), market, keyEdited: false }), true, market);
+test("currentHealth: each source's problem holds while the settings it reads are as saved", () => {
+  const saved = us({ provider: "finnhub" });
+  const problem = (provider, code, extra = {}) => ({ provider, code, params: {}, ...extra });
+  const health = [problem("finnhub", "finnhub.rateLimited"), problem("binance", "binance.region"), problem("yahoo", "yahoo.unreachable")];
+  assert.deepEqual(currentHealth({ health, saved, draft: copy(saved), keyEdited: false }), health);
   // A switch turned on and off again is unchanged.
   const back = copy(saved);
   back.sources.tw.mis = true;
   back.sources.tw.mis = false;
-  assert.equal(marketUnchanged({ saved, draft: back, market: "tw", keyEdited: false }), true);
-  const budget = copy(saved);
-  budget.sources.us.budgetPerMinute = 30;
-  assert.equal(marketUnchanged({ saved, draft: budget, market: "us", keyEdited: false }), false);
-  assert.equal(marketUnchanged({ saved, draft: budget, market: "tw", keyEdited: false }), true);
-  // A typed key or Remove changes only the US.
-  assert.equal(marketUnchanged({ saved, draft: copy(saved), market: "us", keyEdited: true }), false);
-  assert.equal(marketUnchanged({ saved, draft: copy(saved), market: "tw", keyEdited: true }), true);
-});
-
-test("healthAfterSave: a dialog left open forgets the problems of what it saved", () => {
-  const saved = us({ provider: "finnhub" });
-  const problem = (provider, code) => ({ provider, code, params: {} });
-  const health = [problem("finnhub", "finnhub.invalidKey"), problem("binance", "binance.region"), problem("yahoo", "yahoo.unreachable")];
-  // A new key was written: the old key's refusal no longer says anything about it.
-  assert.deepEqual(healthAfterSave({ health, saved, draft: copy(saved), keyChanged: true }), health.slice(1));
-  // Only crypto changed: the US keeps its problem; Yahoo Finance takes no settings, so its stays.
+  const tw = [problem("mis", "mis.unreachable"), problem("yahootw", "yahootw.unreachable")];
+  assert.deepEqual(currentHealth({ health: tw, saved, draft: back, keyEdited: false }), tw);
+  // A key typed or removed (also a key Save wrote, in a dialog left open): Finnhub's problem goes.
+  assert.deepEqual(currentHealth({ health, saved, draft: copy(saved), keyEdited: true }), health.slice(1));
+  // Only crypto changed: Finnhub keeps its problem; Yahoo Finance reads no settings, so its stays.
   const moved = copy(saved);
   moved.sources.crypto.binanceUrl = "https://example.com";
-  assert.deepEqual(healthAfterSave({ health, saved, draft: moved, keyChanged: false }), [health[0], health[2]]);
+  assert.deepEqual(currentHealth({ health, saved, draft: moved, keyEdited: false }), [health[0], health[2]]);
+  // A budget edit drops a rate limit, which the budget may cure.
+  const budget = copy(saved);
+  budget.sources.us.budgetPerMinute = 30;
+  assert.deepEqual(currentHealth({ health, saved, draft: budget, keyEdited: false }), health.slice(1));
+  // The MIS switch is MIS's own: Yahoo 奇摩股市 keeps its problem.
   const misOn = copy(saved);
   misOn.sources.tw.mis = true;
-  const tw = [problem("mis", "mis.unreachable"), problem("yahootw", "yahootw.unreachable")];
-  assert.deepEqual(healthAfterSave({ health: tw, saved, draft: misOn, keyChanged: false }), []);
-  assert.deepEqual(healthAfterSave({ health: [...health, ...tw], saved, draft: copy(saved), keyChanged: false }), [...health, ...tw]);
+  assert.deepEqual(currentHealth({ health: tw, saved, draft: misOn, keyEdited: false }), [tw[1]]);
+  const ticked = copy(saved);
+  ticked.sources.tw.yahootwAck = { version: YAHOOTW_CONSENT_VERSION };
+  assert.deepEqual(currentHealth({ health: tw, saved, draft: ticked, keyEdited: false }), [tw[0]]);
 });
 
 test("settingsMarkets follows the language", () => {
