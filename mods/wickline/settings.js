@@ -118,6 +118,7 @@ export function yahootwReconfirm(settings) {
 }
 
 // The markets with a page of their own in the settings dialog; Hong Kong, China, Japan and Korea share "other".
+// Each id is also the `sources.<id>.` prefix of its fields' error paths, which firstDraftError relies on.
 export const SETTINGS_MARKETS = ["us", "tw", "crypto", "other"];
 
 /** The settings dialog's market pages, in the order the filter row uses for `lang`. */
@@ -155,11 +156,11 @@ export function consentCollapsed(saved, draft, source) {
   return consentGiven(saved.sources.tw, source) && consentGiven(draft.sources.tw, source);
 }
 
-/** The first of `errors` (validateSettings) on a page of `markets`, taken in that order, as `{ code, market }`; null when none. */
+/** The code of the first of `errors` (validateSettings) on a page of `markets`, taken in that order; null when none. */
 export function firstDraftError(errors, markets) {
   for (const market of markets) {
     const path = Object.keys(errors).find((key) => key.startsWith(`sources.${market}.`));
-    if (path) return { code: errors[path], market };
+    if (path) return errors[path];
   }
   return null;
 }

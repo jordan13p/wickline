@@ -11,7 +11,7 @@ import {
 import { button, checkbox, dot, note, segmented, toggle } from "./parts.js";
 
 export const SETTINGS_TABS = [...SETTINGS_MARKETS, "display", "disclaimer"];
-// Each tab's drawing, by its name in SETTINGS_TABS. A market page returns its parts under the title.
+// Each tab's drawing, by its name in SETTINGS_TABS.
 const TABS = { us: usPage, tw: taiwanPage, crypto: cryptoPage, other: otherPage, display: displayTab, disclaimer: disclaimerTab };
 const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
 
@@ -40,10 +40,8 @@ export function settingsView(view, t) {
     .child(div().h(10))
     .child(item("display", view.tx("settings.tab.display")))
     .child(item("disclaimer", view.tx("settings.tab.disclaimer")));
-  const page = SETTINGS_MARKETS.includes(view.tab)
-    ? v_flex().gap(10).child(pageTitle(view, t, view.tab, statuses[view.tab])).children(TABS[view.tab](view, t, errors).filter(Boolean))
-    : TABS[view.tab](view, t);
-  const pane = v_flex().id("bw-settings-pane").flex_1().min_w(0).min_h(0).p(18).gap(14).overflow_y_scrollbar().child(page);
+  const pane = v_flex().id("bw-settings-pane").flex_1().min_w(0).min_h(0).p(18).gap(14).overflow_y_scrollbar()
+    .child(TABS[view.tab](view, t, errors, statuses[view.tab]));
   const save = h_flex().id("bw-settings-save").flex_none().h(28).px(14).items_center().rounded(5).font_semibold()
     .when(invalid, (el) => el.bg(t.hover).text_color(t.dim))
     .when(!invalid, (el) => el.bg(t.solid).text_color(t.solid_foreground).cursor_pointer().on_click((_e, cx) => view.saveDraft(cx)))
@@ -52,7 +50,7 @@ export function settingsView(view, t) {
   const blocking = firstDraftError(errors, settingsMarkets(view.lang));
   const footer = h_flex().flex_none().px(14).py(10).gap(8).items_center().border_t(1).border_color(t.border)
     .child(div().flex_1().min_w(0).max_h(32).line_height("16px").overflow_hidden().text_size(11.5).text_color(t.ansi1)
-      .child(view.error ? view.say(view.error) : blocking ? view.tx(blocking.code) : ""))
+      .child(view.error ? view.say(view.error) : blocking ? view.tx(blocking) : ""))
     .child(h_flex().id("bw-settings-cancel").flex_none().h(28).px(14).items_center().rounded(5).border_1().border_color(t.border)
       .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_click(() => view.closeDialog()).child(view.tx("settings.cancel")))
@@ -88,6 +86,11 @@ function pageTitle(view, t, market, status) {
     .child(dot(t, status.dotState))
     .child(div().flex_none().text_size(11.5).text_color(status.problem ? t.blocked : t.dim)
       .child(`${state} · ${view.tx(`src.${status.source}`)}`));
+}
+
+// A market's page: its title, then its parts (a part may be null).
+function marketPage(view, t, market, status, ...parts) {
+  return v_flex().gap(10).child(pageTitle(view, t, market, status)).children(parts.filter(Boolean));
 }
 
 function heading(view, t, key) {
@@ -139,26 +142,22 @@ function fallback(view, t, market) {
   ];
 }
 
-function disclosure(t, id, open, label, onToggle) {
-  return h_flex().id(id).gap(6).items_center().cursor_pointer().text_size(11).font_semibold().text_color(t.muted)
-    .hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => onToggle(cx))
-    .child(div().flex_none().w(10).child(open ? "⌄" : "›"))
-    .child(label);
-}
-
 // The page's address fields, folded away until the person opens them. A refused address opens them by
-// itself and keeps them open, so fixing it never hides the field being typed in.
+// itself and keeps them open, so fixing it never hides the field being typed in: adding to
+// `view.advancedOpen` while drawing is on purpose, since the open state has to outlive the error.
 function advanced(view, t, market, fields, error) {
   if (error) view.advancedOpen.add(market);
   const open = view.advancedOpen.has(market);
-  return [
-    disclosure(t, `bw-${market}-advanced`, open, view.tx("settings.advanced"), (cx) => {
+  const header = h_flex().id(`bw-${market}-advanced`).gap(6).items_center().cursor_pointer().text_size(11).font_semibold()
+    .text_color(t.muted).hover((s) => s.text_color(t.foreground))
+    .on_click((_e, cx) => {
       if (open) view.advancedOpen.delete(market);
       else view.advancedOpen.add(market);
       cx.notify();
-    }),
-    ...(open ? fields : []),
-  ];
+    })
+    .child(div().flex_none().w(10).child(open ? "⌄" : "›"))
+    .child(view.tx("settings.advanced"));
+  return [header, ...(open ? fields : [])];
 }
 
 // A Taiwan source switched on: once consent to its current statement is saved, one line that shows the
@@ -191,10 +190,10 @@ function consentParts(view, t, source) {
 }
 
 // Taiwan: Yahoo 奇摩股市, then TWSE MIS, each used once switched on and consented to; Yahoo Finance otherwise.
-function taiwanPage(view, t, errors) {
+function taiwanPage(view, t, errors, status) {
   const tw = view.draft.sources.tw;
   const misUrlError = errors["sources.tw.misUrl"];
-  return [
+  return marketPage(view, t, "tw", status,
     heading(view, t, "settings.realtime"),
     sourceRow(view, t, "1", "yahootw", view.tx("settings.unofficial"),
       toggle(t, "bw-yahootw", tw.yahootw, view.tx("src.yahootw"), (on) => { tw.yahootw = on; })),
@@ -205,7 +204,7 @@ function taiwanPage(view, t, errors) {
     ...fallback(view, t, "tw"),
     ...(tw.mis ? advanced(view, t, "tw",
       field(view, t, view.tx("sources.tw.url"), view.misUrlInput, view.misUrlFocused, misUrlError), misUrlError) : []),
-  ];
+  );
 }
 
 // The Finnhub key: a saved one is never drawn, only its last four characters and Remove (applied on Save).
@@ -250,12 +249,12 @@ function finnhubParts(view, t, errors) {
 
 // United States: Finnhub with the person's key, else Yahoo Finance. With Finnhub off, a saved key stays
 // until Remove and Save, so its line stays too.
-function usPage(view, t, errors) {
+function usPage(view, t, errors, status) {
   const us = view.draft.sources.us;
   const on = us.provider === "finnhub";
   const urlError = errors["sources.us.finnhubUrl"];
   const saved = on ? null : savedKey(view, t);
-  return [
+  return marketPage(view, t, "us", status,
     heading(view, t, "settings.realtime"),
     sourceRow(view, t, "1", "finnhub", view.tx("settings.ownKey"),
       toggle(t, "bw-finnhub", on, view.tx("src.finnhub"), (value) => { us.provider = value ? "finnhub" : "yahoo"; })),
@@ -271,25 +270,25 @@ function usPage(view, t, errors) {
     ...fallback(view, t, "us"),
     ...(on ? advanced(view, t, "us",
       field(view, t, view.tx("sources.us.url"), view.finnhubUrlInput, view.finnhubUrlFocused, urlError), urlError) : []),
-  ];
+  );
 }
 
 // Crypto: Binance Spot only, always on, at the address the person may change.
-function cryptoPage(view, t, errors) {
+function cryptoPage(view, t, errors, status) {
   const urlError = errors["sources.crypto.binanceUrl"];
-  return [
+  return marketPage(view, t, "crypto", status,
     heading(view, t, "settings.realtime"),
     // "Spot" is part of the product's name (Binance Spot), the same in every language.
     sourceRow(view, t, "1", "binance", "Spot", alwaysOn(view, t)),
     details(healthLine(view, t, "binance"), note(t, view.tx("sources.crypto.region"))),
     ...fallback(view, t, "crypto"),
     ...advanced(view, t, "crypto", field(view, t, view.tx("sources.crypto.url"), view.urlInput, view.urlFocused, urlError), urlError),
-  ];
+  );
 }
 
 // Every other market: Yahoo Finance alone, nothing to set.
-function otherPage(view, t) {
-  return [...fallback(view, t, "other"), note(t, view.tx("sources.other.body"))];
+function otherPage(view, t, _errors, status) {
+  return marketPage(view, t, "other", status, ...fallback(view, t, "other"), note(t, view.tx("sources.other.body")));
 }
 
 // The interface language, then the gain and loss colors, then Herdr's own appearance settings.

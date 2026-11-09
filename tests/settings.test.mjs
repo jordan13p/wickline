@@ -399,7 +399,7 @@ test("firstDraftError", () => {
   const order = ["tw", "us", "crypto", "other"];
   assert.equal(firstDraftError({}, order), null);
   const errors = { "sources.crypto.binanceUrl": "url.notHttps", "sources.us.budgetPerMinute": "budget.tooSmall" };
-  assert.deepEqual(firstDraftError(errors, order), { code: "budget.tooSmall", market: "us" });
-  assert.deepEqual(firstDraftError(errors, ["crypto"]), { code: "url.notHttps", market: "crypto" });
+  assert.equal(firstDraftError(errors, order), "budget.tooSmall");
+  assert.equal(firstDraftError(errors, ["crypto"]), "url.notHttps");
   assert.equal(firstDraftError(errors, ["tw"]), null);
 });
