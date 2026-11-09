@@ -1,11 +1,12 @@
 // The settings dialog: a copy whose props carry `settings` draws only this. The draft, its inputs and
 // Save live on the view (inputs are made outside render, and saving writes Herdr's storage).
 import { div } from "gpui-kit";
-import { h_flex, v_flex, Checkbox, Input } from "gpui-base";
+import { h_flex, v_flex, Input } from "gpui-base";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { MIS_CONSENT_VERSION } from "../providers/mis.js";
+import { YAHOOTW_CONSENT_VERSION } from "../providers/yahootw.js";
 import { finnhubCap } from "../providers/finnhub.js";
-import { button, card, note, segmented } from "./parts.js";
+import { button, card, checkbox, note, segmented } from "./parts.js";
 
 export const SETTINGS_TABS = ["sources", "display", "disclaimer"];
 // Each tab's drawing, by its name in SETTINGS_TABS.
@@ -106,28 +107,28 @@ function usCard(view, t, errors) {
     healthLine(view, t, "finnhub"));
 }
 
-// Taiwan: Yahoo, or TWSE MIS once its statement is read and the box ticked (Save waits for it).
+// Taiwan: Yahoo Finance always, and two real-time switches, each usable once its own statement is read and
+// its box ticked (Save waits for both). The statements show in the reader's language; the Traditional
+// Chinese text prevails.
 function taiwanCard(view, t, errors) {
   const tw = view.draft.sources.tw;
-  const chosen = tw.provider === "mis";
-  const agreed = tw.misAck?.version === MIS_CONSENT_VERSION;
-  const urlError = errors["sources.tw.misUrl"];
-  const consent = Checkbox.new("bw-mis-consent").checked(agreed).cursor_pointer()
-    .on_change((checked, cx) => { tw.misAck = checked ? { version: MIS_CONSENT_VERSION } : null; cx.notify(); })
-    .child(h_flex().gap(8).items_start()
-      .child(div().flex_none().mt(2).w(14).h(14).rounded(3).border_1().border_color(agreed ? t.accent : t.border)
-        .flex().items_center().justify_center().text_size(10).text_color(t.background)
-        .when(agreed, (el) => el.bg(t.accent).child("✓")))
-      .child(div().flex_1().min_w(0).font_semibold().child(view.tx("mis.consent"))));
-  return card(t, view.tx("sources.tw.title"), view.tx(chosen ? "sources.tw.misSource" : "sources.tw.yahooSource"),
-    segmented(t, "bw-tw", [["yahoo", view.tx("src.yahoo")], ["mis", view.tx("src.mis")]], tw.provider,
-      (provider) => { tw.provider = provider; }),
-    ...(chosen ? field(view, t, view.tx("sources.tw.url"), view.misUrlInput, view.misUrlFocused, urlError) : []),
-    // The statement in the reader's language; the Traditional Chinese text prevails.
-    chosen && div().text_size(11.5).text_color(t.muted).child(view.tx("mis.statement")),
-    chosen && note(t, view.tx("mis.prevails")),
-    chosen && consent,
-    chosen && !agreed ? note(t, view.tx("mis.consentNeeded")) : null,
+  const yahootwAgreed = tw.yahootwAck?.version === YAHOOTW_CONSENT_VERSION;
+  const misAgreed = tw.misAck?.version === MIS_CONSENT_VERSION;
+  return card(t, view.tx("sources.tw.title"), view.tx("sources.tw.yahooSource"),
+    checkbox(t, "bw-yahootw", tw.yahootw, view.tx("sources.tw.yahootwSwitch"), (on) => { tw.yahootw = on; }),
+    tw.yahootw && div().text_size(11.5).text_color(t.muted).child(view.tx("yahootw.statement")),
+    tw.yahootw && note(t, view.tx("yahootw.prevails")),
+    tw.yahootw && checkbox(t, "bw-yahootw-consent", yahootwAgreed, view.tx("yahootw.consent"),
+      (agreed) => { tw.yahootwAck = agreed ? { version: YAHOOTW_CONSENT_VERSION } : null; }),
+    tw.yahootw && !yahootwAgreed ? note(t, view.tx("yahootw.consentNeeded")) : null,
+    healthLine(view, t, "yahootw"),
+    checkbox(t, "bw-mis", tw.mis, view.tx("sources.tw.misSwitch"), (on) => { tw.mis = on; }),
+    ...(tw.mis ? field(view, t, view.tx("sources.tw.url"), view.misUrlInput, view.misUrlFocused, errors["sources.tw.misUrl"]) : []),
+    tw.mis && div().text_size(11.5).text_color(t.muted).child(view.tx("mis.statement")),
+    tw.mis && note(t, view.tx("mis.prevails")),
+    tw.mis && checkbox(t, "bw-mis-consent", misAgreed, view.tx("mis.consent"),
+      (agreed) => { tw.misAck = agreed ? { version: MIS_CONSENT_VERSION } : null; }),
+    tw.mis && !misAgreed ? note(t, view.tx("mis.consentNeeded")) : null,
     healthLine(view, t, "mis"));
 }
 

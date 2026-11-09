@@ -7,6 +7,9 @@ import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance
 import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
+import { readFileSync } from "node:fs";
+import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
+import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 
 const BASE = "https://data-api.binance.vision";
 
@@ -328,6 +331,134 @@ test("pickOverlay: first live in order, else newest, ties keep order, none → n
   assert.equal(pick(NOW - 180_000, NOW - 300_000), "yahootw");
   assert.equal(pick(NOW - 180_000, NOW - 180_000), "yahootw");
   assert.equal(pickOverlay({}, order, NOW), null);
+});
+
+// Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
+const TW_NOW = 1794188480000;
+const TW_ROWS = JSON.parse(readFileSync(new URL("fixtures/yahootw-stocklist.json", import.meta.url), "utf8"));
+const MIS_ROW = JSON.parse(readFileSync(new URL("fixtures/mis-open.json", import.meta.url), "utf8")).msgArray[0];
+const BOTH = { version: 1, sources: { tw: {
+  yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION },
+} } };
+const ONLY_YAHOOTW = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
+// The recorded Yahoo 奇摩股市 rows, each one that has a trade traded at `time`, with some rows' fields replaced.
+const stockList = (time, bySymbol = {}) => ok(TW_ROWS.map((row) => ({
+  ...row, ...(row.regularMarketTime !== "-" && { regularMarketTime: new Date(time).toISOString() }), ...bySymbol[row.symbol],
+})));
+// The recorded MIS row for 2330, traded at `time`.
+const misAt = (time) => ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(time) }] });
+const offline = () => { throw new Error("offline"); };
+const isYahootw = (url) => url.startsWith(YAHOOTW_BASE);
+
+function taiwanHost(prefs, { yahootw = () => stockList(TW_NOW - 5_000), mis = () => misAt(TW_NOW - 5_000) } = {}) {
+  const host = fakeHost((url) => isYahootw(url) ? host.yahootw(url) : url.startsWith(MIS_URL) ? host.mis(url)
+    : chart({ symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
+      regularMarketTime: 1_794_187_000, previousClose: 2135, currency: "TWD" }));
+  Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis });
+  host.store = { version: 1, symbols: ["2330.TW"], paused: false };
+  return host;
+}
+
+// One round of every source, then `check(w, host)`.
+async function firstRound(host, check) {
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_NOW + 1);
+  await check(w, host);
+  await stop(w, host, runs);
+}
+
+test("both live: Yahoo 奇摩股市 is shown", async () => {
+  await firstRound(taiwanHost(BOTH), (w) => {
+    const quote = w.shown("2330.TW", TW_NOW);
+    assert.deepEqual([quote.source, quote.price, quote.localName], ["yahootw", 2240, "台積電"]);
+    assert.equal(w.overlayError("2330.TW"), null);
+  });
+});
+
+test("Yahoo stale, MIS live: MIS is shown with the Yahoo Finance line", async () => {
+  await firstRound(taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - 180_000) }), (w) => {
+    const quote = w.shown("2330.TW");
+    assert.deepEqual([quote.source, quote.chartSource], ["mis", "yahoo"]);
+  });
+});
+
+test("both stale: the newer is shown, ties keep Yahoo 奇摩股市", async () => {
+  for (const [yahootwAge, misAge, expected] of [[180_000, 300_000, "yahootw"], [300_000, 180_000, "mis"], [180_000, 180_000, "yahootw"]]) {
+    const host = taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - yahootwAge), mis: () => misAt(TW_NOW - misAge) });
+    await firstRound(host, (w) => assert.equal(w.shown("2330.TW").source, expected, `${yahootwAge} ${misAge}`));
+  }
+});
+
+test("no overlay: the base, with the reason", async () => {
+  await firstRound(taiwanHost(ONLY_YAHOOTW, { yahootw: offline }), (w) => {
+    assert.equal(w.shown("2330.TW").source, "yahoo");
+    assert.equal(w.overlayError("2330.TW").code, "yahootw.unreachable");
+    assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.unreachable", params: {} }]);
+  });
+});
+
+test("MIS live after a Yahoo 奇摩股市 failure shows no fallback note", async () => {
+  await firstRound(taiwanHost(BOTH, { yahootw: offline }), (w) => {
+    assert.equal(w.shown("2330.TW").source, "mis");
+    assert.equal(w.overlayError("2330.TW"), null);
+  });
+});
+
+test("turning Yahoo 奇摩股市 off drops its overlay and error at once", async () => {
+  // 0050 is priced above its limit-up, so it holds an error instead of an overlay.
+  const host = taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - 5_000, { "0050.TW": { price: { raw: "11" } } }) });
+  host.store.symbols = ["2330.TW", "0050.TW"];
+  await firstRound(host, async (w) => {
+    assert.ok(w.overlays["2330.TW"].yahootw);
+    assert.equal(w.overlayErrors["0050.TW"].yahootw.code, "yahootw.outOfLimits");
+    host.prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootw: false } } };
+    assert.equal(w.sync(), true);
+    assert.equal(w.overlays["2330.TW"].yahootw, undefined);
+    assert.equal(w.overlayErrors["0050.TW"]?.yahootw, undefined);
+    assert.equal(w.shown("2330.TW").source, "mis");
+    const sent = host.requests.filter(isYahootw).length;
+    await advance(host, TW_NOW + 61_000);
+    assert.equal(host.requests.filter(isYahootw).length, sent);
+  });
+});
+
+test("a fresh install never asks tw.stock.yahoo.com", async () => {
+  const host = taiwanHost(undefined);
+  host.store.symbols = ["2330.TW", "6488.TWO", "0050.TW"];
+  await firstRound(host, async (w) => {
+    await advance(host, TW_NOW + 61_000);
+    assert.ok(host.requests.length > 0);
+    assert.ok(host.requests.every((url) => !url.includes("tw.stock.yahoo.com")), host.requests.join());
+    assert.deepEqual(w.problems(), []);
+  });
+});
+
+test("only MIS consented: only MIS and Yahoo Finance are asked for Taiwan", async () => {
+  // Switched on, but its box never ticked.
+  const prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootwAck: null } } };
+  await firstRound(taiwanHost(prefs), async (w, host) => {
+    await advance(host, TW_NOW + 61_000);
+    assert.ok(host.requests.some((url) => url.startsWith(MIS_URL)));
+    assert.ok(host.requests.every((url) => url.startsWith(MIS_URL) || url.startsWith(yahooUrl("2330.TW"))), host.requests.join());
+    assert.equal(w.shown("2330.TW").source, "mis");
+    assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.reconfirm", params: {} }]);
+  });
+});
+
+test("a 403 hands Taiwan rows to MIS and pauses Yahoo 奇摩股市", async () => {
+  await firstRound(taiwanHost(BOTH, { yahootw: () => ({ status: 403, ok: false, text: "" }) }), async (w, host) => {
+    assert.equal(w.shown("2330.TW").source, "mis");
+    assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.refused", params: {} }]);
+    const sent = host.requests.filter(isYahootw).length;
+    await advance(host, TW_NOW + 59_000);
+    assert.equal(host.requests.filter(isYahootw).length, sent);
+    assert.equal(w.shown("2330.TW").source, "mis");
+  });
+});
+
+test("a Yahoo 奇摩股市 name reaches the row", async () => {
+  await firstRound(taiwanHost(ONLY_YAHOOTW), (w) => assert.equal(w.shown("2330.TW").localName, "台積電"));
 });
 
 test("identity", () => {

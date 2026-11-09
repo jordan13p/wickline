@@ -11,7 +11,14 @@ const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5
 test("freshness constants", () => {
   assert.equal(LIVE_MAX_AGE_MS, 120_000);
   assert.equal(TAIWAN_YAHOO_DELAY_S, 1200);
-  assert.deepEqual([...REALTIME_SOURCES].sort(), ["binance", "finnhub", "mis"]);
+  assert.deepEqual([...REALTIME_SOURCES].sort(), ["binance", "finnhub", "mis", "yahootw"]);
+});
+
+test("Yahoo 奇摩股市 is a real-time source", () => {
+  const NOW = 1794188480000;
+  const at = (timestamp) => freshness({ source: "yahootw", timestamp, symbol: "2330.TW" }, "open", NOW).state;
+  assert.equal(at(NOW - 10_000), "live");
+  assert.equal(at(NOW - 121_000), "stalled");
 });
 
 test("freshness states", () => {

@@ -1,7 +1,7 @@
 // Stateless drawing helpers shared by the panel and the dialogs: each takes the theme and what it
 // draws, and returns an element. No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
-import { h_flex, v_flex } from "gpui-base";
+import { h_flex, v_flex, Checkbox } from "gpui-base";
 import { chartGeometry } from "../format.js";
 import { SPIN_MS } from "../motion.js";
 
@@ -66,6 +66,17 @@ export function segmented(t, id, choices, current, onPick) {
       .text_color(value === current ? t.foreground : t.muted).when(value === current, (el) => el.bg(t.hover).font_semibold())
       .hover((s) => s.text_color(t.foreground))
       .on_click((_e, cx) => { onPick(value); cx.notify(); }).child(label)));
+}
+
+// A box drawn in the theme (accent-filled while ticked) and its label; a click on either toggles it.
+export function checkbox(t, id, checked, label, onChange) {
+  return Checkbox.new(id).checked(checked).cursor_pointer()
+    .on_change((value, cx) => { onChange(value); cx.notify(); })
+    .child(h_flex().gap(8).items_start()
+      .child(div().flex_none().mt(2).w(14).h(14).rounded(3).border_1().border_color(checked ? t.accent : t.border)
+        .flex().items_center().justify_center().text_size(10).text_color(t.background)
+        .when(checked, (el) => el.bg(t.accent).child("✓")))
+      .child(div().flex_1().min_w(0).font_semibold().child(label)));
 }
 
 // A source's card: its name and kind, then whatever it lets the person set.

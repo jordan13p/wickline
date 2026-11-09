@@ -5,6 +5,7 @@ import { LANGUAGES } from "./i18n.js";
 import { BINANCE_URL } from "./providers/binance.js";
 import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
+import { YAHOOTW_CONSENT_VERSION } from "./providers/yahootw.js";
 
 // Herdr's shared state (persisted), so every copy uses the same settings.
 export const SETTINGS_KEY = "wickline.settings.v1";
@@ -30,6 +31,8 @@ export function readSettings(value) {
   const crypto = section(saved.sources, "crypto");
   const tw = section(saved.sources, "tw");
   const us = section(saved.sources, "us");
+  // Before the two Taiwan switches, `provider: "mis"` chose MIS; a saved switch wins over it.
+  const mis = typeof tw.mis === "boolean" ? tw.mis : tw.provider === "mis";
   return {
     version: 1,
     language: LANGUAGES.includes(saved.language) ? saved.language : "en",
@@ -44,7 +47,15 @@ export function readSettings(value) {
         finnhubUrl: readUrl(us.finnhubUrl, FINNHUB_URL),
         budgetPerMinute: Number.isInteger(us.budgetPerMinute) && us.budgetPerMinute > 0 ? us.budgetPerMinute : DEFAULT_FINNHUB_BUDGET,
       },
-      tw: { provider: tw.provider === "mis" ? "mis" : "yahoo", misUrl: readUrl(tw.misUrl, MIS_URL), misAck: readAck(tw.misAck) },
+      tw: {
+        // Only for going back to 0.3.1, which reads this key; this build reads `mis`.
+        provider: mis ? "mis" : "yahoo",
+        mis,
+        yahootw: tw.yahootw === true,
+        misUrl: readUrl(tw.misUrl, MIS_URL),
+        misAck: readAck(tw.misAck),
+        yahootwAck: readAck(tw.yahootwAck),
+      },
       crypto: { binanceUrl: readUrl(crypto.binanceUrl, BINANCE_URL) },
     },
   };
@@ -66,22 +77,32 @@ export function keyChange({ provider, typed, saved, removing }) {
   return removing && saved ? "remove" : null;
 }
 
-/** MIS is on only when chosen and consented to for the current statement. */
+/** MIS is on only when switched on and consented to for the current statement. */
 export function misEnabled(settings) {
-  return settings.sources.tw.provider === "mis" && settings.sources.tw.misAck?.version === MIS_CONSENT_VERSION;
+  return settings.sources.tw.mis === true && settings.sources.tw.misAck?.version === MIS_CONSENT_VERSION;
 }
 
-/** MIS is chosen but its consent is missing or for an older statement: Taiwan uses Yahoo until it is given again. */
+/** MIS is switched on but its consent is missing or for an older statement: Taiwan does not use it until it is given again. */
 export function misReconfirm(settings) {
-  return settings.sources.tw.provider === "mis" && !misEnabled(settings);
+  return settings.sources.tw.mis === true && !misEnabled(settings);
+}
+
+/** Yahoo 奇摩股市 is on only when switched on and consented to for its own current statement. */
+export function yahootwEnabled(settings) {
+  return settings.sources.tw.yahootw === true && settings.sources.tw.yahootwAck?.version === YAHOOTW_CONSENT_VERSION;
+}
+
+/** Yahoo 奇摩股市 is switched on but its consent is missing or for an older statement. */
+export function yahootwReconfirm(settings) {
+  return settings.sources.tw.yahootw === true && !yahootwEnabled(settings);
 }
 
 // Field path -> error code; an https address, optionally with a path, and no userinfo, query or fragment.
 // Finnhub's keeps the host finnhub.io (it is sent the key).
-// A field is checked only while it is shown: the MIS address only with MIS chosen.
+// A field is checked only while it is shown: the MIS address only with MIS on.
 const URL_FIELDS = [
   ["sources.us.finnhubUrl", (s) => (s.sources.us?.provider === "finnhub" ? s.sources.us.finnhubUrl : null)],
-  ["sources.tw.misUrl", (s) => (s.sources.tw?.provider === "mis" ? s.sources.tw.misUrl : null)],
+  ["sources.tw.misUrl", (s) => (s.sources.tw?.mis === true ? s.sources.tw.misUrl : null)],
   ["sources.crypto.binanceUrl", (s) => s.sources.crypto.binanceUrl],
 ];
 // The host has at least one letter or digit and no `@` (a password in the address would be sent as is).
@@ -114,8 +135,9 @@ export function validateSettings(settings, { finnhubKey, keySaved = false } = {}
     if (key === "" && !keySaved) errors["sources.us.key"] = "finnhub.keyNeeded";
     else if (key && (KEY_BAD_CHARACTER.test(key) || key.length > KEY_MAX_LENGTH)) errors["sources.us.key"] = "finnhub.keyInvalid";
   }
-  // MIS cannot be saved without ticking the consent box.
+  // Neither Taiwan source can be saved on without ticking its own consent box.
   if (settings.sources.tw && misReconfirm(settings)) errors["sources.tw.misAck"] = "mis.consentNeeded";
+  if (settings.sources.tw && yahootwReconfirm(settings)) errors["sources.tw.yahootwAck"] = "yahootw.consentNeeded";
   return errors;
 }
 
@@ -131,6 +153,8 @@ export function mergeSettings(raw, change) {
   for (const [name, key] of URL_KEYS) {
     if (typeof sources[name]?.[key] === "string") sources[name][key] = sources[name][key].trim();
   }
+  // The old key follows the MIS switch, so a stale one in the dialog's draft never wins.
+  sources.tw.provider = sources.tw.mis === true ? "mis" : "yahoo";
   return { ...old, ...known, ...change, sources };
 }
 

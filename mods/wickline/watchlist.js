@@ -6,21 +6,26 @@ import { marketOf } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
-import { SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings } from "./settings.js";
+import {
+  SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings, yahootwEnabled, yahootwReconfirm,
+} from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
+import { yahootw } from "./providers/yahootw.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
 export const WATCHLIST_KEY = "wickline.watchlist.v1";
 // Herdr's fetch cannot be aborted: a request that has not answered by then counts as failed.
 export const REQUEST_TIMEOUT_MS = 10_000;
 // Started in this order, so their first requests go out in this order too.
-const PROVIDERS = [binance, mis, finnhub, yahoo];
-// The overlay sources in priority order: with several live ones for a symbol, the first wins.
+const PROVIDERS = [binance, yahootw, mis, finnhub, yahoo];
+// The overlay sources in priority order (Yahoo 奇摩股市, then TWSE MIS): with several live ones for a
+// symbol, the first wins.
 const OVERLAY_ORDER = PROVIDERS.filter((provider) => provider.overlay).map((provider) => provider.id);
 // Overlay sources the person turns on in Settings: whether each is on now (given this watchlist, which
 // holds the key read from the secrets file), what its card and status line say while it is chosen but
 // cannot run, and, for a source that can refuse the key, the settings whose change lets it try again.
 const SWITCHES = {
+  yahootw: { on: yahootwEnabled, notice: (settings) => (yahootwReconfirm(settings) ? "yahootw.reconfirm" : null) },
   mis: { on: misEnabled, notice: (settings) => (misReconfirm(settings) ? "mis.reconfirm" : null) },
   finnhub: {
     // The address is checked again here: shared state may hold one the dialog never accepted.
@@ -140,7 +145,7 @@ export class Watchlist {
     // one per overlay source (by provider id).
     this.quotes = {};
     this.overlays = {};
-    // By symbol: the last name an overlay gave (MIS's Chinese name), kept while that source fails.
+    // By symbol: the last name an overlay gave (its Chinese name), kept while that source fails.
     this.localNames = {};
     // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart (by
     // provider id), since its symbol still has the base quote.
@@ -604,7 +609,7 @@ export class Watchlist {
 
   apply(provider, request, result) {
     if (provider.overlay) {
-      // A name can come without a price (MIS before the open): remember it all the same.
+      // A name can come without a price (before the open): remember it all the same.
       for (const symbol of request.symbols) if (result.names?.[symbol]) this.localNames[symbol] = result.names[symbol];
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
       for (const symbol of request.symbols) {

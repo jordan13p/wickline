@@ -21,7 +21,7 @@
 
 ## Highlights
 
-- One source per market: Yahoo Finance for stocks and indexes, Binance Spot for crypto, and real time for Taiwan (TWSE MIS) or US stocks (Finnhub, your own key) only if you turn it on.
+- One source per market: Yahoo Finance for stocks and indexes, Binance Spot for crypto, and real time for Taiwan (Yahoo TW Stock, TWSE MIS) or US stocks (Finnhub, your own key) only if you turn it on.
 - Live or delayed at a glance: every row says where its price comes from and how old it is; a delayed or cached price never looks live.
 - Five interface languages: English, 繁體中文, 简体中文, 日本語 and 한국어, with red-up or green-up colors.
 - Drag a row to reorder the list; every open copy follows at once.
@@ -33,17 +33,17 @@
 | Market | Default | Optional real-time | Notes |
 |---|---|---|---|
 | United States | Yahoo Finance (delayed) | Finnhub, with your own API key | Finnhub prices the first 15 US symbols at its default budget of 60 requests per minute; the rest stay on Yahoo. |
-| Taiwan | Yahoo Finance (delayed 20 min) | TWSE MIS, off until you consent | MIS is unofficial; a price outside the stock's daily limits is discarded and the row shows Yahoo. |
+| Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. |
 | Hong Kong, China, Japan, Korea | Yahoo Finance (delayed) | — | Delays vary by exchange; Yahoo usually does not report them. |
 | Crypto | Binance Spot (real time) | — | Binance is unavailable in some regions, such as the United States; you can set another address that serves the same API. |
 
 Each row has a dot and a label:
 
-- **Filled dot**: live. A real-time source, the market trading, the quote at most 120 seconds old (`Binance Spot`, `TWSE MIS`, `Finnhub`).
+- **Filled dot**: live. A real-time source, the market trading, the quote at most 120 seconds old (`Binance Spot`, `Yahoo TW Stock`, `TWSE MIS`, `Finnhub`).
 - **Ring**: delayed or stalled. Yahoo's prices (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds (`quote stopped at 13:05`), or a session not known yet.
 - **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`).
 
-Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, TWSE MIS every 10 seconds while Taiwan trades, Finnhub about every 30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
+Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, Yahoo TW Stock and TWSE MIS every 10 seconds while Taiwan trades, Finnhub about every 30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
 
 ## Install
 
@@ -115,7 +115,7 @@ Type a symbol into the add field and press Enter; a new symbol goes to the top o
 
 The gear icon opens a dialog with three tabs. Nothing changes until you press Save; Cancel or Esc drops your edits.
 
-**Data sources.** Yahoo Finance and Binance Spot need nothing set. The United States card switches US stocks to Finnhub, with your own API key (a free-plan key is enough), the requests per minute and how many symbols that covers. A saved key is never shown again: the card says `Saved ••••` with its last four characters and a **Remove** button; leave the field empty to keep it, or type a new key to replace it. The Finnhub URL stays on `https://finnhub.io`; only its path can change. The Taiwan card switches Taiwan stocks to TWSE MIS after you read its statement and tick the consent box. The Crypto card takes another Binance address (`https://` only).
+**Data sources.** Yahoo Finance and Binance Spot need nothing set. The United States card switches US stocks to Finnhub, with your own API key (a free-plan key is enough), the requests per minute and how many symbols that covers. A saved key is never shown again: the card says `Saved ••••` with its last four characters and a **Remove** button; leave the field empty to keep it, or type a new key to replace it. The Finnhub URL stays on `https://finnhub.io`; only its path can change. The Taiwan card keeps Yahoo Finance and adds two switches, Yahoo TW Stock (live) and TWSE MIS (live), both off at first; each runs only after you read its own statement and tick its own consent box. The Crypto card takes another Binance address (`https://` only).
 
 **Display.** The interface language (it changes only the text, not the quotes), the gain and loss colors (automatic by language, red-up or green-up) and a button to Herdr's own appearance settings; light and dark themes come from Herdr.
 
@@ -131,7 +131,8 @@ Hosts, and when Wickline contacts them:
 |---|---|
 | `query1.finance.yahoo.com` | always, for stocks and indexes |
 | `data-api.binance.vision`, or the Binance address you set | always, for crypto pairs |
-| `mis.twse.com.tw`, or the MIS address you set | only after you choose TWSE MIS for Taiwan and tick its consent box (unofficial) |
+| `tw.stock.yahoo.com` (fixed) | only after you turn on Yahoo TW Stock for Taiwan and tick its consent box (not a public interface) |
+| `mis.twse.com.tw`, or the MIS address you set | only after you turn on TWSE MIS for Taiwan and tick its consent box (unofficial) |
 | `finnhub.io` (only the path of the Finnhub URL can change) | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address, and only to `https://finnhub.io`: a saved address on any other host, or an answer redirected elsewhere, stops Finnhub and says so |
 
 - **Programs**: only `chmod 600` on `data/wickline/secrets.json` right after you save a Finnhub key, on macOS and Linux, so other accounts on this computer cannot read it. If it fails, the dialog says so and the key stays saved. Nothing else is run.
@@ -142,9 +143,11 @@ Hosts, and when Wickline contacts them:
 
 ## FAQ
 
-**Why are my Taiwan quotes 20 minutes late?** Yahoo Finance delays Taiwan quotes by 20 minutes, and Wickline says so on every Taiwan row (`delayed 20 min`). For real-time Taiwan prices, turn on TWSE MIS in Settings.
+**Why are my Taiwan quotes 20 minutes late?** Yahoo Finance delays Taiwan quotes by 20 minutes, and Wickline says so on every Taiwan row (`delayed 20 min`). For real-time Taiwan prices, turn on Yahoo TW Stock or TWSE MIS in Settings.
 
 **Why is TWSE MIS off by default?** TWSE MIS is the Taiwan Stock Exchange's market-information website, not an API offered to third-party programs, and nothing about it is promised. Wickline uses it only after you read its responsibility statement in Settings and tick the consent box; whether to use it, and whether that complies with the exchange website's terms of use, is your own judgment and responsibility. The Traditional Chinese statement prevails.
+
+**Why is Yahoo TW Stock off by default?** Its quote interface is one that tw.stock.yahoo.com uses internally, not offered publicly to third-party programs, and the site's robots.txt disallows automated access to it; it may change, be blocked or stop at any time. Wickline uses it only after you read its own responsibility statement in Settings and tick its consent box; whether to use it, and whether that complies with Yahoo's terms of service, is your own judgment and responsibility. The Traditional Chinese statement prevails.
 
 **Why only 15 real-time US symbols?** Finnhub's free plan allows 60 requests a minute. Wickline prices as many US symbols as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US symbols in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
 

@@ -6,6 +6,9 @@ import { LIVE_MAX_AGE_MS, freshness } from "../mods/wickline/freshness.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { yahoo } from "../mods/wickline/providers/yahoo.js";
+import { readFileSync } from "node:fs";
+import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
+import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 
 const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD" };
 const ticker = (url) => ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1]))
@@ -18,7 +21,7 @@ const count = (host, part) => host.requests.filter((url) => url.includes(part)).
 
 test("one loop per source", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  assert.deepEqual(w.providerIds(), ["binance", "mis", "finnhub", "yahoo"]);
+  assert.deepEqual(w.providerIds(), ["binance", "yahootw", "mis", "finnhub", "yahoo"]);
   assert.equal(REQUEST_TIMEOUT_MS, 10_000);
 });
 
@@ -521,5 +524,38 @@ test("a refresh in a cooldown asks for nothing and does not hang", async () => {
   await advance(host, 10_000);
   assert.equal(host.requests.length, 0);
   assert.equal(w.refreshing, false);
+  await stop(w, host, runs);
+});
+
+test("the wake-up when a Yahoo 奇摩股市 price turns stale shows MIS", async () => {
+  const fixture = (name) => JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
+  const [row2330] = fixture("yahootw-stocklist");
+  const misRow = fixture("mis-open").msgArray[0];
+  // A trading morning in Taipei. Yahoo 奇摩股市's feed froze 5 s before the first round, so its price
+  // turns stale between two rounds; MIS answers every round with a fresh trade.
+  const start0 = 1794188480000;
+  const frozen = start0 - 5_000;
+  const host = fakeHost((url) => url.startsWith(YAHOOTW_BASE) ? ok([{ ...row2330, regularMarketTime: new Date(frozen).toISOString() }])
+    : url.startsWith(MIS_URL) ? ok({ msgArray: [{ ...misRow, z: "2250.0000", tlong: String(host.clock) }] })
+    : chart({ ...AAPL, symbol: "2330.TW", currency: "TWD" }));
+  host.clock = start0;
+  host.prefs = { version: 1, sources: { tw: {
+    yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION },
+  } } };
+  let redraws = 0;
+  host.changed = () => { redraws++; };
+  const w = new Watchlist(host);
+  w.add("2330.TW");
+  const runs = start(w, host);
+  const stale = frozen + LIVE_MAX_AGE_MS + 1;
+  await advance(host, stale - 1);
+  assert.equal(w.shown("2330.TW").source, "yahootw");
+  const before = redraws;
+  const requests = host.requests.length;
+  await advance(host, stale);
+  assert.equal(w.shown("2330.TW").source, "mis");
+  // No round ran at that instant: the redraw came from the wait itself.
+  assert.equal(host.requests.length, requests);
+  assert.ok(redraws > before, `${redraws} redraws`);
   await stop(w, host, runs);
 });

@@ -1,9 +1,13 @@
 // node --test tests/  (settings.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings } from "../mods/wickline/settings.js";
+import {
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, misEnabled, misReconfirm, readSettings, upIsRed, validateSettings,
+  yahootwEnabled, yahootwReconfirm,
+} from "../mods/wickline/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
+import { YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 
 const BINANCE = "https://data-api.binance.vision";
@@ -11,7 +15,7 @@ const DEFAULTS = {
   version: 1, language: "en", colors: "auto", languagePromptDismissed: false, keyRev: 0,
   sources: {
     us: { provider: "yahoo", finnhubUrl: FINNHUB_URL, budgetPerMinute: 60 },
-    tw: { provider: "yahoo", misUrl: MIS_URL, misAck: null },
+    tw: { provider: "yahoo", mis: false, yahootw: false, misUrl: MIS_URL, misAck: null, yahootwAck: null },
     crypto: { binanceUrl: BINANCE },
   },
 };
@@ -100,7 +104,7 @@ test("consent gates MIS", () => {
   assert.equal(misEnabled(tw({ provider: "mis", misAck: { version: MIS_CONSENT_VERSION } })), true);
   // Consent alone does not turn it on.
   assert.equal(misEnabled(tw({ provider: "yahoo", misAck: { version: MIS_CONSENT_VERSION } })), false);
-  assert.equal(readSettings({ version: 1, sources: { tw: { provider: "bogus" } } }).sources.tw.provider, "yahoo");
+  assert.equal(readSettings({ version: 1, sources: { tw: { provider: "bogus" } } }).sources.tw.mis, false);
   for (const misAck of [{}, { version: "1" }, [], 1, { version: 1.5 }]) assert.equal(tw({ misAck }).sources.tw.misAck, null, JSON.stringify(misAck));
   assert.deepEqual(tw({ misAck: { version: 1, extra: true } }).sources.tw.misAck, { version: 1 });
   // An older consent asks again; Yahoo or a current consent does not.
@@ -115,8 +119,8 @@ test("MIS needs consent and an https address to save", () => {
   assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: null })), { "sources.tw.misAck": "mis.consentNeeded" });
   assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: ack })), {});
   assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: ack, misUrl: "http://x.test" })), { "sources.tw.misUrl": "url.notHttps" });
-  // A hidden address (Yahoo chosen) does not block a save.
-  assert.deepEqual(validateSettings(tw({ provider: "yahoo", misUrl: "http://x.test" })), {});
+  // A hidden address (MIS off) does not block a save.
+  assert.deepEqual(validateSettings(tw({ mis: false, misUrl: "http://x.test" })), {});
   assert.equal(tw({ misUrl: "https://mirror.test/mis" }).sources.tw.misUrl, "https://mirror.test/mis");
   for (const lang of Object.keys(STRINGS)) {
     for (const code of ["mis.consentNeeded", "mis.statement", "mis.consent", "mis.reconfirm"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
@@ -133,6 +137,60 @@ test("a save stores URLs without surrounding spaces", () => {
   const inner = mergeSettings(undefined, { sources: { crypto: { binanceUrl: " https://a b.test " } } });
   assert.equal(inner.sources.crypto.binanceUrl, "https://a b.test");
   assert.deepEqual(validateSettings(readSettings(inner)), { "sources.crypto.binanceUrl": "url.invalid" });
+});
+
+test("an old MIS choice loads as the MIS switch", () => {
+  const settings = tw({ provider: "mis", misAck: { version: MIS_CONSENT_VERSION } });
+  assert.equal(settings.sources.tw.mis, true);
+  assert.equal(settings.sources.tw.yahootw, false);
+  assert.equal(misEnabled(settings), true);
+});
+
+test("the switch wins over a leftover provider key", () => {
+  assert.equal(misEnabled(tw({ provider: "mis", mis: false, misAck: { version: MIS_CONSENT_VERSION } })), false);
+  assert.equal(tw({ provider: "mis", mis: false }).sources.tw.provider, "yahoo");
+});
+
+test("an outdated MIS consent still asks again", () => {
+  assert.equal(misReconfirm(tw({ mis: true, misAck: { version: 1 } })), true);
+});
+
+test("Yahoo 奇摩股市 needs its own consent", () => {
+  assert.equal(validateSettings(tw({ yahootw: true }))["sources.tw.yahootwAck"], "yahootw.consentNeeded");
+  assert.deepEqual(validateSettings(tw({ yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } })), {});
+  // A MIS consent does not stand in for it.
+  assert.equal(validateSettings(tw({ yahootw: true, misAck: { version: MIS_CONSENT_VERSION } }))["sources.tw.yahootwAck"], "yahootw.consentNeeded");
+  assert.equal(yahootwEnabled(tw({ yahootw: true, misAck: { version: MIS_CONSENT_VERSION } })), false);
+  // Consent alone does not turn it on.
+  assert.equal(yahootwEnabled(tw({ yahootwAck: { version: YAHOOTW_CONSENT_VERSION } })), false);
+  assert.equal(yahootwReconfirm(tw({ yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } })), true);
+  assert.equal(yahootwReconfirm(tw({ yahootw: false })), false);
+  for (const yahootw of ["true", 1, null]) assert.equal(tw({ yahootw }).sources.tw.yahootw, false, String(yahootw));
+  for (const lang of Object.keys(STRINGS)) {
+    for (const code of ["yahootw.consentNeeded", "yahootw.statement", "yahootw.consent", "yahootw.reconfirm", "yahootw.prevails"]) {
+      assert.ok(STRINGS[lang][code], `${lang} ${code}`);
+    }
+  }
+});
+
+test("consent versions are independent", () => {
+  const settings = tw({ yahootw: true, yahootwAck: { version: 1 }, mis: true, misAck: { version: 1 } });
+  assert.equal(yahootwEnabled(settings), true);
+  assert.equal(misReconfirm(settings), true);
+});
+
+test("a fresh install has both Taiwan switches off", () => {
+  const { tw: fresh } = readSettings(undefined).sources;
+  assert.equal(fresh.mis, false);
+  assert.equal(fresh.yahootw, false);
+});
+
+test("a save also writes the old provider key", () => {
+  // 0.3.1 reads only `provider`: going back keeps the person's MIS choice.
+  assert.equal(mergeSettings({}, { sources: { tw: { mis: true } } }).sources.tw.provider, "mis");
+  assert.equal(mergeSettings({}, { sources: { tw: { mis: false } } }).sources.tw.provider, "yahoo");
+  // A stale provider in the dialog's draft never wins over the switch.
+  assert.equal(mergeSettings({}, { sources: { tw: { provider: "mis", mis: false } } }).sources.tw.provider, "yahoo");
 });
 
 const us = (fields) => readSettings({ version: 1, sources: { us: fields } });

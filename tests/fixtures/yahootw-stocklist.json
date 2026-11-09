@@ -1,0 +1,174 @@
+[
+  {
+    "symbol": "2330.TW",
+    "symbolName": "台積電",
+    "price": {
+      "raw": "2240",
+      "fmt": "2,240",
+      "sort": 2240
+    },
+    "regularMarketOpen": {
+      "raw": "2210",
+      "fmt": "2,210",
+      "sort": 2210
+    },
+    "regularMarketDayHigh": {
+      "raw": "2240",
+      "fmt": "2,240",
+      "sort": 2240
+    },
+    "regularMarketDayLow": {
+      "raw": "2190",
+      "fmt": "2,190",
+      "sort": 2190
+    },
+    "regularMarketPreviousClose": {
+      "raw": "2135",
+      "fmt": "2,135",
+      "sort": 2135
+    },
+    "regularMarketTime": "2026-11-09T01:41:13Z",
+    "limitUpPrice": {
+      "raw": "2345",
+      "fmt": "2,345",
+      "sort": 2345
+    },
+    "limitDownPrice": {
+      "raw": "1925",
+      "fmt": "1,925",
+      "sort": 1925
+    },
+    "currency": "TWD",
+    "marketStatus": "open",
+    "exchangeDataDelayedBy": 0
+  },
+  {
+    "symbol": "0056.TW",
+    "symbolName": "元大高股息",
+    "price": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketOpen": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketDayHigh": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketDayLow": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketPreviousClose": {
+      "raw": "23.4",
+      "fmt": "23.40",
+      "sort": 23.4
+    },
+    "regularMarketTime": "-",
+    "limitUpPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "limitDownPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "currency": "TWD",
+    "marketStatus": "open",
+    "exchangeDataDelayedBy": 0
+  },
+  {
+    "symbol": "0050.TW",
+    "symbolName": "元大台灣50",
+    "price": {
+      "raw": "10.05",
+      "fmt": "10.05",
+      "sort": 10.05
+    },
+    "regularMarketOpen": {
+      "raw": "10.05",
+      "fmt": "10.05",
+      "sort": 10.05
+    },
+    "regularMarketDayHigh": {
+      "raw": "10.05",
+      "fmt": "10.05",
+      "sort": 10.05
+    },
+    "regularMarketDayLow": {
+      "raw": "10.05",
+      "fmt": "10.05",
+      "sort": 10.05
+    },
+    "regularMarketPreviousClose": {
+      "raw": "9.23",
+      "fmt": "9.23",
+      "sort": 9.23
+    },
+    "regularMarketTime": "2026-11-09T01:17:12Z",
+    "limitUpPrice": {
+      "raw": "10.15",
+      "fmt": "10.15",
+      "sort": 10.15
+    },
+    "limitDownPrice": {
+      "raw": "8.31",
+      "fmt": "8.31",
+      "sort": 8.31
+    },
+    "currency": "TWD",
+    "marketStatus": "open",
+    "exchangeDataDelayedBy": 0
+  },
+  {
+    "symbol": "6488.TWO",
+    "symbolName": "環球晶",
+    "price": {
+      "raw": "563",
+      "fmt": "563",
+      "sort": 563
+    },
+    "regularMarketOpen": {
+      "raw": "535",
+      "fmt": "535",
+      "sort": 535
+    },
+    "regularMarketDayHigh": {
+      "raw": "563",
+      "fmt": "563",
+      "sort": 563
+    },
+    "regularMarketDayLow": {
+      "raw": "518",
+      "fmt": "518",
+      "sort": 518
+    },
+    "regularMarketPreviousClose": {
+      "raw": "512",
+      "fmt": "512",
+      "sort": 512
+    },
+    "regularMarketTime": "2026-11-09T01:28:59Z",
+    "limitUpPrice": {
+      "raw": "563",
+      "fmt": "563",
+      "sort": 563
+    },
+    "limitDownPrice": {
+      "raw": "461",
+      "fmt": "461.0",
+      "sort": 461
+    },
+    "currency": "TWD",
+    "marketStatus": "open",
+    "exchangeDataDelayedBy": 0
+  }
+]

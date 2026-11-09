@@ -9,7 +9,7 @@ import { QuoteError } from "../quotes.js";
  * @typedef {object} Quote  What decodeYahoo / decodeBinance return, with `source` naming the provider.
  * @typedef {{ quotes: Record<string, Quote>, errors: Record<string, QuoteError>, lines?: Record<string, number[]>, names?: Record<string, string> }} ProviderResult
  * @typedef {{
- *   id: "yahoo"|"binance"|"mis"|"finnhub",
+ *   id: "yahoo"|"binance"|"mis"|"yahootw"|"finnhub",
  *   markets: string[],
  *   overlay?: boolean,
  *   manualRefresh?: boolean,
@@ -23,8 +23,8 @@ import { QuoteError } from "../quotes.js";
  * `markets` are the markets (markets.js) whose symbols it quotes. `spacingMs` is the gap between
  * this provider's quote requests in one round. `intervalMs` is the wait between rounds, given the
  * busiest session among its symbols ("open" while unknown). A provider with `kind: "line"`
- * requests asks each line again only once `linesMs(session)` has passed. An `overlay` provider (TWSE MIS) is
- * off until the person turns it on, and lays its prices over the base quote instead of replacing it.
+ * requests asks each line again only once `linesMs(session)` has passed. An `overlay` provider (Yahoo 奇摩股市,
+ * TWSE MIS) is off until the person turns it on, and lays its prices over the base quote instead of replacing it.
  * `cap` limits it to that many of its symbols, in list order; `manualRefresh: false` keeps Refresh
  * from starting an extra round (a request budget). `decode` does not throw
  * for an HTTP or body problem: the request's symbols each get that error instead.

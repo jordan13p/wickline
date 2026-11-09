@@ -12,7 +12,7 @@ const MOD = new URL("../mods/wickline/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
 // mis.twse.com.tw only once the person turns TWSE MIS on and consents; finnhub.io only with Finnhub
 // chosen and a key saved.
-const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw", "finnhub.io"];
+const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw", "tw.stock.yahoo.com", "finnhub.io"];
 // Herdr writes these into the mod folder; they are git-ignored.
 const GENERATED = ["jsconfig.json", "gpui-kit.d.ts"];
 
@@ -286,7 +286,7 @@ test("every error code has English text", () => {
     const text = read(file);
     for (const [, code] of text.matchAll(/new QuoteError\(\s*"([^"]+)"/g)) errors.add(code);
     // Codes handed to the view as `{ code, params }`, e.g. a deferred refresh.
-    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|binance|mis|finnhub|request|notice|budget)\.[A-Za-z]+)"/g)) notices.add(code);
+    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|yahootw|binance|mis|finnhub|request|notice|budget)\.[A-Za-z]+)"/g)) notices.add(code);
   }
   // The key's name in the secrets file, not a text.
   notices.delete(SECRET_KEY_FINNHUB);
@@ -334,6 +334,12 @@ test("the READMEs and RECIPE carry the settings tab's disclaimer", () => {
   assert.ok(recipe.includes(STRINGS.en["disclaimer.key"]), "disclaimer.key in RECIPE.md");
   assert.doesNotMatch(recipe, /`disclaimer\.[a-z]+`/, "string ids in RECIPE.md");
   assert.ok(read(new URL("ui/settings-dialog.js", MOD)).includes('"disclaimer.key"'), "the tab shows disclaimer.key");
+});
+
+// The prevailing Traditional Chinese statements, word for word as the Taiwan card shows them.
+test("README.zh-TW.md quotes both Taiwan statements", () => {
+  const readme = read(new URL("README.zh-TW.md", ROOT));
+  for (const key of ["mis.statement", "yahootw.statement"]) assert.ok(readme.includes(STRINGS["zh-TW"][key]), key);
 });
 
 test("the disclosure names every host and the key file in all four places", () => {

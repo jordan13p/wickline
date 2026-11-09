@@ -505,7 +505,7 @@ export default class Wickline extends View {
     run("app.settings", { section: "look" });
   }
 
-  // "Showing Yahoo · <reason>": a real-time price was dropped, so the row shows its base quote.
+  // "Showing Yahoo Finance · <reason>": a real-time price was dropped, so the row shows its base quote.
   fallbackText(quote, error) {
     return this.tx("quote.fallback", { source: this.tx(`src.${quote.source}`), reason: this.say(error) });
   }

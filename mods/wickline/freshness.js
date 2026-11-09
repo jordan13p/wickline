@@ -8,7 +8,7 @@ export const LIVE_MAX_AGE_MS = 120_000;
 // Yahoo reports no delay for Taiwan, whose quotes come 20 minutes late.
 export const TAIWAN_YAHOO_DELAY_S = 1200;
 // Providers whose prices are real time; any other source is delayed.
-export const REALTIME_SOURCES = new Set(["mis", "finnhub", "binance"]);
+export const REALTIME_SOURCES = new Set(["yahootw", "mis", "finnhub", "binance"]);
 
 /**
  * Where a stock's market is now: "pre", "open", "post" or "closed"; a pair trades around the clock.
@@ -54,7 +54,7 @@ export function freshness(quote, session, now) {
 /**
  * The detail dialog's source line as parts (joined with ` · `). A real-time price over another
  * source's line names both and puts the delay on the line, from the line's own source: `Price: TWSE
- * MIS`, `Line: Yahoo (delayed 20 min)`. Otherwise the source and, for a delayed one, its delay.
+ * MIS`, `Line: Yahoo Finance (delayed 20 min)`. Otherwise the source and, for a delayed one, its delay.
  * `tx(key, params)` translates; a `src.<id>` key names a provider.
  */
 export function detailSource(quote, session, now, tx) {
