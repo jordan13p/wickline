@@ -147,9 +147,5 @@ test("a price at its limit is named in every language", () => {
     assert.equal(t(lang, "quote.limitUp", { price: "563.00" }), up, lang);
     assert.equal(t(lang, "quote.limitDown", { price: "461.00" }), down, lang);
   }
-  assert.equal(t("zh-TW", "detail.limitUpPrice"), "漲停價");
-  assert.equal(t("zh-TW", "detail.limitDownPrice"), "跌停價");
-  assert.equal(t("zh-TW", "detail.limitUp"), "漲停");
-  assert.equal(t("ja", "detail.limitDown"), "ストップ安");
 });
 

@@ -527,7 +527,8 @@ test("half a tick short of the limit is not at it", () => {
 });
 
 test("a stock without both limits carries none", () => {
-  const quote = decode(["2330.TW"], row2330({ z: "2300.0000", u: "9999.9500", w: "-" })).quotes["2330.TW"];
+  // The recorded 00646.TW: limit-up 9999.95, no limit-down.
+  const quote = decode(["00646.TW"], answer(LIMITS)).quotes["00646.TW"];
   assert.equal(quote.limitUp, null);
   assert.equal(quote.limitDown, null);
   assert.equal(priceLimit(quote), null);

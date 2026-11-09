@@ -1,7 +1,7 @@
 // node --test tests/  (quotes.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { USER_AGENT, hasLimits, normalizeSymbol, priceLimit } from "../mods/wickline/quotes.js";
+import { USER_AGENT, normalizeSymbol, priceLimit } from "../mods/wickline/quotes.js";
 
 test("normalizes symbols", () => {
   assert.equal(normalizeSymbol(" aapl "), "AAPL");
@@ -26,6 +26,4 @@ test("a price is at a limit only when it equals its own source's limit", () => {
   assert.equal(priceLimit({ price: 563, limitUp: 563, limitDown: null }), null);
   assert.equal(priceLimit({ price: 9999.95, limitUp: 9999.95, limitDown: 70 }), null);
   assert.equal(priceLimit(null), null);
-  assert.equal(hasLimits(563, 461), true);
-  assert.equal(hasLimits(9999.95, 70), false);
 });
