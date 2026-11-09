@@ -89,9 +89,10 @@ export function decodeStockList(symbols, response, now) {
 }
 
 /**
- * One symbol's line, `{ day, series }`: today's (Taipei) one-minute closes, oldest first, and today as
- * its day. A minute without a trade carries the previous close; minutes before the first trade are
- * dropped. With no point from today, no line.
+ * One symbol's line, `{ day, series, lastAt }`: today's (Taipei) one-minute closes, oldest first, today
+ * as its day, and its last minute's time in ms (to tell a frozen answer from a quiet stock). A minute
+ * without a trade carries the previous close; minutes before the first trade are dropped. With no point
+ * from today, no line.
  */
 export function decodeTick(symbol, response, now) {
   checkStatus(response);
@@ -104,13 +105,16 @@ export function decodeTick(symbol, response, now) {
   const today = taipeiDay(now);
   const series = [];
   let last = null;
+  let lastAt = null;
   times.forEach((seconds, i) => {
     // Checked before the close is taken, so yesterday's last close never fills today's first minutes.
     if (taipeiDay(seconds * 1000) !== today) return;
     if (positive(closes?.[i])) last = closes[i];
-    if (last !== null) series.push(last);
+    if (last === null) return;
+    series.push(last);
+    lastAt = seconds * 1000;
   });
-  return { quotes: {}, errors: {}, ...(series.length && { lines: { [symbol]: { day: today, series } } }) };
+  return { quotes: {}, errors: {}, ...(series.length && { lines: { [symbol]: { day: today, series, lastAt } } }) };
 }
 
 /** @type {Provider} */

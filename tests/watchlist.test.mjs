@@ -506,6 +506,23 @@ test("the Yahoo 奇摩股市 line ends at the shown price, and is used only whil
   });
 });
 
+test("a frozen line is not drawn as live; a quiet stock's line is", async () => {
+  // 2330 traded at 09:41:15 but its line stops at 09:10; 0050 last traded at 09:17:12 and its line
+  // stops at 09:18, its last trade's minute.
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahootw: () => stockList(TW_NOW - 5_000, { "0050.TW": { regularMarketTime: "2026-11-09T01:17:12Z" } }),
+    line: (symbol) => symbol === "0050.TW" ? ok(jsonFixture("yahootw-tick-quiet")) : tickAt(symbol, Date.parse("2026-11-09T01:10:00Z"), [2200, 2205]),
+  });
+  host.store.symbols = ["2330.TW", "0050.TW"];
+  await firstRound(host, (w) => {
+    assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
+    const frozen = w.shown("2330.TW");
+    assert.deepEqual([frozen.source, frozen.chartSource, frozen.series], ["yahootw", "yahoo", BASE_SERIES]);
+    const quiet = w.shown("0050.TW");
+    assert.deepEqual([quiet.chartSource, quiet.series], ["yahootw", [10.05, 10.05]]);
+  });
+});
+
 test("the base line is never overwritten", async () => {
   await firstRound(taiwanHost(ONLY_YAHOOTW), (w) => {
     assert.deepEqual(w.shown("2330.TW").series, [2200, 2205, 2240]);

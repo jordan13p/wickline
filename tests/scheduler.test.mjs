@@ -742,7 +742,9 @@ test("after the close, today's line is not asked again; a missing one still is",
   const closed = TW_PERIODS.regular.end * 1000 + 600_000;
   const host = yahootwHost(["2330.TW"]);
   host.clock = closed;
-  const line = host.line;
+  // Its price traded 5 s before the clock, so today's line ends in the clock's minute.
+  const line = (symbol, minute = Math.floor(host.clock / 60_000) * 60) =>
+    ok([{ symbol, chart: { meta: { symbol }, timestamp: [minute - 60, minute], indicators: { quote: [{ close: [2200, 2205] }] } } }]);
   // The first answer has only yesterday's minutes, so no line is stored.
   host.line = (symbol) => ok([{ symbol, chart: { meta: { symbol }, timestamp: [1794186000 - 86_400], indicators: { quote: [{ close: [2200] }] } } }]);
   const w = new Watchlist(host);

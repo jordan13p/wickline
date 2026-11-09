@@ -160,7 +160,7 @@ const lineOf = (symbol, response) => yahootw.decode(yahootw.requests([symbol]).f
 
 test("keeps today's minutes, carrying the last close over quiet minutes", () => {
   assert.deepEqual(lineOf("2330.TW", tick("2330.TW", [null, 10.05, null, null, 10.10])).lines,
-    { "2330.TW": { day: taipeiDay(NOW), series: [10.05, 10.05, 10.05, 10.10] } });
+    { "2330.TW": { day: taipeiDay(NOW), series: [10.05, 10.05, 10.05, 10.10], lastAt: (TODAY_0900 + 240) * 1000 } });
 });
 
 test("the liquid fixture", () => {
@@ -172,10 +172,13 @@ test("the liquid fixture", () => {
   assert.equal(series.length, 30);
   assert.equal(series[0], 2200);
   assert.equal(series.at(-1), 2210);
+  // The last minute's time, 09:30 in Taipei.
+  assert.equal(lines["2330.TW"].lastAt, Date.parse("2026-11-09T01:30:00Z"));
 });
 
 test("the quiet fixture", () => {
-  assert.deepEqual(lineOf("0050.TW", ok(jsonFixture("yahootw-tick-quiet"))).lines, { "0050.TW": { day: taipeiDay(NOW), series: [10.05] } });
+  assert.deepEqual(lineOf("0050.TW", ok(jsonFixture("yahootw-tick-quiet"))).lines,
+    { "0050.TW": { day: taipeiDay(NOW), series: [10.05], lastAt: Date.parse("2026-11-09T01:18:00Z") } });
 });
 
 test("yesterday's points are dropped", () => {

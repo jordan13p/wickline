@@ -50,6 +50,9 @@ const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadabl
 // The source is down or hung: the rest of the round would only wait out more timeouts.
 const SOURCE_DOWN = /\.(unreachable|timeout)$/;
 const TIMED_OUT = {};
+// A minute's length, and how far a line's last minute may end before its price's own last trade.
+const MINUTE_MS = 60_000;
+const LINE_LAG_MS = 120_000;
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
@@ -762,7 +765,11 @@ export class Watchlist {
    * A symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. A
    * base provider writes the base quote's line and a failure leaves it as it was; an overlay provider
    * keeps its own line beside its price, and an answer without one (a failure, or no point from today)
-   * drops it. Returns the request's error for the symbol, if any (endsRound says what it does to the round).
+   * drops it. So does a line whose last minute ends well before its price's own last trade: a frozen
+   * answer (such as a cached one from earlier in the day) would be drawn as live with only its tail
+   * moving. A quiet stock's line ends at its last trade, so it stays. Checked as the line arrives, not
+   * at each price: a busy stock trades on while its line waits up to `linesMs` for the next request.
+   * Returns the request's error for the symbol, if any (endsRound says what it does to the round).
    */
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
@@ -772,7 +779,8 @@ export class Watchlist {
     const result = await this.ask(provider, request, io, current);
     const line = result?.lines?.[symbol];
     const kept = result && current() && this.priced(provider, symbol);
-    if (kept && provider.overlay && line) (this.lines[provider.id] ??= {})[symbol] = line;
+    const frozen = kept && provider.overlay && line && line.lastAt + MINUTE_MS < kept.tradeTime - LINE_LAG_MS;
+    if (kept && provider.overlay && line && !frozen) (this.lines[provider.id] ??= {})[symbol] = line;
     else if (kept && provider.overlay) delete this.lines[provider.id]?.[symbol];
     else if (kept && line) this.quotes[symbol].series = line;
     return result?.errors?.[symbol] ?? null;
