@@ -16,6 +16,9 @@ import { button, chart, dot, icon, iconButton, link } from "./parts.js";
 const ICON = "mods/wickline/icon.svg";
 // Sidebar rows: three lines (16, 14 and 14 px, 2 px apart) on each side of the day line, which spans them.
 const LINES_H = 48;
+// Every region outside the list's rows: the left gutter, and the right inset that holds the × column and
+// the scrollbar lane, so all of them end on one edge.
+const inset = (el) => el.pl(GUTTER).pr(RIGHT_INSET);
 const TABLE_SPARK = { width: columnWidth("line"), height: 28 };
 // The filter row: 24 px labels with 2 px between them; the chosen one sits on a pill of the same height.
 const FILTER_H = 24;
@@ -107,7 +110,7 @@ export function yieldView(view, root, t, inBand) {
   const notice = div().text_color(t.dim).child(view.tx("dock.openInTab"));
   const back = button(t, "bw-yield-back", view.tx("button.backToPanel"), (cx) => view.backFromYield(cx));
   if (inBand) return root.px(12).gap(14).items_center().overflow_hidden().child(notice.flex_1().min_w(0).truncate()).child(back);
-  return root.child(v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).py(10).gap(10).items_start().child(brand(view, t)).child(notice.text_size(11)).child(back));
+  return root.child(v_flex().flex_none().map(inset).py(10).gap(10).items_start().child(brand(view, t)).child(notice.text_size(11)).child(back));
 }
 
 // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves
@@ -301,7 +304,7 @@ function list(view, t, rows, top = 0) {
 // One line: the disclaimer, which opens the settings' disclaimer tab.
 function footer(view, t) {
   const short = view.size && view.size.width < SHORT_FOOTER_WIDTH;
-  return div().flex_none().pl(GUTTER).pr(RIGHT_INSET)
+  return div().flex_none().map(inset)
     .child(div().id("bw-disclaimer").py(10).border_t(1).border_color(t.border).text_size(11).text_color(t.dim).truncate()
       .cursor_pointer().hover((s) => s.text_color(t.foreground)).on_click(() => view.openSettings("disclaimer"))
       .child(view.tx(short ? "footer.short" : "footer.long")));
@@ -311,14 +314,14 @@ function footer(view, t) {
 export function sidebar(view, root, t) {
   const filter = view.filterState();
   const now = Date.now();
-  const header = v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(10).gap(2)
+  const header = v_flex().flex_none().map(inset).pt(10).gap(2)
     .child(h_flex().h(28).items_center().gap(8)
       .child(brand(view, t))
       .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(countText(view)))
       .child(headerIcons(view, t)))
     .child(div().truncate().text_size(11).text_color(t.dim).child(statusText(view)))
     .children(problemLines(view, t));
-  const field = v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(12).gap(6)
+  const field = v_flex().flex_none().map(inset).pt(12).gap(6)
     .when(!view.settings.languagePromptDismissed, (el) => el.child(languagePrompt(view, t)))
     .child(addField(view, t))
     .children(messages(view, t));
@@ -366,7 +369,7 @@ export function table(view, root, t) {
     ...messages(view, t),
     ...problemLines(view, t),
   ];
-  const header = h_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(10).gap(12).items_center()
+  const header = h_flex().flex_none().map(inset).pt(10).gap(12).items_center()
     .child(brand(view, t))
     .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(`${countText(view)} · ${statusText(view)}`))
     .child(div().flex_none().w(320).child(addField(view, t)))
@@ -374,7 +377,7 @@ export function table(view, root, t) {
   const rows = drawRows(view, filter, (symbol, place, ghost) => tableRow(view, t, symbol, place, columns, nameW, now, ghost));
   const frame = v_flex().w(width).flex_1().min_h(0)
     .child(header)
-    .when(notes.length > 0, (el) => el.child(v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(8).gap(4).children(notes)))
+    .when(notes.length > 0, (el) => el.child(v_flex().flex_none().map(inset).pt(8).gap(4).children(notes)))
     .children(filterBar(view, t, filter))
     .child(tableHead(view, t, columns, nameW))
     .child(list(view, t, rows))
@@ -387,7 +390,7 @@ function tableHead(view, t, columns, nameW) {
     symbol: "table.symbol", name: "table.name", state: "table.state", line: "table.line", price: "table.price",
     change: "table.change", changePct: "table.changePct", high: "detail.high", low: "detail.low", prevClose: "detail.prevClose",
   };
-  return div().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(12)
+  return div().flex_none().map(inset).pt(12)
     .child(h_flex().h(28).items_center().gap(COLUMN_GAP).border_b(1).border_color(t.border).text_size(11).text_color(t.dim)
       .children(columns.map((id) => {
         const right = TABLE_COLUMNS.find((column) => column.id === id).align === "right";
@@ -452,7 +455,7 @@ function filterBar(view, t, { filters, chosen }) {
     .on_click((_e, cx) => { view.setFilter(id); cx.notify(); })
     .child(div().text_color(id === chosen ? t.foreground : t.muted).child(view.tx(id === "all" ? "filter.all" : `market.${id}`)))
     .child(div().text_color(t.dim).child(String(count)));
-  return [div().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(10)
+  return [div().flex_none().map(inset).pt(10)
     .child(h_flex().id("bw-filters").w_full().min_w(0).h(FILTER_H).overflow_x_scrollbar()
       .child(div().relative().flex().flex_none().gap(FILTER_GAP)
         .when(measured, (el) => el.child(div().id("bw-filter-pill").absolute().top(0).left(left).w(widths[chosen]).h(FILTER_H)

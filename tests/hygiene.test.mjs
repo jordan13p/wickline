@@ -428,9 +428,9 @@ test("the list's scrollbar has its own lane", () => {
   assert.match(panel, /Scrollbar\.vertical\("bw-list"\)[^;]*\.w\(SCROLL_LANE\)/);
   assert.doesNotMatch(panel, /\.mode\(/);
   assert.match(panel, /id\(`bw-remove-\$\{symbol\}`\)[^;]*\.w\(REMOVE_W\)/);
-  assert.doesNotMatch(panel, /const REMOVE_W|SCROLLBAR_W/);
-  const imported = panel.match(/import \{([^}]*)\} from "\.\.\/layout\.js"/)[1].split(",").map((name) => name.trim());
-  for (const name of ["REMOVE_W", "SCROLL_LANE", "RIGHT_INSET"]) assert.ok(imported.includes(name), name);
+  // `inset` pads every region; the only other gutter is the empty-list text's, inside the list, ending at the ×.
+  assert.equal(panel.match(/pr\(RIGHT_INSET\)/g).length, 1);
+  assert.equal(panel.match(/pl\(GUTTER\)/g).length, 2);
   assert.doesNotMatch(panel, /px\(GUTTER\)|pr\(GUTTER\)|right\(GUTTER\)/);
   assert.doesNotMatch(panel, /\.p[xr]\(20\)/);
 });
