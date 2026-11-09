@@ -15,7 +15,7 @@ import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, next
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, healthAfterSave, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed,
   validateSettings,
 } from "./settings.js";
 import { BINANCE_URL } from "./providers/binance.js";
@@ -538,6 +538,8 @@ export default class Wickline extends View {
     const { language, colors, sources } = this.draft;
     const key = this.keyInput.value().trim();
     const change = keyChange({ provider: sources.us.provider, typed: key, saved: this.keyEnding !== null, removing: this.keyRemoving });
+    // Taken before the write, which re-renders this copy with the new settings.
+    const before = this.settings;
     this.saving = true;
     this.error = null;
     cx.spawn(async (cx) => {
@@ -569,6 +571,7 @@ export default class Wickline extends View {
       if (!ownerOnly) {
         // Saved, but other accounts may read the file: the dialog stays open to say so, and Save closes it.
         this.saving = false;
+        this.health = healthAfterSave({ health: this.health, saved: before, draft: this.draft, keyChanged: change !== null });
         this.keyInput.set_value("");
         this.keyRemoving = false;
         await this.readKeyEnding();

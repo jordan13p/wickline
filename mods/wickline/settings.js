@@ -170,6 +170,22 @@ export function marketStatus({ saved, draft, health, market, key }) {
   return { ...state, problem: failing.includes(state.source) };
 }
 
+// The market page whose settings each source reads; Yahoo Finance takes none.
+const SOURCE_MARKETS = { finnhub: "us", yahootw: "tw", mis: "tw", binance: "crypto" };
+
+/**
+ * What a dialog left open after Save (the key file could not be made owner-only) keeps of `health`: a
+ * source whose market changed in that save has not run with its new settings yet, so its old problem
+ * goes. `saved`: the settings before Save; `draft`: what was saved; `keyChanged`: Save wrote or removed
+ * the key.
+ */
+export function healthAfterSave({ health, saved, draft, keyChanged }) {
+  return health.filter((entry) => {
+    const market = SOURCE_MARKETS[entry.provider];
+    return !market || marketUnchanged({ saved, draft, market, keyEdited: keyChanged });
+  });
+}
+
 /**
  * A source's statement folds away once consent to its current version is both saved and still in the
  * draft: a box just ticked stays where the pointer is until Save.

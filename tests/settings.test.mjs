@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, finnhubKeyUsable, firstDraftError, keyChange, marketState, marketStatus,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, finnhubKeyUsable, firstDraftError, healthAfterSave, keyChange, marketState, marketStatus,
   marketUnchanged,
   mergeSettings,
   misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
@@ -439,6 +439,23 @@ test("marketUnchanged", () => {
   // A typed key or Remove changes only the US.
   assert.equal(marketUnchanged({ saved, draft: copy(saved), market: "us", keyEdited: true }), false);
   assert.equal(marketUnchanged({ saved, draft: copy(saved), market: "tw", keyEdited: true }), true);
+});
+
+test("healthAfterSave: a dialog left open forgets the problems of what it saved", () => {
+  const saved = us({ provider: "finnhub" });
+  const problem = (provider, code) => ({ provider, code, params: {} });
+  const health = [problem("finnhub", "finnhub.invalidKey"), problem("binance", "binance.region"), problem("yahoo", "yahoo.unreachable")];
+  // A new key was written: the old key's refusal no longer says anything about it.
+  assert.deepEqual(healthAfterSave({ health, saved, draft: copy(saved), keyChanged: true }), health.slice(1));
+  // Only crypto changed: the US keeps its problem; Yahoo Finance takes no settings, so its stays.
+  const moved = copy(saved);
+  moved.sources.crypto.binanceUrl = "https://example.com";
+  assert.deepEqual(healthAfterSave({ health, saved, draft: moved, keyChanged: false }), [health[0], health[2]]);
+  const misOn = copy(saved);
+  misOn.sources.tw.mis = true;
+  const tw = [problem("mis", "mis.unreachable"), problem("yahootw", "yahootw.unreachable")];
+  assert.deepEqual(healthAfterSave({ health: tw, saved, draft: misOn, keyChanged: false }), []);
+  assert.deepEqual(healthAfterSave({ health: [...health, ...tw], saved, draft: copy(saved), keyChanged: false }), [...health, ...tw]);
 });
 
 test("settingsMarkets follows the language", () => {
