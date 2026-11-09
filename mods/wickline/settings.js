@@ -31,8 +31,9 @@ export function readSettings(value) {
   const crypto = section(saved.sources, "crypto");
   const tw = section(saved.sources, "tw");
   const us = section(saved.sources, "us");
-  // Before the two Taiwan switches, `provider: "mis"` chose MIS; a saved switch wins over it.
-  const mis = typeof tw.mis === "boolean" ? tw.mis : tw.provider === "mis";
+  // Before the two Taiwan switches, `provider: "mis"` chose MIS. Every save writes `provider` in step with
+  // `mis`, so the two differ only after 0.3.1 (which writes `provider` alone) changed it: `provider` wins.
+  const mis = typeof tw.provider === "string" ? tw.provider === "mis" : tw.mis === true;
   return {
     version: 1,
     language: LANGUAGES.includes(saved.language) ? saved.language : "en",
@@ -48,7 +49,7 @@ export function readSettings(value) {
         budgetPerMinute: Number.isInteger(us.budgetPerMinute) && us.budgetPerMinute > 0 ? us.budgetPerMinute : DEFAULT_FINNHUB_BUDGET,
       },
       tw: {
-        // Only for going back to 0.3.1, which reads this key; this build reads `mis`.
+        // For going back to 0.3.1, which reads only this key; it follows `mis`.
         provider: mis ? "mis" : "yahoo",
         mis,
         yahootw: tw.yahootw === true,

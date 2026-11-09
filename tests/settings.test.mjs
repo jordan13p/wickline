@@ -146,9 +146,16 @@ test("an old MIS choice loads as the MIS switch", () => {
   assert.equal(misEnabled(settings), true);
 });
 
-test("the switch wins over a leftover provider key", () => {
-  assert.equal(misEnabled(tw({ provider: "mis", mis: false, misAck: { version: MIS_CONSENT_VERSION } })), false);
-  assert.equal(tw({ provider: "mis", mis: false }).sources.tw.provider, "yahoo");
+test("a choice changed in 0.3.1 after a downgrade wins on upgrade", () => {
+  // Every save writes both keys in step, so only 0.3.1 (which writes `provider` alone) leaves them apart.
+  const ack = { version: MIS_CONSENT_VERSION };
+  assert.equal(misEnabled(tw({ provider: "yahoo", mis: true, misAck: ack })), false);
+  assert.equal(tw({ provider: "yahoo", mis: true }).sources.tw.provider, "yahoo");
+  assert.equal(misEnabled(tw({ provider: "mis", mis: false, misAck: ack })), true);
+  assert.equal(tw({ provider: "mis", mis: false }).sources.tw.provider, "mis");
+  // Without the old key, the switch alone decides.
+  assert.equal(tw({ mis: true }).sources.tw.mis, true);
+  assert.equal(tw({ mis: "true" }).sources.tw.mis, false);
 });
 
 test("an outdated MIS consent still asks again", () => {
