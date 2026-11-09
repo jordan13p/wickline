@@ -559,3 +559,140 @@ test("the wake-up when a Yahoo 奇摩股市 price turns stale shows MIS", async 
   assert.ok(redraws > before, `${redraws} redraws`);
   await stop(w, host, runs);
 });
+
+// Yahoo 奇摩股市 on, on a trading morning in Taipei with the session open. Every requested symbol is
+// priced 5 s before the clock, except `host.missing`; a line request gets `host.line(symbol)`, by default
+// two of today's minutes. Yahoo Finance answers with the regular session around the clock.
+const TW_START = 1794188480000;
+const TW_ROW = JSON.parse(readFileSync(new URL("fixtures/yahootw-stocklist.json", import.meta.url), "utf8"))[0];
+const TW_PERIODS = JSON.parse(readFileSync(new URL("fixtures/yahootw-tick.json", import.meta.url), "utf8"))[0].chart.meta.currentTradingPeriod;
+const MIS_ROW = JSON.parse(readFileSync(new URL("fixtures/mis-open.json", import.meta.url), "utf8")).msgArray[0];
+const YAHOOTW_ON = { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } };
+const isLine = (url) => url.startsWith(YAHOOTW_BASE) && url.includes("ApacLibraCharts");
+const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symbols=")[1]))[0];
+const lineSymbols = (host) => host.requests.filter(isLine).map(lineSymbol);
+
+function yahootwHost(symbols, sources = YAHOOTW_ON) {
+  const host = fakeHost((url) => {
+    if (isLine(url)) return host.line(lineSymbol(url));
+    if (url.startsWith(YAHOOTW_BASE)) {
+      const time = new Date(host.clock - 5_000).toISOString();
+      return ok(url.split("symbols=")[1].split(",").filter((symbol) => !host.missing.includes(symbol))
+        .map((symbol) => ({ ...TW_ROW, symbol, regularMarketTime: time })));
+    }
+    if (url.startsWith(MIS_URL)) return ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(host.clock - 5_000) }] });
+    return chart({ symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
+      regularMarketTime: Math.floor(host.clock / 1000) - 1_200, previousClose: 2135, currency: "TWD", currentTradingPeriod: TW_PERIODS });
+  });
+  const minute = Math.floor(TW_START / 60_000) * 60;
+  Object.assign(host, {
+    clock: TW_START, missing: [], prefs: { version: 1, sources },
+    line: (symbol) => ok([{ symbol, chart: { meta: { symbol }, timestamp: [minute - 60, minute], indicators: { quote: [{ close: [2200, 2205] }] } } }]),
+  });
+  host.store = { version: 1, symbols, paused: false };
+  return host;
+}
+
+test("30 symbols: one price request and at most 3 line requests per round, oldest first", async () => {
+  const symbols = Array.from({ length: 30 }, (_, i) => `${1101 + i}.TW`);
+  const host = yahootwHost(symbols);
+  const at = [];
+  const fetch = host.fetch;
+  host.fetch = (url, headers) => { if (isLine(url)) at.push(host.clock); return fetch(url, headers); };
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START);
+  assert.equal(count(host, "stockList"), 1);
+  assert.equal(count(host, "ApacLibraCharts"), 3);
+  await advance(host, TW_START + 250_000);
+  const asked = lineSymbols(host);
+  // Every symbol once, in list order, before any symbol a second time; then again in the same order.
+  assert.deepEqual(asked.slice(0, 30), symbols);
+  assert.deepEqual(asked.slice(30, 60), symbols);
+  const perRound = Object.values(Object.groupBy(at, (time) => time)).map((times) => times.length);
+  assert.ok(perRound.every((n) => n <= 3), perRound.join());
+  await stop(w, host, runs);
+});
+
+test("lines go longest-waiting first, not in list order", async () => {
+  const host = yahootwHost(["1101.TW", "1102.TW", "1103.TW", "1104.TW", "1105.TW"]);
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START + 10_000);
+  assert.deepEqual(lineSymbols(host), ["1101.TW", "1102.TW", "1103.TW", "1104.TW", "1105.TW"]);
+  // Paused until every line is due, the two asked last now listed first.
+  w.pause(true);
+  w.move("1104.TW", "1101.TW");
+  w.move("1105.TW", "1101.TW");
+  await advance(host, TW_START + 200_000);
+  w.pause(false);
+  await advance(host, TW_START + 200_000);
+  assert.deepEqual(lineSymbols(host).slice(5), ["1101.TW", "1102.TW", "1103.TW"]);
+  await stop(w, host, runs);
+});
+
+test("a symbol the price answer did not price is never asked for a line", async () => {
+  const host = yahootwHost(["2330.TW", "2936.TW"]);
+  host.missing = ["2936.TW"];
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START + 300_000);
+  assert.ok(lineSymbols(host).includes("2330.TW"));
+  assert.ok(host.requests.filter(isLine).every((url) => !url.includes("2936")), host.requests.join());
+  await stop(w, host, runs);
+});
+
+test("a line is asked again only after 2 minutes while open", async () => {
+  const host = yahootwHost(["2330.TW"]);
+  const at = [];
+  const fetch = host.fetch;
+  host.fetch = (url, headers) => { if (isLine(url)) at.push(host.clock - TW_START); return fetch(url, headers); };
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START + 250_000);
+  assert.equal(w.sessionFor(["2330.TW"], host.clock), "open");
+  assert.deepEqual(at, [0, 120_000, 240_000]);
+  assert.ok(count(host, "stockList") >= 25);
+  await stop(w, host, runs);
+});
+
+test("one 404 line drops only that line, no backoff", async () => {
+  const host = yahootwHost(["2330.TW", "0050.TW", "6488.TWO"]);
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START);
+  assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["0050.TW", "2330.TW", "6488.TWO"]);
+  const line = host.line;
+  host.line = (symbol) => symbol === "0050.TW" ? { status: 404, ok: false, text: "" } : line(symbol);
+  await advance(host, TW_START + 120_000);
+  assert.equal(count(host, "ApacLibraCharts"), 6);
+  assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["2330.TW", "6488.TWO"]);
+  assert.equal(w.sources.yahootw.retryAt, 0);
+  // Its price stays: only the line went.
+  assert.equal(w.shown("0050.TW").source, "yahootw");
+  assert.deepEqual(w.shown("0050.TW").series, w.quotes["0050.TW"].series);
+  await stop(w, host, runs);
+});
+
+test("a 429 on a line backs the whole source off and hands its rows on", async () => {
+  const host = yahootwHost(["2330.TW", "0050.TW"], {
+    tw: { ...YAHOOTW_ON.tw, mis: true, misAck: { version: MIS_CONSENT_VERSION } },
+  });
+  const line = host.line;
+  host.line = (symbol) => symbol === "0050.TW" ? { status: 429, ok: false, text: "" } : line(symbol);
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START);
+  // 2330's line came first and was stored, then dropped with every Yahoo 奇摩股市 price.
+  assert.deepEqual(lineSymbols(host), ["2330.TW", "0050.TW"]);
+  assert.ok(w.sources.yahootw.retryAt >= TW_START + 60_000);
+  assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.rateLimited", params: {} }]);
+  for (const symbol of ["2330.TW", "0050.TW"]) assert.equal(w.overlays[symbol]?.yahootw, undefined, symbol);
+  assert.deepEqual(w.lines.yahootw ?? {}, {});
+  assert.equal(w.shown("2330.TW").source, "mis");
+  // The cooldown holds.
+  const sent = host.requests.filter((url) => url.startsWith(YAHOOTW_BASE)).length;
+  await advance(host, TW_START + 59_000);
+  assert.equal(host.requests.filter((url) => url.startsWith(YAHOOTW_BASE)).length, sent);
+  await stop(w, host, runs);
+});

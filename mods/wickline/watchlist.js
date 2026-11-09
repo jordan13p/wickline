@@ -10,7 +10,7 @@ import {
   SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings, yahootwEnabled, yahootwReconfirm,
 } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
-import { yahootw } from "./providers/yahootw.js";
+import { taipeiDay, yahootw } from "./providers/yahootw.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
 export const WATCHLIST_KEY = "wickline.watchlist.v1";
@@ -75,15 +75,18 @@ export function pickOverlay(byProvider, order, now) {
 }
 
 /**
- * A real-time overlay's fields over the Yahoo base quote. The line, the trading periods, the
- * currency and the name stay the base's (the overlay's name is kept as `localName`), and
- * `chartSource` names where the line came from. Works with no base yet.
+ * A real-time overlay's fields over the Yahoo base quote. The trading periods, the currency and the
+ * name stay the base's (the overlay's name is kept as `localName`); so does the line, unless the
+ * overlay's source gave its own (`line`, `{ day, series }`) on the overlay's Taipei day: then that line,
+ * ending at the shown price. `chartSource` names where the line came from. Works with no base yet.
  */
-export function mergeOverlay(base, overlay) {
+export function mergeOverlay(base, overlay, line) {
   if (!overlay) return base;
   const merged = { ...base };
   for (const [key, value] of Object.entries(overlay)) if (value !== null && value !== undefined) merged[key] = value;
   const previousClose = merged.previousClose ?? null;
+  // A copy hidden overnight may hold yesterday's line next to today's first price.
+  const own = line?.series.length && line.day === taipeiDay(overlay.timestamp) ? line.series : null;
   return {
     ...merged,
     previousClose,
@@ -92,10 +95,10 @@ export function mergeOverlay(base, overlay) {
     localName: overlay.name ?? null,
     currency: base?.currency ?? null,
     delaySeconds: 0,
-    chartDelaySeconds: base?.delaySeconds ?? null,
-    series: base?.series ?? [],
+    chartDelaySeconds: own ? 0 : base?.delaySeconds ?? null,
+    series: own ? [...own, overlay.price] : base?.series ?? [],
     periods: base?.periods ?? null,
-    chartSource: base?.source ?? null,
+    chartSource: own ? overlay.source : base?.source ?? null,
   };
 }
 
@@ -145,6 +148,9 @@ export class Watchlist {
     // one per overlay source (by provider id).
     this.quotes = {};
     this.overlays = {};
+    // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its Taipei
+    // day), kept only while that source's price for the symbol is.
+    this.lines = {};
     // By symbol: the last name an overlay gave (its Chinese name), kept while that source fails.
     this.localNames = {};
     // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart (by
@@ -217,7 +223,8 @@ export class Watchlist {
 
   /** What a row shows: the base quote with its overlay, if any. */
   shown(symbol, now = this.host.now()) {
-    const quote = mergeOverlay(this.quotes[symbol], this.pick(symbol, now)?.overlay);
+    const pick = this.pick(symbol, now);
+    const quote = mergeOverlay(this.quotes[symbol], pick?.overlay, pick && this.lines[pick.id]?.[symbol]);
     const localName = this.localNames[symbol];
     return quote && localName && !quote.localName ? { ...quote, localName } : quote;
   }
@@ -421,6 +428,8 @@ export class Watchlist {
           if (!Object.keys(record[symbol]).length) delete record[symbol];
         }
       }
+      const lines = this.lines[provider.id] ?? {};
+      for (const symbol of Object.keys(lines)) if (!symbols.has(symbol)) delete lines[symbol];
     }
     for (const symbol of Object.keys(this.localNames)) if (!covered.has(symbol)) delete this.localNames[symbol];
   }
@@ -545,15 +554,24 @@ export class Watchlist {
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));
     let problem = null;
+    // A provider with `linesPerRound` lists its lines after its prices: they are picked once the prices are in.
+    let picked = !provider.linesPerRound;
     state.loading = true;
     io.changed();
     try {
-      for (const [index, request] of requests.entries()) {
+      for (let index = 0; index < requests.length; index++) {
         if (!current()) return;
+        if (!picked && requests[index].kind === "line") {
+          picked = true;
+          requests.splice(index, Infinity, ...this.dueLines(provider, state, requests.slice(index)));
+          if (index === requests.length) break;
+        }
+        const request = requests[index];
         if (request.kind === "line") {
           const limited = await this.line(provider, state, request, io, current);
-          // A rate-limited line ends the round: no more lines or quotes until the cooldown ends.
-          if (limited) { this.backOff(provider, state, requests, index, limited); return; }
+          // A rate-limited line ends the round: no more lines or quotes until the cooldown ends. An
+          // overlay source's prices all go too (index -1), so its rows fall to the next source.
+          if (limited) { this.backOff(provider, state, requests, provider.overlay ? -1 : index, limited); return; }
           continue;
         }
         const wait = spacing - (this.host.now() - state.lastRequestAt);
@@ -597,6 +615,21 @@ export class Watchlist {
     }
   }
 
+  /**
+   * The line requests a round sends of `lines`: those whose symbol has this source's price and whose line
+   * is due, longest-waiting first (never asked counts as longest), at most `linesPerRound`.
+   */
+  dueLines(provider, state, lines) {
+    const now = this.host.now();
+    const askedAt = (request) => state.linesAt[request.symbols[0]] ?? -Infinity;
+    return lines
+      .filter((request) => this.overlays[request.symbols[0]]?.[provider.id]
+        && now - askedAt(request) >= provider.linesMs(this.sessionFor(request.symbols, now)))
+      // Two never-asked lines give NaN: a tie, so they keep list order.
+      .sort((a, b) => askedAt(a) - askedAt(b) || 0)
+      .slice(0, provider.linesPerRound);
+  }
+
   // Back off this provider only: at least a minute, doubling up to 15 minutes; the rest of the
   // round's quote requests are deferred.
   backOff(provider, state, requests, index, limited) {
@@ -619,7 +652,7 @@ export class Watchlist {
           this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
           continue;
         }
-        this.setEntry(this.overlays, symbol, provider.id, undefined);
+        this.dropOverlay(provider, symbol);
         this.setEntry(this.overlayErrors, symbol, provider.id, result.errors[symbol] ? coded(result.errors[symbol]) : undefined);
       }
       return;
@@ -655,8 +688,14 @@ export class Watchlist {
   // A symbol whose request was not answered: a base quote stays, marked cached; an overlay goes.
   fail(provider, symbol, error) {
     if (!provider.overlay) { this.errors[symbol] = error; return; }
-    this.setEntry(this.overlays, symbol, provider.id, undefined);
+    this.dropOverlay(provider, symbol);
     this.setEntry(this.overlayErrors, symbol, provider.id, error);
+  }
+
+  // An overlay's line goes with its price, so a line is never drawn with a later price it did not end at.
+  dropOverlay(provider, symbol) {
+    this.setEntry(this.overlays, symbol, provider.id, undefined);
+    if (this.lines[provider.id]) delete this.lines[provider.id][symbol];
   }
 
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */
@@ -675,17 +714,29 @@ export class Watchlist {
   }
 
   /**
-   * A symbol's line, at most once per `linesMs`; a failure only leaves the line as it was. Returns the
-   * error when the source rate limited the request (the caller backs off), else nothing.
+   * A symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. A
+   * base provider writes the base quote's line and a failure leaves it as it was; an overlay provider
+   * keeps its own line beside its price, and an answer without one (a failure, or no point from today)
+   * drops it. Returns the error when the source rate limited the request (the caller backs off), else nothing.
    */
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
+    const priced = () => (provider.overlay ? this.overlays[symbol]?.[provider.id] : this.quotes[symbol]);
     const now = this.host.now();
-    if (!this.quotes[symbol] || now - (state.linesAt[symbol] ?? -Infinity) < provider.linesMs(this.sessionFor([symbol], now))) return null;
+    if (!priced() || now - (state.linesAt[symbol] ?? -Infinity) < provider.linesMs(this.sessionFor([symbol], now))) return null;
     state.linesAt[symbol] = now;
     const result = await this.ask(provider, request, io, current);
     const series = result?.lines?.[symbol];
-    if (series && current() && this.quotes[symbol]) this.quotes[symbol].series = series;
+    if (result && current() && priced()) {
+      if (!provider.overlay) {
+        if (series) this.quotes[symbol].series = series;
+      } else if (series) {
+        // Decoded at this instant, from today's points only: today is its day.
+        (this.lines[provider.id] ??= {})[symbol] = { day: taipeiDay(this.host.now()), series };
+      } else {
+        delete this.lines[provider.id]?.[symbol];
+      }
+    }
     const error = result?.errors?.[symbol];
     return error?.retryAfterMs !== undefined ? error : null;
   }

@@ -350,11 +350,24 @@ const misAt = (time) => ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: Str
 const offline = () => { throw new Error("offline"); };
 const isYahootw = (url) => url.startsWith(YAHOOTW_BASE);
 
-function taiwanHost(prefs, { yahootw = () => stockList(TW_NOW - 5_000), mis = () => misAt(TW_NOW - 5_000) } = {}) {
-  const host = fakeHost((url) => isYahootw(url) ? host.yahootw(url) : url.startsWith(MIS_URL) ? host.mis(url)
-    : chart({ symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
-      regularMarketTime: 1_794_187_000, previousClose: 2135, currency: "TWD" }));
-  Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis });
+// A Yahoo 奇摩股市 line answer for `symbol`: one close a minute, the last at `time` (ms).
+const tickAt = (symbol, time, closes) => ok([{ symbol, chart: {
+  meta: { symbol }, timestamp: closes.map((_, i) => Math.floor(time / 1000) - (closes.length - 1 - i) * 60),
+  indicators: { quote: [{ close: closes }] },
+} }]);
+const isLine = (url) => isYahootw(url) && url.includes("ApacLibraCharts");
+const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symbols=")[1]))[0];
+// Yahoo Finance's line under every Taiwan row.
+const BASE_SERIES = [2190, 2195];
+
+function taiwanHost(prefs, {
+  yahootw = () => stockList(TW_NOW - 5_000), mis = () => misAt(TW_NOW - 5_000), line = (symbol) => tickAt(symbol, TW_NOW - 60_000, [2200, 2205]),
+} = {}) {
+  const host = fakeHost((url) => isLine(url) ? host.line(lineSymbol(url)) : isYahootw(url) ? host.yahootw(url)
+    : url.startsWith(MIS_URL) ? host.mis(url)
+    : ok({ chart: { result: [{ meta: { symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
+      regularMarketTime: 1_794_187_000, previousClose: 2135, currency: "TWD" }, indicators: { quote: [{ close: BASE_SERIES }] } }], error: null } }));
+  Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis, line });
   host.store = { version: 1, symbols: ["2330.TW"], paused: false };
   return host;
 }
@@ -463,6 +476,81 @@ test("a 403 hands Taiwan rows to MIS and pauses Yahoo 奇摩股市", async () =>
 
 test("a Yahoo 奇摩股市 name reaches the row", async () => {
   await firstRound(taiwanHost(ONLY_YAHOOTW), (w) => assert.equal(w.shown("2330.TW").localName, "台積電"));
+});
+
+// The recorded rows with 2330 priced at 2210.
+const at2210 = (time = TW_NOW - 5_000) => stockList(time, { "2330.TW": { price: { raw: "2210" } } });
+
+test("the Yahoo 奇摩股市 line ends at the shown price, and is used only while its price is shown", async () => {
+  await firstRound(taiwanHost(BOTH, { yahootw: () => at2210() }), (w) => {
+    const quote = w.shown("2330.TW");
+    assert.deepEqual(quote.series, [2200, 2205, 2210]);
+    assert.deepEqual([quote.source, quote.chartSource, quote.chartDelaySeconds], ["yahootw", "yahootw", 0]);
+  });
+  // A stale Yahoo 奇摩股市 price yields to a live MIS one, and its line goes with it.
+  await firstRound(taiwanHost(BOTH, { yahootw: () => at2210(TW_NOW - 180_000) }), (w) => {
+    assert.ok(w.lines.yahootw["2330.TW"]);
+    const quote = w.shown("2330.TW");
+    assert.deepEqual([quote.source, quote.chartSource, quote.series], ["mis", "yahoo", BASE_SERIES]);
+  });
+});
+
+test("the base line is never overwritten", async () => {
+  await firstRound(taiwanHost(ONLY_YAHOOTW), (w) => {
+    assert.deepEqual(w.shown("2330.TW").series, [2200, 2205, 2240]);
+    assert.deepEqual(w.quotes["2330.TW"].series, BASE_SERIES);
+  });
+});
+
+test("removing a symbol, or turning its source off, drops its Yahoo 奇摩股市 line", async () => {
+  const host = taiwanHost(BOTH);
+  host.store.symbols = ["2330.TW", "0050.TW"];
+  await firstRound(host, (w) => {
+    assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["0050.TW", "2330.TW"]);
+    w.remove("0050.TW");
+    assert.deepEqual(Object.keys(w.lines.yahootw), ["2330.TW"]);
+    host.prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootw: false } } };
+    w.sync();
+    assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
+  });
+});
+
+test("yesterday's line is never drawn with today's price", async () => {
+  await firstRound(taiwanHost(ONLY_YAHOOTW), (w) => {
+    // A copy hidden overnight: the line it kept is yesterday's, the price just arrived is today's.
+    w.lines.yahootw["2330.TW"].day -= 1;
+    assert.equal(w.shown("2330.TW").source, "yahootw");
+    assert.deepEqual(w.shown("2330.TW").series, BASE_SERIES);
+  });
+});
+
+test("an answer without today's points removes the old line", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW);
+  await firstRound(host, async (w) => {
+    assert.ok(w.lines.yahootw["2330.TW"]);
+    host.line = (symbol) => tickAt(symbol, TW_NOW - 86_400_000, [2200, 2205]);
+    await advance(host, TW_NOW + 120_000);
+    assert.equal(w.lines.yahootw["2330.TW"], undefined);
+    assert.deepEqual(w.shown("2330.TW").series, BASE_SERIES);
+    assert.deepEqual(w.problems(), []);
+  });
+});
+
+test("a line never outlives its price", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(host.clock - 5_000) });
+  await firstRound(host, async (w) => {
+    assert.ok(w.lines.yahootw["2330.TW"]);
+    // The next price answer has no row for 2330: its price and line go together.
+    host.yahootw = () => ok(TW_ROWS.filter((row) => row.symbol !== "2330.TW"));
+    await advance(host, TW_NOW + 10_000);
+    assert.equal(w.overlays["2330.TW"], undefined);
+    assert.equal(w.lines.yahootw["2330.TW"], undefined);
+    // A new price shows the base line until a new line arrives.
+    host.yahootw = () => stockList(host.clock - 5_000);
+    await advance(host, TW_NOW + 20_000);
+    assert.equal(w.shown("2330.TW").source, "yahootw");
+    assert.deepEqual(w.shown("2330.TW").series, BASE_SERIES);
+  });
 });
 
 test("identity", () => {

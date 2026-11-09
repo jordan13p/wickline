@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { USER_AGENT } from "../mods/wickline/quotes.js";
 import {
-  YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, taipeiDay, yahootw,
+  YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, taipeiDay, yahootw,
 } from "../mods/wickline/providers/yahootw.js";
+import { t } from "../mods/wickline/i18n.js";
 
 // A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads.
 const ROWS = JSON.parse(readFileSync(new URL("fixtures/yahootw-stocklist.json", import.meta.url), "utf8"));
@@ -30,18 +31,31 @@ test("constants and cadence", () => {
   for (const session of ["closed", "pre", "post"]) assert.equal(yahootw.intervalMs(session), 60_000, session);
 });
 
+test("line cadence", () => {
+  assert.equal(yahootw.linesPerRound, 3);
+  assert.equal(yahootw.linesMs("open"), 120_000);
+  assert.equal(yahootw.linesMs("unknown"), 120_000);
+  assert.equal(yahootw.linesMs("closed"), 600_000);
+});
+
 test("a Taipei day turns at midnight in Taipei, not UTC", () => {
   assert.equal(taipeiDay(Date.parse("2026-11-08T16:00:00Z")), taipeiDay(Date.parse("2026-11-09T15:59:59Z")));
   assert.equal(taipeiDay(Date.parse("2026-11-08T15:59:59Z")) + 1, taipeiDay(Date.parse("2026-11-08T16:00:00Z")));
   assert.equal(taipeiDay(NOW), taipeiDay(Date.parse("2026-11-09T01:41:13Z")));
 });
 
-test("requests: batches of 50 to the fixed host", () => {
+test("requests: batches of 50 to the fixed host, then one line request per symbol", () => {
   assert.deepEqual(yahootw.requests([]), []);
   const symbols = Array.from({ length: 51 }, (_, i) => `${1101 + i}.TW`);
-  const requests = yahootw.requests(symbols);
+  const all = yahootw.requests(symbols);
+  const requests = all.filter((r) => r.kind === "quote");
+  assert.deepEqual(all.slice(0, 2), requests);
   assert.equal(requests.length, 2);
   assert.deepEqual(requests.map((r) => r.symbols.length), [50, 1]);
+  const lines = all.slice(2);
+  assert.deepEqual(lines.map((r) => [r.kind, r.symbols]), symbols.map((symbol) => ["line", [symbol]]));
+  assert.equal(lines[0].url, YAHOOTW_BASE + "FinanceChartService.ApacLibraCharts;type=tick;symbols=%5B%221101.TW%22%5D");
+  for (const request of lines) assert.equal(request.headers["User-Agent"], USER_AGENT);
   assert.equal(requests[0].url, YAHOOTW_BASE + "StockServices.stockList;symbols=" + symbols.slice(0, 50).join(","));
   for (const request of requests) {
     assert.equal(request.kind, "quote");
@@ -136,4 +150,62 @@ test("an unreadable answer", () => {
 test("decodeStockList throws what the round shows for each symbol", () => {
   assert.throws(() => decodeStockList(SYMBOLS, { status: 200, ok: true, text: "<html>" }, NOW), (e) => e.code === "yahootw.unreadable");
   assert.equal(decodeStockList(SYMBOLS, answer(ROWS), NOW).quotes["2330.TW"].price, 2240);
+});
+
+// A line answer: one minute per close from 09:00 Taipei on the clock's day (`start`, epoch seconds).
+const TODAY_0900 = 1794186000;
+const tick = (symbol, closes, start = TODAY_0900, answered = symbol) => answer([{
+  symbol, chart: { meta: { symbol: answered }, timestamp: closes.map((_, i) => start + i * 60), indicators: { quote: [{ close: closes }] } },
+}]);
+const TICK = readFileSync(new URL("fixtures/yahootw-tick.json", import.meta.url), "utf8");
+const TICK_QUIET = readFileSync(new URL("fixtures/yahootw-tick-quiet.json", import.meta.url), "utf8");
+const lineOf = (symbol, response) => yahootw.decode(yahootw.requests([symbol]).find((r) => r.kind === "line"), response, NOW);
+
+test("keeps today's minutes, carrying the last close over quiet minutes", () => {
+  assert.deepEqual(lineOf("2330.TW", tick("2330.TW", [null, 10.05, null, null, 10.10])).lines,
+    { "2330.TW": [10.05, 10.05, 10.05, 10.10] });
+});
+
+test("the liquid fixture", () => {
+  const { quotes, errors, lines } = lineOf("2330.TW", { status: 200, ok: true, text: TICK });
+  assert.deepEqual([quotes, errors], [{}, {}]);
+  // 31 minutes, the first without a trade.
+  assert.equal(lines["2330.TW"].length, 30);
+  assert.equal(lines["2330.TW"][0], 2200);
+  assert.equal(lines["2330.TW"].at(-1), 2210);
+});
+
+test("the quiet fixture", () => {
+  assert.deepEqual(lineOf("0050.TW", { status: 200, ok: true, text: TICK_QUIET }).lines, { "0050.TW": [10.05] });
+});
+
+test("yesterday's points are dropped", () => {
+  const { errors, lines } = lineOf("2330.TW", tick("2330.TW", [2200, 2205], TODAY_0900 - 86_400));
+  assert.deepEqual(errors, {});
+  assert.equal(lines?.["2330.TW"], undefined);
+  // Yesterday's last close is not carried into today's first quiet minute.
+  assert.deepEqual(decodeTick("2330.TW", answer([{ symbol: "2330.TW", chart: {
+    meta: { symbol: "2330.TW" }, timestamp: [TODAY_0900 - 86_400, TODAY_0900, TODAY_0900 + 60],
+    indicators: { quote: [{ close: [2200, null, 2210] }] },
+  } }]), NOW).lines, { "2330.TW": [2210] });
+});
+
+test("another symbol is refused", () => {
+  const { errors, lines } = lineOf("2330.TW", tick("2330.TW", [2200], TODAY_0900, "2317.TW"));
+  assert.equal(errors["2330.TW"].code, "yahootw.otherTicker");
+  assert.equal(lines, undefined);
+  assert.equal(t("zh-TW", "yahootw.otherTicker"), "Yahoo 奇摩股市回傳了不同的代號。");
+});
+
+test("a line answer that is empty or has no chart is unreadable", () => {
+  for (const body of [[], [{ symbol: "2330.TW" }], { chart: {} }]) {
+    assert.equal(lineOf("2330.TW", answer(body)).errors["2330.TW"].code, "yahootw.unreadable", JSON.stringify(body));
+  }
+});
+
+test("404 gives yahootw.http", () => {
+  const { errors } = lineOf("2330.TW", { status: 404, ok: false, text: "" });
+  assert.deepEqual([errors["2330.TW"].code, errors["2330.TW"].params], ["yahootw.http", { status: 404 }]);
+  assert.equal(errors["2330.TW"].retryAfterMs, undefined);
+  for (const status of [403, 429]) assert.equal(lineOf("2330.TW", { status, ok: false, text: "" }).errors["2330.TW"].retryAfterMs, 60_000);
 });

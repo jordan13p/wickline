@@ -1,0 +1,81 @@
+[
+  {
+    "symbol": "0050.TW",
+    "chart": {
+      "meta": {
+        "symbol": "0050.TW",
+        "regularMarketPrice": 10.05,
+        "regularMarketTime": 1794187080,
+        "previousClose": 9.23,
+        "limitUpPrice": 10.15,
+        "limitDownPrice": 8.31,
+        "currentTradingPeriod": {
+          "pre": {
+            "timezone": "Asia/Taipei",
+            "start": 1794186000,
+            "end": 1794186000,
+            "gmtoffset": 28800
+          },
+          "regular": {
+            "timezone": "Asia/Taipei",
+            "start": 1794186000,
+            "end": 1794202200,
+            "gmtoffset": 28800
+          },
+          "post": {
+            "timezone": "Asia/Taipei",
+            "start": 1794202200,
+            "end": 1794202200,
+            "gmtoffset": 28800
+          }
+        }
+      },
+      "timestamp": [
+        1794186000,
+        1794186060,
+        1794186120,
+        1794186180,
+        1794186240,
+        1794186300,
+        1794186360,
+        1794186420,
+        1794186480,
+        1794186540,
+        1794186600,
+        1794186660,
+        1794186720,
+        1794186780,
+        1794186840,
+        1794186900,
+        1794186960,
+        1794187080
+      ],
+      "indicators": {
+        "quote": [
+          {
+            "close": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              10.05
+            ]
+          }
+        ]
+      }
+    }
+  }
+]

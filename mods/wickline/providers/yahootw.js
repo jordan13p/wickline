@@ -84,6 +84,32 @@ export function decodeStockList(symbols, response, now) {
   return { quotes, errors, names };
 }
 
+/**
+ * One symbol's line: today's (Taipei) one-minute closes, oldest first. A minute without a trade carries
+ * the previous close; minutes before the first trade are dropped. With no point from today, no line.
+ */
+export function decodeTick(symbol, response, now) {
+  if (response.status === 403) throw new QuoteError("yahootw.refused", {}, { retryAfterMs: 60_000 });
+  if (response.status === 429) throw new QuoteError("yahootw.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (!response.ok) throw new QuoteError("yahootw.http", { status: response.status });
+  const body = parseJson(response.text, "yahootw.unreadable");
+  const chart = Array.isArray(body) ? body[0]?.chart : null;
+  if (!chart) throw new QuoteError("yahootw.unreadable");
+  if (chart.meta?.symbol !== symbol) throw new QuoteError("yahootw.otherTicker");
+  const times = Array.isArray(chart.timestamp) ? chart.timestamp : [];
+  const closes = chart.indicators?.quote?.[0]?.close;
+  const today = taipeiDay(now);
+  const series = [];
+  let last = null;
+  times.forEach((seconds, i) => {
+    // Checked before the close is taken, so yesterday's last close never fills today's first minutes.
+    if (taipeiDay(seconds * 1000) !== today) return;
+    if (positive(closes?.[i])) last = closes[i];
+    if (last !== null) series.push(last);
+  });
+  return { quotes: {}, errors: {}, ...(series.length && { lines: { [symbol]: series } }) };
+}
+
 /** @type {Provider} */
 export const yahootw = {
   id: "yahootw",
@@ -91,16 +117,26 @@ export const yahootw = {
   overlay: true,
   spacingMs: () => 0,
   intervalMs: (session) => (session === "open" || session === "unknown" ? 10_000 : 60_000),
+  // A line request per symbol is too many for every round: each line waits `linesMs`, and a round
+  // sends at most `linesPerRound` of the due ones, longest-waiting first.
+  linesMs: (session) => (session === "open" || session === "unknown" ? 120_000 : 600_000),
+  linesPerRound: 3,
+  // The price batches, then a line request per symbol; the round picks the lines once the prices are in.
   requests(symbols) {
     const requests = [];
     for (let i = 0; i < symbols.length; i += YAHOOTW_BATCH) {
       const batch = symbols.slice(i, i + YAHOOTW_BATCH);
       requests.push({ url: `${YAHOOTW_BASE}StockServices.stockList;symbols=${batch.join(",")}`, headers: HEADERS, symbols: batch, kind: "quote" });
     }
+    for (const symbol of symbols) {
+      const url = `${YAHOOTW_BASE}FinanceChartService.ApacLibraCharts;type=tick;symbols=${encodeURIComponent(JSON.stringify([symbol]))}`;
+      requests.push({ url, headers: HEADERS, symbols: [symbol], kind: "line" });
+    }
     return requests;
   },
   decode(request, response, now) {
     try {
+      if (request.kind === "line") return decodeTick(request.symbols[0], response, now);
       return decodeStockList(request.symbols, response, now);
     } catch (error) {
       return failEach(request.symbols, error);

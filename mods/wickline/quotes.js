@@ -36,6 +36,7 @@ export const MESSAGES_EN = {
   "yahootw.http": "Yahoo TW Stock returned HTTP {status}.",
   "yahootw.unreadable": "Yahoo TW Stock returned an unreadable response.",
   "yahootw.outOfLimits": "The Yahoo TW Stock price was outside the stock's daily price limits.",
+  "yahootw.otherTicker": "Yahoo TW Stock returned a different ticker.",
   "yahootw.unreachable": "Could not reach Yahoo TW Stock.",
   "finnhub.invalidKey": "Finnhub refused the API key. Check it in Settings.",
   "finnhub.rateLimited": "Finnhub rate limited requests.",
