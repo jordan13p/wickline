@@ -78,6 +78,7 @@ export function decodeStockList(symbols, response, now) {
       fetchedAt: now,
     });
   }
+  // Unused when nothing was accepted (Math.max of none is -Infinity, but no quote takes it).
   const feedTime = Math.max(...accepted.map((quote) => quote.tradeTime));
   const quotes = Object.fromEntries(accepted.map((quote) => [quote.symbol, { ...quote, timestamp: feedTime }]));
   return { quotes, errors, names };

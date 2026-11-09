@@ -380,6 +380,8 @@ test("Yahoo stale, MIS live: MIS is shown with the Yahoo Finance line", async ()
   await firstRound(taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - 180_000) }), (w) => {
     const quote = w.shown("2330.TW");
     assert.deepEqual([quote.source, quote.chartSource], ["mis", "yahoo"]);
+    // The stale Yahoo 奇摩股市 price is still held; MIS wins on liveness, not by being alone.
+    assert.ok(w.overlays["2330.TW"].yahootw);
   });
 });
 
@@ -401,6 +403,8 @@ test("no overlay: the base, with the reason", async () => {
 test("MIS live after a Yahoo 奇摩股市 failure shows no fallback note", async () => {
   await firstRound(taiwanHost(BOTH, { yahootw: offline }), (w) => {
     assert.equal(w.shown("2330.TW").source, "mis");
+    // The failure is kept, only not shown while MIS covers the row.
+    assert.equal(w.overlayErrors["2330.TW"].yahootw.code, "yahootw.unreachable");
     assert.equal(w.overlayError("2330.TW"), null);
   });
 });
