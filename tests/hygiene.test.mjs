@@ -432,4 +432,5 @@ test("the list's scrollbar has its own lane", () => {
   const imported = panel.match(/import \{([^}]*)\} from "\.\.\/layout\.js"/)[1].split(",").map((name) => name.trim());
   for (const name of ["REMOVE_W", "SCROLL_LANE", "RIGHT_INSET"]) assert.ok(imported.includes(name), name);
   assert.doesNotMatch(panel, /px\(GUTTER\)|pr\(GUTTER\)|right\(GUTTER\)/);
+  assert.doesNotMatch(panel, /\.p[xr]\(20\)/);
 });
