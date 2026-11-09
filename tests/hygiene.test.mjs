@@ -1,7 +1,7 @@
 // node --test tests/  (what ships in the mod, and how it credits its origin)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { MESSAGES_EN } from "../mods/wickline/quotes.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
@@ -315,6 +315,11 @@ test("README and RECIPE show the preview and say how to open Wickline", () => {
     assert.ok(text.includes("ctrl-alt-b"), `open key in ${name}`);
     assert.ok(text.includes("herdr-app do pane.split --direction right --mod wickline"), `manual open in ${name}`);
   }
+});
+
+// herdr.dev/mods drops a repo whose recipe exceeds about 64 KiB; keep headroom below it.
+test("RECIPE.md stays under the gallery's size limit", () => {
+  assert.ok(statSync(new URL("RECIPE.md", ROOT)).size <= 60_000, "RECIPE.md over 60,000 bytes");
 });
 
 // The settings tab's disclaimer block and the READMEs carry the same sentences.
