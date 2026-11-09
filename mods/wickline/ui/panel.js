@@ -48,7 +48,7 @@ export function band(view, root, t) {
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
         .child(quote
-          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed), 3)
+          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed), { pad: 3 })
           : div().text_color(t.dim).child(failed ? view.tx("band.unavailable") : "…"))
         .when(Boolean(quote), (el) => el.child(div().text_color(view.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
         .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
@@ -155,12 +155,20 @@ function rowData(view, t, now, symbol, source) {
     state: [shown.label, stale ? view.tx("quote.asOf", { date: stale }) : ""].filter(Boolean).join(" · "),
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
-    // The price as both layouts draw it: lit at its limit (see limitMark), `dim` when cached.
-    price: quote && priceBox(`bw-price-${symbol}`, number(quote), source.failed ? t.dim : t.foreground, view.limitMark(t, quote, source.failed)),
+    price: quote && priceLine(view, t, symbol, quote, source.failed),
   };
 }
 
 // Under a row: a cached quote's reason, a real-time source's fallback, Finnhub's budget.
+// The price and its currency as the sidebar and the table draw them, right-aligned by the caller: `dim` when
+// cached; lit at its limit (see limitMark) as one block with the currency, which keeps its slot's own room.
+function priceLine(view, t, symbol, quote, failed) {
+  const mark = view.limitMark(t, quote, failed);
+  const currency = div().flex_none().w(CODE_W).pl(4).text_size(11).when(!mark, (el) => el.text_color(t.dim)).child(quote.currency ?? "");
+  return priceBox(`bw-price-${symbol}`, h_flex().items_baseline().child(number(quote)).child(currency),
+    failed ? t.dim : t.foreground, mark, { right: 0 });
+}
+
 function rowNotes(view, t, { quote, failed, fallback, overCap }) {
   return [
     failed && div().text_size(11).text_color(t.blocked).child(quote ? view.tx("quote.cached", { reason: view.say(failed) }) : view.say(failed)),
@@ -190,10 +198,7 @@ function priceStack(view, t, row) {
   }
   const figure = (text) => lineBox(14).w(NUMBER_W).text_right().whitespace_nowrap().text_size(11).text_color(color).child(text);
   return column
-    .child(lineBox(16, h_flex().items_baseline())
-      .child(h_flex().flex_none().w(NUMBER_W).justify_end()
-        .child(row.price))
-      .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? "")))
+    .child(lineBox(16, h_flex().justify_end()).child(row.price))
     .child(figure(signed(quote)))
     .child(figure(formatChange(quote.changePercent)));
 }
@@ -418,10 +423,7 @@ function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
       .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state)),
     line: () => (quote ? chart(quote, color, t, { ...TABLE_SPARK, fill: true, stroke: 1.5 }) : cell("line")),
     price: () => (quote
-      ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
-        .child(h_flex().flex_1().min_w(0).justify_end()
-          .child(row.price))
-        .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? ""))
+      ? h_flex().flex_none().w(columnWidth("price")).justify_end().child(row.price)
       : cell("price").pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row))),
     change: () => cell("change").text_right().whitespace_nowrap().text_color(color).child(quote ? signed(quote) : ""),
     changePct: () => cell("changePct").text_right().whitespace_nowrap().text_color(color).child(quote ? formatChange(quote.changePercent) : ""),

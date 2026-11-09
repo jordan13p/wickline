@@ -31,7 +31,7 @@ export function detailView(view, t) {
       .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
         .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×")))
     .child(h_flex().gap(10).items_end()
-      .child(priceBox("bw-detail-price", formatPrice(q), t.foreground, mark, 6).text_size(26).font_semibold())
+      .child(priceBox("bw-detail-price", formatPrice(q), t.foreground, mark, { pad: 6 }).text_size(26).font_semibold())
       .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent)))
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown")))))
