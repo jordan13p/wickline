@@ -56,14 +56,13 @@ export function button(t, id, label, onClick) {
 }
 
 /**
- * A price (with its currency) in a content-sized box whose padding and negative margin cancel, so its digits
- * stay put, lit or not. `mark` (a price at its limit, from the view's limitMark) lights it as Taiwan's quote
- * boards do: a solid block in the limit's color, the text in `mark.ink`, the limit in words on hover. `right`
- * is 0 where the content ends in a slot with room of its own (the currency's).
+ * A price in a content-sized box whose padding and negative margin cancel, so its digits stay put, lit or not.
+ * `mark` (a price at its limit, from the view's limitMark) lights it as Taiwan's quote boards do: a solid
+ * block in the limit's color, the text in `mark.ink`, the limit in words on hover.
  */
-export function priceBox(id, content, color, mark, { pad = 4, right = pad } = {}) {
-  return h_flex().id(id).flex_none().items_baseline().whitespace_nowrap().pl(pad).ml(-pad).pr(right).mr(-right).rounded(3)
-    .text_color(mark ? mark.ink : color).when(Boolean(mark), (el) => el.bg(mark.color).tooltip(mark.tip)).child(content);
+export function priceBox(id, text, color, mark, { pad = 4 } = {}) {
+  return div().id(id).flex_none().whitespace_nowrap().px(pad).mx(-pad).rounded(3).text_color(mark ? mark.ink : color)
+    .when(Boolean(mark), (el) => el.bg(mark.color).tooltip(mark.tip)).child(text);
 }
 
 // A text link: `muted`, `foreground` under the pointer.

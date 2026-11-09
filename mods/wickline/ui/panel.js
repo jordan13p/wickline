@@ -161,12 +161,11 @@ function rowData(view, t, now, symbol, source) {
 
 // Under a row: a cached quote's reason, a real-time source's fallback, Finnhub's budget.
 // The price and its currency as the sidebar and the table draw them, right-aligned by the caller: `dim` when
-// cached; lit at its limit (see limitMark) as one block with the currency, which keeps its slot's own room.
+// cached, lit at its limit (see limitMark); the currency stays outside the block, 4px clear of it.
 function priceLine(view, t, symbol, quote, failed) {
-  const mark = view.limitMark(t, quote, failed);
-  const currency = div().flex_none().w(CODE_W).pl(4).text_size(11).when(!mark, (el) => el.text_color(t.dim)).child(quote.currency ?? "");
-  return priceBox(`bw-price-${symbol}`, h_flex().items_baseline().child(number(quote)).child(currency),
-    failed ? t.dim : t.foreground, mark, { right: 0 });
+  return h_flex().flex_none().items_baseline()
+    .child(priceBox(`bw-price-${symbol}`, number(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed)))
+    .child(div().flex_none().w(CODE_W).pl(8).text_size(11).text_color(t.dim).child(quote.currency ?? ""));
 }
 
 function rowNotes(view, t, { quote, failed, fallback, overCap }) {

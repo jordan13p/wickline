@@ -17,8 +17,9 @@ export const RIGHT_INSET = REMOVE_W + SCROLL_LANE;
 export const COLUMN_GAP = 12;
 // A sidebar row's price column: the number, then a slot for its currency. The table's price header
 // leaves the same slot.
-export const NUMBER_W = 72;
-export const CODE_W = 34;
+export const NUMBER_W = 68;
+// 8px of it before the code, so a price lit at its limit (4px past its digits) keeps 4px clear of it.
+export const CODE_W = 38;
 // The room a sidebar row's left lines keep before its day line grows past its narrowest.
 export const NAME_ROOM = 150;
 // The name takes what the fixed columns leave, within these bounds; below the minimum it drops.
