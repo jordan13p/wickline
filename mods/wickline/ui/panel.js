@@ -48,7 +48,7 @@ export function band(view, root, t) {
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
         .child(quote
-          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed))
+          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed), 3)
           : div().text_color(t.dim).child(failed ? view.tx("band.unavailable") : "…"))
         .when(Boolean(quote), (el) => el.child(div().text_color(view.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
         .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
