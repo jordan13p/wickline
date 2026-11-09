@@ -320,7 +320,7 @@ export default class Wickline extends View {
     try {
       this.keyEnding = await loadSecretEnding(SECRET_KEY_FINNHUB);
     } catch {
-      // Unreadable: the card shows the panel's problem; a key saved now replaces the file.
+      // Unreadable: the United States page shows the panel's problem; a key saved now replaces the file.
       this.keyEnding = null;
     }
   }

@@ -401,3 +401,8 @@ test("no tracked file names the old working name", () => {
     assert.doesNotMatch(read(new URL(name, root)), new RegExp(old, "i"), name);
   }
 });
+
+// gpui reads a bare number as a multiplier of the text size, not pixels: a line height is always a length string.
+test("line heights are given in pixels", () => {
+  for (const file of jsFiles()) assert.doesNotMatch(code(read(file)), /\.line_height\(\s*[\d.]/, relativeName(file));
+});

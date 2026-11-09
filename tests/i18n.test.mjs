@@ -126,3 +126,9 @@ const width = (text) => [...text].reduce((sum, char) => sum + (char.codePointAt(
 test("the live label is never wider than Binance Spot", () => {
   for (const lang of LANGUAGES) assert.ok(width(STRINGS[lang]["freshness.live"]) <= width("Binance Spot"), lang);
 });
+
+test("the settings pages say Delayed, capitalized, with or without the minutes", () => {
+  assert.equal(t("en", "settings.delayed"), "Delayed");
+  assert.equal(t("en", "settings.delayedMinutes", { minutes: 20 }), "Delayed 20 min");
+  assert.equal(t("zh-TW", "settings.delayedMinutes", { minutes: 20 }), "延遲 20 分鐘");
+});

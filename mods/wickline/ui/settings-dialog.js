@@ -52,7 +52,7 @@ export function settingsView(view, t) {
   // What blocks Save, also when it sits on another page, so Save is never disabled without a reason.
   const blocking = firstDraftError(errors, settingsMarkets(view.lang));
   const footer = h_flex().flex_none().px(14).py(10).gap(8).items_center().border_t(1).border_color(t.border)
-    .child(div().flex_1().min_w(0).max_h(32).line_height(16).overflow_hidden().text_size(11.5).text_color(t.ansi1)
+    .child(div().flex_1().min_w(0).max_h(32).line_height("16px").overflow_hidden().text_size(11.5).text_color(t.ansi1)
       .child(view.error ? view.say(view.error) : blocking ? view.tx(blocking.code) : ""))
     .child(h_flex().id("bw-settings-cancel").flex_none().h(28).px(14).items_center().rounded(5).border_1().border_color(t.border)
       .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
@@ -78,7 +78,7 @@ function marketStatus(view, market) {
 
 // How late Yahoo Finance is for the market: 20 minutes for Taiwan, by exchange elsewhere.
 function delayText(view, market) {
-  return market === "tw" ? view.tx("freshness.delayedMinutes", { minutes: TAIWAN_YAHOO_DELAY_S / 60 }) : view.tx("settings.delayed");
+  return market === "tw" ? view.tx("settings.delayedMinutes", { minutes: TAIWAN_YAHOO_DELAY_S / 60 }) : view.tx("settings.delayed");
 }
 
 // The market's name, and on the right the state and source the unsaved choices would use.
@@ -281,7 +281,8 @@ function cryptoPage(view, t, errors) {
   const urlError = errors["sources.crypto.binanceUrl"];
   return [
     heading(view, t, "settings.realtime"),
-    sourceRow(view, t, "1", "binance", "", alwaysOn(view, t)),
+    // "Spot" is part of the product's name (Binance Spot), the same in every language.
+    sourceRow(view, t, "1", "binance", "Spot", alwaysOn(view, t)),
     details(healthLine(view, t, "binance"), note(t, view.tx("sources.crypto.region"))),
     ...fallback(view, t, "crypto"),
     ...advanced(view, t, "crypto", field(view, t, view.tx("sources.crypto.url"), view.urlInput, view.urlFocused, urlError), urlError),
