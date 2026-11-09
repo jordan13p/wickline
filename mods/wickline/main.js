@@ -13,7 +13,7 @@ import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
 import { changeTone } from "./format.js";
 import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter } from "./markets.js";
-import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
+import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
   SECRET_KEY_FINNHUB, SETTINGS_KEY, currentHealth, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed,
@@ -207,6 +207,36 @@ export default class Wickline extends View {
         this.added.delete(symbol);
         this.leaving.push(ghost);
         this.playRow(cx, () => { ghost.gone = true; }, () => { this.leaving = this.leaving.filter((g) => g !== ghost); });
+      }
+      return notice;
+    });
+    this.expireUndo(cx);
+  }
+
+  // A removal's notice offers Undo for UNDO_MS, then keeps its text without it. One sleep in a task of its
+  // own, not a poll; a newer notice (any later edit) has ended the Undo already, so it leaves that alone.
+  expireUndo(cx) {
+    const held = this.notice;
+    if (!held?.undo) return;
+    cx.spawn(async (cx) => {
+      await cx.sleep(UNDO_MS);
+      if (this.watch.stopped || this.notice !== held) return;
+      this.notice = { code: held.code, params: held.params };
+      cx.notify();
+    });
+  }
+
+  // Puts the last removed symbol back where it was, in every copy. Read before `act` replaces the notice,
+  // so a second click on a stale Undo does nothing. Listed again already (another copy added it): `restore`
+  // gives null and the notice line clears.
+  undoRemove(cx) {
+    const undo = this.notice?.undo;
+    if (!undo) return;
+    this.act(cx, () => {
+      const notice = this.watch.restore(undo.symbol, undo.index);
+      if (notice) {
+        this.revealSymbol(undo.symbol);
+        this.fadeIn(cx, undo.symbol);
       }
       return notice;
     });

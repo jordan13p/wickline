@@ -1,5 +1,5 @@
-// What a row does when the person adds, removes or drops it, apart from drawing it, and how long the refresh
-// icon turns. No Herdr imports.
+// What a row does when the person adds, removes or drops it, apart from drawing it, how long the refresh
+// icon turns and how long Undo stays. No Herdr imports.
 import { inFilter } from "./markets.js";
 
 // Every row motion: fade in, fade out and collapse, slide into place.
@@ -12,6 +12,9 @@ export const MOTION_END_MS = ROW_MOTION_MS + 50;
 
 // One turn of the refresh icon.
 export const SPIN_MS = 900;
+
+// How long a removal's notice offers Undo.
+export const UNDO_MS = 10_000;
 
 /**
  * How many whole turns, counted from the first press, a spin that has run `elapsedMs` must reach for a

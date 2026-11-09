@@ -101,7 +101,7 @@ test("removing a ticker drops its quote; pause stops automatic rounds", async ()
   await advance(host, 0);
   assert.ok(w.quotes.AAPL);
   const removed = w.remove("AAPL");
-  assert.deepEqual(removed, { code: "notice.removed", params: { symbol: "AAPL" } });
+  assert.deepEqual(removed, { code: "notice.removed", params: { symbol: "AAPL" }, undo: { symbol: "AAPL", index: 0 } });
   assert.equal(t("en", removed.code, removed.params), "Removed AAPL.");
   assert.equal(w.quotes.AAPL, undefined);
   w.add("MSFT");
@@ -236,6 +236,44 @@ test("a drop lands next to its symbol, not at a stale index", () => {
   b.remove("AAPL");
   a.move("2330.TW", "NVDA");
   assert.deepEqual(host.store.symbols, ["2330.TW", "NVDA"]);
+});
+
+test("remove carries what Undo needs", () => {
+  const host = listed(["AAPL", "NVDA", "2330.TW"]);
+  const removed = new Watchlist(host).remove("NVDA");
+  assert.equal(removed.code, "notice.removed");
+  assert.deepEqual(removed.undo, { symbol: "NVDA", index: 1 });
+});
+
+test("restore puts a symbol back where it was", () => {
+  const host = listed(["AAPL", "NVDA", "2330.TW"]);
+  const w = new Watchlist(host);
+  const { undo } = w.remove("NVDA");
+  const restored = w.restore(undo.symbol, undo.index);
+  assert.deepEqual(restored, { code: "notice.restored", params: { symbol: "NVDA" } });
+  assert.equal(t("en", restored.code, restored.params), "Restored NVDA.");
+  assert.deepEqual(host.store.symbols, ["AAPL", "NVDA", "2330.TW"]);
+  assert.deepEqual(w.preferences.symbols, ["AAPL", "NVDA", "2330.TW"]);
+});
+
+test("restore clamps to the end", () => {
+  const host = listed(["AAPL"]);
+  new Watchlist(host).restore("2330.TW", 5);
+  assert.deepEqual(host.store.symbols, ["AAPL", "2330.TW"]);
+});
+
+test("restore of a listed symbol saves nothing", () => {
+  const host = listed(["AAPL", "NVDA"]);
+  const w = new Watchlist(host);
+  const saved = JSON.stringify(host.store);
+  assert.equal(w.restore("NVDA", 0), null);
+  assert.equal(JSON.stringify(host.store), saved);
+});
+
+test("removing an unlisted symbol offers no Undo", () => {
+  const removed = new Watchlist(listed(["AAPL"])).remove("MSFT");
+  assert.equal(removed.code, "notice.notListed");
+  assert.equal("undo" in removed, false);
 });
 
 // Quiet loops: nothing marked for a new round, so a restart shows as `dirty` and a new revision.

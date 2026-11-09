@@ -310,11 +310,24 @@ export class Watchlist {
     return pushed ? notice("notice.overCapPushed", { symbol, pushed, cap }) : message;
   }
 
+  // A removal's notice carries `undo`, the symbol and its place in the list as saved before it, for
+  // `restore`; any later notice replaces it, which ends the Undo.
   remove(symbol) {
     return this.edit((p) => {
-      if (!p.symbols.includes(symbol)) return notice("notice.notListed", { symbol });
+      const index = p.symbols.indexOf(symbol);
+      if (index < 0) return notice("notice.notListed", { symbol });
       p.symbols = p.symbols.filter((s) => s !== symbol);
-      return notice("notice.removed", { symbol });
+      return { ...notice("notice.removed", { symbol }), undo: { symbol, index } };
+    });
+  }
+
+  // Puts a removed symbol back at `index`, or at the end when the list has grown shorter since. Null, and
+  // nothing saved, when it is listed again already (another copy added it).
+  restore(symbol, index) {
+    return this.edit((p) => {
+      if (p.symbols.includes(symbol)) return null;
+      p.symbols.splice(Math.min(index, p.symbols.length), 0, symbol);
+      return notice("notice.restored", { symbol });
     });
   }
 

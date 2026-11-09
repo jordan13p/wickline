@@ -118,10 +118,17 @@ function addField(view, t) {
     .border_color(view.inputFocused ? t.accent : t.selected).bg(t.selected).text_size(12.5).text_color(t.foreground);
 }
 
-// What the last edit said, under the add field.
+// What the last edit said, under the add field. A removal's notice offers Undo right after its text
+// (`Removed 2330.TW. · Undo`), which wraps at its natural width rather than pushing the link to the edge.
 function messages(view, t) {
   if (view.error) return [div().text_size(11).text_color(t.ansi1).child(view.say(view.error))];
-  return view.notice ? [div().text_size(11).text_color(t.dim).child(view.say(view.notice))] : [];
+  if (!view.notice) return [];
+  const text = div().text_size(11).text_color(t.dim).child(view.say(view.notice));
+  if (!view.notice.undo) return [text];
+  return [h_flex().items_start().gap(6).text_size(11)
+    .child(text.flex_initial().min_w(0))
+    .child(div().flex_none().text_color(t.dim).child("·"))
+    .child(link(t, "bw-undo", view.tx("notice.undo"), (cx) => view.undoRemove(cx)))];
 }
 
 // One line per source with a problem: rate limited, unreachable, timed out, refused.
