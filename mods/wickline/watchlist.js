@@ -316,17 +316,17 @@ export class Watchlist {
     return this.edit((p) => {
       const index = p.symbols.indexOf(symbol);
       if (index < 0) return notice("notice.notListed", { symbol });
-      p.symbols = p.symbols.filter((s) => s !== symbol);
+      p.symbols.splice(index, 1);
       return { ...notice("notice.removed", { symbol }), undo: { symbol, index } };
     });
   }
 
-  // Puts a removed symbol back at `index`, or at the end when the list has grown shorter since. Null, and
+  // Puts a removed symbol back at `index` (splice puts it at the end when the list has grown shorter since). Null, and
   // nothing saved, when it is listed again already (another copy added it).
   restore(symbol, index) {
     return this.edit((p) => {
       if (p.symbols.includes(symbol)) return null;
-      p.symbols.splice(Math.min(index, p.symbols.length), 0, symbol);
+      p.symbols.splice(index, 0, symbol);
       return notice("notice.restored", { symbol });
     });
   }

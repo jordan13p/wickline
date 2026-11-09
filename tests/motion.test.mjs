@@ -1,7 +1,7 @@
 // node --test tests/  (motion.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SPIN_MS, rowsWithGhosts, settleOffset, spinTurnsFor } from "../mods/wickline/motion.js";
+import { SPIN_MS, UNDO_MS, rowsWithGhosts, settleOffset, spinTurnsFor } from "../mods/wickline/motion.js";
 import { readFilter } from "../mods/wickline/markets.js";
 
 const ghost = (symbol, before) => ({ symbol, before });
@@ -73,4 +73,8 @@ test("the refresh icon turns whole turns of 900 ms, a whole one for each press",
   // On a boundary, the turn that starts there is the next one.
   assert.equal(spinTurnsFor(900, SPIN_MS), 2);
   assert.equal(spinTurnsFor(901, SPIN_MS), 3);
+});
+
+test("a removal offers Undo for the 10 seconds the docs promise", () => {
+  assert.equal(UNDO_MS, 10_000);
 });

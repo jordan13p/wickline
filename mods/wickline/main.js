@@ -210,7 +210,6 @@ export default class Wickline extends View {
       }
       return notice;
     });
-    this.expireUndo(cx);
   }
 
   // A removal's notice offers Undo for UNDO_MS, then keeps its text without it. One sleep in a task of its
@@ -221,7 +220,8 @@ export default class Wickline extends View {
     cx.spawn(async (cx) => {
       await cx.sleep(UNDO_MS);
       if (this.watch.stopped || this.notice !== held) return;
-      this.notice = { code: held.code, params: held.params };
+      const { undo, ...plain } = held;
+      this.notice = plain;
       cx.notify();
     });
   }
@@ -413,6 +413,8 @@ export default class Wickline extends View {
       this.error = cause instanceof QuoteError ? { code: cause.code, params: cause.params } : { code: failure, params: {} };
     }
     cx.notify();
+    // A removal's notice carries `undo`, whichever action gave it; it ends after UNDO_MS.
+    this.expireUndo(cx);
   }
 
   // Every notice an add gives but the duplicate's means a new symbol, whatever it says about Finnhub's cap.

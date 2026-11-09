@@ -13,7 +13,7 @@ export const MOTION_END_MS = ROW_MOTION_MS + 50;
 // One turn of the refresh icon.
 export const SPIN_MS = 900;
 
-// How long a removal's notice offers Undo.
+// README and RECIPE promise the person 10 seconds.
 export const UNDO_MS = 10_000;
 
 /**
