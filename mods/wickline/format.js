@@ -55,11 +55,16 @@ export function number(quote, value = quote.price) {
 // The sign follows the rounded text, so a change too small to show reads `0.00`, never `+0.00` or `-0.00`.
 const withSign = (value, size) => (/[1-9]/.test(size) ? `${value >= 0 ? "+" : "-"}${size}` : size);
 
-// The day's change in the price's own units: `+3.58`, `-1,234.56`.
+// The day's change in the price's own units and precision: `+3.58`, `-1,234.56`; below 1, the price's
+// significant digits (`+0.00000012`). From 1 up it is 2 decimals like the price, so float noise in a
+// source's price (227.52000427 against 227.52) reads `0.00`, never `+0.000004272`.
 export function signed(quote) {
   if (!(quote.previousClose > 0)) return "—";
   const change = quote.price - quote.previousClose;
-  return withSign(change, Math.abs(change) > 0 ? formatPrice({ ...quote, price: Math.abs(change), currency: null }) : "0.00");
+  const size = Math.abs(change);
+  if (quote.price < 1) return withSign(change, size > 0 ? significant(size) : "0.00");
+  const [whole, fraction] = size.toFixed(2).split(".");
+  return withSign(change, `${group(whole)}.${fraction}`);
 }
 
 export function formatChange(value) {

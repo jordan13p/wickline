@@ -28,6 +28,11 @@ test("signed: the day's change in the price's units", () => {
   assert.equal(signed({ price: 0.00000441, previousClose: 0.00000429 }), "+0.00000012");
   assert.equal(signed({ price: 2135, previousClose: 2260 }), "-125.00");
   assert.equal(signed({ price: 2260 }), "—");
+  // From 1 up the change keeps the price's 2 decimals: a price with float noise is flat, not +0.000004272.
+  assert.equal(signed({ price: 227.52000427246094, previousClose: 227.52 }), "0.00");
+  assert.equal(signed({ price: 100.004, previousClose: 100 }), "0.00");
+  assert.equal(signed({ price: 1.15, previousClose: 1.1 }), "+0.05");
+  assert.equal(signed({ price: 91234.56, previousClose: 90000 }), "+1,234.56");
   assert.equal(number({ price: 2260, currency: "TWD" }), "2,260.00");
 });
 
