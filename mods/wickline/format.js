@@ -41,10 +41,13 @@ export function formatPrice(quote) {
   return quote.currency ? `${price} ${quote.currency}` : price;
 }
 
-/** The compact band leaves out USD and a pair's own quote currency. */
+/** The currency the compact band names: none for USD or a pair's own quote currency. */
+export function bandCurrency(quote) {
+  return !quote.currency || quote.currency === "USD" || quote.symbol.endsWith(`/${quote.currency}`) ? null : quote.currency;
+}
+
 export function formatBandPrice(quote) {
-  const named = quote.currency === "USD" || quote.symbol.endsWith(`/${quote.currency}`);
-  return formatPrice(named ? { ...quote, currency: null } : quote);
+  return formatPrice({ ...quote, currency: bandCurrency(quote) });
 }
 
 // `value` (the price by default) without its currency, for a fixed right-aligned column.

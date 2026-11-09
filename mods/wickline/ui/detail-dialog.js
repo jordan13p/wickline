@@ -2,7 +2,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { hasLimits, isCryptoPair } from "../quotes.js";
-import { displayName, detailTimes, formatBandPrice, formatChange, formatPrice } from "../format.js";
+import { displayName, detailTimes, formatBandPrice, formatChange, number } from "../format.js";
 import { detailSource, sessionOf } from "../freshness.js";
 import { chart, priceBox, segments } from "./parts.js";
 
@@ -31,7 +31,9 @@ export function detailView(view, t) {
       .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
         .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×")))
     .child(h_flex().gap(10).items_end()
-      .child(priceBox("bw-detail-price", formatPrice(q), t.foreground, mark, { pad: 6 }).text_size(26).font_semibold())
+      .child(priceBox("bw-detail-price", number(q), t.foreground, mark, { pad: 6 }).text_size(26).font_semibold())
+      // Outside the price, as in the rows: a lit price's 6px block keeps 4px clear of it.
+      .when(Boolean(q.currency), (el) => el.child(div().pb(4).text_size(13).text_color(t.dim).child(q.currency)))
       .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent)))
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown")))))

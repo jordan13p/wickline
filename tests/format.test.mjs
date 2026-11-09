@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeTone, chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
+import { changeTone, chartGeometry, detailTimes, bandCurrency, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { freshness } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -13,6 +13,10 @@ test("formats without Intl", () => {
   assert.equal(formatBandPrice({ symbol: "AAPL", price: 230.1, currency: "USD" }), "230.10");
   assert.equal(formatBandPrice({ symbol: "BTC/USDT", price: 65000, currency: "USDT" }), "65,000.00");
   assert.equal(formatBandPrice({ symbol: "0700.HK", price: 600, currency: "HKD" }), "600.00 HKD");
+  // The band draws its currency apart, so a lit price's block holds the digits only.
+  assert.equal(bandCurrency({ symbol: "2330.TW", currency: "TWD" }), "TWD");
+  assert.equal(bandCurrency({ symbol: "AAPL", currency: "USD" }), null);
+  assert.equal(bandCurrency({ symbol: "BTC/USDT", currency: "USDT" }), null);
   assert.equal(formatChange(1.234), "+1.23%");
   assert.equal(formatChange(-0.5), "-0.50%");
   assert.equal(formatChange(null), "—");

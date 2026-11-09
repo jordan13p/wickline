@@ -4,7 +4,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, formatBandPrice, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
+import { bandCurrency, displayName, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
@@ -48,8 +48,10 @@ export function band(view, root, t) {
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
         .child(quote
-          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed, now), { pad: 3 })
+          ? priceBox(`bw-band-price-${symbol}`, number(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed, now), { pad: 3 })
           : div().text_color(t.dim).child(failed ? view.tx("band.unavailable") : "…"))
+        // Its own `dim` text, 2px further out than the gap, so a lit price's 3px block keeps 4px clear of it.
+        .when(Boolean(quote && bandCurrency(quote)), (el) => el.child(div().ml(2).text_color(t.dim).child(bandCurrency(quote))))
         .when(Boolean(quote), (el) => el.child(div().text_color(view.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
         .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
     }));
