@@ -333,6 +333,12 @@ test("finnhubKeyUsable", () => {
   assert.equal(finnhubKeyUsable({ ...none, typed: "abc" }), true);
   assert.equal(finnhubKeyUsable({ ...none, typed: "abc", typedValid: false }), false);
   assert.equal(finnhubKeyUsable({ ...none, typed: "abc", saved: true, removing: true }), true);
+  // ...and alone: a malformed typed key never falls back to the saved one.
+  assert.equal(finnhubKeyUsable({ ...none, typed: "a b", typedValid: false, saved: true }), false);
+  // A stop on the address refuses a typed key too; a stop on the key does not.
+  const stopped = (code) => [{ provider: "finnhub", code, stopped: true }];
+  for (const code of ["finnhub.redirected", "finnhub.badUrl"]) assert.equal(finnhubKeyUsable({ ...none, typed: "abc", health: stopped(code) }), false, code);
+  assert.equal(finnhubKeyUsable({ ...none, typed: "abc", health: stopped("finnhub.invalidKey") }), true);
   // The saved key counts while it stays and Finnhub has not stopped on it.
   assert.equal(finnhubKeyUsable({ ...none, saved: true }), true);
   assert.equal(finnhubKeyUsable({ ...none, saved: true, removing: true }), false);
@@ -415,6 +421,16 @@ test("marketStatus: health counts only while its source's settings are as saved"
   // Yahoo Finance reads no settings: no edit drops its problem, so a delayed market it serves reads Problem.
   const yahooDown = [{ provider: "yahoo", code: "yahoo.unreachable", params: {} }];
   assert.deepEqual(status({ saved: finnhub, draft: budget, health: yahooDown, market: "us" }), { live: false, source: "yahoo", problem: true });
+  // A typed key decides alone: a malformed one is not saved, and the refused saved key is not used either.
+  const badKey = { ...savedKey, typed: "bad key", typedValid: false };
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: badKey }),
+    { live: false, source: "yahoo", problem: false });
+  // A refused address refuses every key, typed or saved: after Save the US uses Yahoo Finance.
+  const typedKey = { ...savedKey, typed: "new-key" };
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: typedKey }),
+    { live: false, source: "yahoo", problem: false });
+  assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: typedKey }),
+    { live: true, source: "finnhub", problem: false });
   // A change on another market's page leaves this one's health in force.
   const elsewhere = copy(crypto);
   elsewhere.sources.tw.mis = true;

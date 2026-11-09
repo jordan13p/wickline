@@ -79,13 +79,20 @@ export function keyChange({ provider, typed, saved, removing }) {
   return removing && saved ? "remove" : null;
 }
 
+// A Finnhub stop lifts only by what caused it, so a refused key never reads live after another edit:
+// these (an address the key may not be sent to) by a new address; any other (the key refused, missing
+// or unreadable) by a key typed or removed.
+const FINNHUB_ADDRESS_STOPS = ["finnhub.redirected", "finnhub.badUrl"];
+
 /**
- * A key Finnhub would use after Save: one typed (trimmed) and well formed (`typedValid`), or the saved
- * one while it stays (no Remove) and `health` (each source's current problem) has not stopped Finnhub.
+ * A key Finnhub would use after Save. A key typed (trimmed) decides alone: Save writes it only when well
+ * formed (`typedValid`). Otherwise the saved one, while it stays (no Remove) and `health` (each source's
+ * current problem) has not stopped Finnhub. An address stop refuses any key, as Save would not send one.
  */
 export function finnhubKeyUsable({ typed, typedValid, saved, removing, health }) {
-  return (typed !== "" && typedValid)
-    || (saved && !removing && !health.some((p) => p.provider === "finnhub" && p.stopped));
+  const stops = health.filter((p) => p.provider === "finnhub" && p.stopped);
+  if (typed !== "") return typedValid && !stops.some((p) => FINNHUB_ADDRESS_STOPS.includes(p.code));
+  return saved && !removing && !stops.length;
 }
 
 // Each Taiwan source's consent, as [key in sources.tw, current version].
@@ -153,11 +160,6 @@ const SOURCE_FIELDS = {
   finnhub: [["us", "provider"], ["us", "finnhubUrl"], ["us", "budgetPerMinute"]],
   binance: [["crypto", "binanceUrl"]],
 };
-// A Finnhub stop lifts only by what caused it, so a refused key never reads live after another edit:
-// these (an address the key may not be sent to) by a new address; any other (the key refused, missing
-// or unreadable) by a key typed or removed.
-const FINNHUB_ADDRESS_STOPS = ["finnhub.redirected", "finnhub.badUrl"];
-
 /**
  * The entries of `health` (each source's problem when the dialog opened) that still describe `draft`:
  * a source's problem holds while the settings it reads are as in `saved`. `keyEdited`: a key typed or
