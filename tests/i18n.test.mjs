@@ -132,3 +132,9 @@ test("the settings pages say Delayed, capitalized, with or without the minutes",
   assert.equal(t("en", "settings.delayedMinutes", { minutes: 20 }), "Delayed 20 min");
   assert.equal(t("zh-TW", "settings.delayedMinutes", { minutes: 20 }), "延遲 20 分鐘");
 });
+
+// 恢复 already means "resume" (已恢复自动刷新); Undo uses the word zh-CN software uses for it.
+test("zh-CN Undo is 撤销, not the resume verb", () => {
+  assert.equal(t("zh-CN", "notice.undo"), "撤销");
+  assert.equal(t("zh-CN", "notice.restored", { symbol: "AAPL" }), "已撤销移除 AAPL。");
+});
