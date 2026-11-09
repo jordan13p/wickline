@@ -155,19 +155,15 @@ function rowData(view, t, now, symbol, source) {
     state: [shown.label, stale ? view.tx("quote.asOf", { date: stale }) : ""].filter(Boolean).join(" · "),
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
-    price: quote && priceLine(view, t, symbol, quote, source.failed),
+    // The price as both layouts draw it: lit at its limit (see limitMark), `dim` when cached.
+    price: quote && priceBox(`bw-price-${symbol}`, number(quote), source.failed ? t.dim : t.foreground, view.limitMark(t, quote, source.failed)),
   };
 }
 
-// Under a row: a cached quote's reason, a real-time source's fallback, Finnhub's budget.
-// The price and its currency as the sidebar and the table draw them, right-aligned by the caller: `dim` when
-// cached, lit at its limit (see limitMark); the currency stays outside the block, 4px clear of it.
-function priceLine(view, t, symbol, quote, failed) {
-  return h_flex().flex_none().items_baseline()
-    .child(priceBox(`bw-price-${symbol}`, number(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed)))
-    .child(div().flex_none().w(CODE_W).pl(8).text_size(11).text_color(t.dim).child(quote.currency ?? ""));
-}
+// A price's currency in its own slot, 8px after the digits: 4px clear of a lit price's block.
+const currencySlot = (t, quote) => div().flex_none().w(CODE_W).pl(8).text_size(11).text_color(t.dim).child(quote.currency ?? "");
 
+// Under a row: a cached quote's reason, a real-time source's fallback, Finnhub's budget.
 function rowNotes(view, t, { quote, failed, fallback, overCap }) {
   return [
     failed && div().text_size(11).text_color(t.blocked).child(quote ? view.tx("quote.cached", { reason: view.say(failed) }) : view.say(failed)),
@@ -197,7 +193,9 @@ function priceStack(view, t, row) {
   }
   const figure = (text) => lineBox(14).w(NUMBER_W).text_right().whitespace_nowrap().text_size(11).text_color(color).child(text);
   return column
-    .child(lineBox(16, h_flex().justify_end()).child(row.price))
+    .child(lineBox(16, h_flex().items_baseline())
+      .child(h_flex().flex_none().w(NUMBER_W).justify_end().child(row.price))
+      .child(currencySlot(t, quote)))
     .child(figure(signed(quote)))
     .child(figure(formatChange(quote.changePercent)));
 }
@@ -422,7 +420,9 @@ function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
       .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state)),
     line: () => (quote ? chart(quote, color, t, { ...TABLE_SPARK, fill: true, stroke: 1.5 }) : cell("line")),
     price: () => (quote
-      ? h_flex().flex_none().w(columnWidth("price")).justify_end().child(row.price)
+      ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
+        .child(h_flex().flex_1().min_w(0).justify_end().child(row.price))
+        .child(currencySlot(t, quote))
       : cell("price").pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row))),
     change: () => cell("change").text_right().whitespace_nowrap().text_color(color).child(quote ? signed(quote) : ""),
     changePct: () => cell("changePct").text_right().whitespace_nowrap().text_color(color).child(quote ? formatChange(quote.changePercent) : ""),
