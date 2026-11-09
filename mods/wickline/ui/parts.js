@@ -9,14 +9,15 @@ import { SPIN_MS } from "../motion.js";
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
 export const icon = (name) => `mods/wickline/icons/${name}.svg`;
 
-// The day's line, scaled to its box; the previous close is a dashed rule.
-export function chart(quote, color, t, { width, height, fill }) {
+// The day's line, scaled to its box; the previous close is a dashed rule. `stroke` defaults to 2 px with
+// the area and 1.25 px without.
+export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25 }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
   const g = chartGeometry(quote.series, quote.previousClose);
   if (!g) return sized;
   const layer = (path, paint) => window.paint_path(path, paint).absolute().top(0).left(0).size_full();
-  let line = PathBuilder.stroke(fill ? 2 : 1.25);
+  let line = PathBuilder.stroke(stroke);
   g.points.forEach(([x, y], i) => { line = i ? line.line_to(`${x}%`, `${y}%`) : line.move_to(`${x}%`, `${y}%`); });
   return sized
     .when(g.reference !== null, (el) => el.child(layer(

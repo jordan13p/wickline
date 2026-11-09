@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
-  columnWidth, layoutFor, nameWidth, tableColumns, wantsCard,
+  columnWidth, layoutFor, nameWidth, sparkWidth, tableColumns, wantsCard,
 } from "../mods/wickline/layout.js";
 
 const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", "high", "low", "prevClose"];
@@ -89,6 +89,16 @@ test("the name takes the rest, within its bounds", () => {
   // A very wide pane: the table stops at 1280 and the name at its cap.
   assert.equal(nameWidth(2000, ALL), nameWidth(TABLE_MAX_WIDTH, ALL));
   assert.ok(nameWidth(TABLE_MAX_WIDTH, ALL) <= NAME_MAX_WIDTH);
+});
+
+test("the sidebar line widens with the pane, after the name", () => {
+  assert.equal(sparkWidth(280), 40);
+  assert.equal(sparkWidth(345), 40);
+  assert.equal(sparkWidth(400), 80);
+  assert.equal(sparkWidth(440), 120);
+  assert.equal(sparkWidth(700), 120);
+  // Not laid out yet.
+  assert.equal(sparkWidth(null), 40);
 });
 
 test("a docked block asks for the card with card: true, and nothing else does", () => {

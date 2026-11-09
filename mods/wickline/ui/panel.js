@@ -4,22 +4,20 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, rowName } from "../format.js";
+import { displayName, formatBandPrice, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
-import { COLUMN_GAP, GUTTER, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, tableColumns } from "../layout.js";
+import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, tableColumns } from "../layout.js";
 import { button, chart, dot, icon, iconButton } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
-// Sidebar rows: the day's line, then the price column (the number, then a slot for its currency).
-// The right group keeps this width, so a wider pane gives its room to the name.
+// Sidebar rows: the day's line, then the price column (layout.js NUMBER_W + CODE_W). The right group
+// keeps this width, so a wider pane gives its room to the name.
 const SPARK = { width: 56, height: 20 };
 const TABLE_SPARK = { width: columnWidth("line"), height: 20 };
-const NUMBER_W = 72;
-const CODE_W = 34;
 // The filter row: 24 px labels with 2 px between them; the chosen one sits on a pill of the same height.
 const FILTER_H = 24;
 const FILTER_GAP = 2;
@@ -159,19 +157,6 @@ function rowNotes(view, t, { quote, failed, fallback, overCap }) {
     fallback && div().text_size(11).text_color(t.blocked).child(quote ? view.fallbackText(quote, fallback) : view.say(fallback)),
     overCap && div().text_size(11).text_color(t.dim).child(view.tx("finnhub.overCap", { cap: finnhubCap(view.settings.sources.us.budgetPerMinute) })),
   ].filter(Boolean);
-}
-
-// `value` (the price by default) without its currency, for a fixed right-aligned column.
-function number(quote, value = quote.price) {
-  return typeof value === "number" && value > 0 ? formatPrice({ ...quote, price: value, currency: null }) : "—";
-}
-
-// The day's change in the price's own units: `+3.58`, `-1,234.56`.
-function signed(quote) {
-  if (!(quote.previousClose > 0)) return "—";
-  const change = quote.price - quote.previousClose;
-  const size = Math.abs(change) > 0 ? formatPrice({ ...quote, price: Math.abs(change), currency: null }) : "0.00";
-  return `${change >= 0 ? "+" : "-"}${size}`;
 }
 
 // Before the first quote: why there is none yet.

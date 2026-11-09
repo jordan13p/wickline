@@ -47,6 +47,19 @@ export function formatBandPrice(quote) {
   return formatPrice(named ? { ...quote, currency: null } : quote);
 }
 
+// `value` (the price by default) without its currency, for a fixed right-aligned column.
+export function number(quote, value = quote.price) {
+  return typeof value === "number" && value > 0 ? formatPrice({ ...quote, price: value, currency: null }) : "—";
+}
+
+// The day's change in the price's own units: `+3.58`, `-1,234.56`.
+export function signed(quote) {
+  if (!(quote.previousClose > 0)) return "—";
+  const change = quote.price - quote.previousClose;
+  const size = Math.abs(change) > 0 ? formatPrice({ ...quote, price: Math.abs(change), currency: null }) : "0.00";
+  return `${change >= 0 ? "+" : "-"}${size}`;
+}
+
 export function formatChange(value) {
   return value === null || value === undefined ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }

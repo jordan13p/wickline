@@ -11,6 +11,12 @@ export const TABLE_MAX_WIDTH = 1280;
 // the add field and the footer line up with the content between the gutters.
 export const GUTTER = 20;
 export const COLUMN_GAP = 12;
+// A sidebar row's price column: the number, then a slot for its currency. The table's price header
+// leaves the same slot.
+export const NUMBER_W = 72;
+export const CODE_W = 34;
+// The room a sidebar row's left lines keep before its day line grows past its narrowest.
+export const NAME_ROOM = 150;
 // The name takes what the fixed columns leave, within these bounds; below the minimum it drops.
 export const NAME_MIN_WIDTH = 120;
 export const NAME_MAX_WIDTH = 320;
@@ -43,6 +49,17 @@ export function layoutFor(size) {
   if (!size) return "sidebar";
   if (size.height < BAND_MAX_HEIGHT) return "band";
   return size.width < TABLE_MIN_WIDTH ? "sidebar" : "table";
+}
+
+/**
+ * A sidebar row's day line in px for a copy `width` px wide: 40, growing with the pane to 120 only once the
+ * left lines keep NAME_ROOM beside the gutters, the price column and the gaps on each side of the line.
+ * 40 before the copy is laid out.
+ */
+export function sparkWidth(width) {
+  if (width === null) return 40;
+  const room = width - 2 * GUTTER - (NUMBER_W + CODE_W) - 2 * COLUMN_GAP - NAME_ROOM;
+  return Math.max(40, Math.min(120, room));
 }
 
 /**

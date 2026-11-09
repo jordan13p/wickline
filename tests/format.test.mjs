@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, rowName } from "../mods/wickline/format.js";
+import { chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../mods/wickline/format.js";
 import { freshness } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -19,6 +19,16 @@ test("formats without Intl", () => {
   const now = new Date(2026, 10, 2, 12).getTime();
   assert.equal(formatStaleDate(new Date(2026, 10, 2, 9).getTime(), now), "");
   assert.equal(formatStaleDate(new Date(2026, 9, 31, 16).getTime(), now), "Oct 31");
+});
+
+test("signed: the day's change in the price's units", () => {
+  assert.equal(signed({ price: 2260, previousClose: 2135, currency: "TWD" }), "+125.00");
+  assert.equal(signed({ price: 98.2, previousClose: 92.5 }), "+5.70");
+  // Below 1 the change keeps the price's significant digits.
+  assert.equal(signed({ price: 0.00000441, previousClose: 0.00000429 }), "+0.00000012");
+  assert.equal(signed({ price: 2135, previousClose: 2260 }), "-125.00");
+  assert.equal(signed({ price: 2260 }), "—");
+  assert.equal(number({ price: 2260, currency: "TWD" }), "2,260.00");
 });
 
 test("dates by language, times in 24 hours", () => {
