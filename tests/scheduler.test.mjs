@@ -736,3 +736,26 @@ test("a hung line after a backoff still ends it, so the next 429 waits 60 s agai
   assert.equal(w.sources.yahootw.retryAt, TW_START + 80_000 + 60_000);
   await stop(w, host, runs);
 });
+
+test("after the close, today's line is not asked again; a missing one still is", async () => {
+  // 13:40 in Taipei, ten minutes after the close.
+  const closed = TW_PERIODS.regular.end * 1000 + 600_000;
+  const host = yahootwHost(["2330.TW"]);
+  host.clock = closed;
+  const line = host.line;
+  // The first answer has only yesterday's minutes, so no line is stored.
+  host.line = (symbol) => ok([{ symbol, chart: { meta: { symbol }, timestamp: [1794186000 - 86_400], indicators: { quote: [{ close: [2200] }] } } }]);
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, closed);
+  assert.equal(count(host, "ApacLibraCharts"), 1);
+  assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
+  host.line = line;
+  await advance(host, closed + 600_000);
+  assert.equal(w.sessionFor(["2330.TW"], host.clock), "closed");
+  assert.equal(count(host, "ApacLibraCharts"), 2);
+  assert.ok(w.lines.yahootw["2330.TW"]);
+  await advance(host, closed + 2_400_000);
+  assert.equal(count(host, "ApacLibraCharts"), 2);
+  await stop(w, host, runs);
+});

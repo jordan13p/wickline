@@ -630,10 +630,17 @@ export class Watchlist {
       .slice(0, provider.linesPerRound);
   }
 
-  /** A symbol's line is due: the symbol has this provider's price and its line waited `linesMs`. */
+  /**
+   * A symbol's line is due: the symbol has this provider's price and its line waited `linesMs`. After the
+   * close, a line already held for its price's day is the whole day: it is not asked again.
+   */
   lineDue(provider, state, symbol, now) {
-    return Boolean(this.priced(provider, symbol))
-      && now - (state.linesAt[symbol] ?? -Infinity) >= provider.linesMs(this.sessionFor([symbol], now));
+    const priced = this.priced(provider, symbol);
+    if (!priced) return false;
+    const session = this.sessionFor([symbol], now);
+    const line = this.lines[provider.id]?.[symbol];
+    if ((session === "closed" || session === "post") && line && line.day === priced.day) return false;
+    return now - (state.linesAt[symbol] ?? -Infinity) >= provider.linesMs(session);
   }
 
   // What a line is drawn beside: this provider's overlay, or the base quote.
