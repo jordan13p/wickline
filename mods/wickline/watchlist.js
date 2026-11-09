@@ -568,7 +568,7 @@ export class Watchlist {
         const request = requests[index];
         if (request.kind === "line") {
           const failed = await this.line(provider, state, request, io, current);
-          if (failed) { this.endOnLine(provider, state, requests, index, failed); return; }
+          if (this.endsRound(provider, failed)) { this.endOnLine(provider, state, requests, index, failed); return; }
           continue;
         }
         const wait = spacing - (this.host.now() - state.lastRequestAt);
@@ -606,7 +606,9 @@ export class Watchlist {
       for (const request of provider.linesPerRound ? this.dueLines(provider, state, requests) : []) {
         if (!current()) return;
         const failed = await this.line(provider, state, request, io, current);
-        if (failed) { this.endOnLine(provider, state, requests, requests.indexOf(request), failed); return; }
+        if (this.endsRound(provider, failed)) { this.endOnLine(provider, state, requests, requests.indexOf(request), failed); return; }
+        // A failure of the source itself (an HTTP error, an unreadable answer) shows, as a price's would.
+        if (!problem && failed && SOURCE_FAILURE.test(failed.code)) problem = failed;
       }
       if (!current()) return;
       state.failures = 0;
@@ -646,6 +648,14 @@ export class Watchlist {
   // What a line is drawn beside: this provider's overlay, or the base quote.
   priced(provider, symbol) {
     return provider.overlay ? this.overlays[symbol]?.[provider.id] : this.quotes[symbol];
+  }
+
+  // A line's error ends the round when the source rate limited it or, for a provider with
+  // `linesPerRound` (its lines come after all its prices), when it is down or hung, so the next price
+  // round is not held up by more line timeouts.
+  endsRound(provider, error) {
+    if (!error) return false;
+    return error.retryAfterMs !== undefined || (Boolean(provider.linesPerRound) && SOURCE_DOWN.test(error.code));
   }
 
   // A line that ends the round. Rate limited: the source backs off. Down or hung: its prices are in, so
@@ -749,9 +759,7 @@ export class Watchlist {
    * A symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. A
    * base provider writes the base quote's line and a failure leaves it as it was; an overlay provider
    * keeps its own line beside its price, and an answer without one (a failure, or no point from today)
-   * drops it. Returns the error that ends the round: the source rate limited the request (the caller backs
-   * off) or, for a provider with `linesPerRound` (its lines come after all its prices), it is down or hung, so
-   * the next price round is not held up by more line timeouts. Else nothing.
+   * drops it. Returns the request's error for the symbol, if any (endsRound says what it does to the round).
    */
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
@@ -764,9 +772,7 @@ export class Watchlist {
     if (kept && provider.overlay && line) (this.lines[provider.id] ??= {})[symbol] = line;
     else if (kept && provider.overlay) delete this.lines[provider.id]?.[symbol];
     else if (kept && line) this.quotes[symbol].series = line;
-    const error = result?.errors?.[symbol];
-    if (error?.retryAfterMs !== undefined) return error;
-    return provider.linesPerRound && error && SOURCE_DOWN.test(error.code) ? error : null;
+    return result?.errors?.[symbol] ?? null;
   }
 
   async get(request) {

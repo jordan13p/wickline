@@ -759,3 +759,22 @@ test("after the close, today's line is not asked again; a missing one still is",
   assert.equal(count(host, "ApacLibraCharts"), 2);
   await stop(w, host, runs);
 });
+
+test("a line that keeps failing shows on the status line until a clean round", async () => {
+  const host = yahootwHost(["2330.TW", "0050.TW"]);
+  host.line = () => ({ status: 404, ok: false, text: "" });
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START);
+  assert.equal(count(host, "ApacLibraCharts"), 2);
+  assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.http", params: { status: 404 } }]);
+  assert.equal(w.sources.yahootw.retryAt, 0);
+  // Prices stay live; the lines are Yahoo Finance's.
+  assert.deepEqual(w.lines.yahootw ?? {}, {});
+  for (const symbol of ["2330.TW", "0050.TW"]) assert.equal(w.shown(symbol).source, "yahootw", symbol);
+  assert.equal(w.shown("2330.TW").chartSource, "yahoo");
+  // The next round asks no line (not due yet), so it is clean.
+  await advance(host, TW_START + 10_000);
+  assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+});
