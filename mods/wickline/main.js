@@ -11,6 +11,7 @@ import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
+import { changeTone } from "./format.js";
 import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
@@ -497,11 +498,14 @@ export default class Wickline extends View {
     };
   }
 
-  // Red-up or green-up, by the color setting (automatic: red-up in every language but English).
+  // Red-up or green-up, by the color setting (automatic: red-up in every language but English). A day
+  // that reads 0.00% is neither, in every view.
   changeColor(t, change) {
-    if (change === null || change === undefined) return t.dim;
+    const tone = changeTone(change);
+    if (tone === "none") return t.dim;
+    if (tone === "flat") return t.muted;
     const [up, down] = upIsRed(this.settings) ? [t.ansi1, t.ansi2] : [t.ansi2, t.ansi1];
-    return change >= 0 ? up : down;
+    return tone === "up" ? up : down;
   }
 
   // The header's own-tab icon or null, and the yield view's button (see moves.js).

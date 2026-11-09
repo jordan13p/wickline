@@ -10,13 +10,12 @@ import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
-import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, tableColumns } from "../layout.js";
+import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, sparkWidth, tableColumns } from "../layout.js";
 import { button, chart, dot, icon, iconButton } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
-// Sidebar rows: the day's line, then the price column (layout.js NUMBER_W + CODE_W). The right group
-// keeps this width, so a wider pane gives its room to the name.
-const SPARK = { width: 56, height: 20 };
+// Sidebar rows: three lines (16, 14 and 14 px, 2 px apart) on each side of the day line, which spans them.
+const LINES_H = 48;
 const TABLE_SPARK = { width: columnWidth("line"), height: 20 };
 // The filter row: 24 px labels with 2 px between them; the chosen one sits on a pill of the same height.
 const FILTER_H = 24;
@@ -164,15 +163,27 @@ function waiting(view, row) {
   return view.tx(row.failed ? "row.unavailable" : view.watch.preferences.paused ? "row.notFetched" : "row.waiting");
 }
 
-// The price over the change, both right-aligned on the number; the currency hangs in its own slot.
+// One line of the sidebar grid. Its line height is its own height in px (a bare number is a multiplier), so
+// the glyphs and their descenders fit, and equal boxes put the left and right lines on one baseline. It is
+// drawn even when empty, so every row keeps the same height.
+const lineBox = (height, el = div()) => el.flex_none().h(height).line_height(`${height}px`);
+
+// The price with its currency in its own slot, then the change and the change %, right-aligned on the
+// price's last digit. None of them truncates: a long one grows to the left.
 function priceStack(view, t, row) {
   const { quote, failed, color } = row;
-  if (!quote) return div().flex_none().w(NUMBER_W + CODE_W).pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row));
-  return v_flex().flex_none().gap(2)
-    .child(h_flex().items_baseline()
+  const column = v_flex().flex_none().w(NUMBER_W + CODE_W).gap(2);
+  if (!quote) {
+    return column.child(lineBox(16).pr(CODE_W).text_right().whitespace_nowrap().text_size(11).text_color(t.dim).child(waiting(view, row)))
+      .child(lineBox(14)).child(lineBox(14));
+  }
+  const figure = (text) => lineBox(14).w(NUMBER_W).text_right().whitespace_nowrap().text_size(11).text_color(color).child(text);
+  return column
+    .child(lineBox(16, h_flex().items_baseline())
       .child(div().flex_none().w(NUMBER_W).text_right().whitespace_nowrap().text_color(failed ? t.dim : t.foreground).child(number(quote)))
       .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? "")))
-    .child(div().flex_none().w(NUMBER_W).text_right().text_size(11).text_color(color).child(formatChange(quote.changePercent)));
+    .child(figure(signed(quote)))
+    .child(figure(formatChange(quote.changePercent)));
 }
 
 // A row: the drag handle in the left gutter and × in the right one, both only under the pointer; between
@@ -286,7 +297,7 @@ function footer(view, t) {
       .child(view.tx(short ? "footer.short" : "footer.long")));
 }
 
-// Below TABLE_MIN_WIDTH: the header, the status line, the add field, two-line rows, the footer.
+// Below TABLE_MIN_WIDTH: the header, the status line, the add field, three-line rows, the footer.
 export function sidebar(view, root, t) {
   const filter = view.filterState();
   const now = Date.now();
@@ -305,20 +316,23 @@ export function sidebar(view, root, t) {
   return root.child(header).child(field).children(filterBar(view, t, filter)).child(list(view, t, rows).pt(8)).child(footer(view, t));
 }
 
-// Symbol, then its name on a line of its own, then freshness on the left; the line, then the price
-// over the change, at a fixed width on the right, so a wider pane gives its room to the left lines.
-// A row without a name of its own (a pair, a name that repeats the ticker) keeps two lines.
+// A three-line grid: symbol, name and freshness on the left; the day line spanning all three; the price,
+// the change and the change % at a fixed width on the right, so a wider pane gives its room to the left
+// lines, and past NAME_ROOM to the day line. A row without a name of its own (a pair, a name that repeats
+// the ticker) keeps line 2 empty. Notes go under the grid.
 function sidebarRow(view, t, symbol, place, now, ghost) {
   const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
+  const lineW = sparkWidth(view.size?.width ?? null);
   const body = v_flex().py(8).gap(2)
-    .child(h_flex().gap(12).items_center()
+    .child(h_flex().gap(COLUMN_GAP).items_start()
       .child(v_flex().flex_1().min_w(0).gap(2)
-        .child(div().font_semibold().truncate().child(symbol))
-        .when(Boolean(row.name), (el) => el.child(div().text_size(11).text_color(t.muted).truncate().child(row.name)))
-        .when(Boolean(row.state), (el) => el.child(h_flex().gap(6).items_center()
+        .child(lineBox(16).child(div().font_semibold().truncate().child(symbol)))
+        .child(lineBox(14).child(div().text_size(11).text_color(t.muted).truncate().child(row.name)))
+        .child(lineBox(14, h_flex().gap(6).items_center())
           .when(Boolean(row.dot), (line) => line.child(row.dot))
-          .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state)))))
-      .child(row.quote ? chart(row.quote, row.color, t, SPARK) : div().flex_none().w(SPARK.width).h(SPARK.height))
+          .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state))))
+      .child(row.quote ? chart(row.quote, row.color, t, { width: lineW, height: LINES_H, fill: true, stroke: 1.5 })
+        : div().flex_none().w(lineW).h(LINES_H))
       .child(priceStack(view, t, row)))
     .children(rowNotes(view, t, row));
   return ghost ? ghostFrame(t, ghost, body) : rowFrame(view, t, symbol, place, body, Boolean(row.quote));

@@ -52,16 +52,28 @@ export function number(quote, value = quote.price) {
   return typeof value === "number" && value > 0 ? formatPrice({ ...quote, price: value, currency: null }) : "—";
 }
 
+// The sign follows the rounded text, so a change too small to show reads `0.00`, never `+0.00` or `-0.00`.
+const withSign = (value, size) => (/[1-9]/.test(size) ? `${value >= 0 ? "+" : "-"}${size}` : size);
+
 // The day's change in the price's own units: `+3.58`, `-1,234.56`.
 export function signed(quote) {
   if (!(quote.previousClose > 0)) return "—";
   const change = quote.price - quote.previousClose;
-  const size = Math.abs(change) > 0 ? formatPrice({ ...quote, price: Math.abs(change), currency: null }) : "0.00";
-  return `${change >= 0 ? "+" : "-"}${size}`;
+  return withSign(change, Math.abs(change) > 0 ? formatPrice({ ...quote, price: Math.abs(change), currency: null }) : "0.00");
 }
 
 export function formatChange(value) {
-  return value === null || value === undefined ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+  return value === null || value === undefined ? "—" : `${withSign(value, Math.abs(value).toFixed(2))}%`;
+}
+
+/** A change % that reads `0.00%`: neither a gain nor a loss, whatever its sign before rounding. */
+export const isFlat = (percent) => formatChange(percent) === "0.00%";
+
+/** How a change % is colored: "none" without one, "flat" when it reads `0.00%`, else "up" or "down". */
+export function changeTone(percent) {
+  if (percent === null || percent === undefined) return "none";
+  if (isFlat(percent)) return "flat";
+  return percent >= 0 ? "up" : "down";
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

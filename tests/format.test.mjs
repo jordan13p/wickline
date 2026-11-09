@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../mods/wickline/format.js";
+import { changeTone, chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { freshness } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -29,6 +29,32 @@ test("signed: the day's change in the price's units", () => {
   assert.equal(signed({ price: 2135, previousClose: 2260 }), "-125.00");
   assert.equal(signed({ price: 2260 }), "—");
   assert.equal(number({ price: 2260, currency: "TWD" }), "2,260.00");
+});
+
+test("a flat day has no sign", () => {
+  assert.equal(signed({ price: 100, previousClose: 100 }), "0.00");
+  assert.equal(formatChange(-0.001), "0.00%");
+  assert.equal(formatChange(0), "0.00%");
+});
+
+test("a flat change is neither up nor down", () => {
+  for (const flat of [-0.001, 0, 0.004]) assert.equal(isFlat(flat), true, String(flat));
+  for (const moved of [0.005, -1.2, null]) assert.equal(isFlat(moved), false, String(moved));
+});
+
+test("the change's tone", () => {
+  assert.equal(changeTone(null), "none");
+  assert.equal(changeTone(undefined), "none");
+  assert.equal(changeTone(-0.001), "flat");
+  assert.equal(changeTone(0), "flat");
+  assert.equal(changeTone(0.01), "up");
+  assert.equal(changeTone(-0.01), "down");
+});
+
+test("change and percent agree for one quote", () => {
+  const quote = { price: 2260, previousClose: 2135 };
+  assert.equal(signed(quote), "+125.00");
+  assert.equal(formatChange((quote.price - quote.previousClose) / quote.previousClose * 100), "+5.85%");
 });
 
 test("dates by language, times in 24 hours", () => {

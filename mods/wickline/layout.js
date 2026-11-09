@@ -3,7 +3,7 @@
 
 // Below this height: the one-line band.
 export const BAND_MAX_HEIGHT = 72;
-// From this width: the table; below it, the two-line sidebar rows.
+// From this width: the table; below it, the three-line sidebar rows.
 export const TABLE_MIN_WIDTH = 720;
 // The table never grows wider; a wider pane centers it.
 export const TABLE_MAX_WIDTH = 1280;
