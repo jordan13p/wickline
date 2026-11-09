@@ -236,9 +236,13 @@ export class Watchlist {
     return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now);
   }
 
-  /** Why a symbol has no overlay: the first overlay source's error, in priority order; null while one shows. */
+  /**
+   * Why a symbol has no live overlay: the first overlay source's error, in priority order; null while a
+   * live one shows. A stale one shown still gets the reason a source before it has none.
+   */
   overlayError(symbol, now = this.host.now()) {
-    if (this.pick(symbol, now)) return null;
+    const pick = this.pick(symbol, now);
+    if (pick && now - pick.overlay.timestamp <= LIVE_MAX_AGE_MS) return null;
     const errors = this.overlayErrors[symbol] ?? {};
     const id = OVERLAY_ORDER.find((candidate) => errors[candidate]);
     return id ? errors[id] : null;

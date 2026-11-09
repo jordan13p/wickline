@@ -422,6 +422,17 @@ test("MIS live after a Yahoo 奇摩股市 failure shows no fallback note", async
   });
 });
 
+test("a stale MIS price still shows why Yahoo 奇摩股市 has none", async () => {
+  // 2330 is priced above its limit-up, and MIS has not traded for 3 minutes.
+  const host = taiwanHost(BOTH, {
+    yahootw: () => stockList(TW_NOW - 5_000, { "2330.TW": { price: { raw: "9999" } } }), mis: () => misAt(TW_NOW - 180_000),
+  });
+  await firstRound(host, (w) => {
+    assert.equal(w.shown("2330.TW").source, "mis");
+    assert.equal(w.overlayError("2330.TW").code, "yahootw.outOfLimits");
+  });
+});
+
 test("turning Yahoo 奇摩股市 off drops its overlay and error at once", async () => {
   // 0050 is priced above its limit-up, so it holds an error instead of an overlay.
   const host = taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - 5_000, { "0050.TW": { price: { raw: "11" } } }) });
