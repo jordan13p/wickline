@@ -39,7 +39,7 @@
 
 Each row has a dot and a label:
 
-- **Filled dot**: live. A real-time source, the market trading, the quote at most 120 seconds old (`Binance Spot`, `Yahoo TW Stock`, `TWSE MIS`, `Finnhub`).
+- **Filled dot**: live. A real-time source, the market trading, the quote at most 120 seconds old; the label says `Live`, and the source's name is in the detail view.
 - **Ring**: delayed or stalled. Yahoo's prices (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds (`quote stopped at 13:05`), or a session not known yet.
 - **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`).
 
@@ -90,7 +90,7 @@ Type a symbol into the add field and press Enter; a new symbol goes to the top o
 - **Remove**: hover a row and press `×` at its right.
 - **Filter by market**: with at least 8 symbols from at least 2 markets, a row above the list shows `All` and each market with its count (`All 12 · US 4 · Taiwan 5 · Crypto 3`), in a fixed order for the interface language, never the order of your list (Traditional and Simplified Chinese put Taiwan first, English the US, Japanese Japan, Korean Korea); click one to show only that market. The band never shows it. Each copy remembers its own choice; adding a symbol the filter would hide, or removing a market's last symbol, puts it back on `All`.
 - **Reorder**: hover a row, press the six-dot handle at its left and drag; an accent line shows where it lands. Leaving the list cancels the drag.
-- **Detail**: click a row for its day: a chart, open, high, low and previous close, the session, the quote time and the fetch time.
+- **Detail**: click a row for its day: a chart, open, high, low and previous close, the session, the price's state and source (`Live · TWSE MIS`), the line's, the quote time, the last trade (Yahoo TW Stock) and the fetch time.
 - **Refresh and Pause**: the header icons. Refresh runs one round of every source but Finnhub, also while paused; Pause stops automatic refreshes in every copy.
 - **Keys**: Wickline answers `wickline.refresh` and `wickline.pause`; neither is bound. To bind one, add it to `~/.config/herdr-app/keys.json`:
 

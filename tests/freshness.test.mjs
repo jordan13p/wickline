@@ -2,8 +2,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TAIWAN_YAHOO_DELAY_S, freshness, sessionOf,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TAIWAN_YAHOO_DELAY_S, detailSource, freshness, sessionOf,
 } from "../mods/wickline/freshness.js";
+import { formatTime } from "../mods/wickline/format.js";
+import { t } from "../mods/wickline/i18n.js";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, delaySeconds: null, periods: null, ...fields });
@@ -51,4 +53,28 @@ test("the session of a quote", () => {
   assert.equal(sessionOf({ symbol: "AAPL", periods: day }, 250), "open");
   assert.equal(sessionOf({ symbol: "AAPL", periods: day }, 350), "post");
   assert.equal(sessionOf({ symbol: "AAPL", periods: day }, 500), "closed");
+});
+
+// The detail dialog names the state first, then the source, for the price and for the line.
+test("the detail source line reads state · source", () => {
+  const NOW = 1794188480000;
+  const say = (lang) => (key, params) => t(lang, key, params);
+  const own = { symbol: "2330.TW", source: "yahootw", timestamp: NOW - 10_000, chartSource: "yahootw", chartDelaySeconds: 0 };
+  assert.deepEqual(detailSource(own, "open", NOW, say("zh-TW")), ["價格：即時 · Yahoo 奇摩股市", "走勢：即時 · Yahoo 奇摩股市"]);
+  assert.deepEqual(detailSource(own, "open", NOW, say("en")), ["Price: Live · Yahoo TW Stock", "Line: Live · Yahoo TW Stock"]);
+  // A stalled price makes its own line read stalled too, with the time it stopped.
+  const old = { ...own, timestamp: NOW - 180_000 };
+  const stalled = t("zh-TW", "freshness.stalled", { time: formatTime(old.timestamp) });
+  assert.deepEqual(detailSource(old, "open", NOW, say("zh-TW")), [`價格：${stalled} · Yahoo 奇摩股市`, `走勢：${stalled} · Yahoo 奇摩股市`]);
+  // A line from another source keeps its own delay.
+  const mis = { symbol: "2330.TW", source: "mis", timestamp: NOW - 10_000, chartSource: "yahoo", chartDelaySeconds: null };
+  assert.deepEqual(detailSource(mis, "open", NOW, say("zh-TW")), ["價格：即時 · 證交所 MIS", "走勢：延遲 20 分鐘 · Yahoo Finance"]);
+  assert.deepEqual(detailSource({ ...mis, symbol: "AAPL", source: "finnhub", chartDelaySeconds: 900 }, "open", NOW, say("en")),
+    ["Price: Live · Finnhub", "Line: delayed 15 min · Yahoo Finance"]);
+  // Not trading: the session, not "Live"; a session not known yet reads unknown.
+  assert.deepEqual(detailSource(own, "closed", NOW, say("en")), ["Price: Market closed · Yahoo TW Stock", "Line: Market closed · Yahoo TW Stock"]);
+  assert.deepEqual(detailSource({ ...mis, chartSource: null }, "unknown", NOW, say("en")), ["Price: Session unknown · TWSE MIS"]);
+  // Base only: unchanged.
+  const base = { symbol: "2330.TW", source: "yahoo", timestamp: NOW, delaySeconds: null };
+  assert.deepEqual(detailSource(base, "open", NOW, say("en")), ["Yahoo Finance · regular session", "delayed 20 min"]);
 });

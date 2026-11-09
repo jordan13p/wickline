@@ -1,7 +1,9 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chartGeometry, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../mods/wickline/format.js";
+import { chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, rowName } from "../mods/wickline/format.js";
+import { freshness } from "../mods/wickline/freshness.js";
+import { t } from "../mods/wickline/i18n.js";
 
 test("formats without Intl", () => {
   assert.equal(formatPrice({ price: 1234567.891, currency: "USD" }), "1,234,567.89 USD");
@@ -63,4 +65,34 @@ test("a stock's name gets its own line", () => {
 test("a row's name that only repeats the ticker, or is missing, is left out", () => {
   assert.deepEqual(rowName("^GSPC", "delayed 15 min", "^GSPC"), { label: "delayed 15 min", name: "" });
   assert.deepEqual(rowName("AAPL", "Yahoo", null), { label: "Yahoo", name: "" });
+});
+
+test("the live label names the state, not the source", () => {
+  const now = new Date(2026, 10, 9, 9, 41, 20).getTime();
+  const at = (source, symbol) => ({ symbol, source, timestamp: now - 10_000 });
+  for (const lang of ["en", "zh-TW", "zh-CN", "ja", "ko"]) {
+    const tx = (key, params) => t(lang, key, params);
+    const label = (quote, session) => freshnessLabel(quote, freshness(quote, session, now), now, lang, tx);
+    for (const [source, symbol, session] of [["mis", "2330.TW", "open"], ["yahootw", "2330.TW", "open"], ["finnhub", "AAPL", "open"], ["binance", "BTC/USDT", "24h"]]) {
+      assert.equal(label(at(source, symbol), session), t(lang, "freshness.live"), `${lang} ${source}`);
+    }
+    // A session not known yet keeps the source name: nothing says it is live.
+    assert.equal(label(at("mis", "2330.TW"), "unknown"), t(lang, "src.mis"), lang);
+    assert.equal(label({ ...at("yahootw", "2330.TW"), timestamp: now - 180_000 }, "open"),
+      t(lang, "freshness.stalled", { time: formatTime(now - 180_000) }), lang);
+  }
+});
+
+test("the detail times: quoted, the last trade when it differs, fetched", () => {
+  const tx = (key, params) => t("en", key, params);
+  const at = (h, m, s) => new Date(2026, 10, 9, h, m, s).getTime();
+  const now = at(9, 41, 20);
+  // 0050.TW from Yahoo 奇摩股市: quoted at the feed's time, its own last trade earlier.
+  const quiet = { timestamp: at(9, 41, 13), tradeTime: at(9, 17, 12), fetchedAt: at(9, 41, 19) };
+  assert.deepEqual(detailTimes(quiet, now, "en", tx), ["Quote at 09:41:13", "last trade 09:17:12", "Fetched 09:41:19"]);
+  assert.deepEqual(detailTimes({ ...quiet, tradeTime: quiet.timestamp }, now, "en", tx), ["Quote at 09:41:13", "Fetched 09:41:19"]);
+  const { tradeTime, ...plain } = quiet;
+  assert.deepEqual(detailTimes(plain, now, "en", tx), ["Quote at 09:41:13", "Fetched 09:41:19"]);
+  // An earlier day puts its date before the quote time.
+  assert.deepEqual(detailTimes({ ...plain, timestamp: at(9, 41, 13) - 86_400_000 }, now, "en", tx)[0], "Quote at Nov 8 09:41:13");
 });

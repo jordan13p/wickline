@@ -93,3 +93,40 @@ export function formatTime(timestamp, seconds = false) {
   const time = `${two(date.getHours())}:${two(date.getMinutes())}`;
   return seconds ? `${time}:${two(date.getSeconds())}` : time;
 }
+
+/**
+ * A row's freshness label: the state for a real-time price ("Live"), its source only while the session
+ * is not known, the stop time, the delay, or the session when it is not trading.
+ * `tx(key, params)` translates.
+ */
+export function freshnessLabel(quote, fresh, now, lang, tx) {
+  switch (fresh.state) {
+    case "live":
+      return tx("freshness.live");
+    case "unconfirmed":
+      return tx(`src.${quote.source}`);
+    case "stalled":
+      return tx("freshness.stalled", { time: formatTime(fresh.stoppedAt) });
+    case "delayed":
+      return fresh.delayMinutes === null ? tx("freshness.delayed")
+        : tx("freshness.delayedMinutes", { minutes: fresh.delayMinutes });
+    case "closed": {
+      const date = formatStaleDate(quote.timestamp, now, lang);
+      return `${tx("session.closed")} · ${date ? `${date} ` : ""}${formatTime(quote.timestamp)}`;
+    }
+    default:
+      return tx(`session.${fresh.state}`);
+  }
+}
+
+/**
+ * The detail dialog's times, to the second: the quote's (with its date when not today), the last
+ * trade when it is not the quote's own time (Yahoo 奇摩股市 times a quiet stock at the feed), the fetch.
+ */
+export function detailTimes(quote, now, lang, tx) {
+  const date = formatStaleDate(quote.timestamp, now, lang);
+  const lastTrade = quote.tradeTime && quote.tradeTime !== quote.timestamp
+    ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })] : [];
+  return [tx("detail.quoted", { time: `${date ? `${date} ` : ""}${formatTime(quote.timestamp, true)}` }), ...lastTrade,
+    tx("detail.fetched", { time: formatTime(quote.fetchedAt, true) })];
+}

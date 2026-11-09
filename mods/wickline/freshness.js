@@ -1,5 +1,6 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
+import { formatTime } from "./format.js";
 import { marketOf } from "./markets.js";
 import { isCryptoPair } from "./quotes.js";
 
@@ -52,19 +53,25 @@ export function freshness(quote, session, now) {
 }
 
 /**
- * The detail dialog's source line as parts (joined with ` · `). A real-time price over another
- * source's line names both and puts the delay on the line, from the line's own source: `Price: TWSE
- * MIS`, `Line: Yahoo Finance (delayed 20 min)`. Otherwise the source and, for a delayed one, its delay.
+ * The detail dialog's source line as parts (joined with ` · `). A real-time price names its state
+ * and source: `Price: Live · TWSE MIS`; its line does too, as the same state when the line is the
+ * price's own source (Yahoo 奇摩股市), else with the delay from the line's own source:
+ * `Line: delayed 20 min · Yahoo Finance`. A delayed stock or a pair keeps its plain wording.
  * `tx(key, params)` translates; a `src.<id>` key names a provider.
  */
 export function detailSource(quote, session, now, tx) {
   const minutes = (delayMinutes) => delayMinutes === null ? tx("freshness.delayUnknown")
     : tx("freshness.delayedMinutes", { minutes: delayMinutes });
   if (REALTIME_SOURCES.has(quote.source) && !isCryptoPair(quote.symbol)) {
-    const price = tx("detail.priceFrom", { source: tx(`src.${quote.source}`) });
+    const { state, stoppedAt } = freshness(quote, session, now);
+    const own = state === "live" ? tx("freshness.live")
+      : state === "stalled" ? tx("freshness.stalled", { time: formatTime(stoppedAt) })
+        : tx(`session.${state === "unconfirmed" ? "unknown" : state}`);
+    const price = tx("detail.priceFrom", { state: own, source: tx(`src.${quote.source}`) });
     if (!quote.chartSource) return [price];
+    if (quote.chartSource === quote.source) return [price, tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })];
     const chart = { ...quote, source: quote.chartSource, delaySeconds: quote.chartDelaySeconds ?? null };
-    return [price, tx("detail.lineFrom", { source: tx(`src.${quote.chartSource}`), delay: minutes(freshness(chart, session, now).delayMinutes) })];
+    return [price, tx("detail.lineFrom", { state: minutes(freshness(chart, session, now).delayMinutes), source: tx(`src.${quote.chartSource}`) })];
   }
   if (isCryptoPair(quote.symbol)) return [tx("detail.sourceCrypto")];
   return [tx("detail.sourceStock"), minutes(freshness(quote, session, now).delayMinutes)];

@@ -2,7 +2,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime } from "../format.js";
+import { displayName, detailTimes, formatBandPrice, formatChange, formatPrice } from "../format.js";
 import { detailSource, sessionOf } from "../freshness.js";
 import { chart, segments } from "./parts.js";
 
@@ -13,10 +13,9 @@ export function detailView(view, t) {
   const color = view.changeColor(t, q.changePercent);
   const session = sessionOf(q, now);
   const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
-  const stale = formatStaleDate(q.timestamp, now, view.lang);
-  const source = detailSource(q, session, now, (key, params) => view.tx(key, params));
-  const times = [view.tx("detail.quoted", { time: `${stale ? `${stale} ` : ""}${formatTime(q.timestamp, true)}` }),
-    view.tx("detail.fetched", { time: formatTime(q.fetchedAt, true) })];
+  const tx = (key, params) => view.tx(key, params);
+  const source = detailSource(q, session, now, tx);
+  const times = detailTimes(q, now, view.lang, tx);
   const stat = (label, price) => v_flex().flex_1().gap(2)
     .child(div().text_size(10.5).text_color(t.dim).child(view.tx(label)))
     .child(div().font_semibold().child(value(price)));

@@ -119,3 +119,10 @@ test("every market has a label in all five languages", () => {
   }
   assert.equal(t("zh-TW", "market.tw"), "台股");
 });
+
+// Code points from U+1100 up (Hangul, kana, CJK) are drawn two columns wide.
+const width = (text) => [...text].reduce((sum, char) => sum + (char.codePointAt(0) >= 0x1100 ? 2 : 1), 0);
+
+test("the live label is never wider than Binance Spot", () => {
+  for (const lang of LANGUAGES) assert.ok(width(STRINGS[lang]["freshness.live"]) <= width("Binance Spot"), lang);
+});

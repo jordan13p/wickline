@@ -4,7 +4,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, rowName } from "../format.js";
+import { displayName, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, rowName } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
@@ -28,26 +28,6 @@ const FILTER_SLIDE = { duration: 180, easing: "ease-out" };
 const ROW_MOTION = { duration: ROW_MOTION_MS, easing: "ease-out" };
 // Below this panel width the footer shows the short disclaimer.
 const SHORT_FOOTER_WIDTH = 480;
-
-// The source for a real-time price, the delay for Yahoo's, or the session when it is not trading.
-function freshnessLabel(view, quote, fresh, now) {
-  switch (fresh.state) {
-    case "live":
-    case "unconfirmed":
-      return view.tx(`src.${quote.source}`);
-    case "stalled":
-      return view.tx("freshness.stalled", { time: formatTime(fresh.stoppedAt) });
-    case "delayed":
-      return fresh.delayMinutes === null ? view.tx("freshness.delayed")
-        : view.tx("freshness.delayedMinutes", { minutes: fresh.delayMinutes });
-    case "closed": {
-      const date = formatStaleDate(quote.timestamp, now, view.lang);
-      return `${view.tx("session.closed")} · ${date ? `${date} ` : ""}${formatTime(quote.timestamp)}`;
-    }
-    default:
-      return view.tx(`session.${fresh.state}`);
-  }
-}
 
 // One line: Wickline, then as many quotes as fit.
 export function band(view, root, t) {
@@ -162,7 +142,7 @@ function rowData(view, t, now, symbol, source) {
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
   // A closed label carries its own date; any other quote from an earlier day gets one.
   const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, view.lang) : "";
-  const label = quote ? freshnessLabel(view, quote, fresh, now) : "";
+  const label = quote ? freshnessLabel(quote, fresh, now, view.lang, (key, params) => view.tx(key, params)) : "";
   const shown = rowName(symbol, label, quote ? displayName(quote, view.lang) : null);
   return {
     ...source,
