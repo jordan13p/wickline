@@ -2,7 +2,7 @@
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { stateText } from "./format.js";
 import { marketOf } from "./markets.js";
-import { isCryptoPair } from "./quotes.js";
+import { isCryptoPair, priceLimit } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
 export const LIVE_MAX_AGE_MS = 120_000;
@@ -50,6 +50,15 @@ export function freshness(quote, session, now) {
   const seconds = quote.delaySeconds > 0 ? quote.delaySeconds
     : marketOf(quote.symbol) === "tw" ? TAIWAN_YAHOO_DELAY_S : null;
   return result("delayed", seconds === null ? null : Math.ceil(seconds / 60));
+}
+
+// When a price at its limit is still at it: live, or the session over (closed, after hours) at the close.
+// Never stalled (the lock may have opened since), unconfirmed, or before the open (MIS shows a trial match).
+const LIMIT_STATES = new Set(["live", "closed", "post"]);
+
+/** A quote's limit as drawn: "up", "down" or null (see priceLimit). */
+export function shownLimit(quote, session, now) {
+  return LIMIT_STATES.has(freshness(quote, session, now).state) ? priceLimit(quote) : null;
 }
 
 /**

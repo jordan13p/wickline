@@ -10,8 +10,9 @@ import {
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
-import { QuoteError, priceLimit } from "./quotes.js";
+import { QuoteError } from "./quotes.js";
 import { changeTone, number } from "./format.js";
+import { sessionOf, shownLimit } from "./freshness.js";
 import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
@@ -531,12 +532,14 @@ export default class Wickline extends View {
   }
 
   /**
-   * A price at its own source's limit, as drawn: null for any other, and for a price shown as cached (`failed`).
+   * A price at its own source's limit, as drawn: null for any other, for a price shown as cached (`failed`), and
+   * for one no longer current (shownLimit: stalled, or a trial match before the open).
    * Its color is the gain or loss color by the limit's side, whatever the %: an ex-dividend day's limits are
    * set from a reference price, not the previous close.
    */
   limitMark(t, quote, failed) {
-    const limit = !failed && priceLimit(quote);
+    const now = Date.now();
+    const limit = !failed && shownLimit(quote, sessionOf(quote, now), now);
     if (!limit) return null;
     const up = limit === "up";
     // At its limit the price is the limit, so its own text names it.

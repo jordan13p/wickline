@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TAIWAN_YAHOO_DELAY_S, detailSource, freshness, sessionOf,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TAIWAN_YAHOO_DELAY_S, detailSource, freshness, sessionOf, shownLimit,
 } from "../mods/wickline/freshness.js";
 import { formatTime } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -78,3 +78,20 @@ test("the detail source line reads state · source", () => {
   const base = { symbol: "2330.TW", source: "yahoo", timestamp: NOW, delaySeconds: null };
   assert.deepEqual(detailSource(base, "open", NOW, say("en")), ["Yahoo Finance · regular session", "delayed 20 min"]);
 });
+
+// A light says the stock is at its limit now (or closed there), so it follows the price's own freshness.
+test("a price at its limit is lit only while that is still true", () => {
+  const at = (fields) => quote({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, ...fields });
+  assert.equal(shownLimit(at({}), "open", now), "up");
+  assert.equal(shownLimit(at({ price: 2035 }), "open", now), "down");
+  // Closed at the limit, and the after-hours session at the close: still the day's limit.
+  assert.equal(shownLimit(at({}), "closed", now), "up");
+  assert.equal(shownLimit(at({}), "post", now), "up");
+  // Stalled: the lock may have opened since.
+  assert.equal(shownLimit(at({ timestamp: now - LIVE_MAX_AGE_MS - 1 }), "open", now), null);
+  // Before the open MIS shows a trial match, not a stock locked at its limit.
+  assert.equal(shownLimit(at({}), "pre", now), null);
+  assert.equal(shownLimit(at({}), "unknown", now), null);
+  assert.equal(shownLimit(at({ price: 2400 }), "open", now), null);
+});
+
