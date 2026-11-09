@@ -414,3 +414,22 @@ test("the settings dialog scrolls only its page", () => {
   assert.equal(dialog.match(/overflow_y_scrollbar\(/g).length, 1);
   assert.match(dialog, /id\("bw-settings-pane"\)[^;]*overflow_y_scrollbar\(/);
 });
+
+// overflow_y_scrollbar paints its bar along the list's right edge, over the column where each row's remove ×
+// sits. The list scrolls on its own, and a separate bar sits in a lane of its own beside that column: the list
+// keeps the lane clear of rows, and every region keeps the same right inset, so all of them end on one edge.
+test("the list's scrollbar has its own lane", () => {
+  const panel = code(read(new URL("ui/panel.js", MOD)));
+  const list = panel.slice(panel.indexOf("function list("), panel.indexOf("function footer("));
+  assert.match(list, /id\("bw-list"\)[^;]*overflow_y_scroll\(/);
+  assert.doesNotMatch(list, /overflow_y_scrollbar\(/);
+  assert.match(list, /id\("bw-list"\)[^;]*\.pr\(SCROLL_LANE\)/);
+  assert.match(panel, /Scrollbar\.vertical\("bw-list"\)[^;]*\.right\(0\)/);
+  assert.match(panel, /Scrollbar\.vertical\("bw-list"\)[^;]*\.w\(SCROLL_LANE\)/);
+  assert.doesNotMatch(panel, /\.mode\(/);
+  assert.match(panel, /id\(`bw-remove-\$\{symbol\}`\)[^;]*\.w\(REMOVE_W\)/);
+  assert.doesNotMatch(panel, /const REMOVE_W|SCROLLBAR_W/);
+  const imported = panel.match(/import \{([^}]*)\} from "\.\.\/layout\.js"/)[1].split(",").map((name) => name.trim());
+  for (const name of ["REMOVE_W", "SCROLL_LANE", "RIGHT_INSET"]) assert.ok(imported.includes(name), name);
+  assert.doesNotMatch(panel, /px\(GUTTER\)|pr\(GUTTER\)|right\(GUTTER\)/);
+});

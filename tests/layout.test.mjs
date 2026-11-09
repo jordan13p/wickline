@@ -2,15 +2,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
+  BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, RIGHT_INSET, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
   columnWidth, layoutFor, nameWidth, sparkWidth, tableColumns, wantsCard,
 } from "../mods/wickline/layout.js";
 
 const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", "high", "low", "prevClose"];
 const KEPT = ["symbol", "state", "price", "changePct"];
 const width = (id) => TABLE_COLUMNS.find((column) => column.id === id).width;
-// What `ids` take with the name at its minimum, the gaps and both gutters.
-const needed = (ids) => ids.reduce((sum, id) => sum + (width(id) ?? NAME_MIN_WIDTH), 0) + COLUMN_GAP * (ids.length - 1) + 2 * GUTTER;
+// What `ids` take with the name at its minimum, the gaps, the left gutter and the right inset.
+const needed = (ids) => ids.reduce((sum, id) => sum + (width(id) ?? NAME_MIN_WIDTH), 0) + COLUMN_GAP * (ids.length - 1) + GUTTER + RIGHT_INSET;
 
 test("the limits the spec names", () => {
   assert.equal(BAND_MAX_HEIGHT, 72);
@@ -47,6 +47,8 @@ test("the columns, in display order, with the name the only flexible one", () =>
 test("a wide table shows every column", () => {
   assert.deepEqual(tableColumns(1100), ALL);
   assert.deepEqual(tableColumns(2000), ALL);
+  assert.equal(tableColumns(1100).length, 10);
+  assert.ok(tableColumns(1099).length < 10);
 });
 
 test("previous close is the first to go", () => {
@@ -74,7 +76,7 @@ test("the columns shown always fit", () => {
     const shown = tableColumns(w);
     assert.ok(needed(shown) <= Math.min(w, TABLE_MAX_WIDTH), `${w}: ${shown}`);
     const fixed = shown.reduce((sum, id) => sum + (width(id) ?? 0), 0);
-    assert.ok(fixed <= Math.min(w, TABLE_MAX_WIDTH) - 2 * GUTTER, `${w}`);
+    assert.ok(fixed <= Math.min(w, TABLE_MAX_WIDTH) - GUTTER - RIGHT_INSET, `${w}`);
   }
 });
 
@@ -91,15 +93,17 @@ test("the name takes the rest, within its bounds", () => {
   assert.ok(nameWidth(TABLE_MAX_WIDTH, ALL) <= NAME_MAX_WIDTH);
 });
 
-test("the sidebar line widens with the pane, after the name", () => {
-  assert.equal(sparkWidth(280), 40);
-  assert.equal(sparkWidth(345), 40);
-  assert.equal(sparkWidth(400), 80);
-  assert.equal(sparkWidth(440), 120);
+test("the sidebar line leaves the lane and the name their room", () => {
+  assert.equal(RIGHT_INSET, 28);
+  assert.equal(sparkWidth(280), 32);
+  assert.equal(sparkWidth(345), 32);
+  assert.equal(sparkWidth(400), 72);
+  assert.equal(sparkWidth(447), 119);
+  assert.equal(sparkWidth(448), 120);
   assert.equal(sparkWidth(700), 120);
   // Not laid out yet.
-  assert.equal(sparkWidth(null), 40);
-  assert.equal(sparkWidth(undefined), 40);
+  assert.equal(sparkWidth(null), 32);
+  assert.equal(sparkWidth(undefined), 32);
 });
 
 test("a docked block asks for the card with card: true, and nothing else does", () => {

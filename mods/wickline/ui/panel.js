@@ -2,7 +2,7 @@
 // and header actions. Everything that talks to Herdr (storage, requests, commands, panes) stays on the
 // view in main.js; these functions draw from it and call back into it.
 import { div, svg } from "gpui-kit";
-import { v_flex, h_flex, Input } from "gpui-base";
+import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import { displayName, formatBandPrice, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
@@ -10,7 +10,7 @@ import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
-import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, sparkWidth, tableColumns } from "../layout.js";
+import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, REMOVE_W, RIGHT_INSET, SCROLL_LANE, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, sparkWidth, tableColumns } from "../layout.js";
 import { button, chart, dot, icon, iconButton } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
@@ -109,7 +109,7 @@ export function yieldView(view, root, t, inBand) {
   const notice = div().text_color(t.dim).child(view.tx("dock.openInTab"));
   const back = button(t, "bw-yield-back", view.tx("button.backToPanel"), (cx) => view.backFromYield(cx));
   if (inBand) return root.px(12).gap(14).items_center().overflow_hidden().child(notice.flex_1().min_w(0).truncate()).child(back);
-  return root.child(v_flex().flex_none().px(GUTTER).py(10).gap(10).items_start().child(brand(view, t)).child(notice.text_size(11)).child(back));
+  return root.child(v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).py(10).gap(10).items_start().child(brand(view, t)).child(notice.text_size(11)).child(back));
 }
 
 // Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves
@@ -186,7 +186,7 @@ function priceStack(view, t, row) {
     .child(figure(formatChange(quote.changePercent)));
 }
 
-// A row: the drag handle in the left gutter and × in the right one, both only under the pointer; between
+// A row: the drag handle in the left gutter and × in its column at the right, both only under the pointer; between
 // them the body, which opens the ticker's day. Hairlines between rows span the body only. A row this copy
 // just added starts transparent and fades in; a row just dropped starts where it was and slides to its
 // place (the transition animates the change from the next render on, see main.js `playRow`). `place`: see drawRows.
@@ -237,7 +237,7 @@ function rowFrame(view, t, symbol, place, body, clickable) {
       .when(clickable, (el) => el.cursor_pointer())
       .on_click(() => view.openDetail(symbol)))
     // × sits beside the body, not inside it.
-    .child(div().id(`bw-remove-${symbol}`).flex_none().w(GUTTER).flex().items_center().justify_center().text_color(t.dim)
+    .child(div().id(`bw-remove-${symbol}`).flex_none().w(REMOVE_W).flex().items_center().justify_center().text_color(t.dim)
       .when(controls && !dragged, (el) => el.cursor_pointer().hover((s) => s.text_color(t.foreground))
         .tooltip(view.tx("button.remove"))
         .on_click((_e, cx) => view.removeSymbol(cx, symbol))
@@ -253,7 +253,7 @@ function ghostFrame(t, ghost, body) {
     .child(h_flex().flex_none().h(ghost.height).items_stretch()
       .child(div().flex_none().w(GUTTER))
       .child(body.flex_1().min_w(0).border_b(1).border_color(t.border))
-      .child(div().flex_none().w(GUTTER)));
+      .child(div().flex_none().w(REMOVE_W)));
 }
 
 // The rows to draw, each removed row (a ghost) where it was. `filter`: the view's filterState(). A live row is
@@ -267,9 +267,11 @@ function drawRows(view, filter, draw) {
     .map(({ symbol, ghost }) => (ghost ? draw(symbol, null, ghost) : draw(symbol, { next: shown[++at] ?? null, moving }, null)));
 }
 
-// The scrolling rows. No pointer capture: a release outside the list never arrives, so leaving it cancels a drag.
-function list(view, t, rows) {
-  return v_flex().id("bw-list").flex_1().min_h(0).overflow_y_scrollbar()
+// The scrolling rows, which end at their × column, and the scrollbar in the lane beside it: the lane is padding
+// of the list, so no row fill (hover, a dragged row) reaches under the bar. No pointer capture: a release outside
+// the list never arrives, so leaving it cancels a drag.
+function list(view, t, rows, top = 0) {
+  const scrolling = v_flex().id("bw-list").flex_1().min_h(0).pt(top).pr(SCROLL_LANE).overflow_y_scroll()
     .on_hover((hovered, cx) => {
       if (hovered || !view.drag) return;
       view.drag = null;
@@ -284,14 +286,17 @@ function list(view, t, rows) {
       if (inPlace) cx.notify();
       else view.dropRow(cx, drag);
     })
-    .when(!rows.length, (el) => el.child(div().px(GUTTER).py(8).text_color(t.dim).child(view.tx("list.empty"))))
+    .when(!rows.length, (el) => el.child(div().pl(GUTTER).pr(REMOVE_W).py(8).text_color(t.dim).child(view.tx("list.empty"))))
     .children(rows);
+  return v_flex().relative().flex_1().min_h(0)
+    .child(scrolling)
+    .child(Scrollbar.vertical("bw-list").absolute().top(0).bottom(0).right(0).w(SCROLL_LANE));
 }
 
 // One line: the disclaimer, which opens the settings' disclaimer tab.
 function footer(view, t) {
   const short = view.size && view.size.width < SHORT_FOOTER_WIDTH;
-  return div().flex_none().px(GUTTER)
+  return div().flex_none().pl(GUTTER).pr(RIGHT_INSET)
     .child(div().id("bw-disclaimer").py(10).border_t(1).border_color(t.border).text_size(11).text_color(t.dim).truncate()
       .cursor_pointer().hover((s) => s.text_color(t.foreground)).on_click(() => view.openSettings("disclaimer"))
       .child(view.tx(short ? "footer.short" : "footer.long")));
@@ -301,19 +306,19 @@ function footer(view, t) {
 export function sidebar(view, root, t) {
   const filter = view.filterState();
   const now = Date.now();
-  const header = v_flex().flex_none().px(GUTTER).pt(10).gap(2)
+  const header = v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(10).gap(2)
     .child(h_flex().h(28).items_center().gap(8)
       .child(brand(view, t))
       .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(countText(view)))
       .child(headerIcons(view, t)))
     .child(div().truncate().text_size(11).text_color(t.dim).child(statusText(view)))
     .children(problemLines(view, t));
-  const field = v_flex().flex_none().px(GUTTER).pt(12).gap(6)
+  const field = v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(12).gap(6)
     .when(!view.settings.languagePromptDismissed, (el) => el.child(languagePrompt(view, t)))
     .child(addField(view, t))
     .children(messages(view, t));
   const rows = drawRows(view, filter, (symbol, place, ghost) => sidebarRow(view, t, symbol, place, now, ghost));
-  return root.child(header).child(field).children(filterBar(view, t, filter)).child(list(view, t, rows).pt(8)).child(footer(view, t));
+  return root.child(header).child(field).children(filterBar(view, t, filter)).child(list(view, t, rows, 8)).child(footer(view, t));
 }
 
 // A three-line grid: symbol, name and freshness on the left; the day line spanning all three; the price,
@@ -356,7 +361,7 @@ export function table(view, root, t) {
     ...messages(view, t),
     ...problemLines(view, t),
   ];
-  const header = h_flex().flex_none().px(GUTTER).pt(10).gap(12).items_center()
+  const header = h_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(10).gap(12).items_center()
     .child(brand(view, t))
     .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(`${countText(view)} · ${statusText(view)}`))
     .child(div().flex_none().w(320).child(addField(view, t)))
@@ -364,7 +369,7 @@ export function table(view, root, t) {
   const rows = drawRows(view, filter, (symbol, place, ghost) => tableRow(view, t, symbol, place, columns, nameW, now, ghost));
   const frame = v_flex().w(width).flex_1().min_h(0)
     .child(header)
-    .when(notes.length > 0, (el) => el.child(v_flex().flex_none().px(GUTTER).pt(8).gap(4).children(notes)))
+    .when(notes.length > 0, (el) => el.child(v_flex().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(8).gap(4).children(notes)))
     .children(filterBar(view, t, filter))
     .child(tableHead(view, t, columns, nameW))
     .child(list(view, t, rows))
@@ -377,7 +382,7 @@ function tableHead(view, t, columns, nameW) {
     symbol: "table.symbol", name: "table.name", state: "table.state", line: "table.line", price: "table.price",
     change: "table.change", changePct: "table.changePct", high: "detail.high", low: "detail.low", prevClose: "detail.prevClose",
   };
-  return div().flex_none().px(GUTTER).pt(12)
+  return div().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(12)
     .child(h_flex().h(28).items_center().gap(COLUMN_GAP).border_b(1).border_color(t.border).text_size(11).text_color(t.dim)
       .children(columns.map((id) => {
         const right = TABLE_COLUMNS.find((column) => column.id === id).align === "right";
@@ -442,7 +447,7 @@ function filterBar(view, t, { filters, chosen }) {
     .on_click((_e, cx) => { view.setFilter(id); cx.notify(); })
     .child(div().text_color(id === chosen ? t.foreground : t.muted).child(view.tx(id === "all" ? "filter.all" : `market.${id}`)))
     .child(div().text_color(t.dim).child(String(count)));
-  return [div().flex_none().px(GUTTER).pt(10)
+  return [div().flex_none().pl(GUTTER).pr(RIGHT_INSET).pt(10)
     .child(h_flex().id("bw-filters").w_full().min_w(0).h(FILTER_H).overflow_x_scrollbar()
       .child(div().relative().flex().flex_none().gap(FILTER_GAP)
         .when(measured, (el) => el.child(div().id("bw-filter-pill").absolute().top(0).left(left).w(widths[chosen]).h(FILTER_H)
@@ -458,5 +463,5 @@ function dropsInPlace(drag, shown) {
 }
 
 function dropBar(t) {
-  return div().absolute().left(GUTTER).right(GUTTER).h(2).bg(t.accent);
+  return div().absolute().left(GUTTER).right(REMOVE_W).h(2).bg(t.accent);
 }
