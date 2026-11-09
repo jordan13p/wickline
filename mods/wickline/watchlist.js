@@ -233,6 +233,11 @@ export class Watchlist {
   }
 
   /** What a row shows: the base quote with its overlay, if any. */
+  /** The exchange a symbol's quote reports (Yahoo's exchangeName), or null: see resolvedMarket. */
+  exchangeOf(symbol) {
+    return this.quotes[symbol]?.exchange ?? null;
+  }
+
   shown(symbol, now = this.host.now()) {
     const pick = this.pick(symbol, now);
     const quote = mergeOverlay(this.quotes[symbol], pick?.overlay, pick && this.lines[pick.id]?.[symbol]);

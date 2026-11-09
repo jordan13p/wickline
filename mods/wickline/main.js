@@ -13,7 +13,7 @@ import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
 import { changeTone, number } from "./format.js";
 import { sessionOf, shownLimit } from "./freshness.js";
-import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter } from "./markets.js";
+import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter, resolvedMarket } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
@@ -85,6 +85,10 @@ export default class Wickline extends View {
     // with the tab, so they must never override a later choice), else "all". Only a choice made here is
     // stored. Rows and the filter row read it through filterState, so a market no longer on the list reads as All.
     this.filter = openFilter(filterStorage, given.filter);
+    // A symbol's market for the filter and the fading rows: an index's from the exchange its quote reports,
+    // or, for a row still fading out (its quote already dropped), the one its row was drawn with.
+    this.marketFor = (symbol) => resolvedMarket(symbol,
+      this.watch.exchangeOf(symbol) ?? this.leaving.find((g) => g.symbol === symbol)?.row.quote?.exchange ?? null);
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};
     this.typed = "";
@@ -185,12 +189,12 @@ export default class Wickline extends View {
 
   // The market filter as this copy reads it: `{ filters, chosen, shown }` (see readFilter in markets.js).
   filterState() {
-    return readFilter(this.watch.preferences.symbols, this.filter, this.lang);
+    return readFilter(this.watch.preferences.symbols, this.filter, this.lang, this.marketFor);
   }
 
   // A filter that would hide `symbol` (just added, or already listed) goes back to All, so the person sees it.
   revealSymbol(symbol) {
-    this.resetFilter(filterAfterAdd(this.watch.preferences.symbols, this.filter, symbol));
+    this.resetFilter(filterAfterAdd(this.watch.preferences.symbols, this.filter, symbol, this.marketFor));
   }
 
   // The row motions start their state inside the action, before `act` redraws, so the first draw is the start.
@@ -203,7 +207,7 @@ export default class Wickline extends View {
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
       // The chosen market's last symbol went: back to All for good, so it does not filter again the day the market returns.
-      this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter));
+      this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter, this.marketFor));
       if (notice.code === "notice.removed" && ghost.height > 0) {
         this.added.delete(symbol);
         this.leaving.push(ghost);

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SPIN_MS, UNDO_MS, rowsWithGhosts, settleOffset, spinTurnsFor } from "../mods/wickline/motion.js";
-import { readFilter } from "../mods/wickline/markets.js";
+import { readFilter, resolvedMarket } from "../mods/wickline/markets.js";
 
 const ghost = (symbol, before) => ({ symbol, before });
 // The rows as the panel asks for them: the filter read once, as a render reads it.
@@ -77,4 +77,14 @@ test("the refresh icon turns whole turns of 900 ms, a whole one for each press",
 
 test("a removal offers Undo for the 10 seconds the docs promise", () => {
   assert.equal(UNDO_MS, 10_000);
+});
+
+// A removed index leaves the list at once; its fading row still counts under the market its exchange gave.
+test("a removed index fades under its resolved market", () => {
+  const exchanges = { "^DJI": "DJI" };
+  const marketFor = (symbol) => resolvedMarket(symbol, exchanges[symbol]);
+  const symbols = ["AAPL", "2330.TW", "0050.TW", "NVDA", "BTC/USDT", "ETH/USDT", "MSFT", "2317.TW"];
+  const ghosts = [{ symbol: "^DJI", before: "NVDA" }];
+  const drawn = rowsWithGhosts(symbols, readFilter(symbols, "us", "en", marketFor), ghosts, marketFor).map(({ symbol }) => symbol);
+  assert.deepEqual(drawn, ["AAPL", "^DJI", "NVDA", "MSFT"]);
 });

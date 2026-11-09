@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { stateText } from "./format.js";
-import { marketOf } from "./markets.js";
+import { resolvedMarket } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
@@ -48,7 +48,7 @@ export function freshness(quote, session, now) {
     return now - quote.timestamp <= LIVE_MAX_AGE_MS ? result("live") : result("stalled", null, quote.timestamp);
   }
   const seconds = quote.delaySeconds > 0 ? quote.delaySeconds
-    : marketOf(quote.symbol) === "tw" ? TAIWAN_YAHOO_DELAY_S : null;
+    : resolvedMarket(quote.symbol, quote.exchange) === "tw" ? TAIWAN_YAHOO_DELAY_S : null;
   return result("delayed", seconds === null ? null : Math.ceil(seconds / 60));
 }
 

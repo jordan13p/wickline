@@ -49,6 +49,8 @@ export function decodeYahoo(symbol, response, now) {
     price: meta.regularMarketPrice,
     changePercent: positive(close) ? (meta.regularMarketPrice - close) / close * 100 : null,
     currency: typeof meta.currency === "string" && /^[A-Z]{3}$/.test(meta.currency) ? meta.currency : null,
+    // The exchange Yahoo names (NMS, TAI, OSA…), which gives an index its market (resolvedMarket).
+    exchange: typeof meta.exchangeName === "string" && /^[A-Z]{2,5}$/.test(meta.exchangeName) ? meta.exchangeName : null,
     timestamp: meta.regularMarketTime * 1000,
     fetchedAt: now,
     delaySeconds: typeof delay === "number" && Number.isFinite(delay) && delay >= 0 ? delay : null,

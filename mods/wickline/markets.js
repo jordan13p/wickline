@@ -1,10 +1,11 @@
-// Which market a symbol trades on, from its form alone. No Herdr imports.
+// Which market a symbol trades on: from its form, or for an index from the exchange its source reports.
+// No Herdr imports.
 import { isCryptoPair } from "./quotes.js";
 
 // Yahoo exchange suffixes.
 const SUFFIXES = { TW: "tw", TWO: "tw", HK: "hk", SS: "cn", SZ: "cn", T: "jp", KS: "kr", KQ: "kr" };
 
-/** "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges). */
+/** "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges), by form alone. */
 export function marketOf(symbol) {
   if (isCryptoPair(symbol)) return "crypto";
   // Indices start with ^, currencies and futures contain =.
@@ -12,6 +13,37 @@ export function marketOf(symbol) {
   const dot = symbol.lastIndexOf(".");
   if (dot === -1) return "us";
   return SUFFIXES[symbol.slice(dot + 1)] ?? "other";
+}
+
+/** "pair", "index" (a leading ^), "other" (a currency or future: it has =) or "stock". */
+export function kindOf(symbol) {
+  if (isCryptoPair(symbol)) return "pair";
+  if (symbol.startsWith("^")) return "index";
+  return symbol.includes("=") ? "other" : "stock";
+}
+
+// The exchanges a source reports (Yahoo's exchangeName, Yahoo 奇摩股市's exchange) whose market is known.
+// Closed on purpose: any other exchange leaves an index under "other", never a guess.
+const EXCHANGES = {
+  us: ["DJI", "SNP", "NIM", "NMS", "NYQ", "PCX", "CXI", "NYS", "WCB"],
+  tw: ["TAI", "TWO", "TFE"],
+  hk: ["HKG"],
+  cn: ["SHH", "SHZ"],
+  jp: ["JPX", "OSA"],
+  kr: ["KSC", "KOE"],
+};
+const EXCHANGE_MARKET = Object.fromEntries(Object.entries(EXCHANGES).flatMap(([market, codes]) => codes.map((code) => [code, market])));
+
+/** The market an exchange code belongs to, or null. */
+export const exchangeMarket = (exchange) => EXCHANGE_MARKET[exchange] ?? null;
+
+/**
+ * A symbol's market: its form's, except an index, which takes its source's reported `exchange` (other until
+ * one is reported, or when it is not in the table). A currency or future stays other.
+ */
+export function resolvedMarket(symbol, exchange) {
+  const market = marketOf(symbol);
+  return market === "other" && kindOf(symbol) === "index" ? exchangeMarket(exchange) ?? "other" : market;
 }
 
 // The filter row shows only for a list long enough, and mixed enough, to be worth narrowing.
@@ -36,10 +68,10 @@ export const marketOrder = (lang) => MARKET_ORDER[lang] ?? MARKET_ORDER.en;
  * The filters to offer: `all` with the list's length, then each market on the list in `lang`'s fixed order,
  * with its count (so the counts add up to `all`). Empty below the thresholds.
  */
-export function marketFilters(symbols, lang = "en") {
+export function marketFilters(symbols, lang = "en", marketFor = marketOf) {
   const counts = {};
   for (const symbol of symbols) {
-    const market = marketOf(symbol);
+    const market = marketFor(symbol);
     counts[market] = (counts[market] ?? 0) + 1;
   }
   const listed = marketOrder(lang).filter((id) => counts[id]);
@@ -47,13 +79,16 @@ export function marketFilters(symbols, lang = "en") {
   return [{ id: "all", count: symbols.length }, ...listed.map((id) => ({ id, count: counts[id] }))];
 }
 
-/** `symbol` is in the market `filter` names; every symbol is in `all`. */
-export const inFilter = (symbol, filter) => filter === "all" || marketOf(symbol) === filter;
+/**
+ * `symbol` is in the market `filter` names; every symbol is in `all`. `marketFor` gives a symbol's market
+ * (main.js passes the resolved one, see resolvedMarket); the form alone by default.
+ */
+export const inFilter = (symbol, filter, marketFor = marketOf) => filter === "all" || marketFor(symbol) === filter;
 
 /** The symbols a filter shows, in list order. `all`, an unknown filter or a market not on the list shows everything. */
-export function visibleSymbols(symbols, filter) {
+export function visibleSymbols(symbols, filter, marketFor = marketOf) {
   if (filter === "all") return symbols;
-  const shown = symbols.filter((symbol) => inFilter(symbol, filter));
+  const shown = symbols.filter((symbol) => inFilter(symbol, filter, marketFor));
   return shown.length ? shown : symbols;
 }
 
@@ -61,10 +96,10 @@ export function visibleSymbols(symbols, filter) {
  * The market filter as a copy reads it, for one render: the `filters` to offer (marketFilters), the
  * `chosen` one (the stored `filter` while the row offers it, otherwise All) and the symbols it shows (`shown`).
  */
-export function readFilter(symbols, filter, lang = "en") {
-  const filters = marketFilters(symbols, lang);
+export function readFilter(symbols, filter, lang = "en", marketFor = marketOf) {
+  const filters = marketFilters(symbols, lang, marketFor);
   const chosen = filters.some(({ id }) => id === filter) ? filter : "all";
-  return { filters, chosen, shown: visibleSymbols(symbols, chosen) };
+  return { filters, chosen, shown: visibleSymbols(symbols, chosen, marketFor) };
 }
 
 /** The symbol after `symbol` in `list`, or null (also for the last one). */
@@ -81,13 +116,13 @@ export function dropBefore(full, visible, before) {
 }
 
 /** The filter after `symbol` was added (or found already listed) in `symbols`: All when it would hide that symbol. */
-export function filterAfterAdd(symbols, filter, symbol) {
-  return readFilter(symbols, filter).shown.includes(symbol) ? filter : "all";
+export function filterAfterAdd(symbols, filter, symbol, marketFor = marketOf) {
+  return readFilter(symbols, filter, "en", marketFor).shown.includes(symbol) ? filter : "all";
 }
 
 /** The filter after a remove left `symbols`: All when the chosen market has no symbol left. */
-export function filterAfterRemove(symbols, filter) {
-  return symbols.some((symbol) => inFilter(symbol, filter)) ? filter : "all";
+export function filterAfterRemove(symbols, filter, marketFor = marketOf) {
+  return symbols.some((symbol) => inFilter(symbol, filter, marketFor)) ? filter : "all";
 }
 
 // The key under which a copy keeps its market filter in its own storage (see main.js).

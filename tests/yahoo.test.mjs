@@ -17,6 +17,10 @@ test("decodes Yahoo quotes and refuses another ticker", () => {
   assert.equal(q.name, "Apple Inc.");
   assert.ok(Math.abs(q.changePercent - 2.2667) < 0.001);
   assert.throws(() => decodeYahoo("MSFT", chart(AAPL), 1), /different ticker/);
+  // The exchange it reports gives an index its market; anything but a short code is dropped.
+  assert.equal(decodeYahoo("AAPL", chart({ ...AAPL, exchangeName: "NMS" }), 1).exchange, "NMS");
+  assert.equal(decodeYahoo("AAPL", chart(AAPL), 1).exchange, null);
+  for (const bad of ["nms", "TOOLONGX", "N", 7, "N M"]) assert.equal(decodeYahoo("AAPL", chart({ ...AAPL, exchangeName: bad }), 1).exchange, null, String(bad));
   assert.throws(() => decodeYahoo("AAPL", { status: 429, ok: false, text: "" }, 1), (e) => e.retryAfterMs === 60_000);
   assert.throws(() => decodeYahoo("AAPL", { status: 200, ok: true, text: "<html>" }, 1), /unreadable/);
 });

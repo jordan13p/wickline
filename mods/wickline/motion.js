@@ -31,7 +31,7 @@ export const spinTurnsFor = (elapsedMs, turnMs) => Math.ceil((elapsedMs + turnMs
  * `{ chosen, shown }` from readFilter(symbols, …).
  * @returns {{ symbol: string, ghost: object|null }[]}
  */
-export function rowsWithGhosts(symbols, { chosen, shown }, ghosts) {
+export function rowsWithGhosts(symbols, { chosen, shown }, ghosts, marketFor) {
   if (!ghosts.length) return shown.map((symbol) => ({ symbol, ghost: null }));
   const showing = new Set(shown);
   const leaving = new Map(ghosts.map((g) => [g.symbol, g]));
@@ -39,7 +39,7 @@ export function rowsWithGhosts(symbols, { chosen, shown }, ghosts) {
   // Each ghost joins the group of the live symbol it ends up in front of, after the ghosts in front of it.
   const groups = new Map();
   ghosts.forEach((ghost, order) => {
-    if (!inFilter(ghost.symbol, chosen)) return;
+    if (!inFilter(ghost.symbol, chosen, marketFor)) return;
     let anchor = ghost.before;
     let hops = 0;
     while (anchor !== null && !live.has(anchor)) {

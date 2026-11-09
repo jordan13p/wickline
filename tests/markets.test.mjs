@@ -2,8 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, inFilter, marketFilters, marketOf, nextOf,
-  openFilter, readFilter, visibleSymbols,
+  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, exchangeMarket, filterAfterAdd, filterAfterRemove, inFilter, kindOf, marketFilters, marketOf, nextOf,
+  openFilter, readFilter, resolvedMarket, visibleSymbols,
 } from "../mods/wickline/markets.js";
 
 test("routes symbols to markets", () => {
@@ -157,4 +157,41 @@ test("opening a copy writes nothing: only a choice the person makes there is sto
     openFilter(storage, prop);
     assert.deepEqual(storage.writes, [], JSON.stringify([stored, prop]));
   }
+});
+
+// An index has no market in its form; the exchange its source reports gives one (Yahoo's exchangeName,
+// measured 2026-11-09). A currency or a future stays other, whatever exchange it trades on.
+test("an index takes its market from the exchange its source reports", () => {
+  const table = [
+    ["^GSPC", "SNP", "us"], ["^DJI", "DJI", "us"], ["^IXIC", "NIM", "us"], ["^SOX", "NIM", "us"], ["^RUT", "WCB", "us"],
+    ["^VIX", "CXI", "us"], ["^NYA", "NYS", "us"], ["^TWII", "TAI", "tw"], ["^TWOII", "TWO", "tw"], ["^N225", "OSA", "jp"],
+    ["^HSI", "HKG", "hk"], ["^KS11", "KSC", "kr"], ["^KQ11", "KOE", "kr"], ["000001.SS", "SHH", "cn"],
+    ["^STOXX50E", "ZRH", "other"], ["^FTSE", "FGI", "other"], ["^GSPC", null, "other"], ["^GSPC", undefined, "other"],
+    ["TWD=X", "CCY", "other"], ["ES=F", "CME", "other"], ["EURUSD=X", "NYQ", "other"],
+    // A symbol whose form names its market keeps it, whatever is reported.
+    ["2330.TW", "NMS", "tw"], ["AAPL", "TAI", "us"], ["BTC/USDT", "TAI", "crypto"],
+  ];
+  for (const [symbol, exchange, market] of table) assert.equal(resolvedMarket(symbol, exchange), market, `${symbol} ${exchange}`);
+  assert.equal(exchangeMarket("TFE"), "tw");
+  assert.equal(exchangeMarket("XYZ"), null);
+});
+
+test("a symbol's kind comes from its form", () => {
+  const table = [["AAPL", "stock"], ["2330.TW", "stock"], ["A^B", "stock"], ["^TWII", "index"], ["TWD=X", "other"], ["ES=F", "other"], ["BTC/USDT", "pair"]];
+  for (const [symbol, kind] of table) assert.equal(kindOf(symbol), kind, symbol);
+});
+
+test("the filter counts an index under its resolved market", () => {
+  const exchanges = { "^DJI": "DJI", "^IXIC": "NIM", "^SOX": "NIM", "^TWII": "TAI" };
+  const marketFor = (symbol) => resolvedMarket(symbol, exchanges[symbol]);
+  const symbols = ["^DJI", "^IXIC", "^SOX", "^TWII", "2330.TW", "0050.TW", "AAPL", "NVDA", "BTC/USDT", "ETH/USDT"];
+  assert.deepEqual(marketFilters(symbols, "en", marketFor), [
+    { id: "all", count: 10 }, { id: "us", count: 5 }, { id: "tw", count: 3 }, { id: "crypto", count: 2 },
+  ]);
+  assert.deepEqual(readFilter(symbols, "us", "en", marketFor).shown, ["^DJI", "^IXIC", "^SOX", "AAPL", "NVDA"]);
+  // Before the first quotes the indices are other.
+  assert.deepEqual(marketFilters(symbols, "en").find(({ id }) => id === "other"), { id: "other", count: 4 });
+  // The filter moves with the resolved market: adding a US index keeps the US filter once it is known.
+  assert.equal(filterAfterAdd(symbols, "us", "^SOX", marketFor), "us");
+  assert.equal(filterAfterRemove(["^DJI", "2330.TW"], "us", marketFor), "us");
 });

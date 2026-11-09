@@ -280,7 +280,7 @@ function drawRows(view, filter, draw) {
   const { shown } = filter;
   const moving = Boolean(view.drag) && !dropsInPlace(view.drag, shown);
   let at = 0;
-  return rowsWithGhosts(view.watch.preferences.symbols, filter, view.leaving)
+  return rowsWithGhosts(view.watch.preferences.symbols, filter, view.leaving, view.marketFor)
     .map(({ symbol, ghost }) => (ghost ? draw(symbol, null, ghost) : draw(symbol, { next: shown[++at] ?? null, moving }, null)));
 }
 
