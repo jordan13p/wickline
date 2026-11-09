@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, finnhubKeyUsable, firstDraftError, keyChange, marketProblem, marketState,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, finnhubKeyUsable, firstDraftError, keyChange, marketState, marketStatus,
+  marketUnchanged,
   mergeSettings,
   misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
 } from "../mods/wickline/settings.js";
@@ -345,25 +346,83 @@ test("finnhubKeyUsable", () => {
   assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "yahoo", code: "finnhub.invalidKey", stopped: true }] }), true);
 });
 
-test("marketProblem", () => {
+// The settings dialog's status for a market: the saved settings, a draft copy of them, the panel's
+// health when the dialog opened and the key fields as the dialog holds them.
+const copy = (settings) => JSON.parse(JSON.stringify(settings));
+const NO_KEY = { typed: "", typedValid: true, saved: false, removing: false };
+const status = ({ saved, draft = copy(saved), health = [], market, key = NO_KEY }) => {
+  const { live, source, problem } = marketStatus({ saved, draft, health, market, key });
+  return { live, source, problem };
+};
+
+test("marketStatus: the source in use and whether it is failing", () => {
   const misOn = tw({ mis: true, misAck: { version: MIS_CONSENT_VERSION } });
   const off = readSettings(undefined);
   const failing = (provider) => [{ provider, code: `${provider}.unreachable` }];
-  // The status passes in the draft's state, computed once.
-  const problem = ({ draft, keyAvailable, ...rest }) => marketProblem({ ...rest, state: marketState(draft, rest.market, { keyAvailable }), keyAvailable });
   // The source kept from the saved settings and listed in health.
-  assert.equal(problem({ saved: misOn, draft: misOn, health: failing("mis"), market: "tw" }), true);
-  assert.equal(problem({ saved: off, draft: off, health: failing("yahoo"), market: "tw" }), true);
+  assert.deepEqual(status({ saved: misOn, health: failing("mis"), market: "tw" }), { live: true, source: "mis", problem: true });
+  assert.deepEqual(status({ saved: off, health: failing("yahoo"), market: "tw" }), { live: false, source: "yahoo", problem: true });
   // Another source failing is not this market's problem.
-  assert.equal(problem({ saved: misOn, draft: misOn, health: failing("yahoo"), market: "tw" }), false);
-  assert.equal(problem({ saved: misOn, draft: misOn, health: [], market: "tw" }), false);
+  assert.deepEqual(status({ saved: misOn, health: failing("yahoo"), market: "tw" }), { live: true, source: "mis", problem: false });
+  assert.deepEqual(status({ saved: misOn, market: "tw" }), { live: true, source: "mis", problem: false });
   // A changed choice is not judged by the saved source's problem.
-  assert.equal(problem({ saved: misOn, draft: off, health: failing("mis"), market: "tw" }), false);
-  assert.equal(problem({ saved: off, draft: misOn, health: failing("mis"), market: "tw" }), false);
-  // keyAvailable picks the US source on both sides.
+  assert.deepEqual(status({ saved: misOn, draft: off, health: failing("mis"), market: "tw" }), { live: false, source: "yahoo", problem: false });
+  assert.deepEqual(status({ saved: off, draft: misOn, health: failing("mis"), market: "tw" }), { live: true, source: "mis", problem: false });
+  // The saved key picks the US source; a failing Finnhub that has not stopped is still the one in use.
   const finnhub = us({ provider: "finnhub" });
-  assert.equal(problem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: true }), true);
-  assert.equal(problem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: false }), false);
+  const savedKey = { ...NO_KEY, saved: true };
+  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us", key: savedKey }), { live: true, source: "finnhub", problem: true });
+  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us" }), { live: false, source: "yahoo", problem: false });
+});
+
+test("marketStatus: health counts only while the market is as saved", () => {
+  const finnhub = us({ provider: "finnhub" });
+  const savedKey = { ...NO_KEY, saved: true };
+  const stop = (code) => [{ provider: "finnhub", code, params: {}, stopped: true }];
+  // A key typed over a refused one is judged by the choice alone: Save writes it and Finnhub tries it.
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: { ...savedKey, typed: "new-key" } }),
+    { live: true, source: "finnhub", problem: false });
+  // So is a new Binance address after a region refusal: crypto has no fallback, so the choice says live.
+  const crypto = readSettings(undefined);
+  const moved = copy(crypto);
+  moved.sources.crypto.binanceUrl = "https://example.com";
+  const region = [{ provider: "binance", code: "binance.region", params: {} }];
+  assert.deepEqual(status({ saved: crypto, draft: moved, health: region, market: "crypto" }), { live: true, source: "binance", problem: false });
+  // And a new Finnhub path after a redirect: the saved key would be sent again after Save.
+  const path = copy(finnhub);
+  path.sources.us.finnhubUrl = "https://finnhub.io/api/v2";
+  assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: savedKey }),
+    { live: true, source: "finnhub", problem: false });
+  // Remove pending is a change too: no key is left, so the market reads delayed, not failing.
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: { ...savedKey, removing: true } }),
+    { live: false, source: "yahoo", problem: false });
+  // Unchanged, the old problem still shows.
+  assert.deepEqual(status({ saved: crypto, health: region, market: "crypto" }), { live: true, source: "binance", problem: true });
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: savedKey }),
+    { live: false, source: "yahoo", problem: false });
+  assert.deepEqual(status({ saved: finnhub, health: [{ provider: "finnhub", code: "finnhub.rateLimited", params: {} }], market: "us", key: savedKey }),
+    { live: true, source: "finnhub", problem: true });
+  // A change on another market's page leaves this one's health in force.
+  const elsewhere = copy(crypto);
+  elsewhere.sources.tw.mis = true;
+  assert.deepEqual(status({ saved: crypto, draft: elsewhere, health: region, market: "crypto" }), { live: true, source: "binance", problem: true });
+});
+
+test("marketUnchanged", () => {
+  const saved = readSettings(undefined);
+  for (const market of SETTINGS_MARKETS) assert.equal(marketUnchanged({ saved, draft: copy(saved), market, keyEdited: false }), true, market);
+  // A switch turned on and off again is unchanged.
+  const back = copy(saved);
+  back.sources.tw.mis = true;
+  back.sources.tw.mis = false;
+  assert.equal(marketUnchanged({ saved, draft: back, market: "tw", keyEdited: false }), true);
+  const budget = copy(saved);
+  budget.sources.us.budgetPerMinute = 30;
+  assert.equal(marketUnchanged({ saved, draft: budget, market: "us", keyEdited: false }), false);
+  assert.equal(marketUnchanged({ saved, draft: budget, market: "tw", keyEdited: false }), true);
+  // A typed key or Remove changes only the US.
+  assert.equal(marketUnchanged({ saved, draft: copy(saved), market: "us", keyEdited: true }), false);
+  assert.equal(marketUnchanged({ saved, draft: copy(saved), market: "tw", keyEdited: true }), true);
 });
 
 test("settingsMarkets follows the language", () => {

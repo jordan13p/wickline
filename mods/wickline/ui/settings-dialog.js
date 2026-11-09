@@ -6,7 +6,7 @@ import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { TAIWAN_YAHOO_DELAY_S } from "../freshness.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import {
-  CONSENTS, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, marketProblem, marketState, settingsMarkets,
+  CONSENTS, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, marketStatus, settingsMarkets,
 } from "../settings.js";
 import { button, checkbox, dot, note, segmented, toggle } from "./parts.js";
 
@@ -20,8 +20,8 @@ const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colo
 export function settingsView(view, t) {
   const errors = view.draftErrors();
   const invalid = Object.keys(errors).length > 0 || !view.keyLoaded || view.saving;
-  const keyAvailable = view.keyAvailable(errors);
-  const statuses = Object.fromEntries(SETTINGS_MARKETS.map((market) => [market, marketStatus(view, market, keyAvailable)]));
+  const key = view.keyFields(errors);
+  const statuses = Object.fromEntries(SETTINGS_MARKETS.map((market) => [market, shownStatus(view, market, key)]));
   const item = (tab, label, mark = null) => h_flex().id(`bw-tab-${tab}`).px(8).h(28).gap(6).items_center().rounded(5).cursor_pointer()
     .text_color(tab === view.tab ? t.foreground : t.muted).when(tab === view.tab, (el) => el.bg(t.hover).font_semibold())
     .hover((s) => s.bg(t.hover).text_color(t.foreground))
@@ -61,16 +61,13 @@ export function settingsView(view, t) {
     .child(footer);
 }
 
-/**
- * What a market would use after Save (marketState over the draft), plus `problem` (marketProblem), so it
- * never reads live while it does not work, and the dot and short label the sidebar and the title show.
- */
-function marketStatus(view, market, keyAvailable) {
-  const state = marketState(view.draft, market, { keyAvailable });
-  const problem = marketProblem({ state, saved: view.settings, health: view.health, market, keyAvailable });
-  const dotState = problem ? "stalled" : state.live ? "live" : "delayed";
-  const label = view.tx(problem ? "settings.problem" : state.live ? "freshness.live" : "settings.delayed");
-  return { ...state, problem, dotState, label };
+// A market's status (marketStatus over the draft and the panel's health), with the dot and short label
+// the sidebar and the page title show.
+function shownStatus(view, market, key) {
+  const status = marketStatus({ saved: view.settings, draft: view.draft, health: view.health, market, key });
+  const dotState = status.problem ? "stalled" : status.live ? "live" : "delayed";
+  const label = view.tx(status.problem ? "settings.problem" : status.live ? "freshness.live" : "settings.delayed");
+  return { ...status, dotState, label };
 }
 
 // How late Yahoo Finance is for the market: 20 minutes for Taiwan, by exchange elsewhere.

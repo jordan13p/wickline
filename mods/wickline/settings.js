@@ -140,11 +140,26 @@ export function marketState(settings, market, { keyAvailable = false } = {}) {
 }
 
 /**
- * The market's source is failing: `state` (marketState over the draft) keeps the source the saved
- * settings use and `health` lists it. A changed choice is not judged by the old one's problem.
+ * The health the dialog was given still describes `market`: its section of the draft equals the saved
+ * one, and for the US the key is as saved too (`keyEdited`: a key typed or Remove pressed). Once the
+ * person changes anything there, the dialog cannot know the result before Save.
  */
-export function marketProblem({ state, saved, health, market, keyAvailable }) {
-  return state.source === marketState(saved, market, { keyAvailable }).source && health.some((entry) => entry.provider === state.source);
+export function marketUnchanged({ saved, draft, market, keyEdited }) {
+  if (market === "us" && keyEdited) return false;
+  return JSON.stringify(saved.sources[market]) === JSON.stringify(draft.sources[market]);
+}
+
+/**
+ * A market's status in the settings dialog: what it would use after Save (marketState over `draft`)
+ * and `problem`, that source failing, so it never reads live while it does not work. `health` (each
+ * source's problem when the dialog opened) counts only while the market is unchanged; a changed market
+ * is judged by the choice alone. `key`: the Finnhub key fields finnhubKeyUsable takes, less `health`.
+ */
+export function marketStatus({ saved, draft, health, market, key }) {
+  const unchanged = marketUnchanged({ saved, draft, market, keyEdited: key.typed !== "" || key.removing });
+  const counted = unchanged ? health : [];
+  const state = marketState(draft, market, { keyAvailable: finnhubKeyUsable({ ...key, health: counted }) });
+  return { ...state, problem: counted.some((entry) => entry.provider === state.source) };
 }
 
 /**
