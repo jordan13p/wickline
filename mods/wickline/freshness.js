@@ -52,13 +52,16 @@ export function freshness(quote, session, now) {
   return result("delayed", seconds === null ? null : Math.ceil(seconds / 60));
 }
 
-// When a price at its limit is still at it: live, or the session over (closed, after hours) at the close.
-// Never stalled (the lock may have opened since), unconfirmed, or before the open (MIS shows a trial match).
-const LIMIT_STATES = new Set(["live", "closed", "post"]);
-
-/** A quote's limit as drawn: "up", "down" or null (see priceLimit). */
+/**
+ * A quote's limit as drawn: "up", "down" or null (see priceLimit), only while it still holds: live, or once
+ * the market is not open (closed, after hours) for a price from today's regular session. Never stalled (the
+ * lock may have opened since), unconfirmed, or before the open: Yahoo gives Taiwan no pre-market period, so
+ * MIS's trial match at 08:45 reads "closed", and only its time, before the session's start, tells it apart.
+ */
 export function shownLimit(quote, session, now) {
-  return LIMIT_STATES.has(freshness(quote, session, now).state) ? priceLimit(quote) : null;
+  const { state } = freshness(quote, session, now);
+  const traded = quote.timestamp >= (quote.periods?.regular?.[0] ?? Infinity);
+  return state === "live" || ((state === "closed" || state === "post") && traded) ? priceLimit(quote) : null;
 }
 
 /**

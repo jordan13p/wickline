@@ -537,8 +537,7 @@ export default class Wickline extends View {
    * Its color is the gain or loss color by the limit's side, whatever the %: an ex-dividend day's limits are
    * set from a reference price, not the previous close.
    */
-  limitMark(t, quote, failed) {
-    const now = Date.now();
+  limitMark(t, quote, failed, now) {
     const limit = !failed && shownLimit(quote, sessionOf(quote, now), now);
     if (!limit) return null;
     const up = limit === "up";

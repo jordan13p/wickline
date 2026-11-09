@@ -48,7 +48,7 @@ export function band(view, root, t) {
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
         .child(quote
-          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed), { pad: 3 })
+          ? priceBox(`bw-band-price-${symbol}`, formatBandPrice(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed, now), { pad: 3 })
           : div().text_color(t.dim).child(failed ? view.tx("band.unavailable") : "…"))
         .when(Boolean(quote), (el) => el.child(div().text_color(view.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
         .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
@@ -156,7 +156,7 @@ function rowData(view, t, now, symbol, source) {
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
     // The price as both layouts draw it: lit at its limit (see limitMark), `dim` when cached.
-    price: quote && priceBox(`bw-price-${symbol}`, number(quote), source.failed ? t.dim : t.foreground, view.limitMark(t, quote, source.failed)),
+    price: quote && priceBox(`bw-price-${symbol}`, number(quote), source.failed ? t.dim : t.foreground, view.limitMark(t, quote, source.failed, now)),
   };
 }
 

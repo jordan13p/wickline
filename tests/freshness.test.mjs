@@ -81,7 +81,8 @@ test("the detail source line reads state · source", () => {
 
 // A light says the stock is at its limit now (or closed there), so it follows the price's own freshness.
 test("a price at its limit is lit only while that is still true", () => {
-  const at = (fields) => quote({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, ...fields });
+  const at = (fields) => quote({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035,
+    periods: { pre: null, regular: [now - 3_600_000, now + 3_600_000], post: null }, ...fields });
   assert.equal(shownLimit(at({}), "open", now), "up");
   assert.equal(shownLimit(at({ price: 2035 }), "open", now), "down");
   // Closed at the limit, and the after-hours session at the close: still the day's limit.
@@ -93,5 +94,19 @@ test("a price at its limit is lit only while that is still true", () => {
   assert.equal(shownLimit(at({}), "pre", now), null);
   assert.equal(shownLimit(at({}), "unknown", now), null);
   assert.equal(shownLimit(at({ price: 2400 }), "open", now), null);
+});
+
+// Yahoo gives Taiwan no pre-market period (its pre and post are zero-length), so 08:45 reads "closed", the
+// same as after 13:30: only a price from today's regular session is lit once the market is not open.
+test("MIS's trial match before the open is not lit, a close at the limit is", () => {
+  const open = Date.parse("2026-11-09T01:00:00Z");
+  const close = Date.parse("2026-11-09T05:30:00Z");
+  const tw = (timestamp) => ({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp,
+    periods: { pre: null, regular: [open, close], post: null } });
+  const before = Date.parse("2026-11-09T00:45:00Z");
+  assert.equal(sessionOf(tw(before), before), "closed");
+  assert.equal(shownLimit(tw(before), sessionOf(tw(before), before), before), null);
+  const later = Date.parse("2026-11-09T07:00:00Z");
+  assert.equal(shownLimit(tw(close), sessionOf(tw(close), later), later), "up");
 });
 

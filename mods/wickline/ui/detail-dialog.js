@@ -11,7 +11,7 @@ export function detailView(view, t) {
   const q = view.detail;
   const now = Date.now();
   const color = view.changeColor(t, q.changePercent);
-  const mark = view.limitMark(t, q, q.error);
+  const mark = view.limitMark(t, q, q.error, now);
   const session = sessionOf(q, now);
   const value = (price) => (price ? formatBandPrice({ ...q, price }) : "—");
   const tx = (key, params) => view.tx(key, params);

@@ -110,7 +110,7 @@ test("a one-sided book away from the limits, or without limits, has no price", (
   // Asks only at limit-up, bids only at limit-down: the wrong side.
   none({ z: "-", b: "-", a: "2485.0000_" });
   none({ z: "-", a: "-", b: "2035.0000_" });
-  // No limits to match, or limit-up of 9999 or more.
+  // No limits to match, or limit-up 9999.95 (MIS's mark for none).
   none({ z: "-", b: "-", a: "0.0000_2035.0000_", u: "-", w: "-" });
   none({ z: "-", b: "-", a: "0.0000_2035.0000_", u: "9999.9500" });
 });
