@@ -408,6 +408,22 @@ test("marketStatus: health counts only while the market is as saved", () => {
   assert.deepEqual(status({ saved: crypto, draft: elsewhere, health: region, market: "crypto" }), { live: true, source: "binance", problem: true });
 });
 
+test("marketStatus: a failing source hands the market to the next one switched on", () => {
+  const both = tw({ yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION } });
+  const down = (provider) => ({ provider, code: `${provider}.unreachable`, params: {} });
+  // Yahoo 奇摩股市 unreachable, MIS healthy: the rows show MIS, and so does the status.
+  assert.deepEqual(status({ saved: both, health: [down("yahootw")], market: "tw" }), { live: true, source: "mis", problem: false });
+  // Every source switched on is failing: a problem, named after the first.
+  assert.deepEqual(status({ saved: both, health: [down("mis"), down("yahootw")], market: "tw" }), { live: true, source: "yahootw", problem: true });
+  // Yahoo Finance failing too changes nothing: the problem is the real-time sources'.
+  assert.deepEqual(status({ saved: both, health: [down("yahootw"), down("mis"), down("yahoo")], market: "tw" }),
+    { live: true, source: "yahootw", problem: true });
+  // A changed market is judged by the choice alone, so the first source is named.
+  const edited = copy(both);
+  edited.sources.tw.misUrl = "https://example.com";
+  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw")], market: "tw" }), { live: true, source: "yahootw", problem: false });
+});
+
 test("marketUnchanged", () => {
   const saved = readSettings(undefined);
   for (const market of SETTINGS_MARKETS) assert.equal(marketUnchanged({ saved, draft: copy(saved), market, keyEdited: false }), true, market);

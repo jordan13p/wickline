@@ -126,17 +126,23 @@ export function settingsMarkets(lang) {
   return marketOrder(lang).filter((id) => SETTINGS_MARKETS.includes(id));
 }
 
+// The real-time sources `settings` switches on (and consents to) for `market`, in priority order.
+function realtimeSources(settings, market, keyAvailable) {
+  if (market === "crypto") return ["binance"];
+  if (market === "tw") return [yahootwEnabled(settings) && "yahootw", misEnabled(settings) && "mis"].filter(Boolean);
+  return market === "us" && finnhubChosen(settings) && keyAvailable ? ["finnhub"] : [];
+}
+
 /**
  * The source a market would use with `settings`, and whether it is real time: the first real-time source
- * switched on (and consented to), else Yahoo Finance. `keyAvailable`: a Finnhub key would be there after
- * Save (the key is never in the settings).
+ * switched on (and consented to) that is not `failing` (provider ids), as the panel's rows pick it; the
+ * first one when all of them are; Yahoo Finance when none is on. `keyAvailable`: a Finnhub key would be
+ * there after Save (the key is never in the settings).
  */
-export function marketState(settings, market, { keyAvailable = false } = {}) {
-  if (market === "crypto") return { live: true, source: "binance" };
-  if (market === "tw" && yahootwEnabled(settings)) return { live: true, source: "yahootw" };
-  if (market === "tw" && misEnabled(settings)) return { live: true, source: "mis" };
-  if (market === "us" && finnhubChosen(settings) && keyAvailable) return { live: true, source: "finnhub" };
-  return { live: false, source: "yahoo" };
+export function marketState(settings, market, { keyAvailable = false, failing = [] } = {}) {
+  const sources = realtimeSources(settings, market, keyAvailable);
+  if (!sources.length) return { live: false, source: "yahoo" };
+  return { live: true, source: sources.find((source) => !failing.includes(source)) ?? sources[0] };
 }
 
 /**
@@ -151,15 +157,17 @@ export function marketUnchanged({ saved, draft, market, keyEdited }) {
 
 /**
  * A market's status in the settings dialog: what it would use after Save (marketState over `draft`)
- * and `problem`, that source failing, so it never reads live while it does not work. `health` (each
- * source's problem when the dialog opened) counts only while the market is unchanged; a changed market
- * is judged by the choice alone. `key`: the Finnhub key fields finnhubKeyUsable takes, less `health`.
+ * and `problem`, every source it could use failing, so it never reads live while it does not work.
+ * `health` (each source's problem when the dialog opened) counts only while the market is unchanged; a
+ * changed market is judged by the choice alone. `key`: the Finnhub key fields finnhubKeyUsable takes,
+ * less `health`.
  */
 export function marketStatus({ saved, draft, health, market, key }) {
   const unchanged = marketUnchanged({ saved, draft, market, keyEdited: key.typed !== "" || key.removing });
   const counted = unchanged ? health : [];
-  const state = marketState(draft, market, { keyAvailable: finnhubKeyUsable({ ...key, health: counted }) });
-  return { ...state, problem: counted.some((entry) => entry.provider === state.source) };
+  const failing = counted.map((entry) => entry.provider);
+  const state = marketState(draft, market, { keyAvailable: finnhubKeyUsable({ ...key, health: counted }), failing });
+  return { ...state, problem: failing.includes(state.source) };
 }
 
 /**
