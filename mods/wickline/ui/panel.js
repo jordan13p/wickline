@@ -16,7 +16,7 @@ import { button, chart, dot, icon, iconButton } from "./parts.js";
 const ICON = "mods/wickline/icon.svg";
 // Sidebar rows: three lines (16, 14 and 14 px, 2 px apart) on each side of the day line, which spans them.
 const LINES_H = 48;
-const TABLE_SPARK = { width: columnWidth("line"), height: 20 };
+const TABLE_SPARK = { width: columnWidth("line"), height: 28 };
 // The filter row: 24 px labels with 2 px between them; the chosen one sits on a pill of the same height.
 const FILTER_H = 24;
 const FILTER_GAP = 2;
@@ -399,7 +399,7 @@ function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
     state: () => h_flex().flex_none().w(columnWidth("state")).gap(6).items_center()
       .child(div().flex_none().w(6).h(6).when(Boolean(row.dot), (el) => el.child(row.dot)))
       .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state)),
-    line: () => (quote ? chart(quote, color, t, TABLE_SPARK) : cell("line")),
+    line: () => (quote ? chart(quote, color, t, { ...TABLE_SPARK, fill: true, stroke: 1.5 }) : cell("line")),
     price: () => (quote
       ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
         .child(div().flex_1().min_w(0).text_right().whitespace_nowrap().text_color(row.failed ? t.dim : t.foreground).child(number(quote)))
