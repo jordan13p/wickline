@@ -44,15 +44,13 @@ test("scales a line into its box", () => {
   assert.match(formatTime(new Date(2026, 10, 2, 9, 5).getTime()), /^09:05$/);
 });
 
-test("a row's name and label: a name that begins with the label replaces it", () => {
-  assert.deepEqual(rowName("BTC/USDT", "Binance", "Binance Spot"), { label: "Binance Spot", name: "" });
-  assert.deepEqual(rowName("AAPL", "Yahoo · delayed", "Apple Inc."), { label: "Yahoo · delayed", name: "Apple Inc." });
+test("a name that begins with the live label keeps both", () => {
+  const live = t("en", "freshness.live");
+  assert.deepEqual(rowName("LYV", live, "Live Nation Entertainment"), { label: "Live", name: "Live Nation Entertainment" });
 });
 
 test("a pair has no instrument name: its venue never becomes a name line", () => {
-  // Live: the venue merges into the label, as before.
-  assert.deepEqual(rowName("BTC/USDT", "Binance", "Binance Spot"), { label: "Binance Spot", name: "" });
-  // Stalled: the label does not merge, and the venue still is no name.
+  assert.deepEqual(rowName("BTC/USDT", "Live", "Binance Spot"), { label: "Live", name: "" });
   assert.deepEqual(rowName("BTC/USDT", "quote stopped at 13:05", "Binance Spot"), { label: "quote stopped at 13:05", name: "" });
 });
 
@@ -60,6 +58,7 @@ test("a stock's name gets its own line", () => {
   assert.deepEqual(rowName("2330.TW", "已收盤 · 11/5 13:30", "台積電"), { label: "已收盤 · 11/5 13:30", name: "台積電" });
   // Finnhub keeps the Yahoo name, so a US row reads the same with either source.
   assert.deepEqual(rowName("AAPL", "Finnhub", "Apple Inc."), { label: "Finnhub", name: "Apple Inc." });
+  assert.deepEqual(rowName("AAPL", "Yahoo · delayed", "Apple Inc."), { label: "Yahoo · delayed", name: "Apple Inc." });
 });
 
 test("a row's name that only repeats the ticker, or is missing, is left out", () => {

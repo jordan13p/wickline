@@ -67,14 +67,13 @@ export function formatStaleDate(timestamp, now, lang = "en") {
 
 /**
  * What a row shows as its freshness label and its name, so nothing on the row says the same thing
- * twice: a name that begins with the label (a pair's "Binance Spot" after "Binance") replaces it,
- * and a name that only repeats the ticker is left out. A pair has no instrument name (its "name" is
- * the venue), so it never gets one of its own. `name` is "" when there is none to show.
+ * twice: a name that only repeats the ticker is left out. A pair has no instrument name (its "name" is
+ * the venue), so it never gets one of its own. The label always stays whole, also beside a name that
+ * begins with it ("Live" beside "Live Nation Entertainment"). `name` is "" when there is none to show.
  */
 export function rowName(symbol, label, name) {
-  const named = name && name !== symbol ? name : "";
-  if (named && label && named.startsWith(label)) return { label: named, name: "" };
-  return { label, name: isCryptoPair(symbol) ? "" : named };
+  const named = name && name !== symbol && !isCryptoPair(symbol) ? name : "";
+  return { label, name: named };
 }
 
 // The interfaces that read a Taiwan stock's Chinese name; the others keep the base quote's name.

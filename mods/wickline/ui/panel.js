@@ -134,9 +134,8 @@ function problemLines(view, t) {
   return view.watch.problems().map((problem) => div().text_size(11).text_color(t.blocked).child(view.say(problem)));
 }
 
-// What a row shows, whichever layout draws it. `name` and `state` (the freshness label, then an earlier
-// day's date) are as rowName leaves them: a name that begins with the label (a pair's "Binance Spot")
-// replaces it, so nothing on the row says the same thing twice.
+// What a row shows, whichever layout draws it: `name` as rowName leaves it (none for a pair, or for a
+// name that only repeats the ticker), and `state`, the freshness label, then an earlier day's date.
 function rowData(view, t, now, symbol, source) {
   const { quote } = source;
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
