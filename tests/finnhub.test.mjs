@@ -159,7 +159,7 @@ test("cap of 15 at the default budget", async () => {
   assert.equal(finnhubCount(host), 15);
   assert.ok(!finnhubUrls(host).some((url) => url.endsWith(`=${us[15]}`)));
   assert.equal(w.shown(us[0]).source, "finnhub");
-  assert.equal(w.overlays[us[15]], undefined);
+  assert.equal(w.overlays[us[15]]?.finnhub, undefined);
   // A budget of 8 per minute: two symbols.
   host.prefs = finnhubOn({ budgetPerMinute: 8 });
   w.sync();
@@ -314,7 +314,7 @@ test("401 stops Finnhub until the key changes", async () => {
     assert.equal(finnhubCount(host), 1);
     for (const symbol of ["AAPL", "MSFT"]) {
       assert.equal(w.shown(symbol).source, "yahoo", symbol);
-      assert.equal(w.overlayErrors[symbol].code, "finnhub.invalidKey", symbol);
+      assert.equal(w.overlayError(symbol).code, "finnhub.invalidKey", symbol);
     }
     await advance(host, 61_000);
     assert.equal(finnhubCount(host), 1);

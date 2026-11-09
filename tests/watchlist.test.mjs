@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { STARTER_SYMBOLS, USER_AGENT } from "../mods/wickline/quotes.js";
 import { yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
-import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/wickline/watchlist.js";
+import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
 
@@ -317,6 +317,17 @@ test("crypto requests use the saved Binance URL, also after a change", async () 
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(host.requests, [binanceUrl("https://other.test", ["BTC/USDT"]), binanceKlinesUrl("https://other.test", "BTC/USDT")]);
   await stop(w, host, runs);
+});
+
+test("pickOverlay: first live in order, else newest, ties keep order, none → null", () => {
+  const NOW = 1_000_000;
+  const order = ["yahootw", "mis"];
+  const pick = (yahootw, mis) => pickOverlay({ yahootw: { timestamp: yahootw }, mis: { timestamp: mis } }, order, NOW)?.id;
+  assert.equal(pick(NOW - 10_000, NOW - 5_000), "yahootw");
+  assert.equal(pick(NOW - 180_000, NOW - 5_000), "mis");
+  assert.equal(pick(NOW - 180_000, NOW - 300_000), "yahootw");
+  assert.equal(pick(NOW - 180_000, NOW - 180_000), "yahootw");
+  assert.equal(pickOverlay({}, order, NOW), null);
 });
 
 test("identity", () => {

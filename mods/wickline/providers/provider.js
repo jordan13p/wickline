@@ -16,14 +16,14 @@ import { QuoteError } from "../quotes.js";
  *   cap?(config: object): number,
  *   spacingMs(count: number, intervalMs: number): number,
  *   intervalMs(session: string): number,
- *   linesMs?: number,
+ *   linesMs?(session: string): number,
  *   requests(symbols: string[], config: object): ProviderRequest[],
  *   decode(request: ProviderRequest, response: ProviderResponse, now: number): ProviderResult,
  * }} Provider
  * `markets` are the markets (markets.js) whose symbols it quotes. `spacingMs` is the gap between
  * this provider's quote requests in one round. `intervalMs` is the wait between rounds, given the
  * busiest session among its symbols ("open" while unknown). A provider with `kind: "line"`
- * requests asks each line again only once `linesMs` has passed. An `overlay` provider (TWSE MIS) is
+ * requests asks each line again only once `linesMs(session)` has passed. An `overlay` provider (TWSE MIS) is
  * off until the person turns it on, and lays its prices over the base quote instead of replacing it.
  * `cap` limits it to that many of its symbols, in list order; `manualRefresh: false` keeps Refresh
  * from starting an extra round (a request budget). `decode` does not throw

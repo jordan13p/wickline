@@ -15,6 +15,8 @@ export const WATCHLIST_KEY = "wickline.watchlist.v1";
 export const REQUEST_TIMEOUT_MS = 10_000;
 // Started in this order, so their first requests go out in this order too.
 const PROVIDERS = [binance, mis, finnhub, yahoo];
+// The overlay sources in priority order: with several live ones for a symbol, the first wins.
+const OVERLAY_ORDER = PROVIDERS.filter((provider) => provider.overlay).map((provider) => provider.id);
 // Overlay sources the person turns on in Settings: whether each is on now (given this watchlist, which
 // holds the key read from the secrets file), what its card and status line say while it is chosen but
 // cannot run, and, for a source that can refuse the key, the settings whose change lets it try again.
@@ -50,6 +52,21 @@ function wake(state) {
   const resolve = state.wake;
   state.wake = null;
   resolve?.();
+}
+
+/**
+ * The overlay a row shows, among a symbol's overlays keyed by provider id: the first of `order` that is
+ * still live, else the newest, a tie keeping the earlier id. Null with none.
+ */
+export function pickOverlay(byProvider, order, now) {
+  let newest = null;
+  for (const id of order) {
+    const overlay = byProvider[id];
+    if (!overlay) continue;
+    if (now - overlay.timestamp <= LIVE_MAX_AGE_MS) return { id, overlay };
+    if (!newest || overlay.timestamp > newest.overlay.timestamp) newest = { id, overlay };
+  }
+  return newest;
 }
 
 /**
@@ -119,13 +136,14 @@ export class Watchlist {
     this.keyUnreadable = false;
     this.preferences = readPreferences(host.load());
     this.configKey = JSON.stringify(this.config());
-    // By symbol: the base quote (Yahoo for stocks, Binance for pairs) and a real-time overlay over it.
+    // By symbol: the base quote (Yahoo for stocks, Binance for pairs), and the real-time overlays over it,
+    // one per overlay source (by provider id).
     this.quotes = {};
     this.overlays = {};
     // By symbol: the last name an overlay gave (MIS's Chinese name), kept while that source fails.
     this.localNames = {};
-    // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart, since
-    // its symbol still has the base quote.
+    // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart (by
+    // provider id), since its symbol still has the base quote.
     this.errors = {};
     this.overlayErrors = {};
     this.revision = 0;
@@ -193,10 +211,22 @@ export class Watchlist {
   }
 
   /** What a row shows: the base quote with its overlay, if any. */
-  shown(symbol) {
-    const quote = mergeOverlay(this.quotes[symbol], this.overlays[symbol]);
+  shown(symbol, now = this.host.now()) {
+    const quote = mergeOverlay(this.quotes[symbol], this.pick(symbol, now)?.overlay);
     const localName = this.localNames[symbol];
     return quote && localName && !quote.localName ? { ...quote, localName } : quote;
+  }
+
+  pick(symbol, now) {
+    return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now);
+  }
+
+  /** Why a symbol has no overlay: the first overlay source's error, in priority order; null while one shows. */
+  overlayError(symbol, now = this.host.now()) {
+    if (this.pick(symbol, now)) return null;
+    const errors = this.overlayErrors[symbol] ?? {};
+    const id = OVERLAY_ORDER.find((candidate) => errors[candidate]);
+    return id ? errors[id] : null;
   }
 
   providerIds() {
@@ -375,10 +405,19 @@ export class Watchlist {
     }
     // An overlay goes as soon as its source no longer covers the symbol (removed, or turned off).
     const config = this.config();
-    const covered = new Set(PROVIDERS.filter((provider) => provider.overlay).flatMap((provider) => this.symbolsFor(provider, config)));
-    for (const record of [this.overlays, this.overlayErrors, this.localNames]) {
-      for (const key of Object.keys(record)) if (!covered.has(key)) delete record[key];
+    const covered = new Set();
+    for (const provider of PROVIDERS.filter((p) => p.overlay)) {
+      const symbols = new Set(this.symbolsFor(provider, config));
+      for (const symbol of symbols) covered.add(symbol);
+      for (const record of [this.overlays, this.overlayErrors]) {
+        for (const symbol of Object.keys(record)) {
+          if (symbols.has(symbol)) continue;
+          delete record[symbol][provider.id];
+          if (!Object.keys(record[symbol]).length) delete record[symbol];
+        }
+      }
     }
+    for (const symbol of Object.keys(this.localNames)) if (!covered.has(symbol)) delete this.localNames[symbol];
   }
 
   /**
@@ -395,7 +434,7 @@ export class Watchlist {
   sessionFor(symbols, now) {
     let best = "closed";
     for (const symbol of symbols) {
-      const quote = this.shown(symbol);
+      const quote = this.shown(symbol, now);
       const session = quote ? sessionOf(quote, now) : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
@@ -406,7 +445,7 @@ export class Watchlist {
   staleInMs(symbols, now) {
     let wait = LIVE_MAX_AGE_MS;
     for (const symbol of symbols) {
-      const quote = this.shown(symbol);
+      const quote = this.shown(symbol, now);
       const left = quote ? quote.timestamp + LIVE_MAX_AGE_MS + 1 - now : 0;
       if (left > 0 && left < wait) wait = left;
     }
@@ -571,13 +610,12 @@ export class Watchlist {
       for (const symbol of request.symbols) {
         const overlay = result.quotes[symbol];
         if (overlay) {
-          this.overlays[symbol] = overlay;
-          delete this.overlayErrors[symbol];
+          this.setEntry(this.overlays, symbol, provider.id, overlay);
+          this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
           continue;
         }
-        delete this.overlays[symbol];
-        if (result.errors[symbol]) this.overlayErrors[symbol] = coded(result.errors[symbol]);
-        else delete this.overlayErrors[symbol];
+        this.setEntry(this.overlays, symbol, provider.id, undefined);
+        this.setEntry(this.overlayErrors, symbol, provider.id, result.errors[symbol] ? coded(result.errors[symbol]) : undefined);
       }
       return;
     }
@@ -588,6 +626,17 @@ export class Watchlist {
       delete this.errors[symbol];
     }
     for (const [symbol, error] of Object.entries(result.errors)) this.errors[symbol] = coded(error);
+  }
+
+  // Sets one provider's entry in a per-symbol record (undefined clears it), dropping a symbol left empty.
+  setEntry(record, symbol, id, value) {
+    if (value !== undefined) {
+      (record[symbol] ??= {})[id] = value;
+      return;
+    }
+    if (!record[symbol]) return;
+    delete record[symbol][id];
+    if (!Object.keys(record[symbol]).length) delete record[symbol];
   }
 
   // The quote requests after `index`, not sent this round.
@@ -601,8 +650,8 @@ export class Watchlist {
   // A symbol whose request was not answered: a base quote stays, marked cached; an overlay goes.
   fail(provider, symbol, error) {
     if (!provider.overlay) { this.errors[symbol] = error; return; }
-    delete this.overlays[symbol];
-    this.overlayErrors[symbol] = error;
+    this.setEntry(this.overlays, symbol, provider.id, undefined);
+    this.setEntry(this.overlayErrors, symbol, provider.id, error);
   }
 
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */
@@ -627,7 +676,7 @@ export class Watchlist {
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
     const now = this.host.now();
-    if (!this.quotes[symbol] || now - (state.linesAt[symbol] ?? -Infinity) < provider.linesMs) return null;
+    if (!this.quotes[symbol] || now - (state.linesAt[symbol] ?? -Infinity) < provider.linesMs(this.sessionFor([symbol], now))) return null;
     state.linesAt[symbol] = now;
     const result = await this.ask(provider, request, io, current);
     const series = result?.lines?.[symbol];

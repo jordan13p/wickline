@@ -2,13 +2,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { USER_AGENT } from "../mods/wickline/quotes.js";
+import { USER_AGENT, withinLimits } from "../mods/wickline/quotes.js";
 import { displayName } from "../mods/wickline/format.js";
 import { detailSource } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
 import { advance, chart, fakeHost, start, stop } from "./helpers.mjs";
-import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel, withinLimits } from "../mods/wickline/providers/mis.js";
+import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel } from "../mods/wickline/providers/mis.js";
 
 // Recorded answers from MIS during trading hours (2026-11-05), only these symbols' rows.
 const fixture = (name) => readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8");
@@ -266,7 +266,7 @@ test("any MIS failure drops the overlay at once", async () => {
   await advance(host, 10_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");
   assert.equal(w.shown("2330.TW").price, 2200);
-  assert.equal(w.overlayErrors["2330.TW"].code, "mis.unreachable");
+  assert.equal(w.overlayError("2330.TW").code, "mis.unreachable");
   // Yahoo's own quote is fine, so the row has no error of its own.
   assert.equal(w.errors["2330.TW"], undefined);
   assert.deepEqual(w.problems(), [{ provider: "mis", code: "mis.unreachable", params: {} }]);
@@ -274,7 +274,7 @@ test("any MIS failure drops the overlay at once", async () => {
   host.mis = () => answer(OPEN);
   await advance(host, 20_002);
   assert.equal(w.shown("2330.TW").source, "mis");
-  assert.equal(w.overlayErrors["2330.TW"], undefined);
+  assert.equal(w.overlayError("2330.TW"), null);
   assert.deepEqual(w.problems(), []);
   await stop(w, host, runs);
 });
@@ -290,7 +290,7 @@ test("a price outside the limits falls back for that symbol only", async () => {
   const runs = start(w, host);
   await advance(host, 1);
   assert.equal(w.shown("2330.TW").source, "yahoo");
-  assert.equal(w.overlayErrors["2330.TW"].code, "mis.outOfLimits");
+  assert.equal(w.overlayError("2330.TW").code, "mis.outOfLimits");
   assert.equal(w.shown("0050.TW").source, "mis");
   // One symbol's price, not the source: no status line for MIS.
   assert.deepEqual(w.problems(), []);
@@ -307,7 +307,7 @@ test("no price drops the overlay without an error", async () => {
   host.mis = () => row2330({ z: "-", b: "-", a: "0.0000" });
   await advance(host, 10_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");
-  assert.equal(w.overlayErrors["2330.TW"], undefined);
+  assert.equal(w.overlayError("2330.TW"), null);
   await stop(w, host, runs);
 });
 
@@ -320,7 +320,7 @@ test("before the open the row keeps Yahoo's quote under MIS's name", async () =>
   const quote = w.shown("2330.TW");
   assert.deepEqual([quote.source, quote.price, quote.localName], ["yahoo", 2200, "台積電"]);
   assert.equal(displayName(quote, "zh-TW"), "台積電");
-  assert.equal(w.overlayErrors["2330.TW"], undefined);
+  assert.equal(w.overlayError("2330.TW"), null);
   assert.deepEqual(w.problems(), []);
   await stop(w, host, runs);
 });
@@ -377,7 +377,7 @@ test("a MIS timeout drops the overlay", async () => {
   // The next round starts at 10 s and times out 10 s later.
   await advance(host, 20_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");
-  assert.equal(w.overlayErrors["2330.TW"].code, "request.timeout");
+  assert.equal(w.overlayError("2330.TW").code, "request.timeout");
   assert.deepEqual(w.problems(), [{ provider: "mis", code: "request.timeout", params: { source: "mis", seconds: 10 } }]);
   await stop(w, host, runs);
 });
@@ -398,7 +398,7 @@ test("a MIS rate limit keeps Yahoo's quote for the whole cooldown", async () => 
   for (const at of [10_001, 30_000, retryAt - 1]) {
     await advance(host, at);
     assert.equal(w.shown("2330.TW").source, "yahoo", `at ${at}`);
-    assert.equal(w.overlayErrors["2330.TW"].code, "mis.rateLimited");
+    assert.equal(w.overlayError("2330.TW").code, "mis.rateLimited");
     assert.deepEqual(w.problems(), [{ provider: "mis", code: "mis.rateLimited", params: {} }]);
   }
   assert.equal(misCount(host), sent);
@@ -422,12 +422,12 @@ test("a later batch loses its overlays when an earlier one fails", async () => {
     host.mis = (url) => (batch++ === 0 ? failure() : rowsFor(url));
     await advance(host, 10_001);
     for (const symbol of symbols) {
-      assert.equal(w.overlays[symbol], undefined, symbol);
-      assert.ok(w.overlayErrors[symbol], symbol);
+      assert.equal(w.overlays[symbol]?.mis, undefined, symbol);
+      assert.ok(w.overlayError(symbol), symbol);
     }
     // The second batch (the 51st symbol) was never asked: down means the same reason, limited means deferred.
     assert.equal(batch, 1);
-    assert.equal(w.overlayErrors[symbols[50]].code, later);
+    assert.equal(w.overlayError(symbols[50]).code, later);
     await stop(w, host, runs);
   }
 });

@@ -76,6 +76,12 @@ export function normalizeSymbol(input) {
 
 export const positive = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 
+/** A source's own limit-up and limit-down; a stock without both (or with limit-up ≥ 9999) has none to check. */
+export function withinLimits(price, up, down) {
+  if (!positive(up) || !positive(down) || up >= 9999) return true;
+  return down <= price && price <= up;
+}
+
 export const cleanText = (value) => typeof value === "string"
   ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 100) || null
   : null;

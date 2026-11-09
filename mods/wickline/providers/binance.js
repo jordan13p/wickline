@@ -80,7 +80,7 @@ export const binance = {
   spacingMs: () => 0,
   // Tickers; a pair's line is asked again only once `linesMs` has passed.
   intervalMs: () => 15_000,
-  linesMs: 60_000,
+  linesMs: () => 60_000,
   // Per batch: its quote request, then a line request per pair of that batch.
   requests(pairs, { binanceUrl: base }) {
     const requests = [];

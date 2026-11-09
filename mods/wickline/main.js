@@ -418,7 +418,7 @@ export default class Wickline extends View {
     if (!quote) return;
     openOverlay({
       mod: MOD_ID, kind: "dialog", width: 440,
-      props: { detail: { ...quote, error: this.watch.errors[symbol] ?? null, fallback: this.watch.overlayErrors[symbol] ?? null } },
+      props: { detail: { ...quote, error: this.watch.errors[symbol] ?? null, fallback: this.watch.overlayError(symbol) } },
     });
   }
 
@@ -472,7 +472,7 @@ export default class Wickline extends View {
       quote: w.shown(symbol),
       failed: w.errors[symbol],
       // The real-time source failed for this symbol: the base quote shows, with the reason.
-      fallback: w.overlayErrors[symbol],
+      fallback: w.overlayError(symbol),
       // A US row past Finnhub's budget stays on Yahoo and says so.
       overCap: w.overCap(symbol),
     };

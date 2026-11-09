@@ -2,7 +2,7 @@
 // Taiwan quotes. Off until the person turns it on and consents. This file holds
 // the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
 // dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, positive } from "../quotes.js";
+import { HEADERS, QuoteError, cleanText, positive, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
@@ -17,12 +17,6 @@ export const MIS_CONSENT_VERSION = 2;
 export function misChannel(symbol) {
   const dot = symbol.lastIndexOf(".");
   return `${symbol.slice(dot + 1) === "TWO" ? "otc" : "tse"}_${symbol.slice(0, dot)}.tw`;
-}
-
-/** MIS's own limit-up and limit-down; a stock without both (or with limit-up ≥ 9999) has none to check. */
-export function withinLimits(price, up, down) {
-  if (!positive(up) || !positive(down) || up >= 9999) return true;
-  return down <= price && price <= up;
 }
 
 const number = (value) => {
