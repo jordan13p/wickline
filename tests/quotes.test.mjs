@@ -26,4 +26,6 @@ test("a price is at a limit only when it equals its own source's limit", () => {
   assert.equal(priceLimit({ price: 563, limitUp: 563, limitDown: null }), null);
   assert.equal(priceLimit({ price: 9999.95, limitUp: 9999.95, limitDown: 70 }), null);
   assert.equal(priceLimit(null), null);
+  // Only MIS's own no-limit marker, 9999.95, means none: a real limit-up can pass 9999 (ticks of 5 from 1000).
+  assert.equal(priceLimit({ price: 10010, limitUp: 10010, limitDown: 8190 }), "up");
 });

@@ -90,8 +90,10 @@ export const positiveOrNull = (value) => {
   return positive(n) ? n : null;
 };
 
-// MIS sends limit-up 9999.95 (and no limit-down) for a stock without daily limits.
-export const hasLimits = (up, down) => positive(up) && positive(down) && up < 9999;
+// MIS sends limit-up 9999.95 (and no limit-down) for a stock without daily limits. It is off the tick grid
+// (ticks of 5 from 1000), so a real limit-up past 9999 still counts.
+const NO_LIMIT_UP = 9999.95;
+export const hasLimits = (up, down) => positive(up) && positive(down) && up !== NO_LIMIT_UP;
 
 /**
  * Whether a quote's price is at its own source's limit-up or limit-down: "up", "down" or null. Exact on
