@@ -334,7 +334,7 @@ export function sidebar(view, root, t) {
 // the ticker) keeps line 2 empty. Notes go under the grid.
 function sidebarRow(view, t, symbol, place, now, ghost) {
   const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
-  const lineW = sparkWidth(view.size?.width ?? null);
+  const lineW = sparkWidth(view.size?.width);
   const body = v_flex().py(8).gap(2)
     .child(h_flex().gap(COLUMN_GAP).items_start()
       .child(v_flex().flex_1().min_w(0).gap(2)
