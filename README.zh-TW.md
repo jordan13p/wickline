@@ -17,7 +17,7 @@
   <a href="https://github.com/jordan13p/wickline/actions/workflows/checks.yml"><img src="https://github.com/jordan13p/wickline/actions/workflows/checks.yml/badge.svg" alt="checks"></a>
 </p>
 
-![Wickline](preview.png)
+![Wickline](assets/zh-TW/preview.png)
 
 ## 特色
 
