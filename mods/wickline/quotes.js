@@ -90,13 +90,13 @@ export const positiveOrNull = (value) => {
   return positive(n) ? n : null;
 };
 
-/** A source's own limit-up and limit-down: a stock without both, or with limit-up ≥ 9999, has none. */
+// MIS sends limit-up 9999.95 (and no limit-down) for a stock without daily limits.
 export const hasLimits = (up, down) => positive(up) && positive(down) && up < 9999;
 
 /**
  * Whether a quote's price is at its own source's limit-up or limit-down: "up", "down" or null. Exact on
  * purpose: MIS's no-trade midpoint half a tick under a 0.01-tick limit (8.315 against 8.32) is within 0.005
- * of it, and is not a stock at its limit. A quote without a pair of limits is never at one.
+ * of it, and is not a stock at its limit.
  */
 export function priceLimit(quote) {
   if (!quote || !positive(quote.price) || !hasLimits(quote.limitUp, quote.limitDown)) return null;
@@ -105,7 +105,6 @@ export function priceLimit(quote) {
   return null;
 }
 
-// Both limits, or neither: a stock without a pair has none to show or check.
 export const limitPair = (up, down) => (hasLimits(up, down) ? { limitUp: up, limitDown: down } : { limitUp: null, limitDown: null });
 
 /** A price within its source's limits; a stock without limits has none to check. */

@@ -6,7 +6,7 @@ import { chartGeometry, tint } from "../format.js";
 import { SPIN_MS } from "../motion.js";
 
 // The soft fill under a line chart and behind a lit price.
-export const AREA_OPACITY = 0.16;
+const AREA_OPACITY = 0.16;
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
@@ -55,7 +55,6 @@ export function button(t, id, label, onClick) {
     .on_click((_e, cx) => onClick(cx)).child(label);
 }
 
-// A text link: `muted`, `foreground` under the pointer.
 /**
  * A price in a content-sized box whose padding and negative margin cancel, so its digits stay put, lit or not.
  * `mark` (a price at its limit, from the view's limitMark): the text in its color, on that color at
@@ -67,6 +66,7 @@ export function priceBox(id, text, color, mark, pad = 4) {
     .when(Boolean(fill), (el) => el.bg(fill)).when(Boolean(mark), (el) => el.tooltip(mark.tip)).child(text);
 }
 
+// A text link: `muted`, `foreground` under the pointer.
 export function link(t, id, label, onClick) {
   return div().id(id).flex_none().cursor_pointer().text_color(t.muted).hover((s) => s.text_color(t.foreground))
     .on_click((_e, cx) => onClick(cx)).child(label);

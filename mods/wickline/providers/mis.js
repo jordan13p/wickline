@@ -58,10 +58,11 @@ export function decodeMis(symbols, response, now) {
     if (name) names[symbol] = name;
     const bid = best(row.b);
     const ask = best(row.a);
-    const price = positiveOrNull(row.z) ?? bookPrice(bid, ask, positiveOrNull(row.u), positiveOrNull(row.w));
+    const limits = limitPair(positiveOrNull(row.u), positiveOrNull(row.w));
+    const price = positiveOrNull(row.z) ?? bookPrice(bid, ask, limits.limitUp, limits.limitDown);
     const time = Number(row.tlong);
     if (!price || !positive(time)) continue;
-    if (!withinLimits(price, positiveOrNull(row.u), positiveOrNull(row.w))) {
+    if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("mis.outOfLimits");
       continue;
     }
@@ -74,7 +75,7 @@ export function decodeMis(symbols, response, now) {
       open: positiveOrNull(row.o),
       high: positiveOrNull(row.h),
       low: positiveOrNull(row.l),
-      ...limitPair(positiveOrNull(row.u), positiveOrNull(row.w)),
+      ...limits,
       timestamp: time,
       fetchedAt: now,
     };

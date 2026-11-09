@@ -155,8 +155,8 @@ function rowData(view, t, now, symbol, source) {
     state: [shown.label, stale ? view.tx("quote.asOf", { date: stale }) : ""].filter(Boolean).join(" · "),
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
-    mark: quote ? view.limitMark(t, quote, source.failed) : null,
-    symbol,
+    // The price as both layouts draw it: lit at its limit (see limitMark), `dim` when cached.
+    price: quote && priceBox(`bw-price-${symbol}`, number(quote), source.failed ? t.dim : t.foreground, view.limitMark(t, quote, source.failed)),
   };
 }
 
@@ -182,7 +182,7 @@ const lineBox = (height, el = div()) => el.flex_none().h(height).line_height(`${
 // The price with its currency in its own slot, then the change and the change %, right-aligned on the
 // price's last digit. None of them truncates: a long one grows to the left.
 function priceStack(view, t, row) {
-  const { quote, failed, color } = row;
+  const { quote, color } = row;
   const column = v_flex().flex_none().w(NUMBER_W + CODE_W).gap(2);
   if (!quote) {
     return column.child(lineBox(16).pr(CODE_W).text_right().whitespace_nowrap().text_size(11).text_color(t.dim).child(waiting(view, row)))
@@ -192,7 +192,7 @@ function priceStack(view, t, row) {
   return column
     .child(lineBox(16, h_flex().items_baseline())
       .child(h_flex().flex_none().w(NUMBER_W).justify_end()
-        .child(priceBox(`bw-price-${row.symbol}`, number(quote), failed ? t.dim : t.foreground, row.mark)))
+        .child(row.price))
       .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? "")))
     .child(figure(signed(quote)))
     .child(figure(formatChange(quote.changePercent)));
@@ -420,7 +420,7 @@ function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
     price: () => (quote
       ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
         .child(h_flex().flex_1().min_w(0).justify_end()
-          .child(priceBox(`bw-price-${symbol}`, number(quote), row.failed ? t.dim : t.foreground, row.mark)))
+          .child(row.price))
         .child(div().flex_none().w(CODE_W).pl(4).text_size(11).text_color(t.dim).child(quote.currency ?? ""))
       : cell("price").pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row))),
     change: () => cell("change").text_right().whitespace_nowrap().text_color(color).child(quote ? signed(quote) : ""),

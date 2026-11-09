@@ -68,7 +68,8 @@ export function decodeStockList(symbols, response, now) {
     if (price) priced = true;
     const tradeTime = time(row.regularMarketTime);
     if (!price || tradeTime === null || taipeiDay(tradeTime) !== today || row.exchangeDataDelayedBy !== 0) continue;
-    if (!withinLimits(price, number(row.limitUpPrice), number(row.limitDownPrice))) {
+    const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
+    if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("yahootw.outOfLimits");
       continue;
     }
@@ -81,7 +82,7 @@ export function decodeStockList(symbols, response, now) {
       open: number(row.regularMarketOpen),
       high: number(row.regularMarketDayHigh),
       low: number(row.regularMarketDayLow),
-      ...limitPair(number(row.limitUpPrice), number(row.limitDownPrice)),
+      ...limits,
       tradeTime,
       day: today,
       fetchedAt: now,

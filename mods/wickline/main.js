@@ -539,11 +539,8 @@ export default class Wickline extends View {
     const limit = !failed && priceLimit(quote);
     if (!limit) return null;
     const up = limit === "up";
-    return {
-      limit,
-      color: this.changeColor(t, up ? 1 : -1),
-      tip: this.tx(up ? "quote.limitUp" : "quote.limitDown", { price: number(quote, up ? quote.limitUp : quote.limitDown) }),
-    };
+    // At its limit the price is the limit, so its own text names it.
+    return { limit, color: this.changeColor(t, up ? 1 : -1), tip: this.tx(up ? "quote.limitUp" : "quote.limitDown", { price: number(quote) }) };
   }
 
   // Red-up or green-up, by the color setting (automatic: red-up in every language but English). A day
