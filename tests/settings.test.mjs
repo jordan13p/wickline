@@ -7,7 +7,7 @@ import {
   misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
 } from "../mods/wickline/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
-import { FINNHUB_STOP_CODES, FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
+import { FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
 import { YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 
@@ -336,12 +336,13 @@ test("finnhubKeyUsable", () => {
   // The saved key counts while it stays and Finnhub has not stopped on it.
   assert.equal(finnhubKeyUsable({ ...none, saved: true }), true);
   assert.equal(finnhubKeyUsable({ ...none, saved: true, removing: true }), false);
-  for (const code of FINNHUB_STOP_CODES) {
-    assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code }] }), false, code);
+  // Stopped is what problems() says, whatever the code: no list of codes to keep in step.
+  for (const code of ["finnhub.invalidKey", "finnhub.secretUnreadable", "finnhub.someNewStop"]) {
+    assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code, stopped: true }] }), false, code);
   }
-  assert.deepEqual(FINNHUB_STOP_CODES, ["finnhub.invalidKey", "finnhub.redirected", "finnhub.badUrl"]);
+  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code: "finnhub.invalidKey" }] }), true);
   assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code: "finnhub.rateLimited" }] }), true);
-  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "yahoo", code: "finnhub.invalidKey" }] }), true);
+  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "yahoo", code: "finnhub.invalidKey", stopped: true }] }), true);
 });
 
 test("marketProblem", () => {

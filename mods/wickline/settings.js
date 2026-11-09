@@ -4,7 +4,7 @@
 import { LANGUAGES } from "./i18n.js";
 import { marketOrder } from "./markets.js";
 import { BINANCE_URL } from "./providers/binance.js";
-import { FINNHUB_STOP_CODES, FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
+import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { YAHOOTW_CONSENT_VERSION } from "./providers/yahootw.js";
 
@@ -81,11 +81,11 @@ export function keyChange({ provider, typed, saved, removing }) {
 
 /**
  * A key Finnhub would use after Save: one typed (trimmed) and well formed (`typedValid`), or the saved
- * one while it stays (no Remove) and `health` (each source's current problem) has no stop for Finnhub.
+ * one while it stays (no Remove) and `health` (each source's current problem) has not stopped Finnhub.
  */
 export function finnhubKeyUsable({ typed, typedValid, saved, removing, health }) {
   return (typed !== "" && typedValid)
-    || (saved && !removing && !health.some((p) => p.provider === "finnhub" && FINNHUB_STOP_CODES.includes(p.code)));
+    || (saved && !removing && !health.some((p) => p.provider === "finnhub" && p.stopped));
 }
 
 // Each Taiwan source's consent, as [key in sources.tw, current version].

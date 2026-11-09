@@ -233,7 +233,7 @@ test("MIS stays off until the current consent is given", async () => {
     assert.equal(misCount(host), 0, JSON.stringify(prefs));
     assert.equal(w.shown("2330.TW").source, "yahoo");
     const asked = prefs?.sources.tw.provider === "mis";
-    assert.deepEqual(w.problems(), asked ? [{ provider: "mis", code: "mis.reconfirm", params: {} }] : []);
+    assert.deepEqual(w.problems(), asked ? [{ provider: "mis", code: "mis.reconfirm", params: {}, stopped: true }] : []);
     await stop(w, host, runs);
   }
 });

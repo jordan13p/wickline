@@ -98,7 +98,7 @@ test("a saved Finnhub address off https://finnhub.io sends no request: the key n
     assert.ok(host.requests.length > 0, "Yahoo still asked");
     assert.equal(w.shown("AAPL").source, "yahoo", finnhubUrl);
     // On the status line and the US card (the dialog shows problems()).
-    assert.deepEqual(w.problems().filter((p) => p.provider === "finnhub"), [{ provider: "finnhub", code: "finnhub.badUrl", params: {} }], finnhubUrl);
+    assert.deepEqual(w.problems().filter((p) => p.provider === "finnhub"), [{ provider: "finnhub", code: "finnhub.badUrl", params: {}, stopped: true }], finnhubUrl);
     // Fixed in Settings: Finnhub runs.
     host.prefs = finnhubOn({ finnhubUrl: FINNHUB_URL });
     w.sync();
@@ -132,7 +132,7 @@ test("an answer from another address stops Finnhub: the key is not sent again", 
   await advance(host, 120_000);
   assert.equal(finnhubCount(host), 1);
   assert.equal(w.sources.finnhub.disabled, true);
-  assert.deepEqual(w.problems().find((p) => p.provider === "finnhub"), { provider: "finnhub", code: "finnhub.redirected", params: {} });
+  assert.deepEqual(w.problems().find((p) => p.provider === "finnhub"), { provider: "finnhub", code: "finnhub.redirected", params: {}, stopped: true });
   await stop(w, host, runs);
   assert.ok("finnhub.redirected" in MESSAGES_EN);
   for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.redirected"], lang);
@@ -260,7 +260,7 @@ test("Finnhub stays off without its choice and a key", async () => {
     assert.equal(finnhubCount(host), 0, JSON.stringify(prefs));
     assert.equal(w.shown("AAPL").source, "yahoo");
     assert.equal(w.overCap("AAPL"), false);
-    assert.deepEqual(w.problems(), problem ? [{ provider: "finnhub", code: problem, params: {} }] : []);
+    assert.deepEqual(w.problems(), problem ? [{ provider: "finnhub", code: problem, params: {}, stopped: true }] : []);
     await stop(w, host, runs);
   }
 });
@@ -273,7 +273,7 @@ test("an unreadable secrets file is a visible problem", async () => {
   const runs = start(w, host);
   await advance(host, 31_000);
   assert.equal(finnhubCount(host), 0);
-  assert.deepEqual(w.problems(), [{ provider: "finnhub", code: "finnhub.secretUnreadable", params: {} }]);
+  assert.deepEqual(w.problems(), [{ provider: "finnhub", code: "finnhub.secretUnreadable", params: {}, stopped: true }]);
   assert.ok(STRINGS.en["finnhub.secretUnreadable"]);
   await stop(w, host, runs);
 });
@@ -309,7 +309,8 @@ test("401 stops Finnhub until the key changes", async () => {
     w.add("AAPL"); w.add("MSFT");
     const runs = start(w, host);
     await advance(host, 1_001);
-    assert.deepEqual(w.problems(), [{ provider: "finnhub", code: "finnhub.invalidKey", params: {} }]);
+    // Refused: the source cannot run until its settings change, which the settings dialog reads.
+    assert.deepEqual(w.problems(), [{ provider: "finnhub", code: "finnhub.invalidKey", params: {}, stopped: true }]);
     // The round stops at the first refusal; both rows fall back with the reason.
     assert.equal(finnhubCount(host), 1);
     for (const symbol of ["AAPL", "MSFT"]) {
@@ -405,6 +406,7 @@ test("a Finnhub rate limit falls back to Yahoo for the cooldown", async () => {
   host.finnhub = () => ({ status: 429, ok: false, text: "" });
   await advance(host, 15_001);
   assert.equal(w.shown("AAPL").source, "yahoo");
+  // Limited, not stopped: the key still works after the cooldown.
   assert.deepEqual(w.problems(), [{ provider: "finnhub", code: "finnhub.rateLimited", params: {} }]);
   assert.ok(w.sources.finnhub.retryAt >= 75_000);
   await stop(w, host, runs);

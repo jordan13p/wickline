@@ -470,7 +470,7 @@ test("only MIS consented: only MIS and Yahoo Finance are asked for Taiwan", asyn
     assert.ok(host.requests.some((url) => url.startsWith(MIS_URL)));
     assert.ok(host.requests.every((url) => url.startsWith(MIS_URL) || url.startsWith(yahooUrl("2330.TW"))), host.requests.join());
     assert.equal(w.shown("2330.TW").source, "mis");
-    assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.reconfirm", params: {} }]);
+    assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.reconfirm", params: {}, stopped: true }]);
   });
 });
 

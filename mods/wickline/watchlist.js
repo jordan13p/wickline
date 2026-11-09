@@ -264,14 +264,18 @@ export class Watchlist {
 
   /**
    * One entry per provider that has a problem now (rate limited, unreachable, timed out, refused),
-   * or that is chosen but cannot run (consent to confirm again).
+   * or that is chosen but cannot run (consent to confirm again). `stopped: true` marks a source that
+   * makes no request until its settings change (a notice, or a refusal that disabled it), so the
+   * settings dialog reads that from here instead of from a list of codes.
    */
   problems() {
     const settings = readSettings(this.host.settings());
     return PROVIDERS.flatMap((provider) => {
+      const state = this.sources[provider.id];
       const code = SWITCHES[provider.id]?.notice(settings, this);
-      const problem = code ? notice(code) : this.sources[provider.id].problem;
-      return problem ? [{ provider: provider.id, ...problem }] : [];
+      const problem = code ? notice(code) : state.problem;
+      if (!problem) return [];
+      return [{ provider: provider.id, ...problem, ...(code || state.disabled ? { stopped: true } : {}) }];
     });
   }
 

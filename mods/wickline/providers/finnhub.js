@@ -11,10 +11,6 @@ const FINNHUB_ADDRESS = /^https:\/\/finnhub\.io(\/[^\s?#]*)?$/i;
 // The final address of an answer (after any redirect) is on finnhub.io over https.
 const FINNHUB_ORIGIN = /^https:\/\/finnhub\.io(?=[/?#]|$)/i;
 
-// The problems that stop Finnhub until its settings change: the key refused, or an address it may not be
-// sent to (redirected here, refused before a round by the watchlist). A saved key under one is not usable.
-export const FINNHUB_STOP_CODES = ["finnhub.invalidKey", "finnhub.redirected", "finnhub.badUrl"];
-
 /** The saved Finnhub address may be sent the key. */
 export function finnhubAddressOk(url) {
   return typeof url === "string" && FINNHUB_ADDRESS.test(url.trim());
