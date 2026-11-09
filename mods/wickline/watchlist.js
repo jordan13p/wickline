@@ -24,7 +24,7 @@ const PROVIDERS = [binance, yahootw, mis, finnhub, yahoo];
 const OVERLAYS = PROVIDERS.filter((provider) => provider.overlay);
 const OVERLAY_ORDER = OVERLAYS.map((provider) => provider.id);
 // Overlay sources the person turns on in Settings: whether each is on now (given this watchlist, which
-// holds the key read from the secrets file), what its card and status line say while it is chosen but
+// holds the key read from the secrets file), what its settings row and status line say while it is chosen but
 // cannot run, and, for a source that can refuse the key, the settings whose change lets it try again.
 const SWITCHES = {
   yahootw: { on: yahootwEnabled, notice: (settings) => (yahootwReconfirm(settings) ? "yahootw.reconfirm" : null) },
