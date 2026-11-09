@@ -57,7 +57,7 @@ export function layoutFor(size) {
  * 40 before the copy is laid out.
  */
 export function sparkWidth(width) {
-  if (width === null) return 40;
+  if (!(width > 0)) return 40;
   const room = width - 2 * GUTTER - (NUMBER_W + CODE_W) - 2 * COLUMN_GAP - NAME_ROOM;
   return Math.max(40, Math.min(120, room));
 }

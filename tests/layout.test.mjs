@@ -99,6 +99,7 @@ test("the sidebar line widens with the pane, after the name", () => {
   assert.equal(sparkWidth(700), 120);
   // Not laid out yet.
   assert.equal(sparkWidth(null), 40);
+  assert.equal(sparkWidth(undefined), 40);
 });
 
 test("a docked block asks for the card with card: true, and nothing else does", () => {
