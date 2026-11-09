@@ -568,11 +568,14 @@ export class Watchlist {
         }
         const request = requests[index];
         if (request.kind === "line") {
-          const limited = await this.line(provider, state, request, io, current);
+          const failed = await this.line(provider, state, request, io, current);
+          if (!failed) continue;
           // A rate-limited line ends the round: no more lines or quotes until the cooldown ends. An
           // overlay source's prices all go too (index -1), so its rows fall to the next source.
-          if (limited) { this.backOff(provider, state, requests, provider.overlay ? -1 : index, limited); return; }
-          continue;
+          if (failed.retryAfterMs !== undefined) { this.backOff(provider, state, requests, provider.overlay ? -1 : index, failed); return; }
+          // A down or hung source: its prices are in, so the round ends with the problem shown.
+          state.problem = coded(failed);
+          return;
         }
         const wait = spacing - (this.host.now() - state.lastRequestAt);
         if (wait > 0) await io.sleep(wait);
@@ -717,7 +720,9 @@ export class Watchlist {
    * A symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. A
    * base provider writes the base quote's line and a failure leaves it as it was; an overlay provider
    * keeps its own line beside its price, and an answer without one (a failure, or no point from today)
-   * drops it. Returns the error when the source rate limited the request (the caller backs off), else nothing.
+   * drops it. Returns the error that ends the round: the source rate limited the request (the caller backs
+   * off) or, for a provider with `linesPerRound` (its lines come after all its prices), it is down or hung, so
+   * the next price round is not held up by more line timeouts. Else nothing.
    */
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
@@ -738,7 +743,8 @@ export class Watchlist {
       }
     }
     const error = result?.errors?.[symbol];
-    return error?.retryAfterMs !== undefined ? error : null;
+    if (error?.retryAfterMs !== undefined) return error;
+    return provider.linesPerRound && error && SOURCE_DOWN.test(error.code) ? error : null;
   }
 
   async get(request) {

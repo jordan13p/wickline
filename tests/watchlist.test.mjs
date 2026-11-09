@@ -553,6 +553,24 @@ test("a line never outlives its price", async () => {
   });
 });
 
+test("a hung line keeps the price, drops the line and shows the problem until a clean round", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(host.clock - 5_000) });
+  await firstRound(host, async (w) => {
+    assert.ok(w.lines.yahootw["2330.TW"]);
+    host.line = () => new Promise(() => {});
+    // The line is due again at 120 s; it times out at 130 s.
+    await advance(host, TW_NOW + 130_000);
+    assert.equal(w.lines.yahootw["2330.TW"], undefined);
+    assert.equal(w.shown("2330.TW").source, "yahootw");
+    assert.deepEqual(w.shown("2330.TW").series, BASE_SERIES);
+    assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } }]);
+    // The next round sends no line (not due), so it is clean.
+    host.line = (symbol) => tickAt(symbol, host.clock - 60_000, [2200, 2205]);
+    await advance(host, TW_NOW + 141_000);
+    assert.deepEqual(w.problems(), []);
+  });
+});
+
 test("identity", () => {
   assert.equal(WATCHLIST_KEY, "wickline.watchlist.v1");
 });

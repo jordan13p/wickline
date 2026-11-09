@@ -696,3 +696,23 @@ test("a 429 on a line backs the whole source off and hands its rows on", async (
   assert.equal(host.requests.filter((url) => url.startsWith(YAHOOTW_BASE)).length, sent);
   await stop(w, host, runs);
 });
+
+test("a hung line costs one timeout per round, and the next price round keeps its cadence", async () => {
+  const host = yahootwHost(["2330.TW", "0050.TW", "6488.TWO"]);
+  host.line = never;
+  const prices = [];
+  const fetch = host.fetch;
+  host.fetch = (url, headers) => {
+    if (url.startsWith(YAHOOTW_BASE) && !isLine(url)) prices.push(host.clock - TW_START);
+    return fetch(url, headers);
+  };
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_START + 45_000);
+  // Each round: its prices, one line that times out after 10 s, then the 10 s interval.
+  assert.deepEqual(prices, [0, 20_000, 40_000]);
+  assert.deepEqual(lineSymbols(host), ["2330.TW", "0050.TW", "6488.TWO"]);
+  assert.equal(w.sources.yahootw.retryAt, 0);
+  assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } }]);
+  await stop(w, host, runs);
+});
