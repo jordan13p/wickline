@@ -406,3 +406,11 @@ test("no tracked file names the old working name", () => {
 test("line heights are given in pixels", () => {
   for (const file of jsFiles()) assert.doesNotMatch(code(read(file)), /\.line_height\(\s*[\d.]/, relativeName(file));
 });
+
+// A scroll box inside the scrolling page clipped the statements and let them run past its edge: the page
+// alone scrolls, and every text wraps to the page width.
+test("the settings dialog scrolls only its page", () => {
+  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
+  assert.equal(dialog.match(/overflow_y_scrollbar\(/g).length, 1);
+  assert.match(dialog, /id\("bw-settings-pane"\)[^;]*overflow_y_scrollbar\(/);
+});

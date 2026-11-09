@@ -70,9 +70,9 @@ export function segmented(t, id, choices, current, onPick) {
 
 // A box drawn in the theme (accent-filled while ticked) and its label; a click on either toggles it.
 export function checkbox(t, id, checked, label, onChange) {
-  return Checkbox.new(id).checked(checked).cursor_pointer()
+  return Checkbox.new(id).w_full().min_w(0).checked(checked).cursor_pointer()
     .on_change((value, cx) => { onChange(value); cx.notify(); })
-    .child(h_flex().gap(8).items_start()
+    .child(h_flex().w_full().min_w(0).gap(8).items_start()
       .child(div().flex_none().mt(2).w(14).h(14).rounded(3).border_1().border_color(checked ? t.accent : t.border)
         .flex().items_center().justify_center().text_size(10).text_color(t.background)
         .when(checked, (el) => el.bg(t.accent).child("✓")))
@@ -89,5 +89,6 @@ export function toggle(t, id, on, label, onChange) {
 }
 
 export function note(t, text) {
-  return div().text_size(11.5).text_color(t.dim).child(text);
+  // Its full width, and no wider, so a long note wraps at its column's edge.
+  return div().w_full().min_w(0).text_size(11.5).text_color(t.dim).child(text);
 }

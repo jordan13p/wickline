@@ -87,7 +87,7 @@ function pageTitle(view, t, market, status) {
 
 // A market's page: its title, then its parts (a part may be null).
 function marketPage(view, t, market, status, ...parts) {
-  return v_flex().gap(10).child(pageTitle(view, t, market, status)).children(parts.filter(Boolean));
+  return v_flex().w_full().min_w(0).gap(10).child(pageTitle(view, t, market, status)).children(parts.filter(Boolean));
 }
 
 function heading(view, t, key) {
@@ -110,13 +110,13 @@ function alwaysOn(view, t) {
 // What sits under a source's row, lined up with its name; nothing when there is nothing to show.
 function details(...children) {
   const shown = children.filter(Boolean);
-  return shown.length ? v_flex().pl(18).gap(8).children(shown) : null;
+  return shown.length ? v_flex().w_full().min_w(0).pl(18).gap(8).children(shown) : null;
 }
 
 // The source's problem when the dialog opened, if it had one.
 function healthLine(view, t, provider) {
   const problem = view.health.find((entry) => entry.provider === provider);
-  return problem ? div().text_size(11.5).text_color(t.blocked).child(view.say(problem)) : null;
+  return problem ? div().w_full().min_w(0).text_size(11.5).text_color(t.blocked).child(view.say(problem)) : null;
 }
 
 // A labeled input of the settings dialog, red while its value is refused.
@@ -125,7 +125,7 @@ function field(view, t, label, state, focused, error) {
     div().text_size(11).text_color(t.muted).child(label),
     Input.new(state).h(30).px(8).rounded(6).border_1().border_color(error ? t.ansi1 : focused ? t.accent : t.input)
       .bg(t.background).text_size(12).text_color(t.foreground),
-    error ? div().text_size(11.5).text_color(t.ansi1).child(view.tx(error)) : null,
+    error ? div().w_full().min_w(0).text_size(11.5).text_color(t.ansi1).child(view.tx(error)) : null,
   ];
 }
 
@@ -156,32 +156,36 @@ function advanced(view, t, market, fields, error) {
   return [header, ...(open ? fields : [])];
 }
 
-// A Taiwan source switched on: once consent to its current statement is saved, one line that shows the
-// statement on request; until then the statement in a scrolling box, which text prevails and the box
-// (Save waits for it). The statements show in the reader's language; the Traditional Chinese text prevails.
+// A text link: `muted`, `foreground` under the pointer.
+function link(t, id, label, onClick) {
+  return div().id(id).flex_none().cursor_pointer().text_color(t.muted).hover((s) => s.text_color(t.foreground))
+    .on_click((_e, cx) => onClick(cx)).child(label);
+}
+
+// A Taiwan source switched on: once consent to its current statement is saved, one line, "✓ Consented ·
+// View", whose link reads Hide in the same place while the statement shows below it; until then the
+// statement, which text prevails and the box (Save waits for it). The statements show in full in the
+// reader's language, wrapped to the page, which scrolls; the Traditional Chinese text prevails.
 function consentParts(view, t, source) {
   const tw = view.draft.sources.tw;
   const [ack, version] = CONSENTS[source];
   const agreed = consentGiven(tw, source);
   const collapsible = consentCollapsed(view.settings, view.draft, source);
-  const open = view.statementOpen.has(source);
-  const flip = (cx) => {
-    if (open) view.statementOpen.delete(source);
-    else view.statementOpen.add(source);
-    cx.notify();
-  };
-  if (collapsible && !open) {
-    return [h_flex().gap(8).items_center()
-      .child(div().text_size(11.5).text_color(t.muted).child(`✓ ${view.tx("settings.consented")}`))
-      .child(button(t, `bw-${source}-view`, view.tx("settings.viewStatement"), flip))];
-  }
+  const open = !collapsible || view.statementOpen.has(source);
+  const consented = collapsible ? h_flex().w_full().min_w(0).gap(4).items_center().text_size(11.5)
+    .child(div().flex_none().text_color(t.muted).child(`✓ ${view.tx("settings.consented")} ·`))
+    .child(link(t, `bw-${source}-statement-link`, view.tx(open ? "settings.hideStatement" : "settings.viewStatement"), (cx) => {
+      if (open) view.statementOpen.delete(source);
+      else view.statementOpen.add(source);
+      cx.notify();
+    })) : null;
+  if (!open) return [consented];
   return [
-    div().id(`bw-${source}-statement`).max_h(140).overflow_y_scrollbar().text_size(11.5).text_color(t.muted)
-      .child(view.tx(`${source}.statement`)),
+    consented,
+    div().w_full().min_w(0).text_size(11.5).text_color(t.muted).child(view.tx(`${source}.statement`)),
     note(t, view.tx(`${source}.prevails`)),
     checkbox(t, `bw-${source}-consent`, agreed, view.tx(`${source}.consent`), (on) => { tw[ack] = on ? { version } : null; }),
     agreed ? null : note(t, view.tx(`${source}.consentNeeded`)),
-    collapsible ? h_flex().child(button(t, `bw-${source}-hide`, view.tx("settings.hideStatement"), flip)) : null,
   ];
 }
 
@@ -234,7 +238,7 @@ function finnhubParts(view, t, errors) {
     div().text_size(11).text_color(t.muted).child(view.tx("sources.us.key")),
     saved,
     key,
-    keyError ? div().text_size(11.5).text_color(t.ansi1).child(view.tx(keyError)) : null,
+    keyError ? div().w_full().min_w(0).text_size(11.5).text_color(t.ansi1).child(view.tx(keyError)) : null,
     saved && note(t, view.tx(view.keyRemoving ? "sources.us.keyRemoveHint" : "sources.us.keyReplace")),
     note(t, view.tx("sources.us.keyNote")),
     ...field(view, t, view.tx("sources.us.budget"), view.budgetInput, view.budgetFocused, budgetError),
@@ -256,7 +260,7 @@ function usPage(view, t, errors, status) {
       toggle(t, "bw-finnhub", on, view.tx("src.finnhub"), (value) => { us.provider = value ? "finnhub" : "yahoo"; })),
     details(
       healthLine(view, t, "finnhub"),
-      view.keyWarning ? div().text_size(11.5).text_color(t.blocked).child(view.say(view.keyWarning)) : null,
+      view.keyWarning ? div().w_full().min_w(0).text_size(11.5).text_color(t.blocked).child(view.say(view.keyWarning)) : null,
       ...(on ? finnhubParts(view, t, errors) : saved ? [
         div().text_size(11).text_color(t.muted).child(view.tx("sources.us.key")),
         saved,
@@ -289,7 +293,7 @@ function otherPage(view, t, _errors, status) {
 
 // The interface language, then the gain and loss colors, then Herdr's own appearance settings.
 function displayTab(view, t) {
-  return v_flex().gap(12)
+  return v_flex().w_full().min_w(0).gap(12)
     .child(div().font_semibold().child(view.tx("display.language")))
     .child(segmented(t, "bw-language", LANGUAGES.map((language) => [language, LANGUAGE_LABELS[language]]), view.draft.language,
       (language) => { view.draft.language = language; }))
@@ -303,8 +307,8 @@ function displayTab(view, t) {
 }
 
 function disclaimerTab(view, t) {
-  const paragraph = (key) => div().text_color(t.muted).child(view.tx(key));
-  return v_flex().gap(10)
+  const paragraph = (key) => div().w_full().min_w(0).text_color(t.muted).child(view.tx(key));
+  return v_flex().w_full().min_w(0).gap(10)
     .child(div().font_semibold().child(view.tx("disclaimer.title")))
     .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"].map(paragraph))
     .child(note(t, view.tx("disclaimer.prevails")))
