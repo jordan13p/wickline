@@ -29,6 +29,9 @@ const MARKET_ORDER = {
   ko: ["kr", "us", "tw", "hk", "cn", "jp", "crypto", "other"],
 };
 
+/** Every market in `lang`'s fixed order; a language without its own order takes English's. */
+export const marketOrder = (lang) => MARKET_ORDER[lang] ?? MARKET_ORDER.en;
+
 /**
  * The filters to offer: `all` with the list's length, then each market on the list in `lang`'s fixed order,
  * with its count (so the counts add up to `all`). Empty below the thresholds.
@@ -39,7 +42,7 @@ export function marketFilters(symbols, lang = "en") {
     const market = marketOf(symbol);
     counts[market] = (counts[market] ?? 0) + 1;
   }
-  const listed = (MARKET_ORDER[lang] ?? MARKET_ORDER.en).filter((id) => counts[id]);
+  const listed = marketOrder(lang).filter((id) => counts[id]);
   if (symbols.length < FILTER_MIN_SYMBOLS || listed.length < FILTER_MIN_MARKETS) return [];
   return [{ id: "all", count: symbols.length }, ...listed.map((id) => ({ id, count: counts[id] }))];
 }
