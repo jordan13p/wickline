@@ -140,12 +140,11 @@ export function marketState(settings, market, { keyAvailable = false } = {}) {
 }
 
 /**
- * The market's source is failing: the draft keeps the source the saved settings use and `health` lists
- * it. A changed choice is not judged by the old one's problem.
+ * The market's source is failing: `state` (marketState over the draft) keeps the source the saved
+ * settings use and `health` lists it. A changed choice is not judged by the old one's problem.
  */
-export function marketProblem({ saved, draft, health, market, keyAvailable }) {
-  const { source } = marketState(draft, market, { keyAvailable });
-  return source === marketState(saved, market, { keyAvailable }).source && health.some((entry) => entry.provider === source);
+export function marketProblem({ state, saved, health, market, keyAvailable }) {
+  return state.source === marketState(saved, market, { keyAvailable }).source && health.some((entry) => entry.provider === state.source);
 }
 
 /**

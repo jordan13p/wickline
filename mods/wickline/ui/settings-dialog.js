@@ -67,7 +67,7 @@ export function settingsView(view, t) {
  */
 function marketStatus(view, market, keyAvailable) {
   const state = marketState(view.draft, market, { keyAvailable });
-  const problem = marketProblem({ saved: view.settings, draft: view.draft, health: view.health, market, keyAvailable });
+  const problem = marketProblem({ state, saved: view.settings, health: view.health, market, keyAvailable });
   const dotState = problem ? "stalled" : state.live ? "live" : "delayed";
   const label = view.tx(problem ? "settings.problem" : state.live ? "freshness.live" : "settings.delayed");
   return { ...state, problem, dotState, label };

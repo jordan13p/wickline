@@ -348,19 +348,21 @@ test("marketProblem", () => {
   const misOn = tw({ mis: true, misAck: { version: MIS_CONSENT_VERSION } });
   const off = readSettings(undefined);
   const failing = (provider) => [{ provider, code: `${provider}.unreachable` }];
+  // The status passes in the draft's state, computed once.
+  const problem = ({ draft, keyAvailable, ...rest }) => marketProblem({ ...rest, state: marketState(draft, rest.market, { keyAvailable }), keyAvailable });
   // The source kept from the saved settings and listed in health.
-  assert.equal(marketProblem({ saved: misOn, draft: misOn, health: failing("mis"), market: "tw" }), true);
-  assert.equal(marketProblem({ saved: off, draft: off, health: failing("yahoo"), market: "tw" }), true);
+  assert.equal(problem({ saved: misOn, draft: misOn, health: failing("mis"), market: "tw" }), true);
+  assert.equal(problem({ saved: off, draft: off, health: failing("yahoo"), market: "tw" }), true);
   // Another source failing is not this market's problem.
-  assert.equal(marketProblem({ saved: misOn, draft: misOn, health: failing("yahoo"), market: "tw" }), false);
-  assert.equal(marketProblem({ saved: misOn, draft: misOn, health: [], market: "tw" }), false);
+  assert.equal(problem({ saved: misOn, draft: misOn, health: failing("yahoo"), market: "tw" }), false);
+  assert.equal(problem({ saved: misOn, draft: misOn, health: [], market: "tw" }), false);
   // A changed choice is not judged by the saved source's problem.
-  assert.equal(marketProblem({ saved: misOn, draft: off, health: failing("mis"), market: "tw" }), false);
-  assert.equal(marketProblem({ saved: off, draft: misOn, health: failing("mis"), market: "tw" }), false);
+  assert.equal(problem({ saved: misOn, draft: off, health: failing("mis"), market: "tw" }), false);
+  assert.equal(problem({ saved: off, draft: misOn, health: failing("mis"), market: "tw" }), false);
   // keyAvailable picks the US source on both sides.
   const finnhub = us({ provider: "finnhub" });
-  assert.equal(marketProblem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: true }), true);
-  assert.equal(marketProblem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: false }), false);
+  assert.equal(problem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: true }), true);
+  assert.equal(problem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: false }), false);
 });
 
 test("settingsMarkets follows the language", () => {
