@@ -15,7 +15,8 @@ import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, next
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed, validateSettings,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, finnhubKeyUsable, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed,
+  validateSettings,
 } from "./settings.js";
 import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
@@ -520,13 +521,13 @@ export default class Wickline extends View {
     return validateSettings(this.draft, { finnhubKey: this.keyInput.value(), keySaved: this.keyEnding !== null && !this.keyRemoving });
   }
 
-  // A key Finnhub would use after Save: one typed and well formed, or the saved one while it stays and
-  // Finnhub has not refused it. The dialog reads the US market as live only with one.
-  keyAvailable() {
-    return (this.keyInput.value().trim() !== "" && !this.draftErrors()["sources.us.key"])
-      || (this.keyEnding !== null && !this.keyRemoving
-        && !this.health.some((p) => p.provider === "finnhub"
-          && ["finnhub.invalidKey", "finnhub.redirected", "finnhub.badUrl"].includes(p.code)));
+  // Whether Finnhub would have a key after Save, given `errors` (draftErrors): the dialog reads the US
+  // market as live only with one.
+  keyAvailable(errors) {
+    return finnhubKeyUsable({
+      typed: this.keyInput.value().trim(), typedValid: !errors["sources.us.key"],
+      saved: this.keyEnding !== null, removing: this.keyRemoving, health: this.health,
+    });
   }
 
   // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay. A new

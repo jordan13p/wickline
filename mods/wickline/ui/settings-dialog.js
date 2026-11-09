@@ -5,7 +5,9 @@ import { h_flex, v_flex, Input } from "gpui-base";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { TAIWAN_YAHOO_DELAY_S } from "../freshness.js";
 import { finnhubCap } from "../providers/finnhub.js";
-import { CONSENTS, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, marketState, settingsMarkets } from "../settings.js";
+import {
+  CONSENTS, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, marketProblem, marketState, settingsMarkets,
+} from "../settings.js";
 import { button, checkbox, dot, note, segmented, toggle } from "./parts.js";
 
 export const SETTINGS_TABS = [...SETTINGS_MARKETS, "display", "disclaimer"];
@@ -18,6 +20,8 @@ const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colo
 export function settingsView(view, t) {
   const errors = view.draftErrors();
   const invalid = Object.keys(errors).length > 0 || !view.keyLoaded || view.saving;
+  const keyAvailable = view.keyAvailable(errors);
+  const statuses = Object.fromEntries(SETTINGS_MARKETS.map((market) => [market, marketStatus(view, market, keyAvailable)]));
   const item = (tab, label, mark = null) => h_flex().id(`bw-tab-${tab}`).px(8).h(28).gap(6).items_center().rounded(5).cursor_pointer()
     .text_color(tab === view.tab ? t.foreground : t.muted).when(tab === view.tab, (el) => el.bg(t.hover).font_semibold())
     .hover((s) => s.bg(t.hover).text_color(t.foreground))
@@ -28,17 +32,16 @@ export function settingsView(view, t) {
     .child(div().px(8).pb(8).text_size(13).font_semibold().text_color(t.foreground).child(view.tx("settings.title")))
     .child(div().px(8).pb(2).text_size(11).text_color(t.muted).child(view.tx("settings.group.sources")))
     .children(settingsMarkets(view.lang).map((market) => {
-      const status = marketStatus(view, market);
+      const status = statuses[market];
       return item(market, view.tx(`market.${market}`), h_flex().flex_none().gap(5).items_center()
-        .child(dot(t, status.problem ? "stalled" : status.live ? "live" : "delayed"))
-        .child(div().text_size(11).text_color(status.problem ? t.blocked : t.dim)
-          .child(view.tx(status.problem ? "settings.problem" : status.live ? "freshness.live" : "settings.delayed"))));
+        .child(dot(t, status.dotState))
+        .child(div().text_size(11).text_color(status.problem ? t.blocked : t.dim).child(status.label)));
     }))
     .child(div().h(10))
     .child(item("display", view.tx("settings.tab.display")))
     .child(item("disclaimer", view.tx("settings.tab.disclaimer")));
   const page = SETTINGS_MARKETS.includes(view.tab)
-    ? v_flex().gap(10).child(pageTitle(view, t, view.tab)).children(TABS[view.tab](view, t, errors).filter(Boolean))
+    ? v_flex().gap(10).child(pageTitle(view, t, view.tab, statuses[view.tab])).children(TABS[view.tab](view, t, errors).filter(Boolean))
     : TABS[view.tab](view, t);
   const pane = v_flex().id("bw-settings-pane").flex_1().min_w(0).min_h(0).p(18).gap(14).overflow_y_scrollbar().child(page);
   const save = h_flex().id("bw-settings-save").flex_none().h(28).px(14).items_center().rounded(5).font_semibold()
@@ -61,15 +64,15 @@ export function settingsView(view, t) {
 }
 
 /**
- * What a market would use after Save (marketState over the draft), plus `problem`: the panel saw that
- * source failing and the draft keeps the saved choice, so it never reads live while it does not work.
+ * What a market would use after Save (marketState over the draft), plus `problem` (marketProblem), so it
+ * never reads live while it does not work, and the dot and short label the sidebar and the title show.
  */
-function marketStatus(view, market) {
-  const keyAvailable = view.keyAvailable();
+function marketStatus(view, market, keyAvailable) {
   const state = marketState(view.draft, market, { keyAvailable });
-  const problem = state.source === marketState(view.settings, market, { keyAvailable }).source
-    && view.health.some((entry) => entry.provider === state.source);
-  return { ...state, problem };
+  const problem = marketProblem({ saved: view.settings, draft: view.draft, health: view.health, market, keyAvailable });
+  const dotState = problem ? "stalled" : state.live ? "live" : "delayed";
+  const label = view.tx(problem ? "settings.problem" : state.live ? "freshness.live" : "settings.delayed");
+  return { ...state, problem, dotState, label };
 }
 
 // How late Yahoo Finance is for the market: 20 minutes for Taiwan, by exchange elsewhere.
@@ -77,13 +80,12 @@ function delayText(view, market) {
   return market === "tw" ? view.tx("settings.delayedMinutes", { minutes: TAIWAN_YAHOO_DELAY_S / 60 }) : view.tx("settings.delayed");
 }
 
-// The market's name, and on the right the state and source the unsaved choices would use.
-function pageTitle(view, t, market) {
-  const status = marketStatus(view, market);
-  const state = status.problem ? view.tx("settings.problem") : status.live ? view.tx("freshness.live") : delayText(view, market);
+// The market's name, and on the right the state and source the unsaved choices would use; a delay says how long.
+function pageTitle(view, t, market, status) {
+  const state = status.dotState === "delayed" ? delayText(view, market) : status.label;
   return h_flex().gap(6).items_center()
     .child(div().flex_1().min_w(0).truncate().text_size(13).font_semibold().child(view.tx(`sources.${market}.title`)))
-    .child(dot(t, status.problem ? "stalled" : status.live ? "live" : "delayed"))
+    .child(dot(t, status.dotState))
     .child(div().flex_none().text_size(11.5).text_color(status.problem ? t.blocked : t.dim)
       .child(`${state} · ${view.tx(`src.${status.source}`)}`));
 }

@@ -2,11 +2,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, keyChange, marketState, mergeSettings,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, finnhubKeyUsable, firstDraftError, keyChange, marketProblem, marketState,
+  mergeSettings,
   misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
 } from "../mods/wickline/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
-import { FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
+import { FINNHUB_STOP_CODES, FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
 import { YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 
@@ -323,6 +324,43 @@ test("marketState: US", () => {
 test("marketState: crypto and other", () => {
   assert.deepEqual(marketState(readSettings(undefined), "crypto"), { live: true, source: "binance" });
   assert.deepEqual(marketState(readSettings(undefined), "other"), { live: false, source: "yahoo" });
+});
+
+test("finnhubKeyUsable", () => {
+  const none = { typed: "", typedValid: true, saved: false, removing: false, health: [] };
+  assert.equal(finnhubKeyUsable(none), false);
+  // A typed key counts once well formed, whatever happens to the saved one.
+  assert.equal(finnhubKeyUsable({ ...none, typed: "abc" }), true);
+  assert.equal(finnhubKeyUsable({ ...none, typed: "abc", typedValid: false }), false);
+  assert.equal(finnhubKeyUsable({ ...none, typed: "abc", saved: true, removing: true }), true);
+  // The saved key counts while it stays and Finnhub has not stopped on it.
+  assert.equal(finnhubKeyUsable({ ...none, saved: true }), true);
+  assert.equal(finnhubKeyUsable({ ...none, saved: true, removing: true }), false);
+  for (const code of FINNHUB_STOP_CODES) {
+    assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code }] }), false, code);
+  }
+  assert.deepEqual(FINNHUB_STOP_CODES, ["finnhub.invalidKey", "finnhub.redirected", "finnhub.badUrl"]);
+  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code: "finnhub.rateLimited" }] }), true);
+  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "yahoo", code: "finnhub.invalidKey" }] }), true);
+});
+
+test("marketProblem", () => {
+  const misOn = tw({ mis: true, misAck: { version: MIS_CONSENT_VERSION } });
+  const off = readSettings(undefined);
+  const failing = (provider) => [{ provider, code: `${provider}.unreachable` }];
+  // The source kept from the saved settings and listed in health.
+  assert.equal(marketProblem({ saved: misOn, draft: misOn, health: failing("mis"), market: "tw" }), true);
+  assert.equal(marketProblem({ saved: off, draft: off, health: failing("yahoo"), market: "tw" }), true);
+  // Another source failing is not this market's problem.
+  assert.equal(marketProblem({ saved: misOn, draft: misOn, health: failing("yahoo"), market: "tw" }), false);
+  assert.equal(marketProblem({ saved: misOn, draft: misOn, health: [], market: "tw" }), false);
+  // A changed choice is not judged by the saved source's problem.
+  assert.equal(marketProblem({ saved: misOn, draft: off, health: failing("mis"), market: "tw" }), false);
+  assert.equal(marketProblem({ saved: off, draft: misOn, health: failing("mis"), market: "tw" }), false);
+  // keyAvailable picks the US source on both sides.
+  const finnhub = us({ provider: "finnhub" });
+  assert.equal(marketProblem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: true }), true);
+  assert.equal(marketProblem({ saved: finnhub, draft: finnhub, health: failing("finnhub"), market: "us", keyAvailable: false }), false);
 });
 
 test("settingsMarkets follows the language", () => {

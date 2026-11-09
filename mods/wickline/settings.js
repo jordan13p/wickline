@@ -4,7 +4,7 @@
 import { LANGUAGES } from "./i18n.js";
 import { marketOrder } from "./markets.js";
 import { BINANCE_URL } from "./providers/binance.js";
-import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
+import { FINNHUB_STOP_CODES, FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { YAHOOTW_CONSENT_VERSION } from "./providers/yahootw.js";
 
@@ -79,6 +79,15 @@ export function keyChange({ provider, typed, saved, removing }) {
   return removing && saved ? "remove" : null;
 }
 
+/**
+ * A key Finnhub would use after Save: one typed (trimmed) and well formed (`typedValid`), or the saved
+ * one while it stays (no Remove) and `health` (each source's current problem) has no stop for Finnhub.
+ */
+export function finnhubKeyUsable({ typed, typedValid, saved, removing, health }) {
+  return (typed !== "" && typedValid)
+    || (saved && !removing && !health.some((p) => p.provider === "finnhub" && FINNHUB_STOP_CODES.includes(p.code)));
+}
+
 // Each Taiwan source's consent, as [key in sources.tw, current version].
 export const CONSENTS = { yahootw: ["yahootwAck", YAHOOTW_CONSENT_VERSION], mis: ["misAck", MIS_CONSENT_VERSION] };
 
@@ -127,6 +136,15 @@ export function marketState(settings, market, { keyAvailable = false } = {}) {
   if (market === "tw" && misEnabled(settings)) return { live: true, source: "mis" };
   if (market === "us" && finnhubChosen(settings) && keyAvailable) return { live: true, source: "finnhub" };
   return { live: false, source: "yahoo" };
+}
+
+/**
+ * The market's source is failing: the draft keeps the source the saved settings use and `health` lists
+ * it. A changed choice is not judged by the old one's problem.
+ */
+export function marketProblem({ saved, draft, health, market, keyAvailable }) {
+  const { source } = marketState(draft, market, { keyAvailable });
+  return source === marketState(saved, market, { keyAvailable }).source && health.some((entry) => entry.provider === source);
 }
 
 /**
