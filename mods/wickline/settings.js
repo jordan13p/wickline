@@ -79,9 +79,18 @@ export function keyChange({ provider, typed, saved, removing }) {
   return removing && saved ? "remove" : null;
 }
 
+// Each Taiwan source's consent, as [key in sources.tw, current version].
+export const CONSENTS = { yahootw: ["yahootwAck", YAHOOTW_CONSENT_VERSION], mis: ["misAck", MIS_CONSENT_VERSION] };
+
+/** `tw` (a `sources.tw`) holds consent to `source`'s current statement; an older version is none. */
+export function consentGiven(tw, source) {
+  const [ack, version] = CONSENTS[source];
+  return tw[ack]?.version === version;
+}
+
 /** MIS is on only when switched on and consented to for the current statement. */
 export function misEnabled(settings) {
-  return settings.sources.tw.mis === true && settings.sources.tw.misAck?.version === MIS_CONSENT_VERSION;
+  return settings.sources.tw.mis === true && consentGiven(settings.sources.tw, "mis");
 }
 
 /** MIS is switched on but its consent is missing or for an older statement: Taiwan does not use it until it is given again. */
@@ -91,7 +100,7 @@ export function misReconfirm(settings) {
 
 /** Yahoo 奇摩股市 is on only when switched on and consented to for its own current statement. */
 export function yahootwEnabled(settings) {
-  return settings.sources.tw.yahootw === true && settings.sources.tw.yahootwAck?.version === YAHOOTW_CONSENT_VERSION;
+  return settings.sources.tw.yahootw === true && consentGiven(settings.sources.tw, "yahootw");
 }
 
 /** Yahoo 奇摩股市 is switched on but its consent is missing or for an older statement. */
@@ -120,16 +129,12 @@ export function marketState(settings, market, { keyAvailable = false } = {}) {
   return { live: false, source: "yahoo" };
 }
 
-// Each Taiwan source's consent, as [key in sources.tw, current version].
-const CONSENTS = { yahootw: ["yahootwAck", YAHOOTW_CONSENT_VERSION], mis: ["misAck", MIS_CONSENT_VERSION] };
-
 /**
  * A source's statement folds away once consent to its current version is both saved and still in the
  * draft: a box just ticked stays where the pointer is until Save.
  */
 export function consentCollapsed(saved, draft, source) {
-  const [key, version] = CONSENTS[source];
-  return saved.sources.tw[key]?.version === version && draft.sources.tw[key]?.version === version;
+  return consentGiven(saved.sources.tw, source) && consentGiven(draft.sources.tw, source);
 }
 
 /** The first of `errors` (validateSettings) on a page of `markets`, taken in that order, as `{ code, market }`; null when none. */

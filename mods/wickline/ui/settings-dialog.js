@@ -4,18 +4,14 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex, Input } from "gpui-base";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { TAIWAN_YAHOO_DELAY_S } from "../freshness.js";
-import { MIS_CONSENT_VERSION } from "../providers/mis.js";
-import { YAHOOTW_CONSENT_VERSION } from "../providers/yahootw.js";
 import { finnhubCap } from "../providers/finnhub.js";
-import { SETTINGS_MARKETS, consentCollapsed, firstDraftError, marketState, settingsMarkets } from "../settings.js";
+import { CONSENTS, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, marketState, settingsMarkets } from "../settings.js";
 import { button, checkbox, dot, note, segmented, toggle } from "./parts.js";
 
 export const SETTINGS_TABS = [...SETTINGS_MARKETS, "display", "disclaimer"];
 // Each tab's drawing, by its name in SETTINGS_TABS. A market page returns its parts under the title.
 const TABS = { us: usPage, tw: taiwanPage, crypto: cryptoPage, other: otherPage, display: displayTab, disclaimer: disclaimerTab };
 const COLOR_CHOICES = [["auto", "display.colors.auto"], ["red-up", "display.colors.redUp"], ["green-up", "display.colors.greenUp"]];
-// Each Taiwan source's consent: where the draft keeps it and the statement's current version.
-const CONSENTS = { yahootw: ["yahootwAck", YAHOOTW_CONSENT_VERSION], mis: ["misAck", MIS_CONSENT_VERSION] };
 
 // The sidebar on the left (the market pages, then Display and Disclaimer & privacy), the page on the
 // right, Cancel / Save below.
@@ -169,7 +165,7 @@ function advanced(view, t, market, fields, error) {
 function consentParts(view, t, source) {
   const tw = view.draft.sources.tw;
   const [ack, version] = CONSENTS[source];
-  const agreed = tw[ack]?.version === version;
+  const agreed = consentGiven(tw, source);
   const collapsible = consentCollapsed(view.settings, view.draft, source);
   const open = view.statementOpen.has(source);
   const flip = (cx) => {

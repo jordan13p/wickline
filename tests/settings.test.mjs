@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, firstDraftError, keyChange, marketState, mergeSettings,
+  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, keyChange, marketState, mergeSettings,
   misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
 } from "../mods/wickline/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
@@ -330,6 +330,16 @@ test("settingsMarkets follows the language", () => {
   assert.deepEqual(settingsMarkets("zh-TW"), ["tw", "us", "crypto", "other"]);
   for (const lang of ["en", "ja", "ko"]) assert.deepEqual(settingsMarkets(lang), ["us", "tw", "crypto", "other"], lang);
   assert.deepEqual(settingsMarkets("xx"), settingsMarkets("en"));
+});
+
+test("consentGiven", () => {
+  for (const [source, ack, version] of [["yahootw", "yahootwAck", YAHOOTW_CONSENT_VERSION], ["mis", "misAck", MIS_CONSENT_VERSION]]) {
+    assert.equal(consentGiven({ [ack]: { version } }, source), true, source);
+    assert.equal(consentGiven({ [ack]: { version: version - 1 } }, source), false, source);
+    assert.equal(consentGiven({ [ack]: null }, source), false, source);
+    assert.equal(consentGiven({}, source), false, source);
+  }
+  assert.equal(consentGiven({ misAck: { version: MIS_CONSENT_VERSION } }, "yahootw"), false);
 });
 
 test("consentCollapsed", () => {
