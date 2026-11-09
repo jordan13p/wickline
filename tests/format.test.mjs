@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeTone, chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed, tint } from "../mods/wickline/format.js";
+import { changeTone, chartGeometry, detailTimes, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { freshness } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -135,15 +135,4 @@ test("the detail times: quoted, the last trade when it differs, fetched", () => 
   assert.deepEqual(detailTimes(plain, now, "en", tx), ["Quote at 09:41:13", "Fetched 09:41:19"]);
   // An earlier day puts its date before the quote time.
   assert.deepEqual(detailTimes({ ...plain, timestamp: at(9, 41, 13) - 86_400_000 }, now, "en", tx)[0], "Quote at Nov 8 09:41:13");
-});
-
-// A div's background has no opacity in gpui, so a soft fill is the theme color with an alpha byte.
-test("tint gives a theme color at an opacity", () => {
-  assert.equal(tint("#ff0000", 0.16), "#ff000029");
-  assert.equal(tint("#f00", 0.16), "#ff000029");
-  assert.equal(tint("#11223380", 0.16), "#11223314");
-  assert.equal(tint("#ABCDEF", 1), "#abcdefff");
-  // Not a hex color: no tint at all, rather than a wrong one.
-  assert.equal(tint("rgb(1, 2, 3)", 0.16), null);
-  assert.equal(tint(undefined, 0.16), null);
 });

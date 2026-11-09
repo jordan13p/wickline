@@ -47,18 +47,6 @@ export function formatBandPrice(quote) {
   return formatPrice(named ? { ...quote, currency: null } : quote);
 }
 
-/**
- * A theme color (`#rgb`, `#rrggbb` or `#rrggbbaa`) at `alpha` as `#rrggbbaa`, multiplying an alpha it has: a
- * div's background has no opacity of its own. Null for any other form, so nothing is drawn rather than a wrong color.
- */
-export function tint(color, alpha) {
-  const hex = String(color ?? "").match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i)?.[1].toLowerCase();
-  if (!hex) return null;
-  const full = hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex;
-  const own = full.length === 8 ? parseInt(full.slice(6), 16) / 255 : 1;
-  return `#${full.slice(0, 6)}${Math.round(own * alpha * 255).toString(16).padStart(2, "0")}`;
-}
-
 // `value` (the price by default) without its currency, for a fixed right-aligned column.
 export function number(quote, value = quote.price) {
   return typeof value === "number" && value > 0 ? formatPrice({ ...quote, price: value, currency: null }) : "—";

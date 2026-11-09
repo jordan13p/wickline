@@ -443,3 +443,14 @@ test("Undo follows the notice with no separator", () => {
   assert.match(messages, /link\(t, "bw-undo"/);
   assert.doesNotMatch(messages, /"·"/);
 });
+
+// 亮燈 as Taiwan's quote boards draw it: a solid block in the limit's color with the panel's background as
+// ink, so it stands apart from the 16% chart fill beside it. Static: nothing here animates on its own.
+test("a lit price is a solid block that never animates", () => {
+  const parts = code(read(new URL("ui/parts.js", MOD)));
+  const box = parts.slice(parts.indexOf("export function priceBox("), parts.indexOf("export function link("));
+  assert.match(box, /\.bg\(mark\.color\)/);
+  assert.match(box, /mark\.ink/);
+  assert.doesNotMatch(box, /opacity|transition|loop\(|frames\(|tint/);
+});
+
