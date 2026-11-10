@@ -155,7 +155,7 @@ export default class Wickline extends View {
       for (;;) {
         const command = await nextCommand();
         if (command === "refresh") this.refresh(cx);
-        else if (command === "pause") this.togglePause();
+        else if (command === "pause") this.act(cx, () => this.togglePause());
         cx.notify();
       }
     });

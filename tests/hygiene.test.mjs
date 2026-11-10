@@ -488,3 +488,9 @@ test("the detail's stats are numbers without the currency", () => {
   assert.doesNotMatch(detail, /formatBandPrice/);
   assert.match(detail, /number\(q, price\)/);
 });
+
+test("the pause key acts as the button does", () => {
+  const main = code(read(new URL("main.js", MOD)));
+  assert.match(main, /command === "pause"\)\s*this\.act\(cx, \(\) => this\.togglePause\(\)\)/);
+  assert.doesNotMatch(main, /command === "pause"\)\s*this\.togglePause\(\)/);
+});
