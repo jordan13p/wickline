@@ -165,8 +165,9 @@ function delayWords(quote, tx) {
  * names its state and source on one line: `Price: Live · TWSE MIS`; its line follows on its own, as the
  * same state when the line is the price's own source (Yahoo 奇摩股市), else as the line's own quote
  * reads (`chartTimestamp`, `chartFetchedAt`; see mergeOverlay): its state when that source is real time
- * (stalled once that quote is), else its exchange's delay: `Line: delayed 20 min · Yahoo Finance`. A delayed stock keeps its
- * plain wording as one line of two parts, with its exchange's delay in every session; a pair is one part.
+ * (stalled once that quote is), else its exchange's delay: `Line: delayed 20 min · Yahoo Finance`. A
+ * delayed stock keeps its plain wording as one line of two parts, with its exchange's delay in every
+ * session; a pair is one part.
  * `tx(key, params)` translates; a `src.<id>` key names a provider.
  */
 export function detailSource(quote, session, now, tx) {
