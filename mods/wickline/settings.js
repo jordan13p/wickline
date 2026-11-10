@@ -149,7 +149,7 @@ function realtimeSources(settings, market, keyAvailable) {
  */
 export function marketState(settings, market, { keyAvailable = false, failing = [] } = {}) {
   const sources = realtimeSources(settings, market, keyAvailable);
-  if (!sources.length) return { live: exchangeRule(TYPICAL_EXCHANGE[market] ?? null, "").realtime, source: "yahoo" };
+  if (!sources.length) return { live: exchangeRule(TYPICAL_EXCHANGE[market], "").realtime, source: "yahoo" };
   return { live: true, source: sources.find((source) => !failing.includes(source)) ?? sources[0] };
 }
 

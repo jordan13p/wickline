@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { USER_AGENT, priceLimit, withinLimits } from "../mods/wickline/quotes.js";
 import { displayName } from "../mods/wickline/format.js";
-import { detailSource, freshness, staleAfterMs } from "../mods/wickline/freshness.js";
+import { detailSource, freshness, msUntilStale } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
 import { advance, chart, chartSymbol, fakeHost, start, stop } from "./helpers.mjs";
@@ -200,7 +200,7 @@ test("overlay merges over Yahoo", () => {
 test("a real-time overlay over a delayed Yahoo base keeps its 120 s", () => {
   const merged = mergeOverlay(YAHOO_2330, MIS_2330); // YAHOO_2330 carries exchange TAI (Step 5)
   assert.equal(merged.exchange, "TAI");
-  assert.equal(staleAfterMs(merged), 120_000);
+  assert.equal(msUntilStale(merged, "open", MIS_2330.timestamp), 120_001);
   assert.equal(freshness(merged, "open", MIS_2330.timestamp + 120_000).state, "live");
   assert.deepEqual(freshness(merged, "open", MIS_2330.timestamp + 121_000), { state: "stalled", delayMinutes: null, stoppedAt: MIS_2330.timestamp });
 });

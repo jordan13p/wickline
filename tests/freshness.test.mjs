@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, isRealtime, msUntilStale, quoteAgeMs, sessionOf, shownLimit, staleAfterMs,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, isRealtime, msUntilStale, sessionOf, shownLimit,
 } from "../mods/wickline/freshness.js";
 import { formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -171,13 +171,16 @@ test("futures, unknown exchanges and a quote with no exchange never stall", () =
   assert.deepEqual(detailSource(bare, "open", now, say("en")), [["Yahoo Finance · regular session", "delay not provided"]]);
 });
 
-test("staleAfterMs: 120 s for real time, the delay plus 5 min, else never", () => {
-  assert.equal(staleAfterMs(yq("AAPL", "NMS", 0)), 120_000);
-  assert.equal(staleAfterMs({ symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: 0 }), 120_000);
-  assert.equal(staleAfterMs({ symbol: "BTC/USDT", source: "binance", timestamp: 0 }), 120_000);
-  assert.equal(staleAfterMs(yq("0700.HK", "HKG", 0)), 1_200_000);
-  assert.equal(staleAfterMs(yq("2330.TW", "TAI", 0)), 1_500_000);
-  for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) assert.equal(staleAfterMs(yq(symbol, exchange, 0)), null, symbol);
+// What msUntilStale leaves a quote of `ageMs` that may get `limitMs` old: it stalls 1 ms past the limit.
+const left = (limitMs, ageMs) => limitMs - ageMs + 1;
+
+test("a quote may get 120 s old for real time, its delay plus 5 min, else it never stalls", () => {
+  assert.equal(msUntilStale(yq("AAPL", "NMS", 0), "open", 0), left(120_000, 0));
+  assert.equal(msUntilStale({ symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: 0 }, "open", 0), left(120_000, 0));
+  assert.equal(msUntilStale({ symbol: "BTC/USDT", source: "binance", timestamp: 0 }, "24h", 0), left(120_000, 0));
+  assert.equal(msUntilStale(yq("0700.HK", "HKG", 0), "open", 0), left(1_200_000, 0));
+  assert.equal(msUntilStale(yq("2330.TW", "TAI", 0), "open", 0), left(1_500_000, 0));
+  for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) assert.equal(msUntilStale(yq(symbol, exchange, 0), "open", 0), null, symbol);
 });
 
 test("msUntilStale: the ms left before freshness reads stalled, null when it cannot this session", () => {
@@ -200,14 +203,14 @@ test("msUntilStale: the ms left before freshness reads stalled, null when it can
 test("a delayed market's first minutes read delayed, not stopped at yesterday's close", () => {
   const open = at("2026-11-10T01:00:00Z"); // 09:00 in Taipei
   const tw = yq("2330.TW", "TAI", at("2026-11-09T05:30:00Z"), day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"));
-  assert.equal(quoteAgeMs(tw, open + 60_000), 60_000);
+  assert.equal(msUntilStale(tw, "open", open + 60_000), left(1_500_000, 60_000));
   assert.deepEqual(freshness(tw, "open", open + 60_000), { state: "delayed", delayMinutes: 20, stoppedAt: null });
   assert.equal(freshness(tw, "open", open + 1_500_000).state, "delayed");
   assert.deepEqual(freshness(tw, "open", open + 1_500_001), { state: "stalled", delayMinutes: null, stoppedAt: tw.timestamp });
   // Real time is never anchored: yesterday's price at the open reads stopped, never live.
   const usOpen = at("2026-11-10T14:30:30Z");
   const us = yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z"));
-  assert.equal(quoteAgeMs(us, usOpen), usOpen - us.timestamp);
+  assert.equal(msUntilStale(us, "open", usOpen), left(120_000, usOpen - us.timestamp));
   assert.equal(freshness(us, "open", usOpen).state, "stalled");
 });
 
@@ -260,7 +263,7 @@ test("Hong Kong and Shanghai lunch; Taiwan, Korea and the US have none", () => {
 
 test("the minutes of a lunch break do not count toward a stop", () => {
   const tokyo = yq("7203.T", "JPX", at("2026-11-10T02:30:00Z"), TOKYO_DAY); // the morning's last trade, 11:30 JST
-  assert.equal(quoteAgeMs(tokyo, at("2026-11-10T03:31:00Z")), 60_000);
+  assert.equal(msUntilStale(tokyo, "open", at("2026-11-10T03:31:00Z")), left(1_200_000, 60_000));
   assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:31:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null });
   assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:40:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null }); // 12:40 JST: 10 min traded
   assert.equal(freshness(tokyo, "open", at("2026-11-10T03:50:00Z")).state, "delayed"); // 12:50 JST: 20 min of trading
@@ -289,10 +292,10 @@ test("FX reads closed from Friday 22:00 to Sunday 22:00 UTC", () => {
 
 test("a lunch break counts only where it overlaps the quote's trading time", () => {
   // Timed 11:35 JST, inside lunch: at 12:40 only the 10 min since the reopening count.
-  assert.equal(quoteAgeMs(yq("7203.T", "JPX", at("2026-11-10T02:35:00Z"), TOKYO_DAY), at("2026-11-10T03:40:00Z")), 600_000);
+  assert.equal(msUntilStale(yq("7203.T", "JPX", at("2026-11-10T02:35:00Z"), TOKYO_DAY), "open", at("2026-11-10T03:40:00Z")), left(1_200_000, 600_000));
   // Timed 11:10 JST, at 11:20: lunch has not begun, nothing is taken off.
   const morning = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), TOKYO_DAY);
-  assert.equal(quoteAgeMs(morning, at("2026-11-10T02:20:00Z")), 600_000);
+  assert.equal(msUntilStale(morning, "open", at("2026-11-10T02:20:00Z")), left(1_200_000, 600_000));
   // Its 20 min of trading end at 11:30, so it reads stalled only once the market reopens.
   assert.equal(freshness(morning, sessionOf(morning, at("2026-11-10T03:30:00Z")), at("2026-11-10T03:30:00Z")).state, "delayed");
   assert.equal(freshness(morning, "open", at("2026-11-10T03:30:00Z") + 1).state, "stalled");

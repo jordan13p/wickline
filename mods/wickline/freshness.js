@@ -15,8 +15,8 @@ const DELAYED_GRACE_S = 300;
 export const isRealtime = (quote) => REALTIME_SOURCES.has(quote.source)
   || (quote.source === "yahoo" && exchangeRule(quote.exchange, quote.symbol).realtime);
 
-/** How old a quote may get while its market is open before it has stalled, in ms; null: it never does. */
-export function staleAfterMs(quote) {
+// How old a quote may get while its market is open before it has stalled, in ms; null: it never does.
+function staleAfterMs(quote) {
   if (isRealtime(quote)) return LIVE_MAX_AGE_MS;
   const { delayS, futures } = exchangeRule(quote.exchange, quote.symbol);
   return futures || delayS === null ? null : (delayS + DELAYED_GRACE_S) * 1000;
@@ -31,14 +31,12 @@ function lunchWindow({ offsetMin, from, to }, now) {
   return [dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS];
 }
 
-/**
- * A quote's age against staleAfterMs. A delayed quote counts from today's open at the earliest, so a market's
- * first minutes do not read stopped at the previous close, and without today's lunch break, so it does not
- * read stopped just after lunch; a real-time one always from its own time.
- */
-export function quoteAgeMs(quote, now) {
-  const open = quote.periods?.regular?.[0];
+// A quote's age against staleAfterMs. A delayed quote counts from today's open at the earliest, so a market's
+// first minutes do not read stopped at the previous close, and without today's lunch break, so it does not
+// read stopped just after lunch; a real-time one always from its own time.
+function quoteAgeMs(quote, now) {
   if (isRealtime(quote)) return now - quote.timestamp;
+  const open = quote.periods?.regular?.[0];
   const start = open === undefined ? quote.timestamp : Math.max(quote.timestamp, open);
   const { lunch } = exchangeRule(quote.exchange, quote.symbol);
   if (!lunch) return now - start;
@@ -65,11 +63,11 @@ export function marketSession(quote, now) {
   return "closed";
 }
 
-// From Friday 22:00 to Sunday 22:00 UTC, when the FX week is over.
+// From Friday 22:00 to Sunday 22:00 UTC, when the FX week is over: two hours later it is Saturday or Sunday
+// (day 0, 1970-01-01, was a Thursday: adding 4 to a day count gives its weekday, Sunday 0).
 function fxWeekend(now) {
-  const date = new Date(now);
-  const weekday = date.getUTCDay();
-  return weekday === 6 || (weekday === 5 && date.getUTCHours() >= 22) || (weekday === 0 && date.getUTCHours() < 22);
+  const weekday = (Math.floor((now + 120 * MINUTE_MS) / DAY_MS) + 4) % 7;
+  return weekday === 6 || weekday === 0;
 }
 
 /**
@@ -122,7 +120,7 @@ export function freshness(quote, session, now) {
 }
 
 // After the close, how long a price still belongs to the session: TWSE's fixed-price trades end an hour later.
-const AFTER_CLOSE_MS = 90 * 60_000;
+const AFTER_CLOSE_MS = 90 * MINUTE_MS;
 
 /**
  * A quote's limit as drawn: "up", "down" or null (see priceLimit), only while it still holds: live, or once
@@ -139,6 +137,12 @@ export function shownLimit(quote, session, now) {
   return state === "live" || ((state === "closed" || state === "post") && traded) ? priceLimit(quote) : null;
 }
 
+// A delayed quote's lateness in words: its exchange's minutes, else that the delay is not provided.
+function delayWords(quote, tx) {
+  const late = delayMinutes(quote);
+  return late === null ? tx("freshness.delayUnknown") : tx("freshness.delayedMinutes", { minutes: late });
+}
+
 /**
  * The detail dialog's sources as lines, each a list of parts (joined with ` · `). A real-time price
  * names its state and source on one line: `Price: Live · TWSE MIS`; its line follows on its own, as the
@@ -149,19 +153,15 @@ export function shownLimit(quote, session, now) {
  * `tx(key, params)` translates; a `src.<id>` key names a provider.
  */
 export function detailSource(quote, session, now, tx) {
-  const minutes = (q) => {
-    const late = delayMinutes(q);
-    return late === null ? tx("freshness.delayUnknown") : tx("freshness.delayedMinutes", { minutes: late });
-  };
   if (isRealtime(quote) && !isCryptoPair(quote.symbol)) {
     const own = stateText(freshness(quote, session, now), tx);
     const price = tx("detail.priceFrom", { state: own, source: tx(`src.${quote.source}`) });
     if (!quote.chartSource) return [[price]];
     if (quote.chartSource === quote.source) return [[price], [tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })]];
-    const chart = { ...quote, source: quote.chartSource };
-    const state = isRealtime(chart) ? stateText(freshness({ ...chart, timestamp: now }, session, now), tx) : minutes(chart);
+    const chart = { ...quote, source: quote.chartSource, timestamp: now };
+    const state = isRealtime(chart) ? stateText(freshness(chart, session, now), tx) : delayWords(chart, tx);
     return [[price], [tx("detail.lineFrom", { state, source: tx(`src.${quote.chartSource}`) })]];
   }
   if (isCryptoPair(quote.symbol)) return [[tx("detail.sourceCrypto")]];
-  return [[tx("detail.sourceStock"), minutes(quote)]];
+  return [[tx("detail.sourceStock"), delayWords(quote, tx)]];
 }

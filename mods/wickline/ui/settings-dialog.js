@@ -73,9 +73,9 @@ function shownStatus(view, market, key) {
 // How fresh Yahoo Finance is for the market: the exchange table's rule for the market's typical exchange (real
 // time, or its minutes late), else a plain "Delayed" (by exchange).
 function delayText(view, market) {
-  const { realtime, delayS } = exchangeRule(TYPICAL_EXCHANGE[market] ?? null, "");
+  const { realtime, delayS } = exchangeRule(TYPICAL_EXCHANGE[market], "");
   if (realtime) return view.tx("settings.liveEveryMinute");
-  return delayS !== null ? view.tx("settings.delayedMinutes", { minutes: delayS / 60 }) : view.tx("settings.delayed");
+  return delayS !== null ? view.tx("settings.delayedMinutes", { minutes: Math.ceil(delayS / 60) }) : view.tx("settings.delayed");
 }
 
 // The market's name, and on the right the state and source the unsaved choices would use; a delay says how long.
