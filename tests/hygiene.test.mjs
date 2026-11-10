@@ -446,8 +446,8 @@ test("the sidebar list keeps its gap and hairline outside the scroll", () => {
   // A 1 px border hairline, only for a list with a gap (the sidebar), inset like the footer's, above the scrolling box.
   assert.match(list, /top > 0[^;]*map\(inset\)[^;]*border_t\(1\)[^;]*border_color\(t\.border\)/);
   assert.ok(tree.indexOf("border_t(1)") > 0 && tree.indexOf("border_t(1)") < tree.indexOf("scrolling"));
-  // The bar is a sibling of the scrolling box, in the relative box that holds both.
-  assert.ok(tree.indexOf(".relative()") > 0 && tree.indexOf(".relative()") < tree.indexOf("Scrollbar.vertical"));
+  // The bar is the scrolling box's next sibling, in the relative box that holds both.
+  assert.match(tree, /\.relative\(\)[^;]*\.child\(scrolling\)\s*\.child\(Scrollbar\.vertical\("bw-list"\)/);
   // The empty-list text stays inside the scrolling box, so it sits below the hairline.
   assert.match(box, /list\.empty/);
   assert.match(panel, /list\(view, t, rows, 8\)/);
