@@ -79,7 +79,6 @@ test("the detail source line reads state · source", () => {
   assert.deepEqual(detailSource(base, "open", NOW, say("en")), ["Yahoo Finance · regular session", "delayed 20 min"]);
 });
 
-// A light says the stock is at its limit now (or closed there), so it follows the price's own freshness.
 // Yahoo reports ^TWII on TAI: a Taiwan quote, 20 minutes late like Taiwan stocks.
 test("a Taiwan index on Yahoo reads 20 minutes", () => {
   const index = quote({ symbol: "^TWII", exchange: "TAI" });
@@ -87,6 +86,7 @@ test("a Taiwan index on Yahoo reads 20 minutes", () => {
   assert.equal(freshness(quote({ symbol: "^GSPC", exchange: "SNP" }), "open", now).delayMinutes, null);
 });
 
+// A light says the stock is at its limit now (or closed there), so it follows the price's own freshness.
 test("a price at its limit is lit only while that is still true", () => {
   const at = (fields) => quote({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035,
     periods: { pre: null, regular: [now - 3_600_000, now + 3_600_000], post: null }, ...fields });
