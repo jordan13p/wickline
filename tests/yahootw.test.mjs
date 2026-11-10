@@ -61,6 +61,10 @@ test("requests: batches of 50 to the fixed host, then one line request per symbo
     assert.equal(request.kind, "quote");
     assert.equal(request.headers["User-Agent"], USER_AGENT);
   }
+  // A TW-only symbol may be priced from an earlier day: the batch's own ones ride on its price request.
+  assert.deepEqual(yahootw.requests(["2330.TW", "^TWOII"], { twOnly: ["^TWOII", "^TWZZ"] }).map((r) => r.anyDay),
+    [["^TWOII"], undefined, undefined]);
+  assert.deepEqual(yahootw.requests(["2330.TW"])[0].anyDay, []);
   // The host is fixed: no address in the settings changes it.
   assert.equal(yahootw.requests(["2330.TW"], { misUrl: "https://mirror.test" })[0].url,
     "https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.stockList;symbols=2330.TW");
@@ -79,12 +83,21 @@ test("recorded index rows decode as overlays without limits", () => {
   assert.equal(priceLimit(index), null);
 });
 
+// An instrument only Yahoo 奇摩股市 has takes its market and currency from its row.
+test("a row's exchange and currency reach the overlay; a malformed one is null", () => {
+  const index = decode(ok(ROWS), ["^TWOII"]).quotes["^TWOII"];
+  assert.deepEqual([index.exchange, index.currency], ["TWO", "TWD"]);
+  const odd = decode(changed({ "^TWOII": { exchange: "two!", currency: "twd" } }), ["^TWOII"]).quotes["^TWOII"];
+  assert.deepEqual([odd.exchange, odd.currency], [null, null]);
+});
+
 test("prices today's rows with the answer's newest trade as their time", () => {
   const { quotes } = decode(ok(ROWS));
   const newest = Date.parse("2026-11-09T01:41:13Z");
   assert.deepEqual(quotes["2330.TW"], {
     symbol: "2330.TW", source: "yahootw", name: "台積電", price: 2240, previousClose: 2135, open: 2210, high: 2240, low: 2190,
-    limitUp: 2345, limitDown: 1925, timestamp: newest, tradeTime: newest, day: taipeiDay(NOW), fetchedAt: NOW,
+    limitUp: 2345, limitDown: 1925, exchange: null, currency: "TWD", timestamp: newest, tradeTime: newest, day: taipeiDay(NOW),
+    fetchedAt: NOW,
   });
   // A quiet stock is as current as the feed; its own last trade is kept apart.
   assert.equal(quotes["0050.TW"].price, 10.05);
@@ -255,4 +268,55 @@ test("a Yahoo 奇摩股市 price at its own limit is at the limit", () => {
   const none = decode(changed({ "2330.TW": { limitUpPrice: { raw: "-", fmt: "-", sort: null } } })).quotes["2330.TW"];
   assert.equal(none.limitUp, null);
   assert.equal(none.limitDown, null);
+});
+
+// Recorded at 08:14 in Taipei on 2026-11-10, trimmed to the fields Wickline reads: ^TWOII and ^TWII still carry the day
+// before's 13:31 close (delay 0), and ^TWOII's line still carries that day's periods and minutes.
+const EARLIER_ROWS = jsonFixture("yahootw-stocklist-earlier-day");
+const EARLIER_TICK = jsonFixture("yahootw-tick-earlier-day");
+// 02:00 in Taipei on 2026-11-10, the night after the recorded close.
+const NIGHT = Date.parse("2026-11-09T18:00:00Z");
+const CLOSE_0509 = Date.parse("2026-11-09T05:31:00Z");
+const twOnly = (symbols, response, now, anyDay = ["^TWOII"]) =>
+  yahootw.decode(yahootw.requests(symbols, { twOnly: anyDay })[0], response, now);
+
+test("a line answer gives its trading periods, also without a point from today", () => {
+  const S = TODAY_0900;
+  const E = TODAY_0900 + 16_200;
+  const answer = (start) => ok([{ symbol: "^TWOII", chart: {
+    meta: { symbol: "^TWOII", currentTradingPeriod: { pre: { start: S, end: S }, regular: { start: S, end: E }, post: { start: E, end: E } } },
+    timestamp: [start], indicators: { quote: [{ close: [321.97] }] },
+  } }]);
+  for (const start of [TODAY_0900, TODAY_0900 - 86_400]) {
+    const { periods } = lineOf("^TWOII", answer(start));
+    assert.deepEqual(periods["^TWOII"], { pre: null, regular: [S * 1000, E * 1000], post: null }, String(start));
+  }
+  const recorded = yahootw.decode(yahootw.requests(["^TWOII"]).find((r) => r.kind === "line"), ok(EARLIER_TICK), NIGHT);
+  assert.equal(recorded.lines, undefined);
+  assert.deepEqual(recorded.periods["^TWOII"].regular, [Date.parse("2026-11-09T01:00:00Z"), Date.parse("2026-11-09T05:30:00Z")]);
+  // Without periods, none.
+  assert.equal(lineOf("2330.TW", tick("2330.TW", [2200])).periods, undefined);
+});
+
+test("an earlier day's row is a TW-only symbol's quote, stamped with its own time", () => {
+  const { quotes } = twOnly(["^TWOII", "^TWII"], ok(EARLIER_ROWS), NIGHT);
+  assert.deepEqual(Object.keys(quotes), ["^TWOII"]);
+  const index = quotes["^TWOII"];
+  assert.deepEqual([index.price, index.previousClose, index.exchange, index.currency], [321.97, 304.02, "TWO", "TWD"]);
+  assert.deepEqual([index.timestamp, index.tradeTime, index.day], [CLOSE_0509, CLOSE_0509, taipeiDay(CLOSE_0509)]);
+  // Not a TW-only symbol: the earlier day is refused, as for any row.
+  assert.deepEqual(twOnly(["^TWOII"], ok(EARLIER_ROWS), NIGHT, []).quotes, {});
+});
+
+test("earlier-day rows keep their own time and leave feed time and noLive alone", () => {
+  const yesterday = "2026-11-08T05:31:00Z";
+  const { quotes, noLive } = twOnly(["2330.TW", "^TWOII"], changed({ "^TWOII": { regularMarketTime: yesterday } }), NOW);
+  assert.equal(quotes["2330.TW"].timestamp, Date.parse("2026-11-09T01:41:13Z"));
+  assert.equal(quotes["^TWOII"].timestamp, Date.parse(yesterday));
+  assert.equal(quotes["^TWOII"].day, taipeiDay(Date.parse(yesterday)));
+  assert.equal(noLive, undefined);
+  // With no row from today, an earlier-day quote does not hide that nothing is real time.
+  const night = twOnly(["^TWOII", "^TWII"], ok(EARLIER_ROWS), NIGHT);
+  assert.ok(night.quotes["^TWOII"]);
+  assert.equal(night.noLive.code, "yahootw.noLiveRows");
 });

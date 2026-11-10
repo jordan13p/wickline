@@ -2,7 +2,7 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
-import { kindOf, resolvedMarket } from "./markets.js";
+import { isTaiwanForm, kindOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -53,6 +53,8 @@ const TIMED_OUT = {};
 // A minute's length, and how far a line's last minute may end before its price's own last trade.
 const MINUTE_MS = 60_000;
 const LINE_LAG_MS = 120_000;
+// The periods of a session long over: a TW-only quote from before its line's periods are known reads closed.
+const ENDED = { pre: null, regular: [0, 1], post: null };
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
@@ -84,9 +86,10 @@ export function pickOverlay(byProvider, order, now) {
  * name stay the base's (the overlay's name is kept as `localName`); so does the line, unless the
  * overlay's source gave its own (`line`, `{ day, series }`) on the overlay's Taipei day (`overlay.day`):
  * then that line, ending at the shown price. `chartSource` names where the line came from. Works with
- * no base yet.
+ * no base yet. `alone`, for a symbol only the overlay's source prices (TW-only): the name and currency
+ * are the overlay's, and the periods `alone.periods`.
  */
-export function mergeOverlay(base, overlay, line) {
+export function mergeOverlay(base, overlay, line, alone = null) {
   if (!overlay) return base;
   const merged = { ...base };
   for (const [key, value] of Object.entries(overlay)) if (value !== null && value !== undefined) merged[key] = value;
@@ -97,16 +100,16 @@ export function mergeOverlay(base, overlay, line) {
     ...merged,
     previousClose,
     changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
-    name: base?.name ?? null,
+    name: (alone ? overlay : base)?.name ?? null,
     localName: overlay.name ?? null,
     // A price is never paired with another answer's limits.
     limitUp: overlay.limitUp ?? null,
     limitDown: overlay.limitDown ?? null,
-    currency: base?.currency ?? null,
+    currency: (alone ? overlay : base)?.currency ?? null,
     delaySeconds: 0,
     chartDelaySeconds: own ? 0 : base?.delaySeconds ?? null,
     series: own ? [...own, overlay.price] : base?.series ?? [],
-    periods: base?.periods ?? null,
+    periods: alone ? alone.periods : base?.periods ?? null,
     chartSource: own ? overlay.source : base?.source ?? null,
   };
 }
@@ -166,6 +169,10 @@ export class Watchlist {
     // provider id), since its symbol still has the base quote.
     this.errors = {};
     this.overlayErrors = {};
+    // TW-only symbols: a ^TW… index Yahoo Finance does not know, priced by Yahoo 奇摩股市 alone while it is
+    // on, each with the trading periods its last line gave (null until one does). Only in memory, so each
+    // start learns them again with one Yahoo Finance request.
+    this.twOnly = new Map();
     this.revision = 0;
     this.stopped = false;
     // Per provider: its backoff, its current problem, its round and its own wake-up. `lineFailures`, by
@@ -228,19 +235,29 @@ export class Watchlist {
   /** A listed US stock left on Yahoo because Finnhub's budget is used up by the ones before it. */
   overCap(symbol) {
     const config = this.config();
-    return config.on.finnhub && this.serves(finnhub, symbol) && this.preferences.symbols.includes(symbol)
+    return config.on.finnhub && this.serves(finnhub, symbol, config) && this.preferences.symbols.includes(symbol)
       && !this.symbolsFor(finnhub, config).includes(symbol);
   }
 
-  /** The exchange a symbol's quote reports (Yahoo's exchangeName), or null: see resolvedMarket. */
+  /**
+   * The exchange a symbol's quote reports (Yahoo's exchangeName), else its Yahoo 奇摩股市 overlay's (a TW-only
+   * symbol has no base quote), or null: see resolvedMarket.
+   */
   exchangeOf(symbol) {
-    return this.quotes[symbol]?.exchange ?? null;
+    return this.quotes[symbol]?.exchange ?? this.overlays[symbol]?.[yahootw.id]?.exchange ?? null;
   }
 
-  /** What a row shows: the base quote with its overlay, if any. */
+  /**
+   * What a row shows: the base quote with its overlay, if any. A TW-only symbol shows its overlay alone, with
+   * its line's periods; without them, an old quote (an earlier day's close) reads closed.
+   */
   shown(symbol, now = this.host.now()) {
     const pick = this.pick(symbol, now);
-    const quote = mergeOverlay(this.quotes[symbol], pick?.overlay, pick && this.lines[pick.id]?.[symbol]);
+    const overlay = pick?.overlay;
+    const alone = this.twOnly.has(symbol)
+      ? { periods: this.twOnly.get(symbol) ?? (overlay && now - overlay.timestamp > LIVE_MAX_AGE_MS ? ENDED : null) }
+      : null;
+    const quote = mergeOverlay(this.quotes[symbol], overlay, pick && this.lines[pick.id]?.[symbol], alone);
     const localName = this.localNames[symbol];
     return quote && localName && !quote.localName ? { ...quote, localName } : quote;
   }
@@ -452,8 +469,11 @@ export class Watchlist {
     for (const record of [this.quotes, this.errors]) {
       for (const key of Object.keys(record)) if (!keep.has(key)) delete record[key];
     }
-    // An overlay goes as soon as its source no longer covers the symbol (removed, or turned off).
     const config = this.config();
+    // Yahoo 奇摩股市 off: every TW-only symbol goes back to Yahoo Finance, so turning it on again starts over.
+    if (!config.on[yahootw.id]) this.twOnly.clear();
+    for (const symbol of [...this.twOnly.keys()]) if (!keep.has(symbol)) this.twOnly.delete(symbol);
+    // An overlay goes as soon as its source no longer covers the symbol (removed, or turned off).
     const covered = new Set();
     for (const provider of OVERLAYS) {
       const symbols = new Set(this.symbolsFor(provider, config));
@@ -469,9 +489,11 @@ export class Watchlist {
 
   /**
    * Whether `provider` prices `symbol`: it declares the symbol's market (an index's from its quote's exchange,
-   * see resolvedMarket) and its kind.
+   * see resolvedMarket) and its kind. A TW-only symbol, while Yahoo 奇摩股市 is on (in `config`), is priced by
+   * Yahoo 奇摩股市 alone, whatever its market reads.
    */
-  serves(provider, symbol) {
+  serves(provider, symbol, config) {
+    if (config.on[yahootw.id] && this.twOnly.has(symbol)) return provider === yahootw;
     return provider.markets.includes(resolvedMarket(symbol, this.exchangeOf(symbol))) && provider.kinds.includes(kindOf(symbol));
   }
 
@@ -481,19 +503,21 @@ export class Watchlist {
    */
   symbolsFor(provider, config = this.config(), list = this.preferences.symbols) {
     if (provider.overlay && !config.on[provider.id]) return [];
-    const symbols = list.filter((symbol) => this.serves(provider, symbol));
+    const symbols = list.filter((symbol) => this.serves(provider, symbol, config));
     return provider.cap ? symbols.slice(0, Math.max(0, provider.cap(config))) : symbols;
   }
 
   /**
    * The busiest session among `symbols`: open > unknown (no quote yet) > pre/post > closed. Read from the
-   * base quotes: an overlay keeps the base's trading periods.
+   * base quotes (an overlay keeps the base's trading periods), and for a TW-only symbol from what it shows;
+   * one with nothing to show (no source knows it) counts as closed, so it is never polled every 10 s.
    */
   sessionFor(symbols, now) {
     let best = "closed";
     for (const symbol of symbols) {
-      const quote = this.quotes[symbol];
-      const session = quote ? sessionOf(quote, now) : "unknown";
+      const alone = this.twOnly.has(symbol);
+      const quote = alone ? this.shown(symbol, now) : this.quotes[symbol];
+      const session = quote ? sessionOf(quote, now) : alone ? "closed" : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
     return symbols.length ? best : "unknown";
@@ -596,8 +620,10 @@ export class Watchlist {
     const configKey = JSON.stringify(config);
     // A new address asks every line again.
     if (state.configKey !== configKey) { state.configKey = configKey; state.linesAt = {}; }
-    // Only Finnhub's requests carry the key; no other source is ever handed it.
-    const asked = provider === finnhub ? { ...config, finnhubKey: this.finnhubKey } : config;
+    // Only Finnhub's requests carry the key; no other source is ever handed it. The TW-only symbols go to the
+    // requests only, never to config(): a change there would make sync() restart every round.
+    const keyed = provider === finnhub ? { ...config, finnhubKey: this.finnhubKey } : config;
+    const asked = { ...keyed, twOnly: [...this.twOnly.keys()] };
     const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));
@@ -629,8 +655,9 @@ export class Watchlist {
         const limited = failures.find((error) => error.retryAfterMs !== undefined);
         const down = failures.find((error) => SOURCE_DOWN.test(error.code));
         if (!problem) problem = failures.find((error) => SOURCE_FAILURE.test(error.code)) ?? null;
-        if (Object.keys(result.quotes).length) live = true;
-        else noLive ??= result.noLive ?? null;
+        // An answer that prices only an earlier day's close (TW-only) is not live: it carries noLive.
+        if (result.noLive) noLive ??= result.noLive;
+        else if (Object.keys(result.quotes).length) live = true;
         this.apply(provider, request, result);
         if (refused) {
           // No more requests with this key: the rest fall back with the same reason.
@@ -751,13 +778,19 @@ export class Watchlist {
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
       for (const symbol of request.symbols) {
         const overlay = result.quotes[symbol];
+        const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         if (overlay) {
           this.setEntry(this.overlays, symbol, provider.id, overlay);
           this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
-          continue;
+        } else {
+          this.dropOverlay(provider, symbol);
+          this.setEntry(this.overlayErrors, symbol, provider.id, error);
         }
-        this.dropOverlay(provider, symbol);
-        this.setEntry(this.overlayErrors, symbol, provider.id, result.errors[symbol] ? coded(result.errors[symbol]) : undefined);
+        // A TW-only symbol has no base: it is not found until this source prices or names it, and a failure
+        // shows as itself, never as not found.
+        if (!this.twOnly.has(symbol)) continue;
+        if (overlay || result.names?.[symbol]) delete this.errors[symbol];
+        else this.errors[symbol] = error ?? notice("yahoo.notFound");
       }
       return;
     }
@@ -768,7 +801,12 @@ export class Watchlist {
       this.quotes[symbol] = quote;
       delete this.errors[symbol];
     }
-    for (const [symbol, error] of Object.entries(result.errors)) this.errors[symbol] = coded(error);
+    const yahootwOn = this.config().on[yahootw.id];
+    for (const [symbol, error] of Object.entries(result.errors)) {
+      this.errors[symbol] = coded(error);
+      // A Taiwan index Yahoo Finance does not know may be Yahoo 奇摩股市's alone; the error stays until it is priced.
+      if (error.code === "yahoo.notFound" && isTaiwanForm(symbol) && yahootwOn) this.twOnly.set(symbol, null);
+    }
     this.wakeResolved(before);
   }
 
@@ -813,11 +851,13 @@ export class Watchlist {
     }
   }
 
-  // A symbol whose request was not answered: a base quote stays, marked cached; an overlay goes.
+  // A symbol whose request was not answered: a base quote stays, marked cached; an overlay goes, and a TW-only
+  // symbol, which has no base, says why.
   fail(provider, symbol, error) {
     if (!provider.overlay) { this.errors[symbol] = error; return; }
     this.dropOverlay(provider, symbol);
     this.setEntry(this.overlayErrors, symbol, provider.id, error);
+    if (this.twOnly.has(symbol)) this.errors[symbol] = error;
   }
 
   // An overlay's line goes with its price, so a line is never drawn with a later price it did not end at.
@@ -849,6 +889,7 @@ export class Watchlist {
    * answer (such as a cached one from earlier in the day) would be drawn as live with only its tail
    * moving. A quiet stock's line ends at its last trade, so it stays. Checked as the line arrives, not
    * at each price: a busy stock trades on while its line waits up to `linesMs` for the next request.
+   * A TW-only symbol keeps the answer's trading periods, line or not; known ones are never dropped.
    * Returns the request's error for the symbol, if any (endsRound says what it does to the round).
    */
   async line(provider, state, request, io, current) {
@@ -857,6 +898,7 @@ export class Watchlist {
     if (!this.lineDue(provider, state, symbol, now)) return null;
     state.linesAt[symbol] = now;
     const result = await this.ask(provider, request, io, current);
+    if (result && current() && this.twOnly.has(symbol) && result.periods?.[symbol]) this.twOnly.set(symbol, result.periods[symbol]);
     const line = result?.lines?.[symbol];
     const kept = result && current() && this.priced(provider, symbol);
     const frozen = kept && provider.overlay && line && line.lastAt + MINUTE_MS < kept.tradeTime - LINE_LAG_MS;

@@ -6,6 +6,9 @@ import { yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
+import { freshness, sessionOf } from "../mods/wickline/freshness.js";
+import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import { resolvedMarket } from "../mods/wickline/markets.js";
 import { advance, chart, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
@@ -686,4 +689,158 @@ test("a wake during an overlay round adds a round, it aborts none", async () => 
   assert.deepEqual(host.requests.filter((url) => url.includes("/chart/")).map((url) => decodeURIComponent(url.split("/chart/")[1].split("?")[0])),
     ["2330.TW", "^TWII"]);
   await stop(w, host, runs);
+});
+
+// A ^TW… index Yahoo Finance does not know (404) is priced by Yahoo 奇摩股市 alone, while it is on: TW-only.
+const NOT_FOUND = { status: 404, ok: false, text: "" };
+// ^TWOII's line on the trading morning, with a regular session around the clock.
+const OPEN_NOW = { regular: { start: TW_NOW / 1000 - 3600, end: TW_NOW / 1000 + 3600 } };
+const charts = (host, symbol) => host.requests.filter((url) => url.includes(`/chart/${encodeURIComponent(symbol)}?`)).length;
+
+function twOnlyHost(symbols = ["^TWOII"], options = {}) {
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahoo: (symbol) => (symbol.startsWith("^TW") || symbol === "APPL" ? NOT_FOUND : twYahoo(symbol)),
+    line: (symbol) => tickAt(symbol, host.clock - 60_000, [321.5, 321.97], OPEN_NOW),
+    ...options,
+  });
+  host.store = { version: 1, symbols, paused: false };
+  return host;
+}
+
+// Every source from `from`, then `check(w, host)` once the clock is at `from + 5 s`. Each redraw renders, and a
+// render calls sync(), as in main.js.
+async function twOnlyRun(host, check, from = TW_NOW) {
+  host.clock = from;
+  const w = new Watchlist(host);
+  host.changed = () => w.sync();
+  const runs = start(w, host);
+  await advance(host, from + 5_000);
+  await check(w, host);
+  await stop(w, host, runs);
+}
+
+test("^TWOII, unknown to Yahoo Finance, is priced by Yahoo 奇摩股市 alone", async () => {
+  await twOnlyRun(twOnlyHost(), (w, host) => {
+    const now = TW_NOW + 5_000;
+    const quote = w.shown("^TWOII", now);
+    assert.equal(quote.source, "yahootw");
+    assert.deepEqual([quote.price, quote.name, quote.currency], [321.97, "櫃檯指數", "TWD"]);
+    assert.equal(w.errors["^TWOII"], undefined);
+    assert.equal(resolvedMarket("^TWOII", w.exchangeOf("^TWOII")), "tw");
+    assert.equal(sessionOf(quote, now), "open");
+    // Asked once: its 404 moved it, and Yahoo Finance's round was not restarted.
+    assert.equal(chartCount(host), 1);
+  });
+});
+
+// Recorded at 08:14 in Taipei on 2026-11-10 (see yahootw.test.mjs): the rows still carry the day before's 13:31 close.
+const EARLIER_ROWS = jsonFixture("yahootw-stocklist-earlier-day");
+const NIGHT = Date.parse("2026-11-09T18:00:00Z");
+const CLOSE_0509 = Date.parse("2026-11-09T05:31:00Z");
+
+test("overnight, a TW-only symbol shows its last close and polls gently", async () => {
+  const tx = (key, params) => t("en", key, params);
+  // The recorded line (the day before's periods and minutes), and one with no point from today and no periods.
+  for (const line of [() => ok(jsonFixture("yahootw-tick-earlier-day")), (symbol) => tickAt(symbol, CLOSE_0509, [321.97])]) {
+    const host = twOnlyHost(["^TWOII"], { yahootw: () => ok(EARLIER_ROWS), line });
+    await twOnlyRun(host, async (w) => {
+      const now = NIGHT + 5_000;
+      const quote = w.shown("^TWOII", now);
+      assert.deepEqual([quote.source, quote.price, quote.timestamp], ["yahootw", 321.97, CLOSE_0509]);
+      const fresh = freshness(quote, sessionOf(quote, now), now);
+      assert.equal(fresh.state, "closed");
+      // Its own trade's date and time (the date shows where the local day has turned).
+      assert.equal(freshnessLabel(quote, fresh, now, "en", tx),
+        `${tx("session.closed")} · ${[formatStaleDate(CLOSE_0509, now, "en"), formatTime(CLOSE_0509)].filter(Boolean).join(" ")}`);
+      assert.equal(w.problems().length, 0);
+      // The closed cadence: no round 10 s on, the next at 60 s.
+      assert.equal(stockLists(host).length, 1);
+      await advance(host, NIGHT + 15_000);
+      assert.equal(stockLists(host).length, 1);
+      await advance(host, NIGHT + 61_000);
+      assert.equal(stockLists(host).length, 2);
+    }, NIGHT);
+  }
+});
+
+test("a ^TW symbol neither source knows says not found", async () => {
+  await twOnlyRun(twOnlyHost(["^TWZZ"]), async (w, host) => {
+    assert.equal(w.errors["^TWZZ"].code, "yahoo.notFound");
+    assert.equal(stockLists(host).length, 1);
+    assert.ok(stockLists(host)[0].includes("%5ETWZZ"), stockLists(host)[0]);
+    await advance(host, TW_NOW + 15_000);
+    assert.equal(stockLists(host).length, 1);
+    await advance(host, TW_NOW + 61_000);
+    assert.equal(stockLists(host).length, 2);
+    assert.equal(w.errors["^TWZZ"].code, "yahoo.notFound");
+  });
+});
+
+test("a rate limit shows on a TW-only row", async () => {
+  const limited = { status: 429, ok: false, text: "" };
+  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => limited }), (w) => {
+    assert.equal(w.errors["^TWOII"].code, "yahootw.rateLimited");
+  });
+  // A rate-limited line drops the price it was asked beside: the row says why.
+  await twOnlyRun(twOnlyHost(["^TWOII"], { line: () => limited }), (w) => {
+    assert.equal(w.shown("^TWOII"), undefined);
+    assert.equal(w.errors["^TWOII"].code, "request.deferred");
+  });
+});
+
+// During the session, a TW-only row still from the day before is no real-time price.
+test("a lone earlier-day row does not hide that nothing is real time", async () => {
+  const yesterday = { "^TWOII": { regularMarketTime: "2026-11-08T05:31:00Z" } };
+  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(TW_NOW - 5_000, yesterday) }), (w) => {
+    assert.equal(w.shown("^TWOII").timestamp, Date.parse("2026-11-08T05:31:00Z"));
+    assert.deepEqual(w.problems().map(({ provider, code }) => [provider, code]), [["yahootw", "yahootw.noLiveRows"]]);
+  });
+});
+
+test("the move to TW-only does not restart Yahoo's round", async () => {
+  await twOnlyRun(twOnlyHost(["2330.TW", "^TWOII"]), (w, host) => {
+    assert.equal(w.shown("^TWOII").source, "yahootw");
+    // The renders' sync() found nothing changed: the TW-only set is not part of config().
+    assert.equal(w.sync(), false);
+    assert.equal(charts(host, "2330.TW"), 1);
+    assert.equal(charts(host, "^TWOII"), 1);
+  });
+});
+
+test("a mistyped symbol never reaches the Taiwan host", async () => {
+  await twOnlyRun(twOnlyHost(["APPL"]), (w, host) => {
+    assert.equal(w.errors.APPL.code, "yahoo.notFound");
+    assert.deepEqual(host.requests.filter((url) => isYahootw(url) && url.includes("APPL")), []);
+  });
+});
+
+test("with Yahoo 奇摩股市 off, ^TWOII is not found", async () => {
+  const host = twOnlyHost();
+  host.prefs = undefined;
+  await twOnlyRun(host, (w) => {
+    assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
+    assert.equal(resolvedMarket("^TWOII", w.exchangeOf("^TWOII")), "other");
+    assert.deepEqual(host.requests.filter(isYahootw), []);
+  });
+});
+
+test("turning Yahoo 奇摩股市 off, then on, starts over", async () => {
+  await twOnlyRun(twOnlyHost(), async (w, host) => {
+    assert.equal(w.shown("^TWOII").source, "yahootw");
+    host.prefs = undefined;
+    assert.equal(w.sync(), true);
+    assert.equal(w.shown("^TWOII"), undefined);
+    const before = chartCount(host);
+    await advance(host, TW_NOW + 61_000);
+    assert.ok(chartCount(host) > before);
+    assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
+    host.prefs = ONLY_YAHOOTW;
+    assert.equal(w.sync(), true);
+    const asked = charts(host, "^TWOII");
+    await advance(host, TW_NOW + 66_000);
+    // Asked of Yahoo Finance again: nothing was kept from before.
+    assert.equal(charts(host, "^TWOII"), asked + 1);
+    assert.equal(w.shown("^TWOII").source, "yahootw");
+    assert.equal(w.errors["^TWOII"], undefined);
+  });
 });

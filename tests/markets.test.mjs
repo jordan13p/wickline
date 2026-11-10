@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, exchangeMarket, filterAfterAdd, filterAfterRemove, inFilter, kindOf, marketFilters, marketOf, nextOf,
+  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, exchangeMarket, filterAfterAdd, filterAfterRemove, inFilter, isTaiwanForm, kindOf, marketFilters, marketOf, nextOf,
   openFilter, readFilter, resolvedMarket, visibleSymbols,
 } from "../mods/wickline/markets.js";
 
@@ -179,6 +179,12 @@ test("an index takes its market from the exchange its source reports", () => {
 test("a symbol's kind comes from its form", () => {
   const table = [["AAPL", "stock"], ["2330.TW", "stock"], ["A^B", "stock"], ["^TWII", "index"], ["TWD=X", "other"], ["ES=F", "other"], ["BTC/USDT", "pair"]];
   for (const [symbol, kind] of table) assert.equal(kindOf(symbol), kind, symbol);
+});
+
+// An index of Taiwan form may be known to Yahoo 奇摩股市 when Yahoo Finance does not know it.
+test("a Taiwan form is an index starting ^TW", () => {
+  for (const symbol of ["^TWOII", "^TWII"]) assert.equal(isTaiwanForm(symbol), true, symbol);
+  for (const symbol of ["^GSPC", "APPL", "2330.TW"]) assert.equal(isTaiwanForm(symbol), false, symbol);
 });
 
 test("the filter counts an index under its resolved market", () => {

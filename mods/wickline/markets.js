@@ -22,6 +22,9 @@ export function kindOf(symbol) {
   return symbol.includes("=") ? "other" : "stock";
 }
 
+/** An index of Taiwan form (^TW…): Yahoo 奇摩股市 may know one that Yahoo Finance does not. */
+export const isTaiwanForm = (symbol) => kindOf(symbol) === "index" && symbol.startsWith("^TW");
+
 // The exchanges a source reports (Yahoo's exchangeName, Yahoo 奇摩股市's exchange) whose market is known.
 // Closed on purpose: any other exchange leaves an index under "other", never a guess.
 const EXCHANGES = {

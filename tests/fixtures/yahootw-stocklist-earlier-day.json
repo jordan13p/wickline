@@ -1,0 +1,88 @@
+[
+  {
+    "symbol": "^TWOII",
+    "symbolName": "櫃檯指數",
+    "price": {
+      "raw": "321.97",
+      "fmt": "321.97",
+      "sort": 321.97
+    },
+    "regularMarketOpen": {
+      "raw": "305.51",
+      "fmt": "305.51",
+      "sort": 305.51
+    },
+    "regularMarketDayHigh": {
+      "raw": "323.84",
+      "fmt": "323.84",
+      "sort": 323.84
+    },
+    "regularMarketDayLow": {
+      "raw": "305.51",
+      "fmt": "305.51",
+      "sort": 305.51
+    },
+    "regularMarketPreviousClose": {
+      "raw": "304.02",
+      "fmt": "304.02",
+      "sort": 304.02
+    },
+    "regularMarketTime": "2026-11-09T05:31:00Z",
+    "limitUpPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "limitDownPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "currency": "TWD",
+    "exchangeDataDelayedBy": 0,
+    "exchange": "TWO"
+  },
+  {
+    "symbol": "^TWII",
+    "symbolName": "加權指數",
+    "price": {
+      "raw": "41661.7",
+      "fmt": "41,661.70",
+      "sort": 41661.7
+    },
+    "regularMarketOpen": {
+      "raw": "40347.28",
+      "fmt": "40,347.28",
+      "sort": 40347.28
+    },
+    "regularMarketDayHigh": {
+      "raw": "42349.36",
+      "fmt": "42,349.36",
+      "sort": 42349.36
+    },
+    "regularMarketDayLow": {
+      "raw": "40347.28",
+      "fmt": "40,347.28",
+      "sort": 40347.28
+    },
+    "regularMarketPreviousClose": {
+      "raw": "39701.64",
+      "fmt": "39,701.64",
+      "sort": 39701.64
+    },
+    "regularMarketTime": "2026-11-09T05:31:00Z",
+    "limitUpPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "limitDownPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "currency": "TWD",
+    "exchangeDataDelayedBy": 0,
+    "exchange": "TAI"
+  }
+]

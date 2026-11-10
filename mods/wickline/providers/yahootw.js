@@ -4,6 +4,7 @@
 // settings dialog. No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanText, limitPair, positive, positiveOrNull, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
+import { period } from "./yahoo.js";
 
 // Fixed: the person cannot point it elsewhere.
 export const YAHOOTW_BASE = "https://tw.stock.yahoo.com/_td-stock/api/resource/";
@@ -25,6 +26,10 @@ export function taipeiDay(ms) {
 // `{ raw: "2240" }` → 2240; `"-"` (no value yet) or anything not positive → null.
 const number = (field) => positiveOrNull(field?.raw);
 
+// An exchange code (TAI, TWO) and a currency (TWD) as sent; anything else is null.
+const exchangeCode = (value) => (typeof value === "string" && /^[A-Z]{2,5}$/.test(value) ? value : null);
+const currencyCode = (value) => (typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : null);
+
 const time = (value) => {
   const ms = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(ms) ? ms : null;
@@ -40,21 +45,25 @@ function checkStatus(response) {
 
 /**
  * Overlays by requested symbol. A row is priced only when its price is positive, its trade is from today
- * in Taipei and it is not delayed; a price outside the row's own limits gets an error instead. Any other
- * row (a placeholder `-`, yesterday's close, delayed data), or a requested symbol missing from the answer,
- * has no overlay and no error. Each quote's time is the newest trade among the answer's priced rows (the
- * feed's time), so a quiet stock is as current as the feed; its own last trade is `tradeTime`, and `day`
- * its Taipei day, which a line must share to be drawn with it. An answer with prices but none accepted
- * (all delayed, or none from today) carries `noLive`, so the source can say why it shows nothing; one
- * with no price at all (before the open, every stock halted) does not.
+ * in Taipei (or, for a symbol in `anyDay`, which only this source prices, from an earlier day) and it is
+ * not delayed; a price outside the row's own limits gets an error instead. Any other row (a placeholder
+ * `-`, yesterday's close, delayed data), or a requested symbol missing from the answer, has no overlay and
+ * no error. Each quote priced today is timed at the newest trade among those (the feed's time), so a
+ * quiet stock is as current as the feed; an earlier day's quote keeps its own trade's time, so it reads
+ * closed with its date. The own last trade is `tradeTime`, and `day` its Taipei day, which a line must
+ * share to be drawn with it. An answer with prices but none accepted from today (all delayed, or none
+ * from today) carries `noLive`, so the source can say why it shows nothing live; one with no price at all
+ * (before the open, every stock halted) does not.
  */
-export function decodeStockList(symbols, response, now) {
+export function decodeStockList(symbols, response, now, anyDay = []) {
   checkStatus(response);
   const body = parseJson(response.text, "yahootw.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("yahootw.unreadable");
   const wanted = new Set(symbols);
+  const anyDaySymbols = new Set(anyDay);
   const today = taipeiDay(now);
   const accepted = [];
+  const earlier = [];
   const errors = {};
   // A placeholder row still names its stock.
   const names = {};
@@ -67,13 +76,15 @@ export function decodeStockList(symbols, response, now) {
     const price = number(row.price);
     if (price) priced = true;
     const tradeTime = time(row.regularMarketTime);
-    if (!price || tradeTime === null || taipeiDay(tradeTime) !== today || row.exchangeDataDelayedBy !== 0) continue;
+    const day = tradeTime === null ? null : taipeiDay(tradeTime);
+    const dayOk = day === today || (day !== null && day < today && anyDaySymbols.has(symbol));
+    if (!price || !dayOk || row.exchangeDataDelayedBy !== 0) continue;
     const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
     if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("yahootw.outOfLimits");
       continue;
     }
-    accepted.push({
+    (day === today ? accepted : earlier).push({
       symbol,
       source: "yahootw",
       name,
@@ -83,14 +94,20 @@ export function decodeStockList(symbols, response, now) {
       high: number(row.regularMarketDayHigh),
       low: number(row.regularMarketDayLow),
       ...limits,
+      // An instrument only this source prices takes its market and currency from here.
+      exchange: exchangeCode(row.exchange),
+      currency: currencyCode(row.currency),
       tradeTime,
-      day: today,
+      day,
       fetchedAt: now,
     });
   }
-  // Unused when nothing was accepted (Math.max of none is -Infinity, but no quote takes it).
+  // Unused when nothing was accepted today (Math.max of none is -Infinity, but no quote takes it).
   const feedTime = Math.max(...accepted.map((quote) => quote.tradeTime));
-  const quotes = Object.fromEntries(accepted.map((quote) => [quote.symbol, { ...quote, timestamp: feedTime }]));
+  const quotes = Object.fromEntries([
+    ...accepted.map((quote) => [quote.symbol, { ...quote, timestamp: feedTime }]),
+    ...earlier.map((quote) => [quote.symbol, { ...quote, timestamp: quote.tradeTime }]),
+  ]);
   return { quotes, errors, names, ...(priced && !accepted.length && { noLive: new QuoteError("yahootw.noLiveRows") }) };
 }
 
@@ -98,7 +115,9 @@ export function decodeStockList(symbols, response, now) {
  * One symbol's line, `{ day, series, lastAt }`: today's (Taipei) one-minute closes, oldest first, today
  * as its day, and its last minute's time in ms (to tell a frozen answer from a quiet stock). A minute
  * without a trade carries the previous close; minutes before the first trade are dropped. With no point
- * from today, no line.
+ * from today, no line. `periods`: the answer's trading periods (`meta.currentTradingPeriod`, as Yahoo
+ * Finance's), also without a point from today, for a symbol only this source prices; none without a
+ * regular one.
  */
 export function decodeTick(symbol, response, now) {
   checkStatus(response);
@@ -120,7 +139,13 @@ export function decodeTick(symbol, response, now) {
     series.push(last);
     lastAt = seconds * 1000;
   });
-  return { quotes: {}, errors: {}, ...(series.length && { lines: { [symbol]: { day: today, series, lastAt } } }) };
+  const trading = chart.meta.currentTradingPeriod;
+  const regular = period(trading?.regular);
+  return {
+    quotes: {}, errors: {},
+    ...(series.length && { lines: { [symbol]: { day: today, series, lastAt } } }),
+    ...(regular && { periods: { [symbol]: { pre: period(trading.pre), regular, post: period(trading.post) } } }),
+  };
 }
 
 /** @type {Provider} */
@@ -137,11 +162,14 @@ export const yahootw = {
   linesMs: (session) => (session === "open" || session === "unknown" ? 120_000 : 600_000),
   linesPerRound: 3,
   // The price batches, then a line request per symbol; the round picks the lines once the prices are in.
-  requests(symbols) {
+  // A batch's TW-only symbols (`config.twOnly`) go with it as `anyDay`: see decodeStockList.
+  requests(symbols, config) {
+    const twOnly = new Set(config?.twOnly ?? []);
     const requests = [];
     for (let i = 0; i < symbols.length; i += YAHOOTW_BATCH) {
       const batch = symbols.slice(i, i + YAHOOTW_BATCH);
-      requests.push({ url: `${YAHOOTW_BASE}StockServices.stockList;symbols=${batch.map(encodeURIComponent).join(",")}`, headers: HEADERS, symbols: batch, kind: "quote" });
+      const url = `${YAHOOTW_BASE}StockServices.stockList;symbols=${batch.map(encodeURIComponent).join(",")}`;
+      requests.push({ url, headers: HEADERS, symbols: batch, kind: "quote", anyDay: batch.filter((symbol) => twOnly.has(symbol)) });
     }
     for (const symbol of symbols) {
       const url = `${YAHOOTW_BASE}FinanceChartService.ApacLibraCharts;type=tick;symbols=${encodeURIComponent(JSON.stringify([symbol]))}`;
@@ -152,7 +180,7 @@ export const yahootw = {
   decode(request, response, now) {
     try {
       if (request.kind === "line") return decodeTick(request.symbols[0], response, now);
-      return decodeStockList(request.symbols, response, now);
+      return decodeStockList(request.symbols, response, now, request.anyDay);
     } catch (error) {
       return failEach(request.symbols, error);
     }

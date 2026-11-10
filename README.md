@@ -33,7 +33,7 @@
 | Market | Default | Optional real-time | Notes |
 |---|---|---|---|
 | United States | Yahoo Finance (delayed) | Finnhub, with your own API key | Finnhub prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. |
-| Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. |
+| Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. A `^TW…` index Yahoo Finance lacks, such as 櫃檯指數 (`^TWOII`), needs Yahoo TW Stock on and consented; otherwise it reads not found. |
 | Hong Kong, China, Japan, Korea | Yahoo Finance (delayed) | — | Delays vary by exchange; Yahoo usually does not report them. |
 | Crypto | Binance Spot (real time) | — | Binance is unavailable in some regions, such as the United States; you can set another address that serves the same API. |
 

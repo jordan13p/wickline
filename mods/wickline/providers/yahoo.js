@@ -15,7 +15,8 @@ export function yahooUrl(symbol) {
 
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
 
-const period = (value) => finite(value?.start) && finite(value?.end) && value.end > value.start
+/** A trading period, `{ start, end }` in seconds, as `[start, end]` in ms; null when missing or empty. */
+export const period = (value) => finite(value?.start) && finite(value?.end) && value.end > value.start
   ? [value.start * 1000, value.end * 1000] : null;
 
 /** `response` is `{ status, ok, text }` with the body already read. */
