@@ -2,7 +2,7 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
-import { isTaiwanForm, kindOf, resolvedMarket } from "./markets.js";
+import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -245,6 +245,11 @@ export class Watchlist {
    */
   exchangeOf(symbol) {
     return this.quotes[symbol]?.exchange ?? this.overlays[symbol]?.[yahootw.id]?.exchange ?? null;
+  }
+
+  /** A symbol's market: an index's from the exchange its quote reports (see exchangeOf, resolvedMarket). */
+  marketFor(symbol) {
+    return resolvedMarket(symbol, this.exchangeOf(symbol));
   }
 
   /**
@@ -503,7 +508,9 @@ export class Watchlist {
    */
   serves(provider, symbol, config) {
     if (config.on[yahootw.id] && this.twOnly.has(symbol)) return provider === yahootw;
-    return provider.markets.includes(resolvedMarket(symbol, this.exchangeOf(symbol))) && provider.kinds.includes(kindOf(symbol));
+    const kind = kindOf(symbol);
+    // Only an index's market needs its quote's exchange.
+    return provider.kinds.includes(kind) && provider.markets.includes(kind === "index" ? this.marketFor(symbol) : marketOf(symbol));
   }
 
   /**

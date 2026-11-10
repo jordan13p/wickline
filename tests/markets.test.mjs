@@ -23,20 +23,20 @@ const TWELVE = [
 ];
 
 test("no filters below 8 symbols or 2 markets", () => {
-  assert.deepEqual(marketFilters(["AAPL", "2330.TW", "BTC/USDT", "NVDA"]), []);
-  assert.deepEqual(marketFilters(["AAPL", "NVDA", "MSFT", "AMZN", "GOOG", "META", "TSLA", "NFLX"]), []);
+  assert.deepEqual(marketFilters(["AAPL", "2330.TW", "BTC/USDT", "NVDA"], marketOf), []);
+  assert.deepEqual(marketFilters(["AAPL", "NVDA", "MSFT", "AMZN", "GOOG", "META", "TSLA", "NFLX"], marketOf), []);
   assert.equal(FILTER_MIN_SYMBOLS, 8);
   assert.equal(FILTER_MIN_MARKETS, 2);
 });
 
 test("filters list All, then the markets in the language's order, and the counts add up", () => {
-  const filters = marketFilters(TWELVE, "zh-TW");
+  const filters = marketFilters(TWELVE, marketOf, "zh-TW");
   assert.deepEqual(filters, [{ id: "all", count: 12 }, { id: "tw", count: 5 }, { id: "us", count: 4 }, { id: "crypto", count: 3 }]);
   assert.equal(filters.slice(1).reduce((sum, { count }) => sum + count, 0), filters[0].count);
 });
 
 test("the order is fixed by the interface language, whatever comes first in the list", () => {
-  const ids = (symbols, lang) => marketFilters(symbols, lang).map(({ id }) => id);
+  const ids = (symbols, lang) => marketFilters(symbols, marketOf, lang).map(({ id }) => id);
   // A US symbol first: Chinese still leads with Taiwan, English with the US.
   const usFirst = ["AAPL", ...TWELVE.filter((symbol) => symbol !== "AAPL")];
   assert.deepEqual(ids(usFirst, "zh-TW"), ["all", "tw", "us", "crypto"]);
@@ -54,19 +54,19 @@ test("the order is fixed by the interface language, whatever comes first in the 
 });
 
 test("adding or dragging symbols never reorders the filters", () => {
-  const ids = (symbols) => marketFilters(symbols, "en").map(({ id }) => id);
+  const ids = (symbols) => marketFilters(symbols, marketOf, "en").map(({ id }) => id);
   const before = ids(TWELVE);
   assert.deepEqual(ids(["00878.TW", ...TWELVE]), before);
   assert.deepEqual(ids([...TWELVE].reverse()), before);
 });
 
 test("a market shows its own symbols in list order", () => {
-  assert.deepEqual(visibleSymbols(TWELVE, "tw"), ["2330.TW", "0050.TW", "00632R.TW", "2317.TW", "2454.TW"]);
-  assert.deepEqual(visibleSymbols(TWELVE, "crypto"), ["BTC/USDT", "ETH/USDT", "SOL/USDT"]);
+  assert.deepEqual(visibleSymbols(TWELVE, "tw", marketOf), ["2330.TW", "0050.TW", "00632R.TW", "2317.TW", "2454.TW"]);
+  assert.deepEqual(visibleSymbols(TWELVE, "crypto", marketOf), ["BTC/USDT", "ETH/USDT", "SOL/USDT"]);
 });
 
 test("All, an unknown filter and an absent market show everything", () => {
-  for (const filter of ["all", "kr", "nonsense"]) assert.deepEqual(visibleSymbols(TWELVE, filter), TWELVE, filter);
+  for (const filter of ["all", "kr", "nonsense"]) assert.deepEqual(visibleSymbols(TWELVE, filter, marketOf), TWELVE, filter);
 });
 
 test("a drop in the visible list maps to a place in the full list", () => {
@@ -89,45 +89,45 @@ test("the symbol after another in a list, or null", () => {
 });
 
 test("the chosen filter is the stored one only while it is offered", () => {
-  const chosen = (symbols, filter) => readFilter(symbols, filter).chosen;
+  const chosen = (symbols, filter) => readFilter(symbols, filter, marketOf).chosen;
   assert.equal(chosen(TWELVE, "tw"), "tw");
   assert.equal(chosen(TWELVE, "kr"), "all");
   assert.equal(chosen(TWELVE, "all"), "all");
   // Below the thresholds there is no filter row, so a stored choice must not hide rows.
   assert.equal(chosen(["2330.TW", "AAPL"], "tw"), "all");
   // Whatever the interface language orders the filters by.
-  assert.equal(readFilter(TWELVE, "tw", "ja").chosen, "tw");
+  assert.equal(readFilter(TWELVE, "tw", marketOf, "ja").chosen, "tw");
 });
 
 test("one read of the filter gives the row, the choice and the rows it shows", () => {
-  assert.deepEqual(readFilter(TWELVE, "tw", "zh-TW"),
-    { filters: marketFilters(TWELVE, "zh-TW"), chosen: "tw", shown: visibleSymbols(TWELVE, "tw") });
-  assert.deepEqual(readFilter(TWELVE, "kr", "en"), { filters: marketFilters(TWELVE, "en"), chosen: "all", shown: TWELVE });
-  assert.deepEqual(readFilter(["2330.TW", "AAPL"], "tw"), { filters: [], chosen: "all", shown: ["2330.TW", "AAPL"] });
+  assert.deepEqual(readFilter(TWELVE, "tw", marketOf, "zh-TW"),
+    { filters: marketFilters(TWELVE, marketOf, "zh-TW"), chosen: "tw", shown: visibleSymbols(TWELVE, "tw", marketOf) });
+  assert.deepEqual(readFilter(TWELVE, "kr", marketOf, "en"), { filters: marketFilters(TWELVE, marketOf, "en"), chosen: "all", shown: TWELVE });
+  assert.deepEqual(readFilter(["2330.TW", "AAPL"], "tw", marketOf), { filters: [], chosen: "all", shown: ["2330.TW", "AAPL"] });
 });
 
 test("a symbol is in its own market's filter and in All", () => {
-  assert.equal(inFilter("2330.TW", "tw"), true);
-  assert.equal(inFilter("AAPL", "tw"), false);
-  assert.equal(inFilter("AAPL", "all"), true);
+  assert.equal(inFilter("2330.TW", "tw", marketOf), true);
+  assert.equal(inFilter("AAPL", "tw", marketOf), false);
+  assert.equal(inFilter("AAPL", "all", marketOf), true);
 });
 
 test("an add keeps the filter unless it would hide the symbol", () => {
   // The symbol is already on the list passed in (the list after the add).
-  assert.equal(filterAfterAdd(TWELVE, "tw", "2330.TW"), "tw");
-  assert.equal(filterAfterAdd(TWELVE, "tw", "AAPL"), "all");
-  assert.equal(filterAfterAdd(TWELVE, "all", "AAPL"), "all");
+  assert.equal(filterAfterAdd(TWELVE, "tw", "2330.TW", marketOf), "tw");
+  assert.equal(filterAfterAdd(TWELVE, "tw", "AAPL", marketOf), "all");
+  assert.equal(filterAfterAdd(TWELVE, "all", "AAPL", marketOf), "all");
   // A stored choice the row does not offer reads as All, which hides nothing.
-  assert.equal(filterAfterAdd(TWELVE, "kr", "AAPL"), "kr");
-  assert.equal(filterAfterAdd(["AAPL", "2330.TW"], "tw", "AAPL"), "tw");
+  assert.equal(filterAfterAdd(TWELVE, "kr", "AAPL", marketOf), "kr");
+  assert.equal(filterAfterAdd(["AAPL", "2330.TW"], "tw", "AAPL", marketOf), "tw");
 });
 
 test("a remove returns the filter to All only when its market has no symbol left", () => {
-  assert.equal(filterAfterRemove(TWELVE, "tw"), "tw");
-  assert.equal(filterAfterRemove(TWELVE.filter((s) => !s.endsWith("/USDT")), "crypto"), "all");
-  assert.equal(filterAfterRemove(TWELVE, "all"), "all");
+  assert.equal(filterAfterRemove(TWELVE, "tw", marketOf), "tw");
+  assert.equal(filterAfterRemove(TWELVE.filter((s) => !s.endsWith("/USDT")), "crypto", marketOf), "all");
+  assert.equal(filterAfterRemove(TWELVE, "all", marketOf), "all");
   // A list that fell under the thresholds keeps the choice: readFilter already reads it as All.
-  assert.equal(filterAfterRemove(["2330.TW", "AAPL"], "tw"), "tw");
+  assert.equal(filterAfterRemove(["2330.TW", "AAPL"], "tw", marketOf), "tw");
 });
 
 // A copy's own storage as localStorage gives it, recording each write; `broken` throws on every use.
@@ -191,12 +191,12 @@ test("the filter counts an index under its resolved market", () => {
   const exchanges = { "^DJI": "DJI", "^IXIC": "NIM", "^SOX": "NIM", "^TWII": "TAI" };
   const marketFor = (symbol) => resolvedMarket(symbol, exchanges[symbol]);
   const symbols = ["^DJI", "^IXIC", "^SOX", "^TWII", "2330.TW", "0050.TW", "AAPL", "NVDA", "BTC/USDT", "ETH/USDT"];
-  assert.deepEqual(marketFilters(symbols, "en", marketFor), [
+  assert.deepEqual(marketFilters(symbols, marketFor, "en"), [
     { id: "all", count: 10 }, { id: "us", count: 5 }, { id: "tw", count: 3 }, { id: "crypto", count: 2 },
   ]);
-  assert.deepEqual(readFilter(symbols, "us", "en", marketFor).shown, ["^DJI", "^IXIC", "^SOX", "AAPL", "NVDA"]);
+  assert.deepEqual(readFilter(symbols, "us", marketFor, "en").shown, ["^DJI", "^IXIC", "^SOX", "AAPL", "NVDA"]);
   // Before the first quotes the indices are other.
-  assert.deepEqual(marketFilters(symbols, "en").find(({ id }) => id === "other"), { id: "other", count: 4 });
+  assert.deepEqual(marketFilters(symbols, marketOf, "en").find(({ id }) => id === "other"), { id: "other", count: 4 });
   // The filter moves with the resolved market: adding a US index keeps the US filter once it is known.
   assert.equal(filterAfterAdd(symbols, "us", "^SOX", marketFor), "us");
   assert.equal(filterAfterRemove(["^DJI", "2330.TW"], "us", marketFor), "us");

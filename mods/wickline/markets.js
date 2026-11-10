@@ -23,7 +23,7 @@ export function kindOf(symbol) {
 }
 
 /** An index of Taiwan form (^TW…): Yahoo 奇摩股市 may know one that Yahoo Finance does not. */
-export const isTaiwanForm = (symbol) => kindOf(symbol) === "index" && symbol.startsWith("^TW");
+export const isTaiwanForm = (symbol) => symbol.startsWith("^TW");
 
 // The exchanges a source reports (Yahoo's exchangeName, Yahoo 奇摩股市's exchange) whose market is known.
 // Closed on purpose: any other exchange leaves an index under "other", never a guess.
@@ -45,8 +45,7 @@ export const exchangeMarket = (exchange) => EXCHANGE_MARKET[exchange] ?? null;
  * one is reported, or when it is not in the table). A currency or future stays other.
  */
 export function resolvedMarket(symbol, exchange) {
-  const market = marketOf(symbol);
-  return market === "other" && kindOf(symbol) === "index" ? exchangeMarket(exchange) ?? "other" : market;
+  return symbol.startsWith("^") ? exchangeMarket(exchange) ?? "other" : marketOf(symbol);
 }
 
 // The filter row shows only for a list long enough, and mixed enough, to be worth narrowing.
@@ -69,9 +68,10 @@ export const marketOrder = (lang) => MARKET_ORDER[lang] ?? MARKET_ORDER.en;
 
 /**
  * The filters to offer: `all` with the list's length, then each market on the list in `lang`'s fixed order,
- * with its count (so the counts add up to `all`). Empty below the thresholds.
+ * with its count (so the counts add up to `all`). Empty below the thresholds. `marketFor` gives a symbol's
+ * market (main.js passes the resolved one, see resolvedMarket), as in every filter function below.
  */
-export function marketFilters(symbols, lang = "en", marketFor = marketOf) {
+export function marketFilters(symbols, marketFor, lang = "en") {
   const counts = {};
   for (const symbol of symbols) {
     const market = marketFor(symbol);
@@ -82,14 +82,11 @@ export function marketFilters(symbols, lang = "en", marketFor = marketOf) {
   return [{ id: "all", count: symbols.length }, ...listed.map((id) => ({ id, count: counts[id] }))];
 }
 
-/**
- * `symbol` is in the market `filter` names; every symbol is in `all`. `marketFor` gives a symbol's market
- * (main.js passes the resolved one, see resolvedMarket); the form alone by default.
- */
-export const inFilter = (symbol, filter, marketFor = marketOf) => filter === "all" || marketFor(symbol) === filter;
+/** `symbol` is in the market `filter` names; every symbol is in `all`. */
+export const inFilter = (symbol, filter, marketFor) => filter === "all" || marketFor(symbol) === filter;
 
 /** The symbols a filter shows, in list order. `all`, an unknown filter or a market not on the list shows everything. */
-export function visibleSymbols(symbols, filter, marketFor = marketOf) {
+export function visibleSymbols(symbols, filter, marketFor) {
   if (filter === "all") return symbols;
   const shown = symbols.filter((symbol) => inFilter(symbol, filter, marketFor));
   return shown.length ? shown : symbols;
@@ -99,8 +96,8 @@ export function visibleSymbols(symbols, filter, marketFor = marketOf) {
  * The market filter as a copy reads it, for one render: the `filters` to offer (marketFilters), the
  * `chosen` one (the stored `filter` while the row offers it, otherwise All) and the symbols it shows (`shown`).
  */
-export function readFilter(symbols, filter, lang = "en", marketFor = marketOf) {
-  const filters = marketFilters(symbols, lang, marketFor);
+export function readFilter(symbols, filter, marketFor, lang = "en") {
+  const filters = marketFilters(symbols, marketFor, lang);
   const chosen = filters.some(({ id }) => id === filter) ? filter : "all";
   return { filters, chosen, shown: visibleSymbols(symbols, chosen, marketFor) };
 }
@@ -119,12 +116,12 @@ export function dropBefore(full, visible, before) {
 }
 
 /** The filter after `symbol` was added (or found already listed) in `symbols`: All when it would hide that symbol. */
-export function filterAfterAdd(symbols, filter, symbol, marketFor = marketOf) {
-  return readFilter(symbols, filter, "en", marketFor).shown.includes(symbol) ? filter : "all";
+export function filterAfterAdd(symbols, filter, symbol, marketFor) {
+  return readFilter(symbols, filter, marketFor).shown.includes(symbol) ? filter : "all";
 }
 
 /** The filter after a remove left `symbols`: All when the chosen market has no symbol left. */
-export function filterAfterRemove(symbols, filter, marketFor = marketOf) {
+export function filterAfterRemove(symbols, filter, marketFor) {
   return symbols.some((symbol) => inFilter(symbol, filter, marketFor)) ? filter : "all";
 }
 

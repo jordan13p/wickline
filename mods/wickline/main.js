@@ -85,10 +85,12 @@ export default class Wickline extends View {
     // with the tab, so they must never override a later choice), else "all". Only a choice made here is
     // stored. Rows and the filter row read it through filterState, so a market no longer on the list reads as All.
     this.filter = openFilter(filterStorage, given.filter);
-    // A symbol's market for the filter and the fading rows: an index's from the exchange its quote reports,
-    // or, for a row still fading out (its quote already dropped), the one its row was drawn with.
-    this.marketFor = (symbol) => resolvedMarket(symbol,
-      this.watch.exchangeOf(symbol) ?? this.leaving.find((g) => g.symbol === symbol)?.row.quote?.exchange ?? null);
+    // A symbol's market for the filter and the fading rows: the watchlist's (an index's from the exchange its
+    // quote reports), or, for a row still fading out (its quote already dropped), the one its row was drawn with.
+    this.marketFor = (symbol) => {
+      const fading = this.watch.exchangeOf(symbol) === null && this.leaving.find((g) => g.symbol === symbol);
+      return fading ? resolvedMarket(symbol, fading.row.quote?.exchange ?? null) : this.watch.marketFor(symbol);
+    };
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};
     this.typed = "";
@@ -189,7 +191,7 @@ export default class Wickline extends View {
 
   // The market filter as this copy reads it: `{ filters, chosen, shown }` (see readFilter in markets.js).
   filterState() {
-    return readFilter(this.watch.preferences.symbols, this.filter, this.lang, this.marketFor);
+    return readFilter(this.watch.preferences.symbols, this.filter, this.marketFor, this.lang);
   }
 
   // A filter that would hide `symbol` (just added, or already listed) goes back to All, so the person sees it.

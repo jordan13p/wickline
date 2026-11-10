@@ -8,7 +8,6 @@ import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/
 import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
-import { resolvedMarket } from "../mods/wickline/markets.js";
 import { advance, chart, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay } from "../mods/wickline/providers/yahootw.js";
@@ -725,7 +724,7 @@ test("^TWOII, unknown to Yahoo Finance, is priced by Yahoo 奇摩股市 alone", 
     assert.equal(quote.source, "yahootw");
     assert.deepEqual([quote.price, quote.name, quote.currency], [321.97, "櫃檯指數", "TWD"]);
     assert.equal(w.errors["^TWOII"], undefined);
-    assert.equal(resolvedMarket("^TWOII", w.exchangeOf("^TWOII")), "tw");
+    assert.equal(w.marketFor("^TWOII"), "tw");
     assert.equal(sessionOf(quote, now), "open");
     // Asked once: its 404 moved it, and Yahoo Finance's round was not restarted.
     assert.equal(chartCount(host), 1);
@@ -818,7 +817,7 @@ test("with Yahoo 奇摩股市 off, ^TWOII is not found", async () => {
   host.prefs = undefined;
   await twOnlyRun(host, (w) => {
     assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
-    assert.equal(resolvedMarket("^TWOII", w.exchangeOf("^TWOII")), "other");
+    assert.equal(w.marketFor("^TWOII"), "other");
     assert.deepEqual(host.requests.filter(isYahootw), []);
   });
 });

@@ -2,11 +2,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SPIN_MS, UNDO_MS, rowsWithGhosts, settleOffset, spinTurnsFor } from "../mods/wickline/motion.js";
-import { readFilter, resolvedMarket } from "../mods/wickline/markets.js";
+import { marketOf, readFilter, resolvedMarket } from "../mods/wickline/markets.js";
 
 const ghost = (symbol, before) => ({ symbol, before });
 // The rows as the panel asks for them: the filter read once, as a render reads it.
-const rows = (symbols, filter, ghosts) => rowsWithGhosts(symbols, readFilter(symbols, filter), ghosts);
+const rows = (symbols, filter, ghosts) => rowsWithGhosts(symbols, readFilter(symbols, filter, marketOf), ghosts, marketOf);
 const names = (entries) => entries.map(({ symbol, ghost: g }) => (g ? `~${symbol}` : symbol));
 
 test("a ghost sits where its row was: in front of the symbol that followed it", () => {
@@ -85,6 +85,6 @@ test("a removed index fades under its resolved market", () => {
   const marketFor = (symbol) => resolvedMarket(symbol, exchanges[symbol]);
   const symbols = ["AAPL", "2330.TW", "0050.TW", "NVDA", "BTC/USDT", "ETH/USDT", "MSFT", "2317.TW"];
   const ghosts = [{ symbol: "^DJI", before: "NVDA" }];
-  const drawn = rowsWithGhosts(symbols, readFilter(symbols, "us", "en", marketFor), ghosts, marketFor).map(({ symbol }) => symbol);
+  const drawn = rowsWithGhosts(symbols, readFilter(symbols, "us", marketFor, "en"), ghosts, marketFor).map(({ symbol }) => symbol);
   assert.deepEqual(drawn, ["AAPL", "^DJI", "NVDA", "MSFT"]);
 });
