@@ -732,8 +732,14 @@ test("an index is pending until its first quote, overlay or error", async () => 
   const bare = taiwanHost(BOTH);
   bare.store = { version: 1, symbols: ["^TWII", "AAPL"], paused: false };
   await firstRound(bare, (w) => {
+    assert.ok(w.quotes["^TWII"]);
     assert.equal(w.exchangeOf("^TWII"), null);
     assert.equal(w.pendingIndex("^TWII"), false);
+  });
+  // Priced by Yahoo 奇摩股市 alone: its market is known from that source.
+  await twOnlyRun(twOnlyHost(["^TWOII"]), (w) => {
+    assert.ok(w.shown("^TWOII", TW_NOW + 5_000));
+    assert.equal(w.pendingIndex("^TWOII"), false);
   });
   // Not found by either source.
   await twOnlyRun(twOnlyHost(["^TWXYZ"]), (w) => {

@@ -125,7 +125,7 @@ export function filterAfterAdd(symbols, filter, symbol, marketFor) {
  * `pending` (an index still waiting for its first quote, whose market is not known yet).
  */
 export function filterAfterRemove(symbols, filter, marketFor, pending) {
-  return symbols.some((symbol) => inFilter(symbol, filter, marketFor)) || symbols.some(pending) ? filter : "all";
+  return symbols.some((symbol) => inFilter(symbol, filter, marketFor) || pending(symbol)) ? filter : "all";
 }
 
 // The key under which a copy keeps its market filter in its own storage (see main.js).

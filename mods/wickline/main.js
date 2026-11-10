@@ -154,9 +154,10 @@ export default class Wickline extends View {
     cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
-        if (command === "refresh") this.refresh(cx);
-        else if (command === "pause") this.act(cx, () => this.togglePause());
-        cx.notify();
+        if (command === "refresh") {
+          this.refresh(cx);
+          cx.notify();
+        } else if (command === "pause") this.act(cx, () => this.togglePause());
       }
     });
   }
@@ -209,11 +210,9 @@ export default class Wickline extends View {
     };
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
-      // An index still waiting for its first quote may belong to the chosen market: keep the choice until it reports.
-      // Otherwise the chosen market's last symbol went: back to All for good, so the filter does not come back the
-      // day the market does.
+      // Back to All when the chosen market has no symbol left (see filterAfterRemove).
       this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter, this.marketFor,
-        (symbol) => this.watch.pendingIndex(symbol)));
+        (held) => this.watch.pendingIndex(held)));
       if (notice.code === "notice.removed" && ghost.height > 0) {
         this.added.delete(symbol);
         this.leaving.push(ghost);
