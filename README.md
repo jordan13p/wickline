@@ -32,7 +32,7 @@
 
 | Market | Default | Optional source | Notes |
 |---|---|---|---|
-| United States | Yahoo Finance (real time, updates every minute) | Finnhub (updates about every 15–30 s), with your own API key | Both are real time; Finnhub only updates more often. It prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. When Finnhub falls behind, for example while it waits out a rate limit, a Yahoo Finance price at least as recent shows instead. |
+| United States | Yahoo Finance (real time for US stocks and the S&P, Dow Jones and Nasdaq indexes, updates every minute; Cboe, NYSE and Russell indexes and OTC stocks are delayed 15–20 min) | Finnhub (updates about every 15–30 s), with your own API key | For stocks both are real time; Finnhub only updates more often. It prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. When Finnhub falls behind, for example while it waits out a rate limit, a Yahoo Finance price at least as recent shows instead. |
 | Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. A `^TW…` index Yahoo Finance lacks, such as 櫃檯指數 (`^TWOII`), needs Yahoo TW Stock on and consented; otherwise it reads not found. |
 | Hong Kong, China, Japan, Korea | Yahoo Finance (delayed 15 or 20 min) | — | Hong Kong, China and Japan 15 min, Korea 20 min (Taiwan 20 min). During the lunch break (Tokyo 11:30–12:30, Hong Kong 12:00–13:00, Shanghai and Shenzhen 11:30–13:00 local time) a row reads `Lunch`. An exchange Wickline does not know reads `Yahoo · delayed`, its delay not provided. |
 | Currencies | Yahoo Finance (real time, updates every minute) | — | Quotes such as `EURUSD=X` are indicative, not traded prices. The currency market reads closed from Friday 22:00 to Sunday 22:00 UTC. |
@@ -41,7 +41,7 @@
 
 Each row has a dot and a label:
 
-- **Filled dot**: live. A real-time source (Yahoo Finance too, for US stocks, US indexes and currencies), the market trading, the quote at most 120 seconds old; the label says `Live`, and the source's name is in the detail view.
+- **Filled dot**: live. A real-time source (Yahoo Finance too, for US stocks, the S&P, Dow Jones and Nasdaq indexes and currencies), the market trading, the quote at most 120 seconds old; the label says `Live`, and the source's name is in the detail view.
 - **Ring**: delayed or stalled. Yahoo's prices from a delayed exchange (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds or a delayed one older than its delay plus 5 minutes (`quote stopped at 13:05`; a Yahoo Finance quote's age is taken when it was fetched, from today's open at the earliest, and one not fetched for 5 minutes also reads stopped), or a session not known yet (also a real-time Yahoo Finance quote still at the previous close after the open, until today's first trade arrives).
 - **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`, `Lunch`).
 
