@@ -168,3 +168,8 @@ export function detailTimes(quote, now, lang, tx) {
   return [tx("detail.quoted", { time: `${date ? `${date} ` : ""}${formatTime(quote.timestamp, true)}` }), ...lastTrade,
     tx("detail.fetched", { time: formatTime(quote.fetchedAt, true) })];
 }
+
+/** A row with no price whose fetch failed: it will not price soon, so it gives up its empty lines. */
+export function collapsedRow(row) {
+  return !row.quote && Boolean(row.failed);
+}

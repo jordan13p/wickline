@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeTone, chartGeometry, detailTimes, bandCurrency, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
+import { changeTone, chartGeometry, collapsedRow, detailTimes, bandCurrency, formatBandPrice, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { freshness } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -139,4 +139,16 @@ test("the detail times: quoted, the last trade when it differs, fetched", () => 
   assert.deepEqual(detailTimes(plain, now, "en", tx), ["Quote at 09:41:13", "Fetched 09:41:19"]);
   // An earlier day puts its date before the quote time.
   assert.deepEqual(detailTimes({ ...plain, timestamp: at(9, 41, 13) - 86_400_000 }, now, "en", tx)[0], "Quote at Nov 8 09:41:13");
+});
+
+test("a row collapses only when it has no price and its fetch failed", () => {
+  const notFound = { code: "yahoo.notFound", params: {} };
+  assert.equal(collapsedRow({ quote: null, failed: notFound }), true);
+  assert.equal(collapsedRow({ quote: undefined, failed: { code: "request.timeout", params: {} } }), true);
+  // Waiting for its first quote: keeps the grid, so a price arriving moves nothing.
+  assert.equal(collapsedRow({ quote: null, failed: undefined }), false);
+  // Only the real-time source failed: still waiting for the base.
+  assert.equal(collapsedRow({ quote: null, failed: undefined, fallback: { code: "request.timeout", params: {} } }), false);
+  // Cached: a price from an earlier round with an error keeps the grid and its cached note.
+  assert.equal(collapsedRow({ quote: { symbol: "2330.TW", price: 1000 }, failed: notFound }), false);
 });

@@ -471,3 +471,13 @@ test("a lit price is a solid block that never animates", () => {
   assert.doesNotMatch(box, /opacity|transition|loop\(|frames\(|tint/);
 });
 
+
+test("a collapsed sidebar row is one line with its notes", () => {
+  const panel = code(read(new URL("ui/panel.js", MOD)));
+  const row = panel.slice(panel.indexOf("function sidebarRow("), panel.indexOf("function tableCell("));
+  assert.match(row, /collapsedRow\(row\)/);
+  // A fading (ghost) row collapses exactly as a live one: the branch never looks at `ghost`, and it comes
+  // before the frame is chosen, so a removed failed row fades from its short height.
+  assert.doesNotMatch(row, /!ghost\s*&&\s*collapsedRow|collapsedRow[^;]*!ghost/);
+  assert.ok(row.indexOf("collapsedRow(row)") < row.indexOf("ghost ? ghostFrame("));
+});

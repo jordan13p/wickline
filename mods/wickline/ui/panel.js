@@ -4,7 +4,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { bandCurrency, displayName, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
+import { bandCurrency, collapsedRow, displayName, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
 import { freshness, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
@@ -182,7 +182,7 @@ function waiting(view, row) {
 
 // One line of the sidebar grid. Its line height is its own height in px (a bare number is a multiplier), so
 // the glyphs and their descenders fit, and equal boxes put the left and right lines on one baseline. It is
-// drawn even when empty, so every row keeps the same height.
+// drawn even when empty, so every row keeps the same height, except a collapsed row (see sidebarRow).
 const lineBox = (height, el = div()) => el.flex_none().h(height).line_height(`${height}px`);
 
 // The price with its currency in its own slot, then the change and the change %, right-aligned on the
@@ -344,10 +344,21 @@ export function sidebar(view, root, t) {
 // A three-line grid: symbol, name and freshness on the left; the day line spanning all three; the price,
 // the change and the change % at a fixed width on the right, so a wider pane gives its room to the left
 // lines, and past NAME_ROOM to the day line. A row without a name of its own (a pair, a name that repeats
-// the ticker) keeps line 2 empty. Notes go under the grid.
+// the ticker) keeps line 2 empty. Notes go under the grid. The exception is a collapsed row (no price, its
+// fetch failed): the ticker and its state on one line, the reason under it. A fading row collapses as a
+// live one does, so a removed failed row fades from its short height.
 function sidebarRow(view, t, symbol, place, now, ghost) {
   const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
   const lineW = sparkWidth(view.size?.width);
+  if (collapsedRow(row)) {
+    // The state ends where a price's digits end, on priceStack's right edge.
+    const short = v_flex().py(8).gap(2)
+      .child(lineBox(16, h_flex().gap(COLUMN_GAP))
+        .child(div().flex_1().min_w(0).font_semibold().truncate().child(symbol))
+        .child(div().flex_none().w(NUMBER_W + CODE_W).pr(CODE_W).text_right().whitespace_nowrap().text_size(11).text_color(t.dim).child(waiting(view, row))))
+      .children(rowNotes(view, t, row));
+    return ghost ? ghostFrame(t, ghost, short) : rowFrame(view, t, symbol, place, short, false);
+  }
   const body = v_flex().py(8).gap(2)
     .child(h_flex().gap(COLUMN_GAP).items_start()
       .child(v_flex().flex_1().min_w(0).gap(2)
