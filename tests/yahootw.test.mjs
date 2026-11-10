@@ -342,6 +342,20 @@ test("earlier-day rows keep their own time and leave feed time and noLive alone"
 const FUTURES = ["WTX&", "WTX@", "WMT&", "WTF&", "WTE&"];
 const futures = (response, now = FUT_NOW, symbols = FUTURES) => yahootw.decode(yahootw.requests(symbols, { anyDay: symbols })[0], response, now);
 
+test("a priced row refused as delayed or far ahead says why for a symbol only this source prices, never for an overlay", () => {
+  const delayed = futures(changed({ "WTX&": { exchangeDataDelayedBy: 15 } }, FUTURES_ROWS));
+  assert.equal(delayed.quotes["WTX&"], undefined);
+  assert.equal(delayed.errors["WTX&"].code, "yahootw.noLiveRows");
+  const ahead = futures(changed({ "WTX&": { regularMarketTime: "2026-11-10T06:36:30Z" } }, FUTURES_ROWS)); // an hour ahead
+  assert.equal(ahead.errors["WTX&"].code, "yahootw.noLiveRows");
+  // A placeholder only names it.
+  const placeholder = futures(changed({ "WTX&": { price: { raw: "-" } } }, FUTURES_ROWS));
+  assert.equal(placeholder.errors["WTX&"], undefined);
+  assert.equal(placeholder.names["WTX&"], "台指期近一");
+  // A stock's delayed row stays silent: another source prices it.
+  assert.equal(decode(changed({ "2330.TW": { exchangeDataDelayedBy: 20 } })).errors["2330.TW"], undefined);
+});
+
 test("a future's trading day starts at 15:00 in Taipei, and Friday night is Monday's", () => {
   assert.equal(tradingDay("WTX&", at("2026-11-09T07:00:00Z")), taipeiDay(at("2026-11-10T05:35:37Z"))); // Mon 15:00 → Tue's
   assert.equal(tradingDay("WTX&", at("2026-11-09T06:59:59Z")), taipeiDay(at("2026-11-09T06:59:59Z"))); // Mon 14:59:59 → Mon's

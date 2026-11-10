@@ -101,8 +101,9 @@ function checkStatus(response) {
  * of `now`, as the local clock may be a little behind Yahoo's at 15:00; for a symbol in `anyDay`, which only this
  * source prices, also from an earlier day) and it is not delayed; a price outside the row's own limits gets an error instead,
  * except a future's (TAIFEX's limits are not checked; they are still kept). A futures-form row from any exchange
- * but TFE gives nothing, not even its name. Any other row (a placeholder `-`, yesterday's close, delayed data), or a
- * requested symbol missing from the answer, has no overlay and no error. Each quote priced today is timed at the
+ * but TFE gives nothing, not even its name. A priced row of a symbol in `anyDay` refused as delayed or too far ahead
+ * gets `yahootw.noLiveRows`. Any other row (a placeholder `-`, yesterday's close, delayed data), or a requested
+ * symbol missing from the answer, has no overlay and no error. Each quote priced today is timed at the
  * newest trade among today's on its own market clock (the feed's time): futures on theirs, every other row
  * (stocks and indices, TAI and TWO together) on the stock clock, so a quiet stock is as current as the stock
  * feed and never stamped with a night futures trade. An earlier day's quote keeps its own trade's time, so it
@@ -141,8 +142,13 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const today = todayOn[clock];
     const aheadOk = !future || tradeTime - now <= FUTURE_AHEAD_MS;
     const isToday = aheadOk && (day === today || (future && day > today));
-    const dayOk = day !== null && aheadOk && (isToday || (day < today && anyDaySymbols.has(symbol)));
-    if (!price || !dayOk || row.exchangeDataDelayedBy !== 0) continue;
+    const soleHere = anyDaySymbols.has(symbol);
+    const dayOk = day !== null && aheadOk && (isToday || (day < today && soleHere));
+    const delayed = row.exchangeDataDelayedBy !== 0;
+    // A symbol only this source prices has no other row to fall back on: a price refused as not real time says so,
+    // so the kept price reads cached rather than taken for a name-only answer.
+    if (price && soleHere && (delayed || !aheadOk)) errors[symbol] = new QuoteError("yahootw.noLiveRows");
+    if (!price || !dayOk || delayed) continue;
     const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
     if (!future && !withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("yahootw.outOfLimits");

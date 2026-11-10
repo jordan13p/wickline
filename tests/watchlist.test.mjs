@@ -1192,6 +1192,34 @@ test("after a price, a name-only answer keeps a future's price unmarked, and a m
   }, FUT_NOW);
 });
 
+// A row with a price that is refused (delayed, or timed too far ahead) is not a name-only answer: the kept price reads
+// cached, with why. Only a placeholder (`-`) leaves it unmarked.
+test("after a price, a delayed or far-ahead row keeps a future's price cached as not real time; a placeholder leaves it unmarked", async () => {
+  let answer = "priced";
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => (answer === "priced" ? futuresAt(host.clock - 5_000)
+      : answer === "delayed" ? futuresAt(host.clock - 5_000, { "WTX&": { exchangeDataDelayedBy: 15 } })
+      : answer === "ahead" ? futuresAt(host.clock + 3_600_000)
+      : futuresAt(host.clock - 5_000, { "WTX&": { price: { raw: "-" } } })),
+  });
+  await soleRun(host, async (w) => {
+    for (const [step, until] of [["delayed", 75_000], ["ahead", 150_000]]) {
+      answer = "priced";
+      await advance(host, FUT_NOW + until - 30_000);
+      assert.equal(w.shown("WTX&").cached, undefined, step);
+      answer = step;
+      await advance(host, FUT_NOW + until);
+      const kept = w.shown("WTX&");
+      assert.deepEqual([kept.price, kept.cached], [42604, true], step);
+      assert.equal(w.errors["WTX&"].code, "yahootw.noLiveRows", step);
+    }
+    answer = "placeholder";
+    await advance(host, FUT_NOW + 225_000);
+    assert.equal(w.shown("WTX&").cached, undefined);
+    assert.equal(w.errors["WTX&"], undefined);
+  }, FUT_NOW);
+});
+
 test("a futures code Yahoo 奇摩股市 does not answer reads not found on Yahoo 奇摩股市", async () => {
   await soleRun(futuresHost(["WTXP&"]), (w, host) => {
     assert.equal(w.errors["WTXP&"].code, "yahootw.notFound");
