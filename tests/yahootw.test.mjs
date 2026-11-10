@@ -6,6 +6,7 @@ import {
   YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, ownPeriods, taipeiDay, tradingDay, yahootw,
 } from "../mods/wickline/providers/yahootw.js";
 import { t } from "../mods/wickline/i18n.js";
+import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import {
   CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_ROWS, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, LINE_PERIODS, NIGHT, at, day,
   jsonFixture, ok,
@@ -470,6 +471,38 @@ test("a future's line keeps its trading day from 15:00, also after midnight", ()
 test("a future's line gives its sessions from sourceTradingPeriods", () => {
   const { periods } = yahootw.decode(yahootw.requests(["WTX&"]).find((r) => r.kind === "line"), ok(FUTURES_TICK), FUT_NOW);
   assert.deepEqual(periods["WTX&"], LINE_PERIODS);
+});
+
+// A line's segments describe only their own trading day: from 15:00 a day session's segments say nothing of the night, so
+// the TAIFEX hours decide, and a feed that stops at the day close reads stalled in the night, never closed.
+test("a future's line segments are read only on their own trading day", () => {
+  const close = at("2026-11-10T05:44:59Z"); // 13:44:59 Tuesday
+  const quote = { symbol: "WTX&", day: tradingDay("WTX&", close), tradeTime: close, timestamp: close, source: "yahootw" };
+  // The 13:45–15:00 break: Tuesday's own segments, closed.
+  const two = at("2026-11-10T06:00:00Z");
+  assert.equal(ownPeriods(quote, LINE_PERIODS, two), LINE_PERIODS);
+  assert.equal(sessionOf({ ...quote, periods: LINE_PERIODS }, two), "closed");
+  // 15:10: Wednesday's trading day, so Tuesday's segments go; the night session is open, and the 13:44:59 price stalled.
+  const night = at("2026-11-10T07:10:00Z");
+  const periods = ownPeriods(quote, LINE_PERIODS, night);
+  assert.deepEqual(periods, { pre: null, regular: LINE_PERIODS.regular, post: null });
+  const shown = { ...quote, periods };
+  assert.equal(sessionOf(shown, night), "open");
+  assert.equal(freshness(shown, "open", night).state, "stalled");
+  // Friday's day session, seen on Saturday: Monday's trading day, and the TAIFEX hours read closed.
+  const friday = at("2026-11-13T05:44:59Z");
+  const fridayQuote = { ...quote, day: tradingDay("WTX&", friday), tradeTime: friday, timestamp: friday };
+  const fridayPeriods = { pre: null, regular: [at("2026-11-12T07:00:00Z"), at("2026-11-13T05:45:00Z")], post: null,
+    segments: [[at("2026-11-12T07:00:00Z"), at("2026-11-12T21:00:00Z")], [at("2026-11-13T00:45:00Z"), at("2026-11-13T05:45:00Z")]] };
+  const saturday = at("2026-11-14T02:00:00Z");
+  assert.equal(sessionOf({ ...fridayQuote, periods: ownPeriods(fridayQuote, fridayPeriods, saturday) }, saturday), "closed");
+  // Friday night's segments are Monday's trading day's, so on Sunday they still hold.
+  const lastNight = at("2026-11-13T20:59:59Z");
+  const nightQuote = { ...quote, day: tradingDay("WTX&", lastNight), tradeTime: lastNight, timestamp: lastNight };
+  const mondayPeriods = { pre: null, regular: [at("2026-11-13T07:00:00Z"), at("2026-11-16T05:45:00Z")], post: null,
+    segments: [[at("2026-11-13T07:00:00Z"), at("2026-11-13T21:00:00Z")], [at("2026-11-16T00:45:00Z"), at("2026-11-16T05:45:00Z")]] };
+  const sunday = at("2026-11-15T14:00:00Z");
+  assert.equal(ownPeriods(nightQuote, mondayPeriods, sunday), mondayPeriods);
 });
 
 test("a future's line periods belong to its trading day, which began at 15:00 the day before", () => {

@@ -57,7 +57,10 @@ const dayOf = (symbol) => (kindOf(symbol) === "future" ? futuresDay : taipeiDay)
 /**
  * The trading periods a quote of a symbol this source prices alone is read by (Watchlist#baseQuote):
  * - `periods` (its last line's) while their regular session starts on the quote's own trading day or later (a
- *   future's night session, begun at 15:00 the day before, is that day's);
+ *   future's night session, begun at 15:00 the day before, is that day's); a future's without their `segments`
+ *   once `now` is on a later trading day than theirs, since those describe only their own day: its session is
+ *   then read from the TAIFEX hours (futuresSegment), so a feed that stops at the day close reads stalled in the
+ *   night, and closed between sessions;
  * - else, for a quote from an earlier trading day than `now`'s, a session that ended at its own trade, so it reads
  *   closed with its date;
  * - else null: today's price without today's periods reads unconfirmed, never closed.
@@ -67,7 +70,12 @@ const dayOf = (symbol) => (kindOf(symbol) === "future" ? futuresDay : taipeiDay)
 export function ownPeriods(quote, periods, now) {
   const dayAt = dayOf(quote.symbol);
   const day = dayAt(quote.tradeTime);
-  if (periods?.regular && dayAt(periods.regular[0]) >= day) return periods;
+  const periodsDay = periods?.regular ? dayAt(periods.regular[0]) : null;
+  if (periodsDay !== null && periodsDay >= day) {
+    if (!periods.segments || periodsDay >= dayAt(now)) return periods;
+    const { pre, regular, post } = periods;
+    return { pre, regular, post };
+  }
   return day < dayAt(now) ? { pre: null, regular: [quote.tradeTime, quote.tradeTime], post: null } : null;
 }
 

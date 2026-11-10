@@ -1595,8 +1595,8 @@ test("a future without a price yet is asked as its session opens", async () => {
   }
 });
 
-// At 15:00 the wake usually comes before the night's first trade; the row still reads the day's segments, so the
-// next ask must not wait the break's 60 s.
+// At 15:00 the wake usually comes before the night's first trade; the day's segments no longer hold on the new trading
+// day, so the row reads the night session and the next ask does not wait the break's 60 s.
 test("at 15:00 a priced future is asked every 10 s until the night's first trade", async () => {
   const from = at("2026-11-10T06:59:50Z");          // 14:59:50
   const first = at("2026-11-10T07:00:05Z"); // 15:00:05
@@ -1613,24 +1613,25 @@ test("at 15:00 a priced future is asked every 10 s until the night's first trade
   }, from);
 });
 
-// With no night trade (a holiday), the 10 s asks end a minute after 15:00 and the row reads closed throughout.
-test("a minute after 15:00 without a night trade, the break's cadence is back", async () => {
+// With no night trade (a holiday, or a feed that stopped at the day close), the day close is not the night's: from 15:00
+// the row reads stalled, never closed, and is asked every 10 s as in any open session.
+test("without a night trade, the day close reads stalled from 15:00 and is asked every 10 s", async () => {
   const from = at("2026-11-10T06:59:50Z");          // 14:59:50
   const last = at("2026-11-10T05:44:59Z");          // 13:44:59
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-10T05:44:00Z"), SEGMENTS),
   });
   await soleRun(host, async (w) => {
-    const opening = at("2026-11-10T07:00:00Z");
-    await advance(host, opening + 55_000);
-    // 14:59:50, then 15:00:00 to 15:00:50 every 10 s.
-    assert.equal(stockLists(host).length, 7);
-    await advance(host, opening + 90_000);
+    const ten = at("2026-11-10T07:10:00Z");         // 15:10
+    await advance(host, ten);
     const asked = stockLists(host).length;
-    await advance(host, opening + 270_000);
-    assert.equal(stockLists(host).length - asked, 3);
+    await advance(host, ten + 60_000);
+    assert.ok(stockLists(host).length - asked >= 5, String(stockLists(host).length - asked));
     const now = host.clock;
-    assert.equal(sessionOf(w.shown("WTX&", now), now), "closed");
+    const quote = w.shown("WTX&", now);
+    assert.equal(sessionOf(quote, now), "open");
+    const fresh = freshness(quote, "open", now);
+    assert.deepEqual([fresh.state, fresh.stoppedAt], ["stalled", last]);
   }, from);
 });
 
