@@ -831,7 +831,11 @@ export class Watchlist {
     for (const [symbol, error] of Object.entries(result.errors)) {
       this.errors[symbol] = coded(error);
       // A Taiwan index Yahoo Finance does not know may be Yahoo 奇摩股市's alone; the error stays until it is priced.
-      if (error.code === "yahoo.notFound" && isTaiwanForm(symbol) && this.config().on[yahootw.id]) this.twOnly.set(symbol, null);
+      // A TW-only row keeps nothing of a quote Yahoo Finance gave before.
+      if (error.code === "yahoo.notFound" && isTaiwanForm(symbol) && this.config().on[yahootw.id]) {
+        this.twOnly.set(symbol, null);
+        delete this.quotes[symbol];
+      }
     }
     if (routes) this.wakeResolved(before);
   }

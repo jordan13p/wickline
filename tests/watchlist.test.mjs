@@ -783,6 +783,27 @@ test("a rate limit shows on a TW-only row", async () => {
   });
 });
 
+// Yahoo Finance priced ^TWII, then no longer knows it: TW-only from then on, with nothing kept of Yahoo's quote.
+test("a symbol turned TW-only keeps no Yahoo Finance quote", async () => {
+  let known = true;
+  const host = twOnlyHost(["^TWII"], { yahoo: (symbol) => (known ? atTai(symbol) : NOT_FOUND), line: offline });
+  await twOnlyRun(host, async (w) => {
+    assert.equal(w.quotes["^TWII"].source, "yahoo");
+    known = false;
+    const asked = charts(host, "^TWII");
+    await advance(host, TW_NOW + 70_000);
+    assert.equal(charts(host, "^TWII"), asked + 1);
+    assert.equal(w.quotes["^TWII"], undefined);
+    // Yahoo 奇摩股市 prices it again: nothing of Yahoo Finance's quote shows beside that price.
+    await advance(host, TW_NOW + 85_000);
+    const quote = w.shown("^TWII");
+    assert.equal(quote.source, "yahootw");
+    assert.notEqual(quote.chartSource, "yahoo");
+    assert.notDeepEqual(quote.series, BASE_SERIES);
+    assert.equal(w.errors["^TWII"], undefined);
+  });
+});
+
 // A TW-only row has no base to fall back to: its own error says why, and no fallback note repeats it.
 test("a TW-only row's failure is its error alone, not also an overlay error", async () => {
   await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => new Promise(() => {}) }), async (w, host) => {
