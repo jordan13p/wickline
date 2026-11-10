@@ -128,6 +128,15 @@ export function filterAfterRemove(symbols, filter, marketFor, pending) {
   return symbols.some((symbol) => inFilter(symbol, filter, marketFor) || pending(symbol)) ? filter : "all";
 }
 
+/**
+ * The remove kept `filter` only for a `pending` index: no symbol is in its market. The index may resolve
+ * elsewhere, so the choice settles (filterAfterRemove with nothing pending) once no index is pending.
+ */
+export function heldFilter(symbols, filter, marketFor, pending) {
+  return filter !== "all" && filterAfterRemove(symbols, filter, marketFor, pending) === filter
+    && !symbols.some((symbol) => inFilter(symbol, filter, marketFor));
+}
+
 // The key under which a copy keeps its market filter in its own storage (see main.js).
 export const FILTER_STORAGE_KEY = "wickline.filter";
 

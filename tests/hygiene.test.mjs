@@ -495,3 +495,12 @@ test("the pause key acts as the button does", () => {
   assert.match(main, /command === "pause"\)\s*this\.act\(cx, \(\) => this\.togglePause\(\)\)/);
   assert.doesNotMatch(main, /command === "pause"\)\s*this\.togglePause\(\)/);
 });
+
+test("render settles a choice a pending index held", () => {
+  const main = code(read(new URL("main.js", MOD)));
+  assert.match(main, /this\.filterHeld = heldFilter\(/);
+  const render = main.slice(main.indexOf("  render() {"), main.indexOf("\n  }\n", main.indexOf("  render() {")));
+  // After the sync, so another copy's quotes count; with nothing pending, so the choice cannot stay held.
+  assert.ok(render.indexOf("this.watch.sync()") < render.indexOf("this.filterHeld"), "settles after watch.sync()");
+  assert.match(render, /if \(this\.filterHeld[\s\S]*?filterAfterRemove\([^;]*\(\) => false\)/);
+});

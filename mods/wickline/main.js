@@ -13,7 +13,7 @@ import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
 import { changeTone, number } from "./format.js";
 import { sessionOf, shownLimit } from "./freshness.js";
-import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, nextOf, openFilter, readFilter, resolvedMarket } from "./markets.js";
+import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, heldFilter, nextOf, openFilter, readFilter, resolvedMarket } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
@@ -85,6 +85,8 @@ export default class Wickline extends View {
     // with the tab, so they must never override a later choice), else "all". Only a choice made here is
     // stored. Rows and the filter row read it through filterState, so a market no longer on the list reads as All.
     this.filter = openFilter(filterStorage, given.filter);
+    // A remove kept the choice only for an index awaiting its first quote (see heldFilter): render settles it.
+    this.filterHeld = false;
     // A symbol's market for the filter and the fading rows: the watchlist's (an index's from the exchange its
     // quote reports), or, for a row still fading out (its quote already dropped), the one its row was drawn with.
     this.marketFor = (symbol) => {
@@ -211,8 +213,10 @@ export default class Wickline extends View {
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
       // Back to All when the chosen market has no symbol left (see filterAfterRemove).
-      this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter, this.marketFor,
-        (held) => this.watch.pendingIndex(held)));
+      const left = this.watch.preferences.symbols;
+      const pending = (held) => this.watch.pendingIndex(held);
+      this.filterHeld = heldFilter(left, this.filter, this.marketFor, pending);
+      this.resetFilter(filterAfterRemove(left, this.filter, this.marketFor, pending));
       if (notice.code === "notice.removed" && ghost.height > 0) {
         this.added.delete(symbol);
         this.leaving.push(ghost);
@@ -508,6 +512,12 @@ export default class Wickline extends View {
     if (this.draft) return settingsView(this, t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
+    // A choice a remove held for a pending index settles once none is pending: an index that reported
+    // another market must not leave it stored, or the next add in that market would narrow the list.
+    if (this.filterHeld && !this.watch.preferences.symbols.some((symbol) => this.watch.pendingIndex(symbol))) {
+      this.filterHeld = false;
+      this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter, this.marketFor, () => false));
+    }
     // A hidden docked block never renders, so a render usually means it was just shown: run the rounds it
     // skipped. wakeMissed asks shown() itself, so a copy judged hidden or yielding wakes nothing.
     if (this.card) {

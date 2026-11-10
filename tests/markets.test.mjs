@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, exchangeMarket, filterAfterAdd, filterAfterRemove, inFilter, isTaiwanForm, kindOf, marketFilters, marketOf, nextOf,
+  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, exchangeMarket, filterAfterAdd, filterAfterRemove, heldFilter, inFilter, isTaiwanForm, kindOf, marketFilters, marketOf, nextOf,
   openFilter, readFilter, resolvedMarket, visibleSymbols,
 } from "../mods/wickline/markets.js";
 
@@ -139,6 +139,18 @@ test("a remove returns the filter to All only when its market has no symbol left
   assert.equal(readFilter(list, "tw", marketOf).chosen, "all");
   const twii = (symbol) => (symbol === "^TWII" ? resolvedMarket(symbol, "TAI") : marketOf(symbol));
   assert.equal(readFilter(list, "tw", twii).chosen, "tw");
+});
+
+test("a choice is held only while a pending index alone keeps it", () => {
+  // No Taiwan symbol left, ^GSPC waiting: kept, but only for the index.
+  const list = ["^GSPC", ...TWELVE.filter((s) => !s.endsWith(".TW"))];
+  assert.equal(heldFilter(list, "tw", marketOf, waiting), true);
+  // A Taiwan symbol keeps it on its own.
+  assert.equal(heldFilter(["^GSPC", ...TWELVE], "tw", marketOf, waiting), false);
+  // All is never held.
+  assert.equal(heldFilter(list, "all", marketOf, waiting), false);
+  // Nothing pending: the remove returned it to All already.
+  assert.equal(heldFilter(list, "tw", marketOf, none), false);
 });
 
 // A copy's own storage as localStorage gives it, recording each write; `broken` throws on every use.
