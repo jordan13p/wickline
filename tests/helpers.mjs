@@ -12,6 +12,10 @@ export const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symb
 // The symbol a Yahoo Finance chart request asks for.
 export const chartSymbol = (url) => decodeURIComponent(url.split("/chart/")[1].split("?")[0]);
 export const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
+// Fixed clocks in UTC, a regular session between two of them as Yahoo's periods, and a Yahoo Finance quote.
+export const at = (iso) => Date.parse(iso);
+export const day = (open, close) => ({ pre: null, regular: [at(open), at(close)], post: null });
+export const yq = (symbol, exchange, timestamp, periods = null) => ({ symbol, source: "yahoo", exchange, timestamp, periods });
 
 // Yahoo 奇摩股市 recorded at 08:14 in Taipei on 2026-11-10, trimmed to the fields Wickline reads: ^TWOII and ^TWII
 // still carry the day before's 13:31 close (delay 0), and ^TWOII's line still carries that day's periods and minutes.

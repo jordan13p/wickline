@@ -198,7 +198,7 @@ test("overlay merges over Yahoo", () => {
 });
 
 test("a real-time overlay over a delayed Yahoo base keeps its 120 s", () => {
-  const merged = mergeOverlay(YAHOO_2330, MIS_2330); // YAHOO_2330 carries exchange TAI (Step 5)
+  const merged = mergeOverlay(YAHOO_2330, MIS_2330); // YAHOO_2330 carries exchange TAI
   assert.equal(merged.exchange, "TAI");
   assert.equal(msUntilStale(merged, "open", MIS_2330.timestamp), 120_001);
   assert.equal(freshness(merged, "open", MIS_2330.timestamp + 120_000).state, "live");

@@ -6,6 +6,7 @@ import {
 } from "../mods/wickline/freshness.js";
 import { formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
+import { at, day, yq } from "./helpers.mjs";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
@@ -126,15 +127,12 @@ test("MIS's trial match before the open is not lit, a close at the limit is", ()
   assert.equal(shownLimit({ ...tw(close), periods: today }, "closed", nextMorning), null);
 });
 
-
 // Fixed clocks in UTC; Tuesday 2026-11-10.
-const at = (iso) => Date.parse(iso);
-const day = (open, close) => ({ pre: null, regular: [at(open), at(close)], post: null });
-const yq = (symbol, exchange, timestamp, periods = null) => ({ symbol, source: "yahoo", exchange, timestamp, periods });
 const HK_DAY = day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z");
 
 test("a Yahoo quote from a real-time exchange is live, and stalls after 120 s", () => {
-  for (const exchange of ["NMS", "NYQ", "PCX", "SNP", "DJI", "NIM", "CCY"]) {
+  // One stock and one FX exchange; markets.test.mjs pins which exchanges are real time.
+  for (const exchange of ["NMS", "CCY"]) {
     assert.deepEqual(freshness(yq("AAPL", exchange, now - 40_000), "open", now), { state: "live", delayMinutes: null, stoppedAt: null }, exchange);
     assert.equal(freshness(yq("AAPL", exchange, now - 120_000), "open", now).state, "live", exchange);
     assert.deepEqual(freshness(yq("AAPL", exchange, now - 121_000), "open", now), { state: "stalled", delayMinutes: null, stoppedAt: now - 121_000 }, exchange);
@@ -151,8 +149,8 @@ test("a delayed Yahoo quote shows its exchange's minutes and stalls at its delay
   assert.deepEqual(freshness(hk, "open", T + 1_200_001), { state: "stalled", delayMinutes: null, stoppedAt: T });
   assert.equal(freshness(hk, "open", T + 21 * 60_000).state, "stalled"); // 10:33
   assert.equal(freshness(hk, "closed", T + 3_600_000).state, "closed");
-  const minutes = [["2330.TW", "TAI", 20], ["^TWII", "TAI", 20], ["005930.KS", "KSC", 20], ["7203.T", "JPX", 15], ["^N225", "OSA", 15],
-    ["600519.SS", "SHH", 15], ["000858.SZ", "SHZ", 15], ["^VIX", "CXI", 15], ["ES=F", "CME", 10]];
+  // Two examples; markets.test.mjs pins every exchange's delay.
+  const minutes = [["2330.TW", "TAI", 20], ["7203.T", "JPX", 15]];
   for (const [symbol, exchange, m] of minutes) assert.equal(freshness(yq(symbol, exchange, T, HK_DAY), "open", T + 60_000).delayMinutes, m, symbol);
   const cn = yq("600519.SS", "SHH", T, HK_DAY);
   assert.equal(freshnessLabel(cn, freshness(cn, "open", T + 60_000), T + 60_000, "en", say("en")), "delayed 15 min");

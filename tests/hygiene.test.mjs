@@ -505,24 +505,23 @@ test("render settles a choice a pending index held", () => {
   assert.match(render, /if \(this\.filterHeld[\s\S]*?filterAfterRemove\([^;]*\(\) => false\)/);
 });
 
-test("the settings dialog reads Yahoo's delay from the exchange table", () => {
+test("the settings dialog reads Yahoo's delay and real-time pace from the exchange table", () => {
   const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
   const delay = dialog.slice(dialog.indexOf("function delayText("), dialog.indexOf("function pageTitle("));
   assert.match(delay, /exchangeRule\(TYPICAL_EXCHANGE\[market\]/);
+  assert.match(delay, /realtime[^;]*"settings\.liveEveryMinute"/);
   assert.doesNotMatch(dialog, /TAIWAN_YAHOO_DELAY_S/);
 });
 
-// Guard only (passes before the change): a lunch break is a session, no dot, like closed or pre-market.
+// A lunch break is a session: no dot, like closed or pre-market.
 test("only a price that may not be current draws a ring", () => {
   assert.match(code(read(new URL("ui/parts.js", MOD))), /const HOLLOW = \["unconfirmed", "stalled", "delayed"\];/);
 });
 
-test("the US page says what Finnhub adds, and Yahoo's real-time pace", () => {
+test("the US page says what Finnhub adds", () => {
   const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
   const us = dialog.slice(dialog.indexOf("function usPage("), dialog.indexOf("function cryptoPage("));
   assert.match(us, /details\(\s*note\(t, view\.tx\("sources\.us\.faster"\)\)/);
-  const delay = dialog.slice(dialog.indexOf("function delayText("), dialog.indexOf("function pageTitle("));
-  assert.match(delay, /realtime[^;]*"settings\.liveEveryMinute"/);
 });
 
 test("the docs call Yahoo's US prices real time, and name lunch, FX and futures", () => {

@@ -9,7 +9,8 @@ import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, NIGHT, advance, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop,
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, NIGHT, advance, at, chart, chartSymbol, day, fakeHost, isLine, jsonFixture, lineSymbol, ok, start,
+  stop, yq,
 } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay } from "../mods/wickline/providers/yahootw.js";
@@ -962,11 +963,9 @@ test("turning Yahoo 奇摩股市 off while paused says not found at once", async
 
 test("the idle wake waits for each quote's own stale moment", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  const T = Date.parse("2026-11-10T02:00:00Z");
-  const periods = { pre: null, regular: [Date.parse("2026-11-10T01:30:00Z"), Date.parse("2026-11-10T08:00:00Z")], post: null };
-  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["ES=F", "CME"], ["AAPL", "NMS"]]) {
-    w.quotes[symbol] = { symbol, source: "yahoo", exchange, timestamp: T, periods };
-  }
+  const T = at("2026-11-10T02:00:00Z");
+  const periods = day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z");
+  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["ES=F", "CME"], ["AAPL", "NMS"]]) w.quotes[symbol] = yq(symbol, exchange, T, periods);
   assert.equal(w.staleInMs(["0700.HK"], T), 120_000);
   assert.equal(w.staleInMs(["0700.HK"], T + 1_100_000), 100_001);
   assert.equal(w.staleInMs(["ES=F"], T + 1_100_000), 120_000);
@@ -976,21 +975,18 @@ test("the idle wake waits for each quote's own stale moment", () => {
 
 test("the idle wake skips a delayed quote whose session is not known yet", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  const T = Date.parse("2026-11-10T02:00:00Z");
+  const T = at("2026-11-10T02:00:00Z");
   // No trading hours yet: it reads delayed, never stalled, so no stale moment is due. Real time still wakes,
   // since a stale overlay hands its row to another source.
-  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["AAPL", "NMS"]]) {
-    w.quotes[symbol] = { symbol, source: "yahoo", exchange, timestamp: T, periods: null };
-  }
+  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["AAPL", "NMS"]]) w.quotes[symbol] = yq(symbol, exchange, T);
   assert.equal(w.staleInMs(["0700.HK"], T + 1_100_000), 120_000);
   assert.equal(w.staleInMs(["AAPL"], T + 60_000), 60_001);
 });
 
 test("the busiest session ranks lunch below open and unknown", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  const noon = Date.parse("2026-11-10T02:45:00Z"); // 11:45 JST
-  const quote = (symbol, exchange, open, close) => ({ symbol, source: "yahoo", exchange, timestamp: noon - 600_000,
-    periods: { pre: null, regular: [Date.parse(open), Date.parse(close)], post: null } });
+  const noon = at("2026-11-10T02:45:00Z"); // 11:45 JST
+  const quote = (symbol, exchange, open, close) => yq(symbol, exchange, noon - 600_000, day(open, close));
   w.quotes["7203.T"] = quote("7203.T", "JPX", "2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z");
   w.quotes["2330.TW"] = quote("2330.TW", "TAI", "2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z");
   w.quotes.AAPL = quote("AAPL", "NMS", "2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z");
@@ -999,29 +995,27 @@ test("the busiest session ranks lunch below open and unknown", () => {
   assert.equal(w.sessionFor(["7203.T", "2330.TW"], noon), "open");
   assert.equal(w.sessionFor(["7203.T", "MSFT"], noon), "unknown");
   // A JPX quote from 11:30 JST: nothing turns stale over lunch, and the wake counts trading time after it.
-  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: Date.parse("2026-11-10T02:30:00Z") };
-  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T03:00:00Z")), 120_000); // 12:00 JST: the cap
-  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T03:49:00Z")), 60_001); // 12:49 JST: 19 min traded
+  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: at("2026-11-10T02:30:00Z") };
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T03:00:00Z")), 120_000); // 12:00 JST: the cap
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T03:49:00Z")), 60_001); // 12:49 JST: 19 min traded
   // A quote from 11:10 JST at 11:45: its frozen age (20 min) would leave 1 ms, and the wake would spin all lunch.
-  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: Date.parse("2026-11-10T02:10:00Z") };
-  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:45:00Z")), 120_000);
+  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: at("2026-11-10T02:10:00Z") };
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:45:00Z")), 120_000);
 });
 
 test("a half day's close inside lunch does not spin the idle wake", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
   // HKEX half day: 09:30–12:00 HKT, so at 12:10 the market is closed though the clock is inside 12:00–13:00.
-  w.quotes["0700.HK"] = { symbol: "0700.HK", source: "yahoo", exchange: "HKG", timestamp: Date.parse("2026-11-10T03:40:00Z"),
-    periods: { pre: null, regular: [Date.parse("2026-11-10T01:30:00Z"), Date.parse("2026-11-10T04:00:00Z")], post: null } };
-  for (const hms of ["04:10:00", "04:30:00", "04:59:00"]) assert.equal(w.staleInMs(["0700.HK"], Date.parse(`2026-11-10T${hms}Z`)), 120_000, hms);
+  w.quotes["0700.HK"] = yq("0700.HK", "HKG", at("2026-11-10T03:40:00Z"), day("2026-11-10T01:30:00Z", "2026-11-10T04:00:00Z"));
+  for (const hms of ["04:10:00", "04:30:00", "04:59:00"]) assert.equal(w.staleInMs(["0700.HK"], at(`2026-11-10T${hms}Z`)), 120_000, hms);
 });
 
 test("a JPX quote from before lunch wakes the loop at most at the cap, and its stop moment falls into lunch", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  w.quotes["7203.T"] = { symbol: "7203.T", source: "yahoo", exchange: "JPX", timestamp: Date.parse("2026-11-10T02:10:00Z"), // 11:10 JST
-    periods: { pre: null, regular: [Date.parse("2026-11-10T00:00:00Z"), Date.parse("2026-11-10T06:30:00Z")], post: null } };
+  w.quotes["7203.T"] = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), day("2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z")); // 11:10 JST
   // 11:20: 10 min traded, 20 min allowed: 600 001 ms left, held to the cap.
-  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:20:00Z")), 120_000);
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:20:00Z")), 120_000);
   // 11:29: 60 001 ms left, a wake at 11:30:00.001, inside lunch, where the quote is skipped.
-  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:29:00Z")), 60_001);
-  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:30:00Z") + 1), 120_000);
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:29:00Z")), 60_001);
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:30:00Z") + 1), 120_000);
 });
