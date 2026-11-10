@@ -23,8 +23,8 @@ const TAIPEI_OFFSET_MS = TAIFEX_HOURS.offsetMin * MINUTE_MS;
 // The open of the TAIFEX session that runs past midnight (the night's, 15:00) is the next day's 00:00 once this is
 // added.
 const NIGHT_TO_NEXT_DAY_MS = (24 * 60 - TAIFEX_HOURS.sessions.find(({ to }) => to > 24 * 60).from) * MINUTE_MS;
-// How far a future's trade may be ahead of the local clock and still count for a later trading day (a clock a
-// little behind Yahoo's at 15:00); a trade further ahead is a bad time, never the feed time.
+// How far a future's trade may be ahead of the local clock and still count, on any trading day (a clock a little
+// behind Yahoo's, which at 15:00 stamps the next trading day); a trade further ahead is a bad time, never the feed time.
 const FUTURE_AHEAD_MS = 5 * 60_000;
 
 /** @typedef {import("./provider.js").Provider} Provider */
@@ -97,9 +97,9 @@ function checkStatus(response) {
 
 /**
  * Overlays by requested symbol. A row is priced only when its price is positive, its trade is from today's
- * trading day (see tradingDay; a future's also from a later one while at most 5 minutes ahead of `now`, as the
- * local clock may be a little behind Yahoo's at 15:00; for a symbol in `anyDay`, which only this source prices,
- * also from an earlier day) and it is not delayed; a price outside the row's own limits gets an error instead,
+ * trading day (see tradingDay; a future's also from a later one, and on any day only while at most 5 minutes ahead
+ * of `now`, as the local clock may be a little behind Yahoo's at 15:00; for a symbol in `anyDay`, which only this
+ * source prices, also from an earlier day) and it is not delayed; a price outside the row's own limits gets an error instead,
  * except a future's (TAIFEX's limits are not checked; they are still kept). A futures-form row from any exchange
  * but TFE gives nothing, not even its name. Any other row (a placeholder `-`, yesterday's close, delayed data), or a
  * requested symbol missing from the answer, has no overlay and no error. Each quote priced today is timed at the
@@ -139,8 +139,9 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const tradeTime = time(row.regularMarketTime);
     const day = tradeTime === null ? null : tradingDay(symbol, tradeTime);
     const today = todayOn[clock];
-    const isToday = day === today || (future && day > today && tradeTime - now <= FUTURE_AHEAD_MS);
-    const dayOk = day !== null && (isToday || (day < today && anyDaySymbols.has(symbol)));
+    const aheadOk = !future || tradeTime - now <= FUTURE_AHEAD_MS;
+    const isToday = aheadOk && (day === today || (future && day > today));
+    const dayOk = day !== null && aheadOk && (isToday || (day < today && anyDaySymbols.has(symbol)));
     if (!price || !dayOk || row.exchangeDataDelayedBy !== 0) continue;
     const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
     if (!future && !withinLimits(price, limits.limitUp, limits.limitDown)) {

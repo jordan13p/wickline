@@ -444,6 +444,17 @@ test("a futures trade far ahead of the local clock is not today's and never sets
   assert.equal(quotes["WTX@"].timestamp, Math.max(...others));
 });
 
+// The bound holds on the trading day too: 04:00 Wednesday is Wednesday's trading day as 16:00 Tuesday is, and still a bad time.
+test("a futures trade far ahead of the local clock on today's trading day is refused and never sets the feed time", () => {
+  const now = at("2026-11-10T08:00:00Z"); // 16:00 Tuesday, Wednesday's trading day
+  const { quotes } = futures(changed({
+    "WTX&": { regularMarketTime: "2026-11-10T20:00:00Z" }, // 04:00 Wednesday
+    "WMT&": { regularMarketTime: "2026-11-10T07:59:50Z" },
+  }, FUTURES_ROWS), now);
+  assert.equal(quotes["WTX&"], undefined);
+  assert.equal(quotes["WMT&"].timestamp, at("2026-11-10T07:59:50Z"));
+});
+
 test("a night trade after midnight is the same trading day: priced live, no noLive", () => {
   const now = at("2026-11-10T16:00:30Z"); // 00:00:30 Wednesday
   const { quotes, noLive } = futures(changed({ "WTX&": { regularMarketTime: "2026-11-10T15:59:50Z" } }, FUTURES_ROWS), now, ["WTX&"]);
