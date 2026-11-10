@@ -132,7 +132,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const price = number(row.price);
     if (price) anyPrice = true;
     const tradeTime = time(row.regularMarketTime);
-    const day = tradeTime === null ? null : tradingDay(symbol, tradeTime);
+    const day = tradeTime === null ? null : (future ? futuresDay : taipeiDay)(tradeTime);
     const today = todayOn[clock];
     const aheadOk = !future || tradeTime - now <= FUTURE_AHEAD_MS;
     const isToday = aheadOk && (day === today || (future && day > today));
