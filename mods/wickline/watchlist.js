@@ -841,11 +841,12 @@ export class Watchlist {
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         if (this.soleSource(symbol) === provider) {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
-          // does, and its own row says why: nothing once its source prices or names it, else a failure as itself,
-          // never as not found, else not found (by this source once it priced it, so the kept price reads cached).
+          // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
+          // rejected with a reason still names it), never as not found, else nothing once named, else not found
+          // (by this source once it priced it, so the kept price reads cached).
           const priced = this.overlays[symbol]?.[provider.id];
           if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
-          if (overlay || result.names?.[symbol]) delete this.errors[symbol];
+          if (overlay || (!error && result.names?.[symbol])) delete this.errors[symbol];
           else this.errors[symbol] = error ?? notice(priced ? "yahootw.notFound" : "yahoo.notFound");
           continue;
         }

@@ -887,7 +887,25 @@ test("after a price, an answer without its row keeps a TW-only index's last pric
     await advance(host, TW_NOW + 25_000);
     const kept = w.shown("^TWOII");
     assert.deepEqual([kept.price, kept.cached], [priced.price, true]);
+    assert.deepEqual(kept.series, priced.series);
     assert.equal(w.errors["^TWOII"].code, "yahootw.notFound");
+  });
+});
+
+test("after a price, an answer that rejects its row keeps a TW-only index's last price and line, cached with that reason", async () => {
+  let rejected = false;
+  // Limits the recorded price (321.97) is above: the decoder discards it with a reason.
+  const limits = { "^TWOII": { limitUpPrice: { raw: "320.00" }, limitDownPrice: { raw: "290.00" } } };
+  const host = twOnlyHost(["^TWOII"], { yahootw: () => stockList(host.clock - 5_000, rejected ? limits : {}) });
+  await twOnlyRun(host, async (w) => {
+    const priced = w.shown("^TWOII");
+    assert.ok(priced.series.length);
+    rejected = true;
+    await advance(host, TW_NOW + 25_000);
+    const kept = w.shown("^TWOII");
+    assert.deepEqual([kept.price, kept.timestamp, kept.cached], [priced.price, priced.timestamp, true]);
+    assert.deepEqual(kept.series, priced.series);
+    assert.equal(w.errors["^TWOII"].code, "yahootw.outOfLimits");
   });
 });
 
