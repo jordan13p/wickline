@@ -7,6 +7,7 @@ import {
 } from "../mods/wickline/freshness.js";
 import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
+import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
 import { LINE_PERIODS, SEGMENTS, at, day, yq } from "./helpers.mjs";
 
 const now = 1_000_000;
@@ -491,4 +492,18 @@ test("a future at its reported limit is lit while live and after its session, ne
   const after = at("2026-11-10T06:30:00Z");                            // 14:30
   assert.equal(sessionOf(atLimit(last), after), "closed");
   assert.equal(shownLimit(atLimit(last), "closed", after), "up");
+});
+
+// TWSE's fixed-price trades after the close are a stock's: a future's price belongs to its session only up to its end.
+test("a future's limit holds after its session only for a trade inside it, with no after-close window", () => {
+  const atLimit = (timestamp) => ({ ...future(timestamp), price: 45625, limitUp: 45625, limitDown: 37331 });
+  const two = at("2026-11-10T06:00:00Z");                              // 14:00, the break
+  assert.equal(shownLimit(atLimit(at("2026-11-10T05:44:00Z")), "closed", two), "up");
+  // Timed a minute past the day session's end: not the session's price.
+  assert.equal(shownLimit(atLimit(at("2026-11-10T05:46:00Z")), "closed", two), null);
+  // 15:05 with no night trade: the night session is open and the day's limit price has stalled.
+  const night = at("2026-11-10T07:05:00Z");
+  const quote = atLimit(at("2026-11-10T05:44:00Z"));
+  const shown = { ...quote, periods: ownPeriods({ ...quote, tradeTime: quote.timestamp }, quote.periods, night) };
+  assert.equal(shownLimit(shown, sessionOf(shown, night), night), null);
 });

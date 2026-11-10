@@ -203,12 +203,14 @@ const AFTER_CLOSE_MS = 90 * MINUTE_MS;
  * Never stalled (the lock may have opened since), unconfirmed, or before the open: Yahoo gives Taiwan no
  * pre-market period, so MIS's trial match at 08:45 reads "closed", and only its time, outside the session,
  * tells it apart, also while a copy that slept still holds yesterday's periods. The time may be the feed's
- * (Yahoo 奇摩股市), which is never earlier than the stock's own trade today.
+ * (Yahoo 奇摩股市), which is never earlier than the stock's own trade today. TWSE's after-close window is a stock's:
+ * a future's price belongs to its periods only up to their end.
  */
 export function shownLimit(quote, session, now) {
   const { state } = freshness(quote, session, now);
   const regular = quote.periods?.regular;
-  const traded = Boolean(regular) && quote.timestamp >= regular[0] && quote.timestamp <= regular[1] + AFTER_CLOSE_MS;
+  const end = regular && regular[1] + (kindOf(quote.symbol) === "future" ? 0 : AFTER_CLOSE_MS);
+  const traded = Boolean(regular) && quote.timestamp >= regular[0] && quote.timestamp <= end;
   return state === "live" || ((state === "closed" || state === "post") && traded) ? priceLimit(quote) : null;
 }
 
