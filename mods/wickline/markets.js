@@ -61,6 +61,13 @@ const TOKYO_LUNCH = { offsetMin: 540, from: 690, to: 750 };
 const HONG_KONG_LUNCH = { offsetMin: 480, from: 720, to: 780 };
 const CHINA_LUNCH = { offsetMin: 480, from: 690, to: 780 };
 
+// TAIFEX's published hours (Taipei, +8 h, no DST), in minutes since midnight; each session opens Monday to
+// Friday (Sunday 0). The night session runs past midnight into the next day. Holidays follow the data only.
+export const TAIFEX_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], sessions: [
+  { name: "day", from: 525, to: 825 },     // 08:45–13:45
+  { name: "night", from: 900, to: 1740 },  // 15:00–05:00 the next day
+] });
+
 const LIVE = { realtime: true, delayS: null };
 const late = (delayS, lunch = null) => ({ delayS, lunch });
 

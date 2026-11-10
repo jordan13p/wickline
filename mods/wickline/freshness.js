@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { stateText } from "./format.js";
-import { exchangeRule } from "./markets.js";
+import { TAIFEX_HOURS, exchangeRule, kindOf } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
@@ -90,13 +90,55 @@ function fxWeekend(now) {
   return weekday === 6 || weekday === 0;
 }
 
+// TAIFEX's sessions as [start, end) in ms that open on the Taipei day of `now` or the day before (a night session
+// still running past midnight), on the weekdays it trades.
+function taifexSegments(now) {
+  const { offsetMin, weekdays, sessions } = TAIFEX_HOURS;
+  const offset = offsetMin * MINUTE_MS;
+  const today = Math.floor((now + offset) / DAY_MS);
+  const segments = [];
+  for (const day of [today - 1, today]) {
+    if (!weekdays.includes((day + 4) % 7)) continue;
+    const dayStart = day * DAY_MS - offset;
+    for (const { from, to } of sessions) segments.push([dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS]);
+  }
+  return segments;
+}
+
+/**
+ * The session a future trades in at `now`: "day" or "night", or null between sessions. Its segments are
+ * quote.periods.segments when given, else TAIFEX_HOURS around `now`. A segment starting at or after 12:00 Taipei is
+ * the night session. A segment holds [start, end).
+ */
+export function futuresSegment(quote, now) {
+  const segments = quote.periods?.segments ?? taifexSegments(now);
+  const segment = segments.find(([start, end]) => now >= start && now < end);
+  if (!segment) return null;
+  // Its start in Taipei minutes since midnight.
+  const startMin = ((segment[0] + TAIFEX_HOURS.offsetMin * MINUTE_MS) % DAY_MS) / MINUTE_MS;
+  return startMin >= 720 ? "night" : "day";
+}
+
+/** How long until a TAIFEX session opens later on the Taipei day of `now`, in ms; null when none does. */
+export function msUntilTaifexOpens(now) {
+  const starts = taifexSegments(now).map(([start]) => start).filter((start) => start > now);
+  return starts.length ? Math.min(...starts) - now : null;
+}
+
+/** The detail's session key suffix: a trading future's "day" or "night", else `session` itself. */
+export function sessionName(quote, session, now) {
+  return (session === "open" && kindOf(quote.symbol) === "future" && futuresSegment(quote, now)) || session;
+}
+
 /**
  * "open", "pre", "post" or "closed" from the quote's trading periods, and "lunch" while open inside its
  * exchange's lunch break (Yahoo's regular period runs through it); FX is "closed" over the weekend whatever
- * its period says. A pair trades "24h"; a stock without a regular session (no Yahoo quote yet) is "unknown".
+ * its period says. A pair trades "24h"; a future (WTX&) is "open" inside a segment (futuresSegment), else
+ * "closed", also with no periods yet; a stock without a regular session (no Yahoo quote yet) is "unknown".
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";
+  if (kindOf(quote.symbol) === "future") return futuresSegment(quote, now) ? "open" : "closed";
   if (!quote.periods?.regular) return "unknown";
   const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
   if (fx && fxWeekend(now)) return "closed";
@@ -114,14 +156,15 @@ const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
 /**
  * How long until a quote turns stale in `session`, in ms: at least 1 while it has not yet, 0 or less once it
  * has (older than staleAfterMs by quoteAgeMs, or a Yahoo Finance quote not fetched for FETCH_MAX_AGE_MS).
- * null when it never will this session: a delayed quote's session is not open, or it is a future or from an
- * exchange without a delay. A real-time quote counts in every session, also while closed or not known yet:
- * freshness reads it by its session then, but its moment is when pickOverlay (by the same LIVE_MAX_AGE_MS)
- * hands the row to another source, so the idle wake must still land on it. A delayed quote is a Yahoo
- * base, never handed over, and outside the open session it never reads stalled: nothing to wake for.
+ * null when it never will this session: a delayed quote's or a future's (WTX&) session is not open, or it is a
+ * Yahoo future (`=F`) or from an exchange without a delay. A real-time quote counts in every session, also while
+ * closed or not known yet: freshness reads it by its session then, but its moment is when pickOverlay (by the same
+ * LIVE_MAX_AGE_MS) hands the row to another source, so the idle wake must still land on it. A delayed quote is a
+ * Yahoo base, never handed over, and a future has one source: outside the open session neither reads stalled,
+ * nothing to wake for.
  */
 export function msUntilStale(quote, session, now) {
-  if (!isRealtime(quote) && session !== "open") return null;
+  if (session !== "open" && (!isRealtime(quote) || kindOf(quote.symbol) === "future")) return null;
   const limit = staleAfterMs(quote);
   if (limit === null) return null;
   const left = limit - quoteAgeMs(quote, now) + 1;
@@ -137,8 +180,8 @@ export function msUntilStale(quote, session, now) {
  * as new). unconfirmed: real time while the session is not known, or a real-time Yahoo quote still at the
  * previous close after today's open (beforeOpen), until today's first trade or the fetch guard. stalled:
  * past its msUntilStale, real time or delayed. delayed: any other quote, with its exchange's minutes when the
- * table holds them; a future or an exchange without a delay never stalls. closed / pre / post / lunch: the
- * session.
+ * table holds them; a Yahoo future (`=F`) or an exchange without a delay never stalls. closed / pre / post /
+ * lunch: the session.
  */
 export function freshness(quote, session, now) {
   if (PAUSED.has(session)) return result(session);

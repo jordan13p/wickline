@@ -1,7 +1,7 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, sessionOf } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, msUntilTaifexOpens, sessionOf } from "./freshness.js";
 import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -57,6 +57,11 @@ const LINE_LAG_MS = 120_000;
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
+// A quote-less sole-source symbol's session by its form alone (see Watchlist#sessionFor), "closed" when it gives none.
+const soleSession = (symbol, now) => {
+  const session = sessionOf({ symbol, periods: null }, now);
+  return session === "unknown" ? "closed" : session;
+};
 
 // Ends a loop's wait now.
 function wake(state) {
@@ -594,13 +599,14 @@ export class Watchlist {
   /**
    * The busiest session among `symbols`: open > unknown (no quote yet) > lunch > pre/post > closed. Read from the
    * base quotes (baseQuote: an overlay keeps the base's trading periods). A symbol with a sole source and
-   * nothing to show (no source knows it) counts as closed, so it is never polled every 10 s.
+   * nothing to show (no source knows it) takes its form's session: a future's by TAIFEX's hours, so it is asked
+   * every 10 s in a session; any other counts as closed, so it is never polled every 10 s.
    */
   sessionFor(symbols, now) {
     let best = "closed";
     for (const symbol of symbols) {
       const quote = this.baseQuote(symbol, now);
-      const session = quote ? sessionOf(quote, now) : this.soleSource(symbol) ? "closed" : "unknown";
+      const session = quote ? sessionOf(quote, now) : this.soleSource(symbol) ? soleSession(symbol, now) : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
     return symbols.length ? best : "unknown";
@@ -675,7 +681,11 @@ export class Watchlist {
       if (state.manual || state.dirty) continue;
       const idle = paused || !symbols.length || state.disabled || hidden;
       const now = this.host.now();
-      const due = now + (idle ? 0 : Math.max(provider.intervalMs(this.sessionFor(symbols, now)), state.retryAt - now));
+      // A break's interval ends at TAIFEX's next opening, so a future's first price of a session is not up to an
+      // interval late.
+      const opens = symbols.some((symbol) => kindOf(symbol) === "future") ? msUntilTaifexOpens(now) : null;
+      const interval = provider.intervalMs(this.sessionFor(symbols, now));
+      const due = now + (idle ? 0 : Math.max(opens === null ? interval : Math.min(interval, opens), state.retryAt - now));
       await this.rest(state, symbols, due, io);
     }
   }

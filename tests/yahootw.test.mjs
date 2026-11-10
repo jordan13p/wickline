@@ -469,6 +469,12 @@ test("a future's line keeps its trading day from 15:00, also after midnight", ()
   assert.equal(night.lines["WTX&"].day, tradingDay("WTX&", one));
 });
 
+test("a future's line gives its sessions from sourceTradingPeriods", () => {
+  const { periods } = yahootw.decode(yahootw.requests(["WTX&"]).find((r) => r.kind === "line"), ok(FUTURES_TICK), FUT_NOW);
+  assert.deepEqual(periods["WTX&"], { pre: null, regular: [1794207600000, 1794289500000], post: null,
+    segments: [[1794207600000, 1794258000000], [1794271500000, 1794289500000]] });
+});
+
 test("a future's line periods belong to its trading day, which began at 15:00 the day before", () => {
   const nine = Date.parse("2026-11-10T01:00:00Z"); // 09:00 Tuesday
   const quote = { symbol: "WTX&", day: tradingDay("WTX&", nine - 10_000), tradeTime: nine - 10_000 };

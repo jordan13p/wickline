@@ -206,3 +206,8 @@ test("futures texts in every language", () => {
     for (const key of ["symbol.invalid", "input.placeholder"]) assert.ok(t(lang, key).includes("WTX&"), `${lang} ${key}`);
   }
 });
+
+test("the futures sessions are named in every language", () => {
+  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.day")), ["Day session open", "日盤交易中", "日盘交易中", "日中取引中", "주간 거래 중"]);
+  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.night")), ["Night session open", "夜盤交易中", "夜盘交易中", "夜間取引中", "야간 거래 중"]);
+});

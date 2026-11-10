@@ -153,6 +153,10 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   return { quotes, errors, names, ...(anyPrice && !anyToday && { noLive: new QuoteError("yahootw.noLiveRows") }) };
 }
 
+// `sourceTradingPeriods`' periods, at any depth, as sorted `[start, end]` pairs; none when it is not an array.
+const futuresSegments = (periods) => (Array.isArray(periods) ? periods.flat(Infinity) : [])
+  .map(period).filter(Boolean).sort((a, b) => a[0] - b[0]);
+
 /**
  * One symbol's line, `{ day, series, lastAt }`: the one-minute closes of today's trading day (see tradingDay:
  * a future's from 15:00 the day before, so the night's minutes stay past midnight), oldest first, that day as
@@ -160,7 +164,8 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
  * without a trade carries the previous close; minutes before the first trade are dropped. With no point
  * from today, no line. `periods`: the answer's trading periods (`meta.currentTradingPeriod`, as Yahoo
  * Finance's), also without a point from today, for a symbol only this source prices; none without a
- * regular one.
+ * regular one. A future's also carry `segments`, its sessions (`meta.sourceTradingPeriods`, nested by day) as
+ * sorted `[start, end]` pairs in ms; the key is absent without any.
  */
 export function decodeTick(symbol, response, now) {
   checkStatus(response);
@@ -184,10 +189,13 @@ export function decodeTick(symbol, response, now) {
   });
   const trading = chart.meta.currentTradingPeriod;
   const regular = period(trading?.regular);
+  const segments = kindOf(symbol) === "future" ? futuresSegments(chart.meta.sourceTradingPeriods) : [];
   return {
     quotes: {}, errors: {},
     ...(series.length && { lines: { [symbol]: { day: today, series, lastAt } } }),
-    ...(regular && { periods: { [symbol]: { pre: period(trading.pre), regular, post: period(trading.post) } } }),
+    ...(regular && { periods: { [symbol]: {
+      pre: period(trading.pre), regular, post: period(trading.post), ...(segments.length && { segments }),
+    } } }),
   };
 }
 

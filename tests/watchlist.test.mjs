@@ -8,7 +8,7 @@ import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
-import { freshness, sessionOf } from "../mods/wickline/freshness.js";
+import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf } from "../mods/wickline/freshness.js";
 import { collapsedRow, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, NIGHT, advance, at, chart, chartSymbol, day, fakeHost, isLine,
@@ -1352,4 +1352,246 @@ test("a JPX quote from before lunch wakes the loop at most at the cap, and its s
   // 11:29: 60 001 ms left, a wake at 11:30:00.001, inside lunch, where the quote is skipped.
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:29:00Z")), 60_001);
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:30:00Z") + 1), 120_000);
+});
+
+// A futures line answer: one close a minute over each of `spans` ([[from, to]] in ms, both ends included), 42 000 rising
+// by one a point, with `segments` as its sourceTradingPeriods and their span as its currentTradingPeriod.
+const futuresLineOf = (symbol, spans, segments) => {
+  const timestamp = spans.flatMap(([from, to]) =>
+    Array.from({ length: Math.round((to - from) / 60_000) + 1 }, (_, i) => from / 1000 + i * 60));
+  return ok([{ symbol, chart: {
+    meta: { symbol, currentTradingPeriod: { regular: { start: segments[0][0] / 1000, end: segments.at(-1)[1] / 1000 } },
+      sourceTradingPeriods: [segments.map(([start, end]) => ({ start: start / 1000, end: end / 1000 }))] },
+    timestamp,
+    indicators: { quote: [{ close: timestamp.map((_, i) => 42000 + i) }] },
+  } }]);
+};
+const futuresLine = (symbol, from, to, segments) => futuresLineOf(symbol, [[from, to]], segments);
+const SEGMENTS = [[1794207600000, 1794258000000], [1794271500000, 1794289500000]];            // Tue's trading day
+const NEXT_SEGMENTS = [[Date.parse("2026-11-10T07:00:00Z"), Date.parse("2026-11-10T21:00:00Z")],
+  [Date.parse("2026-11-11T00:45:00Z"), Date.parse("2026-11-11T05:45:00Z")]];                    // Wed's
+const MON_1500 = Date.parse("2026-11-09T07:00:00Z");
+// Monday 2026-11-16's trading day, as its line would give it: Friday 15:00 → Saturday 05:00, Monday 08:45 → 13:45.
+const FRI_1500 = Date.parse("2026-11-13T07:00:00Z");
+const FRI_SEGMENTS = [[FRI_1500, Date.parse("2026-11-13T21:00:00Z")], [Date.parse("2026-11-16T00:45:00Z"), Date.parse("2026-11-16T05:45:00Z")]];
+
+test("22:00 in the night session: Live, and the detail names the night session", async () => {
+  const from = Date.parse("2026-11-10T14:00:00Z");
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(host.clock - 20_000),
+    line: (symbol) => futuresLine(symbol, NEXT_SEGMENTS[0][0], from - 60_000, NEXT_SEGMENTS),
+  });
+  await twOnlyRun(host, async (w) => {
+    const now = host.clock;
+    const quote = w.shown("WTX&", now);
+    const session = sessionOf(quote, now);
+    assert.equal(freshness(quote, session, now).state, "live");
+    assert.equal(t("zh-TW", `session.${sessionName(quote, session, now)}`), "夜盤交易中");
+    const asked = stockLists(host).length;
+    await advance(host, from + 35_000);
+    assert.ok(stockLists(host).length - asked >= 3, String(stockLists(host).length - asked));
+  }, from);
+});
+
+test("06:30 in the morning break: closed at 05:00, polled gently", async () => {
+  const from = Date.parse("2026-11-09T22:30:00Z");
+  const last = Date.parse("2026-11-09T21:00:00Z");
+  const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, last, SEGMENTS) });
+  await twOnlyRun(host, async (w) => {
+    const now = host.clock;
+    const quote = w.shown("WTX&", now);
+    assert.equal(freshness(quote, sessionOf(quote, now), now).state, "closed");
+    assert.equal(quote.timestamp, last);
+    assert.deepEqual(w.problems(), []);
+    assert.equal(stockLists(host).length, 1);
+    await advance(host, from + 15_000);
+    assert.equal(stockLists(host).length, 1);
+    await advance(host, from + 61_000);
+    assert.equal(stockLists(host).length, 2);
+  }, from);
+});
+
+// The last trade at 04:59:50, 10 s before the break and 40 s before the test starts at 05:00:30: in session it would turn
+// stale 75 s after the first check; in the break it never does. The staleInMs assertion is the guard; the redraw bound is a
+// backstop (it passes before the change too, since a real-time age always grows).
+test("a break never spins the idle wake", async () => {
+  const from = Date.parse("2026-11-09T21:00:30Z"); // 05:00:30
+  const last = Date.parse("2026-11-09T20:59:50Z"); // 04:59:50
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-09T20:59:00Z"), SEGMENTS),
+  });
+  host.clock = from;
+  const w = new Watchlist(host);
+  let redraws = 0;
+  const runs = w.providerIds().map((id) => w.runProvider(id, { sleep: host.sleep, changed: () => { redraws++; } }));
+  await advance(host, from + 5_000);
+  for (const at of [from + 5_000, from + 30_000]) assert.equal(w.staleInMs(["WTX&"], at), LIVE_MAX_AGE_MS, String(at));
+  await advance(host, from + 600_000);
+  assert.ok(redraws < 100, String(redraws));
+  await stop(w, host, runs);
+});
+
+test("01:00 in the night session: Live, with the line from 15:00", async () => {
+  const from = Date.parse("2026-11-09T17:00:00Z");
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(host.clock - 20_000),
+    line: (symbol) => futuresLine(symbol, MON_1500, from - 60_000, SEGMENTS),
+  });
+  await twOnlyRun(host, (w) => {
+    const now = host.clock;
+    const quote = w.shown("WTX&", now);
+    assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
+    assert.equal(sessionName(quote, "open", now), "night");
+    assert.deepEqual([quote.series.length, quote.series[0]], [601, 42000]);
+  }, from);
+});
+
+test("09:00 after a night: Live, read by the line's own sessions", async () => {
+  const from = Date.parse("2026-11-10T01:00:00Z");
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(host.clock - 10_000),
+    line: (symbol) => futuresLine(symbol, MON_1500, from - 60_000, SEGMENTS),
+  });
+  await twOnlyRun(host, (w) => {
+    const now = host.clock;
+    const quote = w.shown("WTX&", now);
+    assert.deepEqual(quote.periods.segments, SEGMENTS);
+    assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
+    assert.equal(sessionName(quote, "open", now), "day");
+  }, from);
+});
+
+// Spec quote-freshness, "Monday after Friday night".
+test("Monday 09:00 after Friday night: Live in the day session, with Friday night's line", async () => {
+  const from = Date.parse("2026-11-16T01:00:00Z");
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(host.clock - 10_000),
+    // Friday night's 840 minutes, then Monday's first 15.
+    line: (symbol) => futuresLineOf(symbol, [[FRI_1500, Date.parse("2026-11-13T20:59:00Z")], [FRI_SEGMENTS[1][0], from - 60_000]], FRI_SEGMENTS),
+  });
+  await twOnlyRun(host, (w) => {
+    const now = host.clock;
+    const quote = w.shown("WTX&", now);
+    assert.deepEqual(quote.periods.segments, FRI_SEGMENTS);
+    assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
+    assert.equal(t("zh-TW", `session.${sessionName(quote, "open", now)}`), "日盤交易中");
+    assert.deepEqual([quote.series.length, quote.series[0]], [856, 42000]);
+  }, from);
+});
+
+// Saturday 04:59:59 belongs to Monday's trading day (Task 3), so on Sunday it is not an earlier day: no noLive. The
+// round's `asked.twOnly` lists futures as well (Task 2), so it would be accepted as an earlier day's row anyway.
+test("on Sunday, Friday night's last price reads closed with its date, polled gently", async () => {
+  const from = Date.parse("2026-11-15T14:00:00Z"); // Sun 22:00
+  const last = Date.parse("2026-11-13T20:59:59Z"); // Sat 04:59:59
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(last),
+    line: (symbol) => futuresLine(symbol, FRI_1500, Date.parse("2026-11-13T20:59:00Z"), FRI_SEGMENTS),
+  });
+  const tx = (key, params) => t("zh-TW", key, params);
+  await twOnlyRun(host, async (w) => {
+    const now = host.clock;
+    const quote = w.shown("WTX&", now);
+    const fresh = freshness(quote, sessionOf(quote, now), now);
+    assert.equal(fresh.state, "closed");
+    const date = formatStaleDate(last, now, "zh-TW");
+    assert.ok(date, "the date shows");
+    assert.equal(freshnessLabel(quote, fresh, now, "zh-TW", tx), `${tx("session.closed")} · ${date} ${formatTime(last)}`);
+    assert.deepEqual(w.problems(), []);
+    assert.equal(stockLists(host).length, 1);
+    await advance(host, from + 15_000);
+    assert.equal(stockLists(host).length, 1);
+    await advance(host, from + 61_000);
+    assert.equal(stockLists(host).length, 2);
+  }, from);
+});
+
+test("13:50 after the day session: closed, polled gently", async () => {
+  const from = Date.parse("2026-11-10T05:50:00Z");
+  const last = Date.parse("2026-11-10T05:44:59Z");
+  const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, last, SEGMENTS) });
+  await twOnlyRun(host, async (w) => {
+    const now = host.clock;
+    assert.equal(sessionOf(w.shown("WTX&", now), now), "closed");
+    await advance(host, from + 15_000);
+    assert.equal(stockLists(host).length, 1);
+  }, from);
+});
+
+test("the night opens with its first trade, before the line brings the new trading day's sessions", async () => {
+  const from = Date.parse("2026-11-10T06:59:50Z");  // 14:59:50
+  const first = Date.parse("2026-11-10T07:00:02Z"); // 15:00:02
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(host.clock < first ? Date.parse("2026-11-10T05:44:59Z") : first),
+    line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-10T05:44:00Z"), SEGMENTS),
+  });
+  await twOnlyRun(host, async (w) => {
+    assert.equal(sessionOf(w.shown("WTX&", host.clock), host.clock), "closed");
+    await advance(host, from + 75_000);
+    const now = from + 75_000;
+    const quote = w.shown("WTX&", now);
+    assert.equal(quote.timestamp, first);
+    assert.equal(sessionOf(quote, now), "open");
+    assert.equal(freshness(quote, "open", now).state, "live");
+  }, from);
+});
+
+// The first round hangs and times out at 10 s; the row says so, and the next ask comes at the session's cadence: 10 s at
+// night (the TAIFEX hours, since the row has no quote), 60 s in a break.
+test("a failed round says why, and retries at the session's cadence", async () => {
+  for (const [from, at22s, at72s] of [[Date.parse("2026-11-10T14:00:00Z"), 2, null], [Date.parse("2026-11-09T22:30:00Z"), 1, 2]]) {
+    const label = new Date(from).toISOString();
+    const host = futuresHost(["WTX&"], {
+      yahootw: () => (host.clock < from + 10_000 ? new Promise(() => {}) : futuresAt(host.clock - 5_000)),
+    });
+    await twOnlyRun(host, async (w) => {
+      await advance(host, from + 11_000);
+      assert.equal(w.errors["WTX&"].code, "request.timeout", label);
+      assert.equal(stockLists(host).length, 1, label);
+      await advance(host, from + 22_000);
+      assert.equal(stockLists(host).length, at22s, label);
+      if (at72s !== null) {
+        await advance(host, from + 72_000);
+        assert.equal(stockLists(host).length, at72s, label);
+      }
+    }, from);
+  }
+});
+
+// Between segments a future reads closed, so its line, already held for the trading day, is not asked again every
+// 120 s, and its prices come at the break's 60 s cadence, not every 10 s.
+test("a break and a weekend ask a future's line no more", async () => {
+  for (const [from, last, line] of [
+    [Date.parse("2026-11-09T22:30:00Z"), Date.parse("2026-11-09T21:00:00Z"),
+      (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-09T21:00:00Z"), SEGMENTS)],                // 06:30
+    [Date.parse("2026-11-15T14:00:00Z"), Date.parse("2026-11-13T20:59:59Z"),
+      (symbol) => futuresLine(symbol, FRI_1500, Date.parse("2026-11-13T20:59:00Z"), FRI_SEGMENTS)],            // Sun 22:00
+  ]) {
+    const label = new Date(from).toISOString();
+    const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line });
+    await twOnlyRun(host, async () => {
+      assert.equal(host.requests.filter(isLine).length, 1, label);
+      await advance(host, from + 600_000);
+      assert.equal(host.requests.filter(isLine).length, 1, label);
+      assert.ok(stockLists(host).length <= 11, `${label} ${stockLists(host).length}`);
+    }, from);
+  }
+});
+
+// A future still without a price in a break is asked again as its session opens, not up to the break's 60 s later.
+test("a future without a price yet is asked as its session opens", async () => {
+  for (const open of [Date.parse("2026-11-10T00:45:00Z"), Date.parse("2026-11-10T07:00:00Z")]) { // 08:45, 15:00
+    const label = new Date(open).toISOString();
+    const host = futuresHost(["WTX&"], {
+      yahootw: () => futuresAt(host.clock, host.clock < open ? { "WTX&": { price: { raw: "-" } } } : {}),
+    });
+    await twOnlyRun(host, async (w) => {
+      assert.ok(!w.shown("WTX&", host.clock), label);
+      await advance(host, open + 1_000);
+      const now = open + 1_000;
+      const quote = w.shown("WTX&", now);
+      assert.equal(quote?.timestamp, open, label);
+      assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live", label);
+    }, open - 30_000);
+  }
 });

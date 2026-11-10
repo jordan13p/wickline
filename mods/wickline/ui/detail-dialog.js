@@ -3,7 +3,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { hasLimits, isCryptoPair } from "../quotes.js";
 import { displayName, detailTimes, formatChange, number } from "../format.js";
-import { detailSource, sessionOf } from "../freshness.js";
+import { detailSource, sessionName, sessionOf } from "../freshness.js";
 import { chart, priceBox, segments } from "./parts.js";
 
 // The dialog a row opens: the day's chart, its range and the session.
@@ -26,7 +26,7 @@ export function detailView(view, t) {
         .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
         .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, view.lang) ?? "")))
       // The session as plain text: a filled dot means a live quote, everywhere.
-      .child(div().flex_none().text_size(11).text_color(t.muted).child(view.tx(`session.${session}`)))
+      .child(div().flex_none().text_size(11).text_color(t.muted).child(view.tx(`session.${sessionName(q, session, now)}`)))
       .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
         .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×")))
     .child(h_flex().gap(10).items_end()

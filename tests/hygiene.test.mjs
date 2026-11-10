@@ -516,6 +516,11 @@ test("the detail's stats are numbers without the currency", () => {
   assert.match(detail, /number\(q, price\)/);
 });
 
+test("the detail names a future's day or night session", () => {
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /view\.tx\(`session\.\$\{sessionName\(q, session, now\)\}`\)/);
+});
+
 test("the pause key acts as the button does", () => {
   const main = code(read(new URL("main.js", MOD)));
   assert.match(main, /command === "pause"\)\s*this\.act\(cx, \(\) => this\.togglePause\(\)\)/);
