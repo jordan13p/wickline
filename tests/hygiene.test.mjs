@@ -482,3 +482,9 @@ test("a collapsed sidebar row is one line with its notes", () => {
   assert.doesNotMatch(row, /!ghost\s*&&\s*collapsedRow|collapsedRow[^;]*!ghost/);
   assert.ok(row.indexOf("collapsedRow(row)") < row.indexOf("ghost ? ghostFrame("));
 });
+
+test("the detail's stats are numbers without the currency", () => {
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.doesNotMatch(detail, /formatBandPrice/);
+  assert.match(detail, /number\(q, price\)/);
+});

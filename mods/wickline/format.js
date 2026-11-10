@@ -46,10 +46,6 @@ export function bandCurrency(quote) {
   return !quote.currency || quote.currency === "USD" || quote.symbol.endsWith(`/${quote.currency}`) ? null : quote.currency;
 }
 
-export function formatBandPrice(quote) {
-  return formatPrice({ ...quote, currency: bandCurrency(quote) });
-}
-
 // `value` (the price by default) without its currency, for a fixed right-aligned column.
 export function number(quote, value = quote.price) {
   return typeof value === "number" && value > 0 ? formatPrice({ ...quote, price: value, currency: null }) : "—";

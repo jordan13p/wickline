@@ -71,10 +71,11 @@ export function shownLimit(quote, session, now) {
 }
 
 /**
- * The detail dialog's source line as parts (joined with ` · `). A real-time price names its state
- * and source: `Price: Live · TWSE MIS`; its line does too, as the same state when the line is the
- * price's own source (Yahoo 奇摩股市), else with the delay from the line's own source:
- * `Line: delayed 20 min · Yahoo Finance`. A delayed stock or a pair keeps its plain wording.
+ * The detail dialog's sources as lines, each a list of parts (joined with ` · `). A real-time price
+ * names its state and source on one line: `Price: Live · TWSE MIS`; its line follows on its own, as the
+ * same state when the line is the price's own source (Yahoo 奇摩股市), else with the delay from the
+ * line's own source: `Line: delayed 20 min · Yahoo Finance`. A delayed stock keeps its plain wording
+ * as one line of two parts; a pair is one part.
  * `tx(key, params)` translates; a `src.<id>` key names a provider.
  */
 export function detailSource(quote, session, now, tx) {
@@ -83,11 +84,11 @@ export function detailSource(quote, session, now, tx) {
   if (REALTIME_SOURCES.has(quote.source) && !isCryptoPair(quote.symbol)) {
     const own = stateText(freshness(quote, session, now), tx);
     const price = tx("detail.priceFrom", { state: own, source: tx(`src.${quote.source}`) });
-    if (!quote.chartSource) return [price];
-    if (quote.chartSource === quote.source) return [price, tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })];
+    if (!quote.chartSource) return [[price]];
+    if (quote.chartSource === quote.source) return [[price], [tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })]];
     const chart = { ...quote, source: quote.chartSource, delaySeconds: quote.chartDelaySeconds ?? null };
-    return [price, tx("detail.lineFrom", { state: minutes(freshness(chart, session, now).delayMinutes), source: tx(`src.${quote.chartSource}`) })];
+    return [[price], [tx("detail.lineFrom", { state: minutes(freshness(chart, session, now).delayMinutes), source: tx(`src.${quote.chartSource}`) })]];
   }
-  if (isCryptoPair(quote.symbol)) return [tx("detail.sourceCrypto")];
-  return [tx("detail.sourceStock"), minutes(freshness(quote, session, now).delayMinutes)];
+  if (isCryptoPair(quote.symbol)) return [[tx("detail.sourceCrypto")]];
+  return [[tx("detail.sourceStock"), minutes(freshness(quote, session, now).delayMinutes)]];
 }

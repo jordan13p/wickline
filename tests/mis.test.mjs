@@ -459,19 +459,19 @@ test("a Taiwan name follows the interface language", () => {
 test("the detail line puts the chart's delay on the chart", () => {
   const say = (lang) => (key, params) => t(lang, key, params);
   const merged = mergeOverlay(YAHOO_2330, MIS_2330);
-  assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), ["價格：即時 · 證交所 MIS", "走勢：延遲 20 分鐘 · Yahoo Finance"]);
-  assert.deepEqual(detailSource(merged, "open", 5_000, say("en")), ["Price: Live · TWSE MIS", "Line: delayed 20 min · Yahoo Finance"]);
+  assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(merged, "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: delayed 20 min · Yahoo Finance"]]);
   // The base's own delay is kept for the chart: Yahoo's reported value, or none.
   const us = { ...YAHOO_2330, symbol: "AAPL", delaySeconds: 900 };
   // Any real-time overlay over a US Yahoo quote (Finnhub's case).
   const over = { ...MIS_2330, symbol: "AAPL" };
   assert.equal(mergeOverlay(us, over).chartDelaySeconds, 900);
-  assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), ["Price: Live · TWSE MIS", "Line: delayed 15 min · Yahoo Finance"]);
-  assert.deepEqual(detailSource(mergeOverlay({ ...us, delaySeconds: null }, over), "open", 5_000, say("en"))[1], "Line: delay not provided · Yahoo Finance");
+  assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: delayed 15 min · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(mergeOverlay({ ...us, delaySeconds: null }, over), "open", 5_000, say("en"))[1], ["Line: delay not provided · Yahoo Finance"]);
   // A real-time price before Yahoo's first quote; a plain Yahoo row keeps its wording.
-  assert.deepEqual(detailSource(mergeOverlay(undefined, MIS_2330), "unknown", 5_000, say("en")), ["Price: Session unknown · TWSE MIS"]);
-  assert.deepEqual(detailSource(YAHOO_2330, "open", 5_000, say("en")), ["Yahoo Finance · regular session", "delayed 20 min"]);
-  assert.deepEqual(detailSource({ ...YAHOO_2330, symbol: "BTC/USDT", source: "binance", periods: null }, "24h", 5_000, say("en")), ["Binance Spot · 24h"]);
+  assert.deepEqual(detailSource(mergeOverlay(undefined, MIS_2330), "unknown", 5_000, say("en")), [["Price: Session unknown · TWSE MIS"]]);
+  assert.deepEqual(detailSource(YAHOO_2330, "open", 5_000, say("en")), [["Yahoo Finance · regular session", "delayed 20 min"]]);
+  assert.deepEqual(detailSource({ ...YAHOO_2330, symbol: "BTC/USDT", source: "binance", periods: null }, "24h", 5_000, say("en")), [["Binance Spot · 24h"]]);
 });
 
 test("a Chinese interface keeps the last MIS name while MIS fails", async () => {
