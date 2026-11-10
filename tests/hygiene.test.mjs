@@ -528,7 +528,7 @@ test("the US page says what Finnhub adds, and Yahoo's real-time pace", () => {
 test("the docs call Yahoo's US prices real time, and name lunch, FX and futures", () => {
   for (const name of ["README.md", "RECIPE.md"]) {
     const doc = read(new URL(name, ROOT));
-    assert.doesNotMatch(doc, /United States \| Yahoo Finance \(delayed\)|Real time for up to|showing Yahoo/, name);
+    assert.doesNotMatch(doc, /United States \| Yahoo Finance \(delayed\)|Real time for up to|showing Yahoo|real-time limit/, name);
     for (const word of ["Lunch", "22:00 UTC", "indicative"]) assert.ok(doc.includes(word), `${name} ${word}`);
   }
   const zh = read(new URL("README.zh-TW.md", ROOT));

@@ -30,7 +30,7 @@
 
 ## Markets and sources
 
-| Market | Default | Optional real-time | Notes |
+| Market | Default | Optional source | Notes |
 |---|---|---|---|
 | United States | Yahoo Finance (real time, updates every minute) | Finnhub (updates about every 15–30 s), with your own API key | Both are real time; Finnhub only updates more often. It prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. |
 | Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. A `^TW…` index Yahoo Finance lacks, such as 櫃檯指數 (`^TWOII`), needs Yahoo TW Stock on and consented; otherwise it reads not found. |

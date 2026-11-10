@@ -1098,7 +1098,7 @@ export const STRINGS = {
     "sources.us.hide": "숨기기",
     "sources.us.url": "Finnhub URL",
     "sources.us.budget": "분당 요청 수",
-    "sources.us.faster": "1분마다가 아니라 약 15–30초마다 업데이트합니다.",
+    "sources.us.faster": "1분마다가 아니라 약 15–30초마다 업데이트됩니다.",
     "sources.us.cap": "미국 종목은 최대 {cap}개까지 더 자주 업데이트되며, 나머지는 Yahoo에서 1분마다 업데이트됩니다.",
     "sources.us.keyNote": "키는 이 컴퓨터의 Herdr 폴더 안 data/wickline/secrets.json에 평문으로 저장되며, Herdr 공유 상태에는 기록되지 않습니다. 무료 요금제 키를 권장합니다.",
     "sources.us.keyRemove": "Finnhub를 꺼도 저장한 키는 남아 있습니다. 삭제하려면 삭제를 누르고 저장하거나 data/wickline/secrets.json을 삭제하세요.",
