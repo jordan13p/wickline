@@ -87,12 +87,12 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
   |---|---|---|---|
   | live | real-time source (Binance, Yahoo 奇摩股市, TWSE MIS, Finnhub; Yahoo Finance for a real-time exchange, FX indicative), trading, quote at most 120 s old | filled | `Live` (`即時`, `实时`, `リアルタイム`, `실시간`; never a source name, no wider than `Binance Spot`) |
   | unconfirmed | real-time source, session not known yet | ring | the source name (`TWSE MIS`) |
-  | stalled | trading: real time over 120 s old, delayed over its delay + 5 min since today's open | ring | `quote stopped at 13:05` |
+  | stalled | trading: real time over 120 s old, delayed over its delay + 5 min (Yahoo: below) | ring | `quote stopped at 13:05` |
   | delayed | Yahoo, delayed exchange | ring | the table's minutes (`delayed 20 min`), else `Yahoo · delayed`; futures and unknown exchanges never stall |
   | closed | market closed; FX from Friday 22:00 to Sunday 22:00 UTC | none | `Market closed · Oct 31 16:00` (the date only when not today) |
   | pre / post / lunch | pre-market, after hours, lunch (JPX/OSA 11:30–12:30, HKG 12:00–13:00, SHH/SHZ 11:30–13:00 local; lunch minutes do not count toward a stop); prices are regular-session | none | `Pre-market`, `After hours`, `Lunch` (`午休`, `昼休み`, `점심 휴장`) |
 
-  Yahoo Finance is live only from exchanges `markets.js` marks live.
+  A Yahoo Finance quote is aged at its fetch, from today's open at the earliest; unfetched for 5 min while trading, it stalls.
 - **Pause / Resume**: automatic rounds stop and start; Refresh still runs one round while paused. Cached quotes stay.
 - **Refresh icon**: from a press or `wickline.refresh` it turns (`spin(900)`, natively) until that refresh ends, in whole turns (stopping upright), at least one per press; a press while it turns adds a turn, no round.
 - **Motion**: nothing moves on its own; only the person's actions animate:

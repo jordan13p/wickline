@@ -11,6 +11,9 @@ import { at, day, yq } from "./helpers.mjs";
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
 const say = (lang) => (key, params) => t(lang, key, params);
+// A Yahoo Finance quote as fetched at `fetchedAt`. Without one it counts as fetched at the instant drawn
+// (pinned below), which is what the tests that pass only a quote time mean.
+const fetched = (q, fetchedAt) => ({ ...q, fetchedAt });
 
 test("freshness constants", () => {
   assert.equal(LIVE_MAX_AGE_MS, 120_000);
@@ -173,26 +176,31 @@ test("futures, unknown exchanges and a quote with no exchange never stall", () =
 const left = (limitMs, ageMs) => limitMs - ageMs + 1;
 
 test("a quote may get 120 s old for real time, its delay plus 5 min, else it never stalls", () => {
-  assert.equal(msUntilStale(yq("AAPL", "NMS", 0), "open", 0), left(120_000, 0));
   assert.equal(msUntilStale({ symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: 0 }, "open", 0), left(120_000, 0));
   assert.equal(msUntilStale({ symbol: "BTC/USDT", source: "binance", timestamp: 0 }, "24h", 0), left(120_000, 0));
-  assert.equal(msUntilStale(yq("0700.HK", "HKG", 0), "open", 0), left(1_200_000, 0));
-  assert.equal(msUntilStale(yq("2330.TW", "TAI", 0), "open", 0), left(1_500_000, 0));
+  // Yahoo Finance, by its age at the fetch: at the limit it waits only for the fetch guard, 1 ms past it is stale.
+  for (const [symbol, exchange, limit] of [["AAPL", "NMS", 120_000], ["0700.HK", "HKG", 1_200_000], ["2330.TW", "TAI", 1_500_000]]) {
+    assert.equal(msUntilStale(fetched(yq(symbol, exchange, 0), limit), "open", limit), left(300_000, 0), symbol);
+    assert.equal(msUntilStale(fetched(yq(symbol, exchange, 0), limit + 1), "open", limit + 1), left(limit, limit + 1), symbol);
+  }
   for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) assert.equal(msUntilStale(yq(symbol, exchange, 0), "open", 0), null, symbol);
 });
 
 test("msUntilStale: the ms left before freshness reads stalled, null when it cannot this session", () => {
   const T = at("2026-11-10T02:12:00Z"); // 10:12 in Hong Kong
-  const hk = yq("0700.HK", "HKG", T, HK_DAY);
-  assert.equal(msUntilStale(hk, "open", T + 1_200_000), 1);
-  assert.equal(msUntilStale(hk, "open", T + 1_200_001), 0);
-  const us = yq("AAPL", "NMS", T);
-  assert.equal(msUntilStale(us, "open", T + 60_000), 60_001);
-  assert.equal(msUntilStale(us, "open", T + 120_001), 0);
+  const hk = fetched(yq("0700.HK", "HKG", T, HK_DAY), T + 60_000);
+  assert.equal(msUntilStale(hk, "open", T + 300_000), 60_001);
+  assert.equal(msUntilStale(hk, "open", T + 360_001), 0);
+  const us = fetched(yq("AAPL", "NMS", T), T);
+  assert.equal(msUntilStale(us, "open", T + 60_000), 240_001);
+  const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: T };
+  assert.equal(msUntilStale(finnhub, "open", T + 60_000), 60_001);
+  assert.equal(msUntilStale(finnhub, "open", T + 120_001), 0);
   for (const session of ["closed", "pre", "post", "lunch"]) assert.equal(msUntilStale(hk, session, T), null, session);
   // A session not known yet: a delayed quote never stalls; real time still counts, for the overlay pick.
   assert.equal(msUntilStale(hk, "unknown", T + 1_200_001), null);
-  assert.equal(msUntilStale(us, "unknown", T + 60_000), 60_001);
+  assert.equal(msUntilStale(us, "unknown", T + 60_000), 240_001);
+  assert.equal(msUntilStale(finnhub, "unknown", T + 60_000), 60_001);
   for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) {
     assert.equal(msUntilStale(yq(symbol, exchange, T, HK_DAY), "open", T + 3_600_000), null, symbol);
   }
@@ -201,15 +209,14 @@ test("msUntilStale: the ms left before freshness reads stalled, null when it can
 test("a delayed market's first minutes read delayed, not stopped at yesterday's close", () => {
   const open = at("2026-11-10T01:00:00Z"); // 09:00 in Taipei
   const tw = yq("2330.TW", "TAI", at("2026-11-09T05:30:00Z"), day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"));
-  assert.equal(msUntilStale(tw, "open", open + 60_000), left(1_500_000, 60_000));
+  assert.equal(msUntilStale(fetched(tw, open + 1_500_001), "open", open + 1_500_001), 0);
   assert.deepEqual(freshness(tw, "open", open + 60_000), { state: "delayed", delayMinutes: 20, stoppedAt: null });
   assert.equal(freshness(tw, "open", open + 1_500_000).state, "delayed");
   assert.deepEqual(freshness(tw, "open", open + 1_500_001), { state: "stalled", delayMinutes: null, stoppedAt: tw.timestamp });
-  // Real time is never anchored: yesterday's price at the open reads stopped, never live.
-  const usOpen = at("2026-11-10T14:30:30Z");
-  const us = yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z"));
-  assert.equal(msUntilStale(us, "open", usOpen), left(120_000, usOpen - us.timestamp));
-  assert.equal(freshness(us, "open", usOpen).state, "stalled");
+  // An overlay is never anchored: yesterday's MIS price at the open reads stopped, never live.
+  const mis = { ...tw, source: "mis" };
+  assert.equal(msUntilStale(mis, "open", open + 30_000), left(120_000, open + 30_000 - mis.timestamp));
+  assert.equal(freshness(mis, "open", open + 30_000).state, "stalled");
 });
 
 test("the detail names Yahoo's state and keeps a delay while closed", () => {
@@ -261,7 +268,8 @@ test("Hong Kong and Shanghai lunch; Taiwan, Korea and the US have none", () => {
 
 test("the minutes of a lunch break do not count toward a stop", () => {
   const tokyo = yq("7203.T", "JPX", at("2026-11-10T02:30:00Z"), TOKYO_DAY); // the morning's last trade, 11:30 JST
-  assert.equal(msUntilStale(tokyo, "open", at("2026-11-10T03:31:00Z")), left(1_200_000, 60_000));
+  // Fetched at 12:31 JST, 1 min traded: nothing but the fetch guard can turn it.
+  assert.equal(msUntilStale(fetched(tokyo, at("2026-11-10T03:31:00Z")), "open", at("2026-11-10T03:31:00Z")), left(300_000, 0));
   assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:31:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null });
   assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:40:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null }); // 12:40 JST: 10 min traded
   assert.equal(freshness(tokyo, "open", at("2026-11-10T03:50:00Z")).state, "delayed"); // 12:50 JST: 20 min of trading
@@ -289,12 +297,79 @@ test("FX reads closed from Friday 22:00 to Sunday 22:00 UTC", () => {
 });
 
 test("a lunch break counts only where it overlaps the quote's trading time", () => {
-  // Timed 11:35 JST, inside lunch: at 12:40 only the 10 min since the reopening count.
-  assert.equal(msUntilStale(yq("7203.T", "JPX", at("2026-11-10T02:35:00Z"), TOKYO_DAY), "open", at("2026-11-10T03:40:00Z")), left(1_200_000, 600_000));
-  // Timed 11:10 JST, at 11:20: lunch has not begun, nothing is taken off.
+  // Timed 11:35 JST, inside lunch: only the minutes since the 12:30 reopening count, so it stops after 12:50.
+  const inLunch = yq("7203.T", "JPX", at("2026-11-10T02:35:00Z"), TOKYO_DAY);
+  assert.equal(freshness(fetched(inLunch, at("2026-11-10T03:50:00Z")), "open", at("2026-11-10T03:50:00Z")).state, "delayed");
+  assert.equal(msUntilStale(fetched(inLunch, at("2026-11-10T03:50:00Z") + 1), "open", at("2026-11-10T03:50:00Z") + 1), 0);
+  // Timed 11:00 JST, fetched 11:20: lunch has not begun, nothing is taken off: exactly its 20 min, not stale.
+  const early = yq("7203.T", "JPX", at("2026-11-10T02:00:00Z"), TOKYO_DAY);
+  assert.equal(msUntilStale(fetched(early, at("2026-11-10T02:20:00Z")), "open", at("2026-11-10T02:20:00Z")), left(300_000, 0));
   const morning = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), TOKYO_DAY);
-  assert.equal(msUntilStale(morning, "open", at("2026-11-10T02:20:00Z")), left(1_200_000, 600_000));
   // Its 20 min of trading end at 11:30, so it reads stalled only once the market reopens.
   assert.equal(freshness(morning, sessionOf(morning, at("2026-11-10T03:30:00Z")), at("2026-11-10T03:30:00Z")).state, "delayed");
   assert.equal(freshness(morning, "open", at("2026-11-10T03:30:00Z") + 1).state, "stalled");
+});
+
+// ---- A Yahoo Finance quote's age is taken at its fetch ----
+
+const US_DAY = day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z"); // 09:30–16:00 in New York
+
+test("a long list does not flicker: a Yahoo quote stays live until its next fetch", () => {
+  // 60 symbols on Yahoo, each fetched about every 2 minutes; AAPL's trade 10 s older than its fetch.
+  const fetchAt = at("2026-11-10T15:00:00Z");
+  const aapl = fetched(yq("AAPL", "NMS", fetchAt - 10_000, US_DAY), fetchAt);
+  for (const since of [100_000, 119_000]) {
+    assert.deepEqual(freshness(aapl, "open", fetchAt + since), { state: "live", delayMinutes: null, stoppedAt: null }, `${since}`);
+  }
+  // Nothing changes until the next fetch or the 5-minute guard.
+  assert.equal(msUntilStale(aapl, "open", fetchAt + 100_000), 200_001);
+});
+
+test("Yahoo at the US open: yesterday's close fetched a minute before the open does not read stopped", () => {
+  const now = at("2026-11-10T14:30:20Z"); // 09:30:20 in New York
+  const aapl = fetched(yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), at("2026-11-10T14:29:00Z"));
+  assert.notEqual(freshness(aapl, "open", now).state, "stalled");
+  // Its age counts from the open: the same close fetched 120 s after it is live, 121 s after it stopped.
+  assert.equal(freshness(fetched(aapl, at("2026-11-10T14:32:00Z")), "open", at("2026-11-10T14:32:00Z")).state, "live");
+  assert.equal(freshness(fetched(aapl, at("2026-11-10T14:32:01Z")), "open", at("2026-11-10T14:32:01Z")).state, "stalled");
+});
+
+test("a Yahoo quote not fetched for 5 minutes reads stopped while its market is open", () => {
+  const fetchAt = at("2026-11-10T02:20:00Z"); // 10:20 in Hong Kong
+  const hk = fetched(yq("0700.HK", "HKG", fetchAt - 60_000, HK_DAY), fetchAt);
+  assert.deepEqual(freshness(hk, "open", fetchAt + 300_000), { state: "delayed", delayMinutes: 15, stoppedAt: null });
+  assert.deepEqual(freshness(hk, "open", fetchAt + 300_001), { state: "stalled", delayMinutes: null, stoppedAt: hk.timestamp });
+  assert.equal(msUntilStale(hk, "open", fetchAt + 200_000), 100_001);
+  assert.equal(freshness(hk, "closed", fetchAt + 3_600_000).state, "closed");
+  const us = fetched(yq("AAPL", "NMS", at("2026-11-10T15:00:00Z") - 1_000, US_DAY), at("2026-11-10T15:00:00Z"));
+  assert.equal(freshness(us, "open", us.fetchedAt + 300_000).state, "live");
+  assert.equal(freshness(us, "open", us.fetchedAt + 300_001).state, "stalled");
+});
+
+test("a delayed Yahoo quote's boundary is taken at its fetch", () => {
+  const T = at("2026-11-10T02:12:00Z"); // a trade at 10:12 in Hong Kong
+  const hk = yq("0700.HK", "HKG", T, HK_DAY);
+  // Fetched 20 min after the trade: delayed, however long ago the fetch (inside the guard); 1 ms later: stopped.
+  const edge = fetched(hk, T + 1_200_000);
+  for (const since of [0, 60_000, 299_000]) assert.equal(freshness(edge, "open", edge.fetchedAt + since).state, "delayed", `${since}`);
+  const past = fetched(hk, T + 1_200_001);
+  assert.deepEqual(freshness(past, "open", past.fetchedAt), { state: "stalled", delayMinutes: null, stoppedAt: T });
+  assert.equal(msUntilStale(past, "open", past.fetchedAt + 60_000), 0);
+});
+
+test("an overlay's age still runs from its own time to now, whatever its fetch time", () => {
+  const T = at("2026-11-10T02:12:00Z");
+  for (const source of ["mis", "yahootw", "finnhub", "binance"]) {
+    const overlay = { symbol: "2330.TW", source, timestamp: T, fetchedAt: T - 400_000 };
+    assert.equal(freshness(overlay, "open", T + 120_000).state, "live", source);
+    assert.equal(freshness(overlay, "open", T + 120_001).state, "stalled", source);
+    assert.equal(msUntilStale(overlay, "open", T + 60_000), 60_001, source);
+  }
+});
+
+test("a Yahoo quote without a fetch time counts as fetched now", () => {
+  const T = at("2026-11-10T15:00:00Z");
+  const aapl = yq("AAPL", "NMS", T - 10_000, US_DAY);
+  for (const now of [T, T + 110_000, T + 110_001]) assert.deepEqual(freshness(aapl, "open", now), freshness(fetched(aapl, now), "open", now), `${now}`);
+  assert.equal(freshness(aapl, "open", T + 110_001).state, "stalled");
 });

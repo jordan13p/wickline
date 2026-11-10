@@ -42,7 +42,7 @@
 Each row has a dot and a label:
 
 - **Filled dot**: live. A real-time source (Yahoo Finance too, for US stocks, US indexes and currencies), the market trading, the quote at most 120 seconds old; the label says `Live`, and the source's name is in the detail view.
-- **Ring**: delayed or stalled. Yahoo's prices from a delayed exchange (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds or a delayed one older than its delay plus 5 minutes (`quote stopped at 13:05`), or a session not known yet.
+- **Ring**: delayed or stalled. Yahoo's prices from a delayed exchange (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds or a delayed one older than its delay plus 5 minutes (`quote stopped at 13:05`; a Yahoo Finance quote's age is taken when it was fetched, from today's open at the earliest, and one not fetched for 5 minutes also reads stopped), or a session not known yet.
 - **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`, `Lunch`).
 
 **Lit price.** A Taiwan stock exactly at its limit-up or limit-down, as its real-time source (TWSE MIS or Yahoo TW Stock) reports it, shows its price on a solid block in the gain or loss color, the way Taiwan's quote boards light a stock at its limit; hover it for `Limit up 563.00`. Limits are never computed, so other markets, and Taiwan on Yahoo Finance alone, never light; nor does a stalled quote, or the trial match before the open.

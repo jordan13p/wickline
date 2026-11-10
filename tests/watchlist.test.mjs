@@ -965,12 +965,18 @@ test("the idle wake waits for each quote's own stale moment", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
   const T = at("2026-11-10T02:00:00Z");
   const periods = day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z");
-  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["ES=F", "CME"], ["AAPL", "NMS"]]) w.quotes[symbol] = yq(symbol, exchange, T, periods);
-  assert.equal(w.staleInMs(["0700.HK"], T), 120_000);
-  assert.equal(w.staleInMs(["0700.HK"], T + 1_100_000), 100_001);
-  assert.equal(w.staleInMs(["ES=F"], T + 1_100_000), 120_000);
-  assert.equal(w.staleInMs(["AAPL"], T + 60_000), 60_001);
-  assert.equal(w.staleInMs(["AAPL", "0700.HK"], T + 1_100_000), 100_001);
+  // A Yahoo quote's age is taken at its fetch, so what turns it is 5 minutes without one.
+  const fetchedAt = { "0700.HK": T + 100_000, "ES=F": T, AAPL: T };
+  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["ES=F", "CME"], ["AAPL", "NMS"]]) {
+    w.quotes[symbol] = { ...yq(symbol, exchange, T, periods), fetchedAt: fetchedAt[symbol] };
+  }
+  assert.equal(w.staleInMs(["0700.HK"], T + 100_000), 120_000);
+  assert.equal(w.staleInMs(["0700.HK"], T + 300_000), 100_001);
+  assert.equal(w.staleInMs(["ES=F"], T + 250_000), 120_000);
+  assert.equal(w.staleInMs(["AAPL"], T + 250_000), 50_001);
+  assert.equal(w.staleInMs(["AAPL", "0700.HK"], T + 250_000), 50_001);
+  // One stale already is skipped: AAPL past its guard, the wake is 0700.HK's.
+  assert.equal(w.staleInMs(["AAPL", "0700.HK"], T + 300_001), 100_000);
 });
 
 test("the idle wake skips a delayed quote whose session is not known yet", () => {
@@ -978,9 +984,9 @@ test("the idle wake skips a delayed quote whose session is not known yet", () =>
   const T = at("2026-11-10T02:00:00Z");
   // No trading hours yet: it reads delayed, never stalled, so no stale moment is due. Real time still wakes,
   // since a stale overlay hands its row to another source.
-  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["AAPL", "NMS"]]) w.quotes[symbol] = yq(symbol, exchange, T);
+  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["AAPL", "NMS"]]) w.quotes[symbol] = { ...yq(symbol, exchange, T), fetchedAt: T };
   assert.equal(w.staleInMs(["0700.HK"], T + 1_100_000), 120_000);
-  assert.equal(w.staleInMs(["AAPL"], T + 60_000), 60_001);
+  assert.equal(w.staleInMs(["AAPL"], T + 240_000), 60_001);
 });
 
 test("the busiest session ranks lunch below open and unknown", () => {
@@ -994,10 +1000,11 @@ test("the busiest session ranks lunch below open and unknown", () => {
   assert.equal(w.sessionFor(["7203.T", "AAPL"], noon), "lunch");
   assert.equal(w.sessionFor(["7203.T", "2330.TW"], noon), "open");
   assert.equal(w.sessionFor(["7203.T", "MSFT"], noon), "unknown");
-  // A JPX quote from 11:30 JST: nothing turns stale over lunch, and the wake counts trading time after it.
-  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: at("2026-11-10T02:30:00Z") };
+  // A JPX quote from 11:30 JST fetched at 11:59: nothing turns stale over lunch; once open again, its fetch guard.
+  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: at("2026-11-10T02:30:00Z"), fetchedAt: at("2026-11-10T02:59:00Z") };
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T03:00:00Z")), 120_000); // 12:00 JST: the cap
-  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T03:49:00Z")), 60_001); // 12:49 JST: 19 min traded
+  w.quotes["7203.T"].fetchedAt = at("2026-11-10T03:45:00Z"); // 12:45 JST: 15 min traded
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T03:49:00Z")), 60_001);
   // A quote from 11:10 JST at 11:45: its frozen age (20 min) would leave 1 ms, and the wake would spin all lunch.
   w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: at("2026-11-10T02:10:00Z") };
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:45:00Z")), 120_000);
@@ -1012,9 +1019,10 @@ test("a half day's close inside lunch does not spin the idle wake", () => {
 
 test("a JPX quote from before lunch wakes the loop at most at the cap, and its stop moment falls into lunch", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  w.quotes["7203.T"] = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), day("2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z")); // 11:10 JST
-  // 11:20: 10 min traded, 20 min allowed: 600 001 ms left, held to the cap.
-  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:20:00Z")), 120_000);
+  // Timed 11:10 JST, last fetched 11:25.
+  w.quotes["7203.T"] = { ...yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), day("2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z")), fetchedAt: at("2026-11-10T02:25:00Z") };
+  // 11:26: 240 001 ms to the fetch guard, held to the cap.
+  assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:26:00Z")), 120_000);
   // 11:29: 60 001 ms left, a wake at 11:30:00.001, inside lunch, where the quote is skipped.
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:29:00Z")), 60_001);
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:30:00Z") + 1), 120_000);

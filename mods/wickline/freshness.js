@@ -10,6 +10,9 @@ export const LIVE_MAX_AGE_MS = 120_000;
 export const REALTIME_SOURCES = new Set(["yahootw", "mis", "finnhub", "binance"]);
 // A delayed quote has stalled once it is older than its exchange's delay plus this.
 const DELAYED_GRACE_S = 300;
+// A Yahoo Finance quote not fetched for longer than this while its market is open has stalled, however
+// recent its price.
+const FETCH_MAX_AGE_MS = 300_000;
 
 /** A real-time source, or Yahoo Finance for a real-time exchange. */
 export const isRealtime = (quote) => REALTIME_SOURCES.has(quote.source)
@@ -31,17 +34,24 @@ function lunchWindow({ offsetMin, from, to }, now) {
   return [dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS];
 }
 
-// A quote's age against staleAfterMs. A delayed quote counts from today's open at the earliest, so a market's
-// first minutes do not read stopped at the previous close, and without today's lunch break, so it does not
-// read stopped just after lunch; a real-time one always from its own time.
+// When a Yahoo Finance quote was fetched; one without a fetch time (every provider sets it) counts as fetched
+// now, so its age still grows rather than reading NaN, which would never stall.
+const fetchedAt = (quote, now) => quote.fetchedAt ?? now;
+
+// A quote's age against staleAfterMs. An overlay's (a real-time source's own) runs from its time to now. A
+// Yahoo Finance quote's is taken when it was fetched, so it does not grow with the time a long list takes
+// to come round again; it counts from today's open at the earliest, so a market's first minutes do not read
+// stopped at the previous close, and a delayed one leaves out today's lunch break, so it does not read
+// stopped just after lunch (no real-time exchange has one).
 function quoteAgeMs(quote, now) {
-  if (isRealtime(quote)) return now - quote.timestamp;
+  if (quote.source !== "yahoo") return now - quote.timestamp;
+  const at = fetchedAt(quote, now);
   const open = quote.periods?.regular?.[0];
   const start = open === undefined ? quote.timestamp : Math.max(quote.timestamp, open);
   const { lunch } = exchangeRule(quote.exchange, quote.symbol);
-  if (!lunch) return now - start;
-  const [lunchStart, lunchEnd] = lunchWindow(lunch, now);
-  return now - start - Math.max(0, Math.min(now, lunchEnd) - Math.max(start, lunchStart));
+  if (!lunch) return at - start;
+  const [lunchStart, lunchEnd] = lunchWindow(lunch, at);
+  return at - start - Math.max(0, Math.min(at, lunchEnd) - Math.max(start, lunchStart));
 }
 
 // A delayed quote's minutes late, from its exchange's rule; null when the rule gives none.
@@ -93,15 +103,20 @@ const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
 
 /**
  * How long until a quote turns stale in `session`, in ms: at least 1 while it has not yet, 0 or less once it
- * has (older than staleAfterMs by quoteAgeMs). null when it never will this session: the market is not
- * trading, a delayed quote's session is not open, or it is a future or from an exchange without a delay. A
- * real-time quote counts also while its session is not known: it reads unconfirmed, but a stale overlay
- * still hands its row to another source (pickOverlay).
+ * has (older than staleAfterMs by quoteAgeMs, or a Yahoo Finance quote not fetched for FETCH_MAX_AGE_MS).
+ * null when it never will this session: the market is not trading, a delayed quote's session is not open,
+ * or it is a future or from an exchange without a delay. A real-time quote counts also while its session is
+ * not known: it reads unconfirmed, but a stale overlay still hands its row to another source (pickOverlay).
  */
 export function msUntilStale(quote, session, now) {
   if (PAUSED.has(session) || (!isRealtime(quote) && session !== "open")) return null;
   const limit = staleAfterMs(quote);
-  return limit === null ? null : limit - quoteAgeMs(quote, now) + 1;
+  if (limit === null) return null;
+  const left = limit - quoteAgeMs(quote, now) + 1;
+  // A Yahoo quote's age stands still until its next fetch: once past its limit it stays stale, else only
+  // the fetch guard can turn it.
+  if (quote.source !== "yahoo" || left <= 0) return left;
+  return FETCH_MAX_AGE_MS - (now - fetchedAt(quote, now)) + 1;
 }
 
 /**
