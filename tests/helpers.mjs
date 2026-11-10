@@ -25,6 +25,12 @@ export const EARLIER_TICK = jsonFixture("yahootw-tick-earlier-day");
 export const NIGHT = Date.parse("2026-11-09T18:00:00Z");
 // The recorded close, 13:31 in Taipei on 2026-11-09.
 export const CLOSE_0509 = Date.parse("2026-11-09T05:31:00Z");
+// Yahoo 奇摩股市 futures rows recorded at 13:35 in Taipei on Tuesday 2026-11-10 (day session): WTX& 台指期近一 at 42 604
+// (13:35:37, limits 45 625 / 37 331, previous close 41 478), WTX@, WMT&, WTF&, WTE&, all on TFE with delay 0; and
+// the US ticker WTX (NMS), which is what WTX without & answers.
+export const FUTURES_ROWS = jsonFixture("yahootw-stocklist-futures");
+// 13:36:30 in Taipei on 2026-11-10, just after both futures recordings.
+export const FUT_NOW = Date.parse("2026-11-10T05:36:30Z");
 
 export function fakeHost(respond) {
   const host = {

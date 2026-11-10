@@ -164,8 +164,8 @@ export function decodeTick(symbol, response, now) {
 export const yahootw = {
   id: "yahootw",
   markets: ["tw"],
-  // A Taiwan index (^TWII) is live here, 20 minutes late on Yahoo Finance.
-  kinds: ["stock", "index"],
+  // A Taiwan index (^TWII) is live here, 20 minutes late on Yahoo Finance; a TAIFEX future (WTX&) is only here.
+  kinds: ["stock", "index", "future"],
   overlay: true,
   spacingMs: () => 0,
   intervalMs: (session) => (session === "open" || session === "unknown" ? 10_000 : 60_000),

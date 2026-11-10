@@ -1,21 +1,29 @@
 // Which market a symbol trades on: from its form, or for an index from the exchange its source reports.
 // No Herdr imports.
-import { isCryptoPair } from "./quotes.js";
+import { isCryptoPair, isFutureForm } from "./quotes.js";
 
 // Yahoo exchange suffixes.
 const SUFFIXES = { TW: "tw", TWO: "tw", HK: "hk", SS: "cn", SZ: "cn", T: "jp", KS: "kr", KQ: "kr" };
 
-/** "pair", "index" (a leading ^), "other" (a currency or future: it has =) or "stock". */
+/**
+ * "pair", "index" (a leading ^), "future" (letters then & or @: a TAIFEX code at Yahoo 奇摩股市), "other" (has =: a
+ * currency or a Yahoo future such as ES=F) or "stock".
+ */
 export function kindOf(symbol) {
   if (isCryptoPair(symbol)) return "pair";
   if (symbol.startsWith("^")) return "index";
+  if (isFutureForm(symbol)) return "future";
   return symbol.includes("=") ? "other" : "stock";
 }
 
-/** "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges), by form alone. */
+/**
+ * "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges), by form alone. A
+ * future is TAIFEX's: "tw".
+ */
 export function marketOf(symbol) {
   const kind = kindOf(symbol);
   if (kind === "pair") return "crypto";
+  if (kind === "future") return "tw";
   if (kind !== "stock") return "other";
   const dot = symbol.lastIndexOf(".");
   if (dot === -1) return "us";
@@ -42,7 +50,7 @@ export const exchangeMarket = (exchange) => EXCHANGE_MARKET[exchange] ?? null;
 
 /**
  * A symbol's market: its form's, except an index, which takes its source's reported `exchange` (other until
- * one is reported, or when it is not in the table). A currency or future stays other.
+ * one is reported, or when it is not in the table). A currency or a Yahoo future (=) stays other.
  */
 export function resolvedMarket(symbol, exchange) {
   return symbol.startsWith("^") ? exchangeMarket(exchange) ?? "other" : marketOf(symbol);

@@ -10,7 +10,7 @@ export const STARTER_SYMBOLS = ["AAPL", "NVDA", "^GSPC", "BTC/USDT"];
 
 /** English text by error code; `{name}` is filled from the error's params. */
 export const MESSAGES_EN = {
-  "symbol.invalid": "Enter a ticker, such as AAPL, 0700.HK or ^GSPC, or a pair, such as BTC/USDT.",
+  "symbol.invalid": "Enter a ticker, such as AAPL, 0700.HK or ^GSPC, a Taiwan future, such as WTX&, or a pair, such as BTC/USDT.",
   "yahoo.rateLimited": "Yahoo rate limited requests.",
   "yahoo.notFound": "Ticker not found on Yahoo Finance.",
   "yahoo.http": "Yahoo returned HTTP {status}.",
@@ -69,10 +69,13 @@ export function isCryptoPair(symbol) {
   return /^[A-Z0-9]{1,20}\/[A-Z0-9]{1,20}$/.test(symbol);
 }
 
-/** Yahoo tickers or Binance pairs, never company names or URLs. Throws a message for people. */
+/** A TAIFEX future as Yahoo 奇摩股市 writes it: letters then & (near month) or @ (next month), such as WTX&. */
+export const isFutureForm = (symbol) => /^[A-Z]{1,6}[&@]$/.test(symbol);
+
+/** Yahoo tickers, Binance pairs or Taiwan futures, never company names or URLs. Throws a message for people. */
 export function normalizeSymbol(input) {
   let symbol = String(input ?? "").trim().toUpperCase();
-  if (isCryptoPair(symbol)) return symbol;
+  if (isCryptoPair(symbol) || isFutureForm(symbol)) return symbol;
   if (!/^[A-Z0-9^][A-Z0-9.^=\-]{0,31}$/.test(symbol)) {
     throw new QuoteError("symbol.invalid");
   }

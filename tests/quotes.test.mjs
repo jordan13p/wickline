@@ -11,6 +11,10 @@ test("normalizes symbols", () => {
   assert.equal(normalizeSymbol("btc/usdt"), "BTC/USDT");
   assert.throws(() => normalizeSymbol("https://example.com"));
   assert.throws(() => normalizeSymbol("Apple Inc"));
+  assert.equal(normalizeSymbol("wtx&"), "WTX&");
+  assert.equal(normalizeSymbol(" wtx@ "), "WTX@");
+  assert.equal(normalizeSymbol("wtx"), "WTX");
+  for (const bad of ["TXF1&", "WTX&&", "&", "ABCDEFG&", "WTX &", "^WTX&"]) assert.throws(() => normalizeSymbol(bad), (e) => e.code === "symbol.invalid", bad);
 });
 
 test("identity", () => {

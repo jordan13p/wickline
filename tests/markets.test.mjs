@@ -242,6 +242,17 @@ test("a symbol's kind comes from its form", () => {
   for (const [symbol, kind] of table) assert.equal(kindOf(symbol), kind, symbol);
 });
 
+test("a future is letters then & or @, and trades in Taiwan", () => {
+  for (const symbol of ["WTX&", "WTX@", "WMT&", "WTF&", "WTE&"]) {
+    assert.equal(kindOf(symbol), "future", symbol);
+    assert.equal(marketOf(symbol), "tw", symbol);
+    assert.equal(resolvedMarket(symbol, null), "tw", symbol);
+  }
+  assert.equal(kindOf("WTX"), "stock");
+  assert.equal(marketOf("WTX"), "us");
+  for (const symbol of ["TXF1&", "^WTX&", "WTX&&", "ABCDEFG&", "ES=F"]) assert.notEqual(kindOf(symbol), "future", symbol);
+});
+
 // An index of Taiwan form may be known to Yahoo 奇摩股市 when Yahoo Finance does not know it.
 test("a Taiwan form is an index starting ^TW", () => {
   for (const symbol of ["^TWOII", "^TWII"]) assert.equal(isTaiwanForm(symbol), true, symbol);

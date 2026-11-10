@@ -2,18 +2,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { STARTER_SYMBOLS, USER_AGENT } from "../mods/wickline/quotes.js";
-import { yahooUrl } from "../mods/wickline/providers/yahoo.js";
+import { yahoo, yahooUrl } from "../mods/wickline/providers/yahoo.js";
+import { finnhub } from "../mods/wickline/providers/finnhub.js";
+import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
-import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import { collapsedRow, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, NIGHT, advance, at, chart, chartSymbol, day, fakeHost, isLine, jsonFixture, lineSymbol, ok, start,
-  stop, yq,
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_ROWS, FUT_NOW, NIGHT, advance, at, chart, chartSymbol, day, fakeHost, isLine, jsonFixture,
+  lineSymbol, ok, start, stop, yq,
 } from "./helpers.mjs";
-import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
-import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay } from "../mods/wickline/providers/yahootw.js";
+import { MIS_CONSENT_VERSION, MIS_URL, mis } from "../mods/wickline/providers/mis.js";
+import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay, yahootw } from "../mods/wickline/providers/yahootw.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
 
 const BASE = "https://data-api.binance.vision";
@@ -746,6 +748,17 @@ async function twOnlyRun(host, check, from = TW_NOW) {
   await stop(w, host, runs);
 }
 
+// The recorded futures rows, each that has a trade traded at `time`, with some rows' fields replaced.
+const futuresAt = (time, bySymbol = {}) => ok(FUTURES_ROWS.map((row) => ({
+  ...row, ...(row.regularMarketTime && { regularMarketTime: new Date(time).toISOString() }), ...bySymbol[row.symbol],
+})));
+// Yahoo 奇摩股市 on and consented, the futures rows as recorded, no line unless given; run with twOnlyRun(host, check, FUT_NOW).
+function futuresHost(symbols = ["WTX&"], options = {}) {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => ok(FUTURES_ROWS), line: offline, ...options });
+  host.store = { version: 1, symbols, paused: false };
+  return host;
+}
+
 // An index holds the chosen market on a remove only while it waits for its first quote (filterAfterRemove).
 test("an index is pending until its first quote, overlay or error", async () => {
   const host = taiwanHost(BOTH, { yahoo: atTai });
@@ -1055,6 +1068,120 @@ test("turning Yahoo 奇摩股市 off while paused says not found at once", async
     assert.equal(w.sync(), true);
     assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
   });
+});
+
+test("a future goes to Yahoo 奇摩股市 alone, never with the Finnhub key", async () => {
+  // Every answer is unreadable: only what is asked, and with which headers, matters here.
+  const host = fakeHost(() => ok({}));
+  host.prefs = { version: 1, sources: { us: { provider: "finnhub" }, tw: BOTH.sources.tw } };
+  host.secrets = { [SECRET_KEY_FINNHUB]: "k".repeat(20) };
+  host.store = { version: 1, symbols: ["WTX&", "AAPL", "2330.TW"], paused: false };
+  await twOnlyRun(host, (w) => {
+    const config = w.config();
+    for (const provider of [yahoo, finnhub, mis]) assert.equal(w.serves(provider, "WTX&", config), false, provider.id);
+    assert.equal(w.serves(yahootw, "WTX&", config), true);
+    assert.equal(w.marketFor("WTX&"), "tw");
+    assert.deepEqual(w.finnhubSymbols(), ["AAPL"]);
+    assert.deepEqual(host.requests.filter((url) => !isYahootw(url) && url.includes("WTX")), []);
+    assert.ok(host.requests.some((url) => isYahootw(url) && url.includes("WTX%26")));
+    assert.ok(host.headers.some((headers) => headers["X-Finnhub-Token"]), "Finnhub was asked");
+    host.headers.forEach((headers, i) => {
+      if (headers["X-Finnhub-Token"]) assert.doesNotMatch(host.requests[i], /WTX/);
+    });
+  }, FUT_NOW);
+});
+
+test("without Yahoo 奇摩股市 a future stays listed as one unavailable line, and turning it on prices it", async () => {
+  const host = futuresHost();
+  host.prefs = undefined;
+  await twOnlyRun(host, async (w) => {
+    assert.equal(w.errors["WTX&"].code, "yahootw.futuresNeedSource");
+    assert.equal(w.shown("WTX&"), undefined);
+    assert.equal(collapsedRow({ quote: w.shown("WTX&"), failed: w.errors["WTX&"] }), true);
+    assert.deepEqual(host.requests.filter((url) => url.includes("WTX")), []);
+    assert.equal(w.marketFor("WTX&"), "tw");
+    host.prefs = ONLY_YAHOOTW;
+    assert.equal(w.sync(), true);
+    assert.equal(w.errors["WTX&"], undefined);
+    await advance(host, FUT_NOW + 10_000);
+    const quote = w.shown("WTX&");
+    assert.deepEqual([quote.source, quote.price], ["yahootw", 42604]);
+    assert.deepEqual(w.preferences.symbols, ["WTX&"]);
+  }, FUT_NOW);
+});
+
+test("a future awaiting Yahoo 奇摩股市's re-confirmation gives that reason, and the futures reason once it is off", async () => {
+  const host = futuresHost();
+  // Switched on, with a consent to an older statement.
+  host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
+  await twOnlyRun(host, (w) => {
+    assert.equal(w.errors["WTX&"].code, "yahootw.reconfirm");
+    assert.deepEqual(host.requests.filter(isYahootw), []);
+    host.prefs = undefined;
+    assert.equal(w.sync(), true);
+    assert.equal(w.errors["WTX&"].code, "yahootw.futuresNeedSource");
+  }, FUT_NOW);
+});
+
+// Spec quote-sources, "A failed round keeps the last price" (the rule from Task 1b, now for a future).
+test("a failed round keeps a future's last price, cached with the reason", async () => {
+  let hang = false;
+  const host = futuresHost(["WTX&"], { yahootw: () => (hang ? new Promise(() => {}) : futuresAt(host.clock - 5_000)) });
+  await twOnlyRun(host, async (w) => {
+    assert.equal(w.shown("WTX&").price, 42604);
+    hang = true;
+    // Whatever the cadence (10 s or 60 s), a hung round has timed out by then.
+    await advance(host, FUT_NOW + 75_000);
+    const kept = w.shown("WTX&");
+    assert.deepEqual([kept.source, kept.price, kept.cached], ["yahootw", 42604, true]);
+    assert.equal(w.errors["WTX&"].code, "request.timeout");
+  }, FUT_NOW);
+});
+
+// Spec quote-sources, "A name-only answer keeps the last price" and "A failed round keeps the last price" (a missing
+// row), for a future.
+test("after a price, a name-only answer keeps a future's price unmarked, and a missing row keeps it cached as not found", async () => {
+  let answer = "priced";
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => (answer === "priced" ? futuresAt(host.clock - 5_000)
+      : answer === "name" ? futuresAt(host.clock - 5_000, { "WTX&": { price: { raw: "-" }, regularMarketTime: "-" } })
+      : ok(FUTURES_ROWS.filter((row) => row.symbol !== "WTX&"))),
+  });
+  await twOnlyRun(host, async (w) => {
+    answer = "name";
+    await advance(host, FUT_NOW + 75_000);
+    let kept = w.shown("WTX&");
+    assert.deepEqual([kept.price, kept.cached], [42604, undefined]);
+    assert.equal(w.errors["WTX&"], undefined);
+    answer = "absent";
+    await advance(host, FUT_NOW + 150_000);
+    kept = w.shown("WTX&");
+    assert.deepEqual([kept.price, kept.cached], [42604, true]);
+    assert.equal(w.errors["WTX&"].code, "yahootw.notFound");
+  }, FUT_NOW);
+});
+
+test("a futures code Yahoo 奇摩股市 does not answer reads not found on Yahoo 奇摩股市", async () => {
+  await twOnlyRun(futuresHost(["WTXP&"]), (w, host) => {
+    assert.equal(w.errors["WTXP&"].code, "yahootw.notFound");
+    assert.ok(stockLists(host)[0].includes("WTXP%26"), stockLists(host)[0]);
+    assert.equal(charts(host, "WTXP&"), 0);
+    assert.equal(w.shown("WTXP&"), undefined);
+  }, FUT_NOW);
+});
+
+test("the add field takes a futures code; WTX alone stays a US ticker", () => {
+  const host = fakeHost(() => ok({}));
+  const w = new Watchlist(host);
+  assert.deepEqual(w.add("wtx&"), { code: "notice.added", params: { symbol: "WTX&" } });
+  assert.deepEqual(host.store.symbols, ["WTX&"]);
+  w.add("WTX");
+  assert.deepEqual(host.store.symbols, ["WTX", "WTX&"]);
+  assert.equal(w.marketFor("WTX"), "us");
+  assert.equal(w.marketFor("WTX&"), "tw");
+  assert.throws(() => w.add("TXF1&"), (e) => e.code === "symbol.invalid");
+  assert.deepEqual(host.store.symbols, ["WTX", "WTX&"]);
+  assert.deepEqual(readPreferences({ version: 1, symbols: ["wtx&", "WTX@", "WTX&"] }).symbols, ["WTX&", "WTX@"]);
 });
 
 test("the idle wake waits for each quote's own stale moment", () => {

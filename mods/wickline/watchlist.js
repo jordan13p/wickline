@@ -207,6 +207,8 @@ export class Watchlist {
       // Choosing Finnhub must wake its loop to read the key, also when keyRev did not change.
       usProvider: settings.sources.us.provider,
       on: Object.fromEntries(Object.entries(SWITCHES).map(([id, { on }]) => [id, on(settings, this)])),
+      // Yahoo 奇摩股市 switched on but awaiting re-confirmation: what a row it alone can price says (unpricedReason).
+      yahootwPending: yahootwReconfirm(settings),
     };
   }
 
@@ -279,12 +281,21 @@ export class Watchlist {
   }
 
   /**
-   * The source that prices `symbol` alone (Yahoo 奇摩股市 for a TW-only symbol while it is on), else null.
-   * `config` is read only for a TW-only symbol, since this is asked for every row.
+   * The source that prices `symbol` alone (Yahoo 奇摩股市 for a TW-only symbol or a future while it is on), else null.
+   * `config` is read only for such a symbol, since this is asked for every row.
    */
   soleSource(symbol, config) {
-    if (!this.twOnly.has(symbol)) return null;
+    if (!this.twOnly.has(symbol) && kindOf(symbol) !== "future") return null;
     return (config ?? this.config()).on[yahootw.id] ? yahootw : null;
+  }
+
+  /**
+   * Why a symbol only Yahoo 奇摩股市 can price has no price while it is off (`config`: config()). A future says the
+   * source must be turned on, or confirmed again; a TW-only index says what Yahoo Finance last said: not found.
+   */
+  unpricedReason(symbol, config) {
+    if (kindOf(symbol) !== "future") return notice("yahoo.notFound");
+    return notice(config.yahootwPending ? "yahootw.reconfirm" : "yahootw.futuresNeedSource");
   }
 
   /**
@@ -519,8 +530,17 @@ export class Watchlist {
     // Yahoo 奇摩股市 off: every TW-only symbol goes back to Yahoo Finance, so turning it on again starts over.
     // Until Yahoo Finance answers again (paused, or backing off), the row says what it last said: not found.
     if (!config.on[yahootw.id]) {
-      for (const symbol of this.twOnly) if (keep.has(symbol)) this.errors[symbol] = notice("yahoo.notFound");
+      for (const symbol of this.twOnly) if (keep.has(symbol)) this.errors[symbol] = this.unpricedReason(symbol, config);
       this.twOnly.clear();
+    }
+    // No other source prices a future, so with Yahoo 奇摩股市 off its row says why; on, that reason goes at once.
+    for (const symbol of preferences.symbols) {
+      if (kindOf(symbol) === "future" && !this.soleSource(symbol, config)) this.errors[symbol] = this.unpricedReason(symbol, config);
+    }
+    if (config.on[yahootw.id]) {
+      for (const [symbol, error] of Object.entries(this.errors)) {
+        if (error.code === "yahootw.futuresNeedSource" || error.code === "yahootw.reconfirm") delete this.errors[symbol];
+      }
     }
     for (const symbol of [...this.twOnly]) if (!keep.has(symbol)) this.twOnly.delete(symbol);
     for (const symbol of Object.keys(this.linePeriods)) {
@@ -843,11 +863,12 @@ export class Watchlist {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
           // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
           // rejected with a reason still names it), never as not found, else nothing once named, else not found
-          // (by this source once it priced it, so the kept price reads cached).
+          // (by this source once it priced it, so the kept price reads cached, and always for a future, which
+          // Yahoo Finance never sees).
           const priced = this.overlays[symbol]?.[provider.id];
           if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
           if (overlay || (!error && result.names?.[symbol])) delete this.errors[symbol];
-          else this.errors[symbol] = error ?? notice(priced ? "yahootw.notFound" : "yahoo.notFound");
+          else this.errors[symbol] = error ?? notice(priced || kindOf(symbol) === "future" ? "yahootw.notFound" : "yahoo.notFound");
           continue;
         }
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);

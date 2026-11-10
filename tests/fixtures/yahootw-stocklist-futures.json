@@ -1,0 +1,227 @@
+[
+  {
+    "symbol": "WTX&",
+    "symbolName": "台指期近一",
+    "exchange": "TFE",
+    "price": {
+      "raw": "42604",
+      "fmt": "42,604.00",
+      "sort": 42604
+    },
+    "regularMarketTime": "2026-11-10T05:35:37Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "45625",
+      "fmt": "45,625.00",
+      "sort": 45625
+    },
+    "limitDownPrice": {
+      "raw": "37331",
+      "fmt": "37,331.00",
+      "sort": 37331
+    },
+    "regularMarketPreviousClose": {
+      "raw": "41478",
+      "fmt": "41,478.00",
+      "sort": 41478
+    },
+    "regularMarketOpen": {
+      "raw": "41240",
+      "fmt": "41,240.00",
+      "sort": 41240
+    },
+    "regularMarketDayHigh": {
+      "raw": "43108",
+      "fmt": "43,108.00",
+      "sort": 43108
+    },
+    "regularMarketDayLow": {
+      "raw": "40715",
+      "fmt": "40,715.00",
+      "sort": 40715
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  },
+  {
+    "symbol": "WTX@",
+    "symbolName": "台指期近二",
+    "exchange": "TFE",
+    "price": {
+      "raw": "42651",
+      "fmt": "42,651.00",
+      "sort": 42651
+    },
+    "regularMarketTime": "2026-11-10T05:35:28Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "45716",
+      "fmt": "45,716.00",
+      "sort": 45716
+    },
+    "limitDownPrice": {
+      "raw": "37404",
+      "fmt": "37,404.00",
+      "sort": 37404
+    },
+    "regularMarketPreviousClose": {
+      "raw": "41560",
+      "fmt": "41,560.00",
+      "sort": 41560
+    },
+    "regularMarketOpen": {
+      "raw": "41332",
+      "fmt": "41,332.00",
+      "sort": 41332
+    },
+    "regularMarketDayHigh": {
+      "raw": "43133",
+      "fmt": "43,133.00",
+      "sort": 43133
+    },
+    "regularMarketDayLow": {
+      "raw": "40788",
+      "fmt": "40,788.00",
+      "sort": 40788
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  },
+  {
+    "symbol": "WMT&",
+    "symbolName": "小型台指近一",
+    "exchange": "TFE",
+    "price": {
+      "raw": "42603",
+      "fmt": "42,603.00",
+      "sort": 42603
+    },
+    "regularMarketTime": "2026-11-10T05:35:37Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "45625",
+      "fmt": "45,625.00",
+      "sort": 45625
+    },
+    "limitDownPrice": {
+      "raw": "37331",
+      "fmt": "37,331.00",
+      "sort": 37331
+    },
+    "regularMarketPreviousClose": {
+      "raw": "41478",
+      "fmt": "41,478.00",
+      "sort": 41478
+    },
+    "regularMarketOpen": {
+      "raw": "41240",
+      "fmt": "41,240.00",
+      "sort": 41240
+    },
+    "regularMarketDayHigh": {
+      "raw": "43109",
+      "fmt": "43,109.00",
+      "sort": 43109
+    },
+    "regularMarketDayLow": {
+      "raw": "40714",
+      "fmt": "40,714.00",
+      "sort": 40714
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  },
+  {
+    "symbol": "WTF&",
+    "symbolName": "金融期近一",
+    "exchange": "TFE",
+    "price": {
+      "raw": "3579.2",
+      "fmt": "3,579.20",
+      "sort": 3579.2
+    },
+    "regularMarketTime": "2026-11-10T05:33:19Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "3992.6",
+      "fmt": "3,992.60",
+      "sort": 3992.6
+    },
+    "limitDownPrice": {
+      "raw": "3267",
+      "fmt": "3,267.00",
+      "sort": 3267
+    },
+    "regularMarketPreviousClose": {
+      "raw": "3629.8",
+      "fmt": "3,629.80",
+      "sort": 3629.8
+    },
+    "regularMarketOpen": {
+      "raw": "3623.8",
+      "fmt": "3,623.80",
+      "sort": 3623.8
+    },
+    "regularMarketDayHigh": {
+      "raw": "3685.8",
+      "fmt": "3,685.80",
+      "sort": 3685.8
+    },
+    "regularMarketDayLow": {
+      "raw": "3572.6",
+      "fmt": "3,572.60",
+      "sort": 3572.6
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  },
+  {
+    "symbol": "WTE&",
+    "symbolName": "電子期近一",
+    "exchange": "TFE",
+    "price": {
+      "raw": "2631.3",
+      "fmt": "2,631.30",
+      "sort": 2631.3
+    },
+    "regularMarketTime": "2026-11-10T05:35:26Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "2816.3",
+      "fmt": "2,816.30",
+      "sort": 2816.3
+    },
+    "limitDownPrice": {
+      "raw": "2304.3",
+      "fmt": "2,304.30",
+      "sort": 2304.3
+    },
+    "regularMarketPreviousClose": {
+      "raw": "2560.3",
+      "fmt": "2,560.30",
+      "sort": 2560.3
+    },
+    "regularMarketOpen": {
+      "raw": "2538.55",
+      "fmt": "2,538.55",
+      "sort": 2538.55
+    },
+    "regularMarketDayHigh": {
+      "raw": "2666.7",
+      "fmt": "2,666.70",
+      "sort": 2666.7
+    },
+    "regularMarketDayLow": {
+      "raw": "2498.6",
+      "fmt": "2,498.60",
+      "sort": 2498.6
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  },
+  {
+    "symbol": "WTX",
+    "symbolName": "",
+    "exchange": "NMS"
+  }
+]

@@ -174,3 +174,11 @@ test("Yahoo 奇摩股市's no-real-time note claims no fallback, and its not-fou
   assert.equal(t("zh-TW", "yahootw.notFound"), "Yahoo 奇摩股市查無此代號。");
   assert.equal(t("en", "yahootw.notFound"), "Ticker not found on Yahoo TW Stock.");
 });
+
+test("futures texts in every language", () => {
+  assert.equal(t("zh-TW", "yahootw.futuresNeedSource"), "期貨報價需要在設定開啟 Yahoo 奇摩股市。");
+  assert.equal(t("en", "yahootw.futuresNeedSource"), "Futures quotes need Yahoo TW Stock turned on in Settings.");
+  for (const lang of LANGUAGES) {
+    for (const key of ["symbol.invalid", "input.placeholder"]) assert.ok(t(lang, key).includes("WTX&"), `${lang} ${key}`);
+  }
+});
