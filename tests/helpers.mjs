@@ -34,6 +34,9 @@ export const FUT_NOW = at("2026-11-10T05:36:30Z");
 // Yahoo 奇摩股市's WTX& line recorded at 13:36 on 2026-11-10: 1 133 one-minute points from 15:00 the day before (the
 // first without a trade) to 13:36, currentTradingPeriod 15:00 → 13:45, sourceTradingPeriods [15:00 → 05:00], [08:45 → 13:45].
 export const FUTURES_TICK = jsonFixture("yahootw-tick-futures");
+// The same line recorded in the night session on 2026-11-10: every minute of the trading day from 15:00 to 13:43 the
+// next day (1 140 timestamps), its closes up to 22:20 and `null` for the 700 minutes still to come.
+export const FUTURES_NIGHT_TICK = jsonFixture("yahootw-tick-futures-night");
 // That line's sessions for Tuesday 2026-11-10's trading day: Monday 15:00 → Tuesday 05:00, 08:45 → 13:45 (Taipei); and
 // its periods as decoded, with those segments.
 export const SEGMENTS = [[1794207600000, 1794258000000], [1794271500000, 1794289500000]];

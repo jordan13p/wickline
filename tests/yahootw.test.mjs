@@ -8,7 +8,7 @@ import {
 import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_ROWS, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, LINE_PERIODS, NIGHT, at, day,
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_ROWS, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, LINE_PERIODS, NIGHT, at, day,
   jsonFixture, ok,
 } from "./helpers.mjs";
 
@@ -491,6 +491,25 @@ test("a future's line keeps its trading day from 15:00, also after midnight", ()
     timestamp: closes.map((_, i) => start + i * 60), indicators: { quote: [{ close: closes }] } } }]), one);
   assert.deepEqual([night.lines["WTX&"].series.length, night.lines["WTX&"].series[0]], [600, 42000]);
   assert.equal(night.lines["WTX&"].day, tradingDay("WTX&", one));
+});
+
+// Yahoo 奇摩股市 lists the minutes still to come, without closes: a line never runs past `now`, so it has no flat tail and
+// its last minute is a trade's, which a frozen answer can be told by.
+test("a line ends at its last close at or before now, never at the minutes still to come", () => {
+  const request = yahootw.requests(["WTX&"]).find((r) => r.kind === "line");
+  const chart = FUTURES_NIGHT_TICK[0].chart;
+  const closes = chart.indicators.quote[0].close;
+  for (const now of [at("2026-11-10T14:17:30Z"), at("2026-11-10T14:20:30Z")]) { // 22:17:30, 22:20:30
+    const label = new Date(now).toISOString();
+    const { series, lastAt } = yahootw.decode(request, ok(FUTURES_NIGHT_TICK), now).lines["WTX&"];
+    const last = chart.timestamp.findLastIndex((seconds, i) => seconds * 1000 <= now && closes[i] !== null);
+    assert.equal(lastAt, chart.timestamp[last] * 1000, label);
+    assert.ok(lastAt <= now, label);
+    assert.equal(series.at(-1), closes[last], label);
+    // One point a minute from the first close, none past now.
+    const first = closes.findIndex((close) => close !== null);
+    assert.equal(series.length, last - first + 1, label);
+  }
 });
 
 test("a future's line gives its sessions from sourceTradingPeriods", () => {

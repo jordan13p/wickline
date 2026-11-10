@@ -183,7 +183,7 @@ const futuresSegments = (periods) => (Array.isArray(periods) ? periods.flat(Infi
  * One symbol's line, `{ day, series, lastAt }`: the one-minute closes of today's trading day (see tradingDay:
  * a future's from 15:00 the day before, so the night's minutes stay past midnight), oldest first, that day as
  * its day, and its last minute's time in ms (to tell a frozen answer from a quiet stock). A minute
- * without a trade carries the previous close; minutes before the first trade are dropped. With no point
+ * without a trade carries the previous close; minutes before the first trade, and after `now`, are dropped. With no point
  * from today, no line. `periods`: the answer's trading periods (`meta.currentTradingPeriod`, as Yahoo
  * Finance's), also without a point from today, for a symbol only this source prices; none without a
  * regular one. A future's also carry `segments`, its sessions (`meta.sourceTradingPeriods`, nested by day) as
@@ -203,8 +203,9 @@ export function decodeTick(symbol, response, now) {
   let last = null;
   let lastAt = null;
   times.forEach((seconds, i) => {
-    // Checked before the close is taken, so yesterday's last close never fills today's first minutes.
-    if (dayAt(seconds * 1000) !== today) return;
+    // Checked before the close is taken, so yesterday's last close never fills today's first minutes. A minute
+    // after `now` is still to come (a futures answer lists the whole trading day): never filled.
+    if (seconds * 1000 > now || dayAt(seconds * 1000) !== today) return;
     if (positive(closes?.[i])) last = closes[i];
     if (last === null) return;
     series.push(last);
