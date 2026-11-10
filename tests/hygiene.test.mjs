@@ -435,6 +435,23 @@ test("the list's scrollbar has its own lane", () => {
   assert.doesNotMatch(panel, /\.p[xr]\(20\)/);
 });
 
+test("the sidebar list keeps its gap and hairline outside the scroll", () => {
+  const panel = code(read(new URL("ui/panel.js", MOD)));
+  const list = panel.slice(panel.indexOf("function list("), panel.indexOf("function footer("));
+  const box = list.slice(list.indexOf('id("bw-list")'), list.indexOf(".children(rows)"));
+  // The gap no longer scrolls away with the rows.
+  assert.doesNotMatch(box, /\.pt\(/);
+  assert.match(list, /\.pt\(top\)/);
+  // A 1 px border hairline, only for a list with a gap (the sidebar), inset like the footer's, above the scrolling box.
+  assert.match(list, /top > 0[^;]*map\(inset\)[^;]*border_t\(1\)[^;]*border_color\(t\.border\)/);
+  const tree = list.slice(list.indexOf("return v_flex"));
+  assert.ok(tree.indexOf("border_t(1)") > 0 && tree.indexOf("border_t(1)") < tree.indexOf("scrolling"));
+  // The empty-list text stays inside the scrolling box, so it sits below the hairline.
+  assert.match(box, /list\.empty/);
+  assert.match(panel, /list\(view, t, rows, 8\)/);
+  assert.match(panel, /list\(view, t, rows\)\)/);
+});
+
 // The notice ends with its own full stop (。 in Chinese and Japanese), so a separator before Undo would sit
 // right after it; the link follows the text with only the gap between them.
 test("Undo follows the notice with no separator", () => {

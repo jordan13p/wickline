@@ -286,9 +286,10 @@ function drawRows(view, filter, draw) {
 
 // The scrolling rows, which end at their × column, and the scrollbar in the lane beside it: the lane is padding
 // of the list, so no row fill (hover, a dragged row) reaches under the bar. No pointer capture: a release outside
-// the list never arrives, so leaving it cancels a drag.
+// the list never arrives, so leaving it cancels a drag. A list with a gap above it (the sidebar) keeps the gap and
+// a hairline outside the scroll, so a row scrolled up is cut at the hairline instead of touching the region above.
 function list(view, t, rows, top = 0) {
-  const scrolling = v_flex().id("bw-list").flex_1().min_h(0).pt(top).pr(SCROLL_LANE).overflow_y_scroll()
+  const scrolling = v_flex().id("bw-list").flex_1().min_h(0).pr(SCROLL_LANE).overflow_y_scroll()
     .on_hover((hovered, cx) => {
       if (hovered || !view.drag) return;
       view.drag = null;
@@ -305,9 +306,11 @@ function list(view, t, rows, top = 0) {
     })
     .when(!rows.length, (el) => el.child(div().pl(GUTTER).pr(REMOVE_W).py(8).text_color(t.dim).child(view.tx("list.empty"))))
     .children(rows);
-  return v_flex().relative().flex_1().min_h(0)
-    .child(scrolling)
-    .child(Scrollbar.vertical("bw-list").absolute().top(0).bottom(0).right(0).w(SCROLL_LANE));
+  return v_flex().flex_1().min_h(0).pt(top)
+    .when(top > 0, (el) => el.child(div().flex_none().map(inset).child(div().border_t(1).border_color(t.border))))
+    .child(v_flex().relative().flex_1().min_h(0)
+      .child(scrolling)
+      .child(Scrollbar.vertical("bw-list").absolute().top(0).bottom(0).right(0).w(SCROLL_LANE)));
 }
 
 // One line: the disclaimer, which opens the settings' disclaimer tab.
