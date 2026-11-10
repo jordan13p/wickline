@@ -88,8 +88,9 @@ export function pickOverlay(byProvider, order, now, base = null) {
  * A real-time overlay's fields over the Yahoo base quote. The trading periods, the currency and the
  * name stay the base's (the overlay's name is kept as `localName`); so does the line, unless the
  * overlay's source gave its own (`line`, `{ day, series }`) on the overlay's Taipei day (`overlay.day`):
- * then that line, ending at the shown price. `chartSource` names where the line came from. Works with
- * no base yet.
+ * then that line, ending at the shown price. `chartSource` names where the line came from, and
+ * `chartTimestamp` and `chartFetchedAt` keep that quote's times, so the line's state is judged by its own
+ * quote. Works with no base yet.
  */
 export function mergeOverlay(base, overlay, line) {
   if (!overlay) return base;
@@ -111,6 +112,8 @@ export function mergeOverlay(base, overlay, line) {
     series: own ? [...own, overlay.price] : base?.series ?? [],
     periods: base?.periods ?? null,
     chartSource: own ? overlay.source : base?.source ?? null,
+    chartTimestamp: own ? overlay.timestamp : base?.timestamp ?? null,
+    chartFetchedAt: own ? overlay.fetchedAt : base?.fetchedAt ?? null,
   };
 }
 

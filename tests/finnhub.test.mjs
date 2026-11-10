@@ -2,9 +2,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { MESSAGES_EN, USER_AGENT } from "../mods/wickline/quotes.js";
-import { STRINGS } from "../mods/wickline/i18n.js";
-import { Watchlist } from "../mods/wickline/watchlist.js";
-import { freshness, sessionOf } from "../mods/wickline/freshness.js";
+import { STRINGS, t } from "../mods/wickline/i18n.js";
+import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
+import { detailSource, freshness, sessionOf } from "../mods/wickline/freshness.js";
+import { formatTime } from "../mods/wickline/format.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { advance, at, chart, chartSymbol, day, fakeHost, ok, start, stop, yq } from "./helpers.mjs";
 import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/wickline/providers/finnhub.js";
@@ -569,6 +570,19 @@ test("a Finnhub price held back gives way to a fresh Yahoo quote", () => {
   const shown = w.shown("AAPL", now);
   assert.deepEqual([shown.source, shown.price], ["yahoo", 230.1]);
   assert.equal(freshness(shown, sessionOf(shown, now), now).state, "live");
+});
+
+test("the detail's line under a live Finnhub price takes its state from the Yahoo quote it came from", () => {
+  const now = at("2026-11-10T15:00:00Z"); // 10:00 in New York
+  const fetchedAt = now - 360_000; // Yahoo not fetched for 6 minutes
+  const base = { ...yq("AAPL", "NMS", fetchedAt - 10_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")), fetchedAt, series: [229, 230] };
+  const merged = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 10_000, fetchedAt: now - 9_000 });
+  const say = (key, params) => t("en", key, params);
+  const stopped = t("en", "freshness.stalled", { time: formatTime(base.timestamp) });
+  assert.deepEqual(detailSource(merged, "open", now, say), [["Price: Live · Finnhub"], [`Line: ${stopped} · Yahoo Finance`]]);
+  // Fetched a minute ago: the line reads live again.
+  const fresh = mergeOverlay({ ...base, timestamp: now - 70_000, fetchedAt: now - 60_000 }, { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 10_000, fetchedAt: now - 9_000 });
+  assert.deepEqual(detailSource(fresh, "open", now, say), [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
 });
 
 // ---- helpers ----

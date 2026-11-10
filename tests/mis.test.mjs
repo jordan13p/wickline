@@ -185,12 +185,15 @@ test("overlay merges over Yahoo", () => {
   assert.deepEqual(merged.periods, YAHOO_2330.periods);
   assert.equal(merged.currency, "TWD");
   assert.equal(merged.chartSource, "yahoo");
+  // The line's own quote times, for its state in the detail.
+  assert.deepEqual([merged.chartTimestamp, merged.chartFetchedAt], [YAHOO_2330.timestamp, YAHOO_2330.fetchedAt]);
   // Without a Yahoo quote yet: MIS's price, no line, no session.
   const alone = mergeOverlay(undefined, MIS_2330);
   assert.equal(alone.price, MIS_2330.price);
   assert.deepEqual(alone.series, []);
   assert.equal(alone.periods, null);
   assert.equal(alone.chartSource, null);
+  assert.deepEqual([alone.chartTimestamp, alone.chartFetchedAt], [null, null]);
   assert.equal(alone.name, null);
   assert.equal(alone.localName, "台積電");
   assert.equal(mergeOverlay(YAHOO_2330, undefined), YAHOO_2330);
@@ -209,7 +212,7 @@ test("an overlay's own line is drawn only on its price's Taipei day", () => {
   const own = { ...MIS_2330, source: "yahootw", day: 20_766 };
   const series = [2250, 2260];
   const today = mergeOverlay(YAHOO_2330, own, { day: own.day, series });
-  assert.deepEqual([today.series, today.chartSource], [[2250, 2260, 2267.5], "yahootw"]);
+  assert.deepEqual([today.series, today.chartSource, today.chartTimestamp], [[2250, 2260, 2267.5], "yahootw", own.timestamp]);
   // A copy hidden overnight: the line it kept is yesterday's, the price just arrived is today's.
   const overnight = mergeOverlay(YAHOO_2330, own, { day: own.day - 1, series });
   assert.deepEqual([overnight.series, overnight.chartSource], [YAHOO_2330.series, "yahoo"]);

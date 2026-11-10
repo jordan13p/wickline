@@ -72,7 +72,7 @@ test("the detail source line reads state · source", () => {
   // A line from another source keeps its own delay.
   const mis = { symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: NOW - 10_000, chartSource: "yahoo" };
   assert.deepEqual(detailSource(mis, "open", NOW, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
-  assert.deepEqual(detailSource({ ...mis, symbol: "AAPL", source: "finnhub", exchange: "NMS" }, "open", NOW, say("en")),
+  assert.deepEqual(detailSource({ ...mis, symbol: "AAPL", source: "finnhub", exchange: "NMS", chartTimestamp: NOW - 40_000, chartFetchedAt: NOW - 30_000 }, "open", NOW, say("en")),
     [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
   // Not trading: the session, not "Live"; a session not known yet reads unknown.
   assert.deepEqual(detailSource(own, "closed", NOW, say("en")), [["Price: Market closed · Yahoo TW Stock"], ["Line: Market closed · Yahoo TW Stock"]]);
@@ -230,9 +230,10 @@ test("the detail names Yahoo's state and keeps a delay while closed", () => {
   assert.deepEqual(detailSource(yq("0700.HK", "HKG", NOW - 40_000), "closed", NOW, say("en")), [["Yahoo Finance · regular session", "delayed 15 min"]]);
 });
 
-test("the line under a real-time price never reads stalled", () => {
+test("the line under a real-time price reads as its own quote, not the price", () => {
   const NOW = 1794188480000;
-  const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: NOW - 600_000, chartSource: "yahoo" };
+  const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: NOW - 600_000, chartSource: "yahoo",
+    chartTimestamp: NOW - 40_000, chartFetchedAt: NOW - 30_000 };
   const stalled = t("en", "freshness.stalled", { time: formatTime(NOW - 600_000) });
   assert.deepEqual(detailSource(finnhub, "open", NOW, say("en")), [[`Price: ${stalled} · Finnhub`], ["Line: Live · Yahoo Finance"]]);
   assert.deepEqual(detailSource(finnhub, "closed", NOW, say("en")), [["Price: Market closed · Finnhub"], ["Line: Market closed · Yahoo Finance"]]);
