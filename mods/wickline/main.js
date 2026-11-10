@@ -209,8 +209,11 @@ export default class Wickline extends View {
     };
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
-      // The chosen market's last symbol went: back to All for good, so it does not filter again the day the market returns.
-      this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter, this.marketFor));
+      // An index still waiting for its first quote may belong to the chosen market: keep the choice until it reports.
+      // Otherwise the chosen market's last symbol went: back to All for good, so the filter does not come back the
+      // day the market does.
+      this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter, this.marketFor,
+        (symbol) => this.watch.pendingIndex(symbol)));
       if (notice.code === "notice.removed" && ghost.height > 0) {
         this.added.delete(symbol);
         this.leaving.push(ghost);

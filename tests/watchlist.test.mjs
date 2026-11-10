@@ -719,6 +719,29 @@ async function twOnlyRun(host, check, from = TW_NOW) {
   await stop(w, host, runs);
 }
 
+// An index holds the chosen market on a remove only while it waits for its first quote (filterAfterRemove).
+test("an index is pending until its first quote, overlay or error", async () => {
+  const host = taiwanHost(BOTH, { yahoo: atTai });
+  host.store = { version: 1, symbols: ["^TWII", "AAPL"], paused: false };
+  const before = new Watchlist(host);
+  assert.equal(before.pendingIndex("^TWII"), true);
+  // Only an index waits: a stock's market is known from its symbol.
+  assert.equal(before.pendingIndex("AAPL"), false);
+  await firstRound(host, (w) => assert.equal(w.pendingIndex("^TWII"), false));
+  // Priced without an exchange: never Taiwan's, so it holds nothing.
+  const bare = taiwanHost(BOTH);
+  bare.store = { version: 1, symbols: ["^TWII", "AAPL"], paused: false };
+  await firstRound(bare, (w) => {
+    assert.equal(w.exchangeOf("^TWII"), null);
+    assert.equal(w.pendingIndex("^TWII"), false);
+  });
+  // Not found by either source.
+  await twOnlyRun(twOnlyHost(["^TWXYZ"]), (w) => {
+    assert.equal(w.errors["^TWXYZ"].code, "yahoo.notFound");
+    assert.equal(w.pendingIndex("^TWXYZ"), false);
+  });
+});
+
 test("^TWOII, unknown to Yahoo Finance, is priced by Yahoo 奇摩股市 alone", async () => {
   await twOnlyRun(twOnlyHost(), (w, host) => {
     const now = TW_NOW + 5_000;

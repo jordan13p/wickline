@@ -252,6 +252,14 @@ export class Watchlist {
   }
 
   /**
+   * An index still waiting for its first quote: no quote, overlay or error yet, so its market is unknown. One
+   * priced without an exchange, or one that failed, is not waiting.
+   */
+  pendingIndex(symbol) {
+    return kindOf(symbol) === "index" && !this.quotes[symbol] && !this.overlays[symbol] && !this.errors[symbol];
+  }
+
+  /**
    * What a row shows: the base quote with its overlay, if any. A TW-only symbol has no base of its own: its
    * overlay gives the name and currency, and twOnlyPeriods the trading periods.
    */

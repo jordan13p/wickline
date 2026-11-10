@@ -120,9 +120,12 @@ export function filterAfterAdd(symbols, filter, symbol, marketFor) {
   return readFilter(symbols, filter, marketFor).shown.includes(symbol) ? filter : "all";
 }
 
-/** The filter after a remove left `symbols`: All when the chosen market has no symbol left. */
-export function filterAfterRemove(symbols, filter, marketFor) {
-  return symbols.some((symbol) => inFilter(symbol, filter, marketFor)) ? filter : "all";
+/**
+ * The filter after a remove left `symbols`: All when the chosen market has no symbol left and no symbol is
+ * `pending` (an index still waiting for its first quote, whose market is not known yet).
+ */
+export function filterAfterRemove(symbols, filter, marketFor, pending) {
+  return symbols.some((symbol) => inFilter(symbol, filter, marketFor)) || symbols.some(pending) ? filter : "all";
 }
 
 // The key under which a copy keeps its market filter in its own storage (see main.js).

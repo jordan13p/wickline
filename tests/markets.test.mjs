@@ -21,6 +21,9 @@ test("routes symbols to markets", () => {
 const TWELVE = [
   "2330.TW", "0050.TW", "AAPL", "00632R.TW", "NVDA", "BTC/USDT", "2317.TW", "MSFT", "ETH/USDT", "2454.TW", "AMZN", "SOL/USDT",
 ];
+// filterAfterRemove's `pending`: no index waits for its first quote, or every index does.
+const none = () => false;
+const waiting = (symbol) => symbol.startsWith("^");
 
 test("no filters below 8 symbols or 2 markets", () => {
   assert.deepEqual(marketFilters(["AAPL", "2330.TW", "BTC/USDT", "NVDA"], marketOf), []);
@@ -123,11 +126,19 @@ test("an add keeps the filter unless it would hide the symbol", () => {
 });
 
 test("a remove returns the filter to All only when its market has no symbol left", () => {
-  assert.equal(filterAfterRemove(TWELVE, "tw", marketOf), "tw");
-  assert.equal(filterAfterRemove(TWELVE.filter((s) => !s.endsWith("/USDT")), "crypto", marketOf), "all");
-  assert.equal(filterAfterRemove(TWELVE, "all", marketOf), "all");
+  assert.equal(filterAfterRemove(TWELVE, "tw", marketOf, none), "tw");
+  assert.equal(filterAfterRemove(TWELVE.filter((s) => !s.endsWith("/USDT")), "crypto", marketOf, none), "all");
+  assert.equal(filterAfterRemove(TWELVE, "all", marketOf, none), "all");
   // A list that fell under the thresholds keeps the choice: readFilter already reads it as All.
-  assert.equal(filterAfterRemove(["2330.TW", "AAPL"], "tw", marketOf), "tw");
+  assert.equal(filterAfterRemove(["2330.TW", "AAPL"], "tw", marketOf, none), "tw");
+  assert.equal(filterAfterRemove(["^TWII", "AAPL"], "tw", marketOf, waiting), "tw");
+  assert.equal(filterAfterRemove(["^TWII", "AAPL"], "tw", marketOf, none), "all");
+  assert.equal(filterAfterRemove(["^TWII", "AAPL"], "all", marketOf, waiting), "all");
+  // Kept while pending: All for now, the choice again once the index reports its exchange.
+  const list = ["^TWII", ...TWELVE.filter((s) => !s.endsWith(".TW"))];
+  assert.equal(readFilter(list, "tw", marketOf).chosen, "all");
+  const twii = (symbol) => (symbol === "^TWII" ? resolvedMarket(symbol, "TAI") : marketOf(symbol));
+  assert.equal(readFilter(list, "tw", twii).chosen, "tw");
 });
 
 // A copy's own storage as localStorage gives it, recording each write; `broken` throws on every use.
@@ -199,5 +210,5 @@ test("the filter counts an index under its resolved market", () => {
   assert.deepEqual(marketFilters(symbols, marketOf, "en").find(({ id }) => id === "other"), { id: "other", count: 4 });
   // The filter moves with the resolved market: adding a US index keeps the US filter once it is known.
   assert.equal(filterAfterAdd(symbols, "us", "^SOX", marketFor), "us");
-  assert.equal(filterAfterRemove(["^DJI", "2330.TW"], "us", marketFor), "us");
+  assert.equal(filterAfterRemove(["^DJI", "2330.TW"], "us", marketFor, none), "us");
 });
