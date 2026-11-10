@@ -25,21 +25,29 @@ const HONG_KONG = { offsetMin: 480, from: 720, to: 780 };
 const CHINA = { offsetMin: 480, from: 690, to: 780 };
 
 test("exchangeRule: the closed table", () => {
-  for (const code of ["NMS", "NYQ", "PCX", "SNP", "DJI", "NIM"]) assert.deepEqual(exchangeRule(code, "AAPL"), live, code);
+  for (const code of ["NMS", "NGM", "NCM", "NYQ", "ASE", "PCX", "BTS", "SNP", "DJI", "NIM"]) assert.deepEqual(exchangeRule(code, "AAPL"), live, code);
   assert.deepEqual(exchangeRule("CCY", "EURUSD=X"), { ...live, fx: true });
-  for (const code of ["TAI", "TWO", "KSC", "KOE"]) assert.deepEqual(exchangeRule(code, "2330.TW"), late(1200), code);
+  for (const code of ["TAI", "TWO", "KSC", "KOE", "CXI"]) assert.deepEqual(exchangeRule(code, "2330.TW"), late(1200), code);
   for (const code of ["JPX", "OSA"]) assert.deepEqual(exchangeRule(code, "7203.T"), late(900, TOKYO), code);
   assert.deepEqual(exchangeRule("HKG", "0700.HK"), late(900, HONG_KONG));
   for (const code of ["SHH", "SHZ"]) assert.deepEqual(exchangeRule(code, "600519.SS"), late(900, CHINA), code);
-  for (const code of ["CXI", "PNK", "NYS", "WCB"]) assert.deepEqual(exchangeRule(code, "^VIX"), late(900), code);
+  for (const code of ["PNK", "NYS", "WCB"]) assert.deepEqual(exchangeRule(code, "^VIX"), late(900), code);
   for (const code of ["CME", "NYM", "CMX", "CBT"]) assert.deepEqual(exchangeRule(code, "ES=F"), late(600, null, true), code);
   assert.deepEqual(exchangeRule("XYZ", "AAPL"), late(null));
+});
+
+test("exchangeRule: a Taiwan suffix keeps TAI's 20 min when its exchange is missing or not in the table", () => {
+  for (const [exchange, symbol] of [[null, "2330.TW"], [undefined, "6488.TWO"], ["", "2330.TW"], ["XYZ", "6488.TWO"]]) {
+    assert.deepEqual(exchangeRule(exchange, symbol), late(1200), `${exchange} ${symbol}`);
+  }
+  assert.deepEqual(exchangeRule("TWO", "6488.TWO"), late(1200));
+  // Only the suffix counts: an index of Taiwan form or a name merely containing TW does not.
+  for (const symbol of ["^TWII", "TWLO", "2330.TWX"]) assert.deepEqual(exchangeRule(null, symbol), late(null), symbol);
 });
 
 test("exchangeRule: without an exchange, the suffix decides", () => {
   assert.deepEqual(exchangeRule(null, "ES=F"), late(null, null, true));
   assert.deepEqual(exchangeRule(undefined, "EURUSD=X"), { ...live, fx: true });
-  assert.deepEqual(exchangeRule(null, "2330.TW"), late(null));
   assert.deepEqual(exchangeRule("", "AAPL"), late(null));
   assert.deepEqual(exchangeRule("XYZ", "ES=F"), late(null)); // a reported exchange wins
   assert.deepEqual(TYPICAL_EXCHANGE, { us: "NMS", tw: "TAI" });

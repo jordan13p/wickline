@@ -61,6 +61,7 @@ const late = (delayS, lunch = null) => ({ delayS, lunch });
 // stays here rather than in a provider, since the view reads both together.
 const RULES = {
   NMS: LIVE, NYQ: LIVE, PCX: LIVE, // measured 2026-11-09, lag 1–16 s
+  NGM: LIVE, NCM: LIVE, ASE: LIVE, BTS: LIVE, // Yahoo help: all US-listed stocks are real time; to confirm in a US session
   SNP: LIVE, DJI: LIVE, NIM: LIVE, // measured 2026-11-09
   CCY: { ...LIVE, fx: true }, // measured 2026-11-10, lag 2–31 s; indicative quotes
   TAI: late(1200), TWO: late(1200), // measured 2026-11-10, 1198–1220 s
@@ -68,7 +69,7 @@ const RULES = {
   JPX: late(900, TOKYO_LUNCH), OSA: late(900, TOKYO_LUNCH), // measured 2026-11-10 (899–901 s, after lunch); Yahoo help says 20
   HKG: late(900, HONG_KONG_LUNCH), // measured 2026-11-10, 896–907 s
   SHH: late(900, CHINA_LUNCH), SHZ: late(900, CHINA_LUNCH), // measured 2026-11-10, 898–901 s (help says 30)
-  CXI: late(900), // measured 2026-11-09, 1117 s
+  CXI: late(1200), // measured 2026-11-09, 1117 s (over 15 min)
   PNK: late(900), NYS: late(900), WCB: late(900), // Yahoo help (SLN2310)
   CME: { ...late(600), futures: true }, NYM: { ...late(600), futures: true }, CMX: { ...late(600), futures: true }, // measured 2026-11-10, 592–611 s
   CBT: { ...late(600), futures: true }, // CME Group, as CME; not measured
@@ -80,13 +81,20 @@ const FULL = new Map(Object.entries(RULES).map(([code, rule]) => [code, Object.f
 const FUTURE_BY_FORM = Object.freeze({ ...NONE, futures: true });
 const FX_BY_FORM = Object.freeze({ ...NONE, ...LIVE, fx: true });
 
+// A Taiwan stock's suffix, which keeps TAI's 20 min when Yahoo reports no exchange or one not in the table.
+const TAIWAN_SUFFIX = /\.TWO?$/;
+
 /**
  * How fresh Yahoo Finance's quotes are for `exchange`: `realtime`, else `delayS` (null: not provided), the
- * exchange's `lunch` break or null, and whether it trades `futures` or `fx`. Only without a reported exchange
- * does the symbol's form decide: `=F` is a future with no delay known, `=X` real-time FX.
+ * exchange's `lunch` break or null, and whether it trades `futures` or `fx`. A `.TW`/`.TWO` symbol whose
+ * exchange is missing or not in the table takes TAI's rule. Only without a reported exchange does any other
+ * form decide: `=F` is a future with no delay known, `=X` real-time FX.
  */
 export function exchangeRule(exchange, symbol) {
-  if (exchange) return FULL.get(exchange) ?? NONE;
+  const listed = exchange ? FULL.get(exchange) : undefined;
+  if (listed) return listed;
+  if (TAIWAN_SUFFIX.test(symbol)) return FULL.get("TAI");
+  if (exchange) return NONE;
   if (symbol.endsWith("=F")) return FUTURE_BY_FORM;
   if (symbol.endsWith("=X")) return FX_BY_FORM;
   return NONE;
