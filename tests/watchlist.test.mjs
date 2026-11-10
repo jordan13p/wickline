@@ -384,9 +384,8 @@ const BOTH = { version: 1, sources: { tw: {
   yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION },
 } } };
 const ONLY_YAHOOTW = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
-// The recorded Yahoo 奇摩股市 rows and any `extra` ones, each one that has a trade traded at `time`, with some rows'
-// fields replaced.
-const stockList = (time, bySymbol = {}, extra = []) => ok([...TW_ROWS, ...extra].map((row) => ({
+// The recorded Yahoo 奇摩股市 rows, each one that has a trade traded at `time`, with some rows' fields replaced.
+const stockList = (time, bySymbol = {}) => ok(TW_ROWS.map((row) => ({
   ...row, ...(row.regularMarketTime !== "-" && { regularMarketTime: new Date(time).toISOString() }), ...bySymbol[row.symbol],
 })));
 // The recorded MIS row for 2330, traded at `time`.
@@ -407,9 +406,9 @@ const BASE_SERIES = [2190, 2195];
 const twYahoo = (symbol, fields = {}) => ok({ chart: { result: [{ meta: { symbol, regularMarketPrice: 2200,
   regularMarketTime: 1_794_187_000, previousClose: 2135, currency: "TWD", ...fields }, indicators: { quote: [{ close: BASE_SERIES }] } }], error: null } });
 
-// `yahoo` answers Yahoo Finance per symbol; `rows` are added to the recorded Yahoo 奇摩股市 rows.
+// `yahoo` answers Yahoo Finance per symbol.
 function taiwanHost(prefs, {
-  rows = [], yahootw = () => stockList(TW_NOW - 5_000, {}, rows), mis = () => misAt(TW_NOW - 5_000),
+  yahootw = () => stockList(TW_NOW - 5_000), mis = () => misAt(TW_NOW - 5_000),
   line = (symbol) => tickAt(symbol, TW_NOW - 60_000, [2200, 2205]), yahoo = (symbol) => twYahoo(symbol),
 } = {}) {
   const host = fakeHost((url) => isLine(url) ? host.line(lineSymbol(url)) : isYahootw(url) ? host.yahootw(url)
