@@ -11,7 +11,7 @@ import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/fo
 import { resolvedMarket } from "../mods/wickline/markets.js";
 import { advance, chart, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
-import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
+import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay } from "../mods/wickline/providers/yahootw.js";
 
 const BASE = "https://data-api.binance.vision";
 
@@ -841,5 +841,43 @@ test("turning Yahoo 奇摩股市 off, then on, starts over", async () => {
     assert.equal(charts(host, "^TWOII"), asked + 1);
     assert.equal(w.shown("^TWOII").source, "yahootw");
     assert.equal(w.errors["^TWOII"], undefined);
+  });
+});
+
+// At the open the line still carries the day before's periods (recorded at 08:14): they are not today's row's.
+test("after the open, a TW-only row is not read closed by the day before's periods", async () => {
+  const open = Date.parse("2026-11-10T01:00:00Z");
+  const host = twOnlyHost(["^TWOII"], {
+    yahootw: () => (host.clock >= open ? stockList(host.clock - 5_000) : ok(EARLIER_ROWS)),
+    line: () => ok(jsonFixture("yahootw-tick-earlier-day")),
+  });
+  const lines = () => host.requests.filter(isLine).length;
+  // 08:57:30: the day before's close, and its line's periods, are known before the open.
+  await twOnlyRun(host, async (w) => {
+    assert.equal(sessionOf(w.shown("^TWOII", host.clock), host.clock), "closed");
+    assert.equal(lines(), 1);
+    // The round at 09:00:30 prices today's first row and asks the line again at once.
+    await advance(host, open + 31_000);
+    const now = open + 31_000;
+    const quote = w.shown("^TWOII", now);
+    assert.equal(quote.day, taipeiDay(now));
+    assert.notEqual(sessionOf(quote, now), "closed");
+    assert.equal(freshness(quote, sessionOf(quote, now), now).state, "unconfirmed");
+    assert.equal(lines(), 2);
+    // At 09:05 it still is not closed, and it polls every 10 s.
+    const asked = stockLists(host).length;
+    await advance(host, open + 300_000);
+    assert.notEqual(sessionOf(w.shown("^TWOII", open + 300_000), open + 300_000), "closed");
+    assert.ok(stockLists(host).length - asked >= 25, String(stockLists(host).length - asked));
+  }, open - 150_000);
+});
+
+test("turning Yahoo 奇摩股市 off while paused says not found at once", async () => {
+  await twOnlyRun(twOnlyHost(), (w, host) => {
+    assert.equal(w.errors["^TWOII"], undefined);
+    w.pause(true);
+    host.prefs = undefined;
+    assert.equal(w.sync(), true);
+    assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
   });
 });

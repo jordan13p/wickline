@@ -10,7 +10,7 @@ import {
   SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings, yahootwEnabled, yahootwReconfirm,
 } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
-import { yahootw } from "./providers/yahootw.js";
+import { taipeiDay, yahootw } from "./providers/yahootw.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
 export const WATCHLIST_KEY = "wickline.watchlist.v1";
@@ -249,14 +249,19 @@ export class Watchlist {
 
   /**
    * What a row shows: the base quote with its overlay, if any. A TW-only symbol shows its overlay alone, with
-   * its line's periods; without them, an old quote (an earlier day's close) reads closed.
+   * its line's periods, unless they are from a Taipei day before its price's (before the open the line still
+   * gives the day before's: a price from today then reads unconfirmed, not closed). Without periods, an old
+   * quote (an earlier day's close) reads closed.
    */
   shown(symbol, now = this.host.now()) {
     const pick = this.pick(symbol, now);
     const overlay = pick?.overlay;
-    const alone = this.twOnly.has(symbol)
-      ? { periods: this.twOnly.get(symbol) ?? (overlay && now - overlay.timestamp > LIVE_MAX_AGE_MS ? ENDED : null) }
-      : null;
+    let alone = null;
+    if (this.twOnly.has(symbol)) {
+      const known = this.twOnly.get(symbol);
+      const periods = known?.regular && (!overlay || taipeiDay(known.regular[0]) >= overlay.day) ? known : null;
+      alone = { periods: periods ?? (overlay && now - overlay.timestamp > LIVE_MAX_AGE_MS ? ENDED : null) };
+    }
     const quote = mergeOverlay(this.quotes[symbol], overlay, pick && this.lines[pick.id]?.[symbol], alone);
     const localName = this.localNames[symbol];
     return quote && localName && !quote.localName ? { ...quote, localName } : quote;
@@ -471,7 +476,11 @@ export class Watchlist {
     }
     const config = this.config();
     // Yahoo 奇摩股市 off: every TW-only symbol goes back to Yahoo Finance, so turning it on again starts over.
-    if (!config.on[yahootw.id]) this.twOnly.clear();
+    // Until Yahoo Finance answers again (paused, or backing off), the row says what it last said: not found.
+    if (!config.on[yahootw.id]) {
+      for (const symbol of this.twOnly.keys()) if (keep.has(symbol)) this.errors[symbol] = notice("yahoo.notFound");
+      this.twOnly.clear();
+    }
     for (const symbol of [...this.twOnly.keys()]) if (!keep.has(symbol)) this.twOnly.delete(symbol);
     // An overlay goes as soon as its source no longer covers the symbol (removed, or turned off).
     const covered = new Set();
