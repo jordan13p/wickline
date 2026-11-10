@@ -34,9 +34,10 @@ function lunchWindow({ offsetMin, from, to }, now) {
   return [dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS];
 }
 
-// When a Yahoo Finance quote was fetched; one without a fetch time (every provider sets it) counts as fetched
-// now, so its age still grows rather than reading NaN, which would never stall.
-const fetchedAt = (quote, now) => quote.fetchedAt ?? now;
+// When a Yahoo Finance quote's age is taken: at its fetch, but now for a `cached` one (its last fetch failed,
+// see Watchlist.shown), so cached data never looks fresh. One without a fetch time (every provider sets it)
+// counts as fetched now, so its age still grows rather than reading NaN, which would never stall.
+const fetchedAt = (quote, now) => (quote.cached ? now : quote.fetchedAt ?? now);
 
 // A quote's age against staleAfterMs. An overlay's (a real-time source's own) runs from its time to now. A
 // Yahoo Finance quote's is taken when it was fetched, so it does not grow with the time a long list takes
@@ -120,8 +121,9 @@ export function msUntilStale(quote, session, now) {
   if (limit === null) return null;
   const left = limit - quoteAgeMs(quote, now) + 1;
   // A Yahoo quote's age stands still until its next fetch: once past its limit it stays stale, else only
-  // the fetch guard can turn it. A previous close never stalls by age (beforeOpen), only by that guard.
-  if (quote.source !== "yahoo" || (left <= 0 && !beforeOpen(quote))) return left;
+  // the fetch guard can turn it. A previous close never stalls by age (beforeOpen), only by that guard. A
+  // cached quote's age grows with now, as an overlay's does.
+  if (quote.source !== "yahoo" || quote.cached || (left <= 0 && !beforeOpen(quote))) return left;
   return FETCH_MAX_AGE_MS - (now - fetchedAt(quote, now)) + 1;
 }
 

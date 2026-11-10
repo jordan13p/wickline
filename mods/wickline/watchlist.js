@@ -264,16 +264,18 @@ export class Watchlist {
   }
 
   /**
-   * What a row shows: the base quote with its overlay, if any. A TW-only symbol has no base of its own: its
-   * overlay gives the name and currency, and twOnlyPeriods the trading periods.
+   * What a row shows: the base quote with its overlay, if any. A base whose last fetch failed is marked
+   * `cached`, so freshness ages it to now, never by its last good fetch. A TW-only symbol has no base of its
+   * own: its overlay gives the name and currency, and twOnlyPeriods the trading periods.
    */
   shown(symbol, now = this.host.now()) {
     const pick = this.pick(symbol, now);
     const overlay = pick?.overlay;
+    const kept = this.quotes[symbol] && this.errors[symbol] ? { ...this.quotes[symbol], cached: true } : this.quotes[symbol];
     const base = overlay && this.twOnly.has(symbol) ? {
-      ...this.quotes[symbol], name: overlay.name ?? null, currency: overlay.currency ?? null,
+      ...kept, name: overlay.name ?? null, currency: overlay.currency ?? null,
       periods: this.twOnlyPeriods(symbol, overlay, now),
-    } : this.quotes[symbol];
+    } : kept;
     const quote = mergeOverlay(base, overlay, pick && this.lines[pick.id]?.[symbol]);
     const localName = this.localNames[symbol];
     return quote && localName && !quote.localName ? { ...quote, localName } : quote;
