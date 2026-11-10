@@ -53,7 +53,7 @@ const TIMED_OUT = {};
 // A minute's length, and how far a line's last minute may end before its price's own last trade.
 const MINUTE_MS = 60_000;
 const LINE_LAG_MS = 120_000;
-// The periods of a session long over: a TW-only quote from before its line's periods are known reads closed.
+// The periods of a session long over: a TW-only quote from an earlier day, without its own day's periods, reads closed.
 const ENDED = { pre: null, regular: [0, 1], post: null };
 
 const notice = (code, params = {}) => ({ code, params });
@@ -270,12 +270,13 @@ export class Watchlist {
   /**
    * A TW-only symbol's trading periods: its line's, unless they are from a Taipei day before its price's
    * (before the open the line still gives the day before's: a price from today then reads unconfirmed, not
-   * closed). Without periods, an old quote (an earlier day's close) reads closed.
+   * closed). Without periods, a price from an earlier Taipei day (its close) reads closed; one from today reads
+   * unconfirmed whatever its age, so a feed that stalls is never taken for the close.
    */
   twOnlyPeriods(symbol, overlay, now) {
     const known = this.twOnly.get(symbol);
     if (known?.regular && taipeiDay(known.regular[0]) >= overlay.day) return known;
-    return now - overlay.timestamp > LIVE_MAX_AGE_MS ? ENDED : null;
+    return overlay.day < taipeiDay(now) ? ENDED : null;
   }
 
   pick(symbol, now) {

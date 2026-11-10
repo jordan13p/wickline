@@ -868,6 +868,29 @@ test("after the open, a TW-only row is not read closed by the day before's perio
   }, open - 150_000);
 });
 
+// A feed that stalls during the session: today's price ages with no periods from its own day (the line still
+// gives the day before's, or fails). That reads unconfirmed, never closed: only an earlier day's price does.
+test("a stalled TW-only price from today is not read closed", async () => {
+  const DAY_S = 86_400;
+  const dayBefore = { regular: { start: OPEN_NOW.regular.start - DAY_S, end: OPEN_NOW.regular.end - DAY_S } };
+  for (const line of [(symbol) => tickAt(symbol, TW_NOW - 60_000, [321.97], dayBefore), offline]) {
+    await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(TW_NOW - 5_000), line }), async (w, host) => {
+      const now = TW_NOW + 300_000;
+      await advance(host, now);
+      const quote = w.shown("^TWOII", now);
+      assert.equal(quote.day, taipeiDay(now));
+      assert.equal(quote.periods, null);
+      assert.notEqual(sessionOf(quote, now), "closed");
+      assert.notEqual(freshness(quote, sessionOf(quote, now), now).state, "closed");
+    });
+  }
+  // An earlier day's price still reads closed.
+  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => ok(EARLIER_ROWS), line: offline }), (w) => {
+    const quote = w.shown("^TWOII", NIGHT + 5_000);
+    assert.equal(sessionOf(quote, NIGHT + 5_000), "closed");
+  }, NIGHT);
+});
+
 test("turning Yahoo 奇摩股市 off while paused says not found at once", async () => {
   await twOnlyRun(twOnlyHost(), (w, host) => {
     assert.equal(w.errors["^TWOII"], undefined);
