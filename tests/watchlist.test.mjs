@@ -974,6 +974,18 @@ test("the idle wake waits for each quote's own stale moment", () => {
   assert.equal(w.staleInMs(["AAPL", "0700.HK"], T + 1_100_000), 100_001);
 });
 
+test("the idle wake skips a delayed quote whose session is not known yet", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  const T = Date.parse("2026-11-10T02:00:00Z");
+  // No trading hours yet: it reads delayed, never stalled, so no stale moment is due. Real time still wakes,
+  // since a stale overlay hands its row to another source.
+  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["AAPL", "NMS"]]) {
+    w.quotes[symbol] = { symbol, source: "yahoo", exchange, timestamp: T, periods: null };
+  }
+  assert.equal(w.staleInMs(["0700.HK"], T + 1_100_000), 120_000);
+  assert.equal(w.staleInMs(["AAPL"], T + 60_000), 60_001);
+});
+
 test("the busiest session ranks lunch below open and unknown", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
   const noon = Date.parse("2026-11-10T02:45:00Z"); // 11:45 JST

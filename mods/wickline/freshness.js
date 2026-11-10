@@ -91,24 +91,34 @@ export function sessionOf(quote, now) {
 const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delayMinutes, stoppedAt });
 
 // Sessions a quote reads as, never stale: the market is not trading (regular-session prices only).
-export const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
+const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
+
+/**
+ * How long until a quote turns stale in `session`, in ms: at least 1 while it has not yet, 0 or less once it
+ * has (older than staleAfterMs by quoteAgeMs). null when it never will this session: the market is not
+ * trading, a delayed quote's session is not open, or it is a future or from an exchange without a delay. A
+ * real-time quote counts also while its session is not known: it reads unconfirmed, but a stale overlay
+ * still hands its row to another source (pickOverlay).
+ */
+export function msUntilStale(quote, session, now) {
+  if (PAUSED.has(session) || (!isRealtime(quote) && session !== "open")) return null;
+  const limit = staleAfterMs(quote);
+  return limit === null ? null : limit - quoteAgeMs(quote, now) + 1;
+}
 
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
- * as new). unconfirmed: real time while the session is not known. stalled: trading and older than
- * staleAfterMs (quoteAgeMs), real time or delayed. delayed: any other quote, with its exchange's minutes when
- * the table holds them; a future or an exchange without a delay never stalls. closed / pre / post / lunch:
- * the session.
+ * as new). unconfirmed: real time while the session is not known. stalled: past its msUntilStale, real time
+ * or delayed. delayed: any other quote, with its exchange's minutes when the table holds them; a future or an
+ * exchange without a delay never stalls. closed / pre / post / lunch: the session.
  */
 export function freshness(quote, session, now) {
   if (PAUSED.has(session)) return result(session);
-  const limit = staleAfterMs(quote);
-  const stale = limit !== null && quoteAgeMs(quote, now) > limit;
-  if (isRealtime(quote)) {
-    if (session === "unknown") return result("unconfirmed");
-    return stale ? result("stalled", null, quote.timestamp) : result("live");
-  }
-  return session === "open" && stale ? result("stalled", null, quote.timestamp) : result("delayed", delayMinutes(quote));
+  const realtime = isRealtime(quote);
+  if (realtime && session === "unknown") return result("unconfirmed");
+  const left = msUntilStale(quote, session, now);
+  if (left !== null && left <= 0) return result("stalled", null, quote.timestamp);
+  return realtime ? result("live") : result("delayed", delayMinutes(quote));
 }
 
 // After the close, how long a price still belongs to the session: TWSE's fixed-price trades end an hour later.

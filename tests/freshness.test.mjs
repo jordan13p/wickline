@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, isRealtime, quoteAgeMs, sessionOf, shownLimit, staleAfterMs,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, isRealtime, msUntilStale, quoteAgeMs, sessionOf, shownLimit, staleAfterMs,
 } from "../mods/wickline/freshness.js";
 import { formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -178,6 +178,23 @@ test("staleAfterMs: 120 s for real time, the delay plus 5 min, else never", () =
   assert.equal(staleAfterMs(yq("0700.HK", "HKG", 0)), 1_200_000);
   assert.equal(staleAfterMs(yq("2330.TW", "TAI", 0)), 1_500_000);
   for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) assert.equal(staleAfterMs(yq(symbol, exchange, 0)), null, symbol);
+});
+
+test("msUntilStale: the ms left before freshness reads stalled, null when it cannot this session", () => {
+  const T = at("2026-11-10T02:12:00Z"); // 10:12 in Hong Kong
+  const hk = yq("0700.HK", "HKG", T, HK_DAY);
+  assert.equal(msUntilStale(hk, "open", T + 1_200_000), 1);
+  assert.equal(msUntilStale(hk, "open", T + 1_200_001), 0);
+  const us = yq("AAPL", "NMS", T);
+  assert.equal(msUntilStale(us, "open", T + 60_000), 60_001);
+  assert.equal(msUntilStale(us, "open", T + 120_001), 0);
+  for (const session of ["closed", "pre", "post", "lunch"]) assert.equal(msUntilStale(hk, session, T), null, session);
+  // A session not known yet: a delayed quote never stalls; real time still counts, for the overlay pick.
+  assert.equal(msUntilStale(hk, "unknown", T + 1_200_001), null);
+  assert.equal(msUntilStale(us, "unknown", T + 60_000), 60_001);
+  for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) {
+    assert.equal(msUntilStale(yq(symbol, exchange, T, HK_DAY), "open", T + 3_600_000), null, symbol);
+  }
 });
 
 test("a delayed market's first minutes read delayed, not stopped at yesterday's close", () => {
