@@ -609,8 +609,8 @@ export default class Wickline extends View {
   }
 
   // The Finnhub key as the dialog holds it, given `errors` (draftErrors), for marketStatus: it decides
-  // whether the US page names Finnhub or Yahoo Finance as its source; the market reads live either way,
-  // since Yahoo's US prices are real time with no key.
+  // whether the US page names Finnhub or Yahoo Finance as its source. The US market reads live from
+  // Yahoo with or without a key (its US prices are real time), and reads Problem when every source fails.
   keyFields(errors) {
     return {
       typed: this.keyInput.value().trim(), typedValid: !errors["sources.us.key"],
