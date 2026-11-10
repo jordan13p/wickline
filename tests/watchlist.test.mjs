@@ -783,6 +783,15 @@ test("a rate limit shows on a TW-only row", async () => {
   });
 });
 
+// A TW-only row has no base to fall back to: its own error says why, and no fallback note repeats it.
+test("a TW-only row's failure is its error alone, not also an overlay error", async () => {
+  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => new Promise(() => {}) }), async (w, host) => {
+    await advance(host, TW_NOW + 20_000);
+    assert.equal(w.errors["^TWOII"].code, "request.timeout");
+    assert.equal(w.overlayError("^TWOII"), null);
+  });
+});
+
 // During the session, a TW-only row still from the day before is no real-time price.
 test("a lone earlier-day row does not hide that nothing is real time", async () => {
   const yesterday = { "^TWOII": { regularMarketTime: "2026-11-08T05:31:00Z" } };

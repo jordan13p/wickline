@@ -285,9 +285,11 @@ export class Watchlist {
 
   /**
    * Why a symbol has no live overlay: the first overlay source's error, in priority order; null while a
-   * live one shows. A stale one shown still gets the reason a source before it has none.
+   * live one shows. A stale one shown still gets the reason a source before it has none. Null for a TW-only
+   * symbol: it has no base to fall back to, and its own error (see setAloneError) already says why.
    */
   overlayError(symbol, now = this.host.now()) {
+    if (this.twOnly.has(symbol)) return null;
     const pick = this.pick(symbol, now);
     if (pick && now - pick.overlay.timestamp <= LIVE_MAX_AGE_MS) return null;
     const errors = this.overlayErrors[symbol] ?? {};
