@@ -269,3 +269,14 @@ test("FX reads closed from Friday 22:00 to Sunday 22:00 UTC", () => {
   const [sunday, u] = fx("2026-11-15T22:01:00Z");
   assert.equal(freshness(sunday, sessionOf(sunday, u), u).state, "live");
 });
+
+test("a lunch break counts only where it overlaps the quote's trading time", () => {
+  // Timed 11:35 JST, inside lunch: at 12:40 only the 10 min since the reopening count.
+  assert.equal(quoteAgeMs(yq("7203.T", "JPX", at("2026-11-10T02:35:00Z"), TOKYO_DAY), at("2026-11-10T03:40:00Z")), 600_000);
+  // Timed 11:10 JST, at 11:20: lunch has not begun, nothing is taken off.
+  const morning = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), TOKYO_DAY);
+  assert.equal(quoteAgeMs(morning, at("2026-11-10T02:20:00Z")), 600_000);
+  // Its 20 min of trading end at 11:30, so it reads stalled only once the market reopens.
+  assert.equal(freshness(morning, sessionOf(morning, at("2026-11-10T03:30:00Z")), at("2026-11-10T03:30:00Z")).state, "delayed");
+  assert.equal(freshness(morning, "open", at("2026-11-10T03:30:00Z") + 1).state, "stalled");
+});

@@ -994,3 +994,22 @@ test("the busiest session ranks lunch below open and unknown", () => {
   w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: Date.parse("2026-11-10T02:10:00Z") };
   assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:45:00Z")), 120_000);
 });
+
+test("a half day's close inside lunch does not spin the idle wake", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  // HKEX half day: 09:30–12:00 HKT, so at 12:10 the market is closed though the clock is inside 12:00–13:00.
+  w.quotes["0700.HK"] = { symbol: "0700.HK", source: "yahoo", exchange: "HKG", timestamp: Date.parse("2026-11-10T03:40:00Z"),
+    periods: { pre: null, regular: [Date.parse("2026-11-10T01:30:00Z"), Date.parse("2026-11-10T04:00:00Z")], post: null } };
+  for (const hms of ["04:10:00", "04:30:00", "04:59:00"]) assert.equal(w.staleInMs(["0700.HK"], Date.parse(`2026-11-10T${hms}Z`)), 120_000, hms);
+});
+
+test("a JPX quote from before lunch wakes the loop at most at the cap, and its stop moment falls into lunch", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  w.quotes["7203.T"] = { symbol: "7203.T", source: "yahoo", exchange: "JPX", timestamp: Date.parse("2026-11-10T02:10:00Z"), // 11:10 JST
+    periods: { pre: null, regular: [Date.parse("2026-11-10T00:00:00Z"), Date.parse("2026-11-10T06:30:00Z")], post: null } };
+  // 11:20: 10 min traded, 20 min allowed: 600 001 ms left, held to the cap.
+  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:20:00Z")), 120_000);
+  // 11:29: 60 001 ms left, a wake at 11:30:00.001, inside lunch, where the quote is skipped.
+  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:29:00Z")), 60_001);
+  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:30:00Z") + 1), 120_000);
+});

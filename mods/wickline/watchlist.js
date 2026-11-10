@@ -1,7 +1,7 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { LIVE_MAX_AGE_MS, quoteAgeMs, sessionOf, staleAfterMs } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, PAUSED, quoteAgeMs, sessionOf, staleAfterMs } from "./freshness.js";
 import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -561,14 +561,16 @@ export class Watchlist {
 
   /**
    * How long until the first of `symbols`' shown quotes turns stale, each at its own moment (staleAfterMs past
-   * its quoteAgeMs); at most LIVE_MAX_AGE_MS, also when none ever does. A quote at lunch is skipped: its age
-   * stands still until trading resumes, and the cap wakes the loop for that.
+   * its quoteAgeMs); at most LIVE_MAX_AGE_MS, also when none ever does. A quote in a session that never goes
+   * stale (PAUSED) is skipped: inside a lunch window its age stands still, also after a half day's close, and
+   * the cap wakes the loop for the reopening.
    */
   staleInMs(symbols, now) {
     let wait = LIVE_MAX_AGE_MS;
     for (const symbol of symbols) {
       const quote = this.shown(symbol, now);
-      const limit = quote && sessionOf(quote, now) !== "lunch" ? staleAfterMs(quote) : null;
+      const session = quote && sessionOf(quote, now);
+      const limit = session && !PAUSED.has(session) ? staleAfterMs(quote) : null;
       const left = limit === null ? 0 : limit - quoteAgeMs(quote, now) + 1;
       if (left > 0 && left < wait) wait = left;
     }

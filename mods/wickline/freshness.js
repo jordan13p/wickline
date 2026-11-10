@@ -91,7 +91,7 @@ export function sessionOf(quote, now) {
 const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delayMinutes, stoppedAt });
 
 // Sessions a quote reads as, never stale: the market is not trading (regular-session prices only).
-const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
+export const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
 
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
