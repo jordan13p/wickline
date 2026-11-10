@@ -7,7 +7,7 @@ import {
 } from "../mods/wickline/freshness.js";
 import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
-import { at, day, yq } from "./helpers.mjs";
+import { LINE_PERIODS, SEGMENTS, at, day, yq } from "./helpers.mjs";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
@@ -413,9 +413,6 @@ test("a Yahoo quote without a fetch time counts as fetched now", () => {
   assert.equal(freshness(aapl, "open", T + 110_001).state, "stalled");
 });
 
-// WTX&'s sessions as its line gave them for Tuesday 2026-11-10's trading day: Monday 15:00 → Tuesday 05:00, 08:45 → 13:45 (Taipei).
-const SEGMENTS = [[1794207600000, 1794258000000], [1794271500000, 1794289500000]];
-const LINE_PERIODS = { pre: null, regular: [1794207600000, 1794289500000], post: null, segments: SEGMENTS };
 const future = (timestamp, periods = LINE_PERIODS) => ({ symbol: "WTX&", source: "yahootw", timestamp, periods });
 
 test("a future's session: inside a segment open, between segments closed, the TAIFEX hours without them", () => {
@@ -432,7 +429,7 @@ test("a future's session: inside a segment open, between segments closed, the TA
     ["2026-11-10T00:45:00Z", LINE_PERIODS, "day"],   // 08:45
     ["2026-11-10T05:44:59Z", LINE_PERIODS, "day"],   // 13:44:59
     ["2026-11-10T05:45:00Z", LINE_PERIODS, null],    // 13:45
-    ["2026-11-10T07:00:00Z", LINE_PERIODS, null],    // Tue 15:00: past the line's last segment (resolved 8)
+    ["2026-11-10T07:00:00Z", LINE_PERIODS, null],    // Tue 15:00: past the line's last segment
     ["2026-11-10T06:59:59Z", null, null],            // TAIFEX hours: 14:59:59
     ["2026-11-10T07:00:00Z", null, "night"],         // 15:00
     ["2026-11-10T14:00:00Z", null, "night"],         // 22:00
@@ -450,27 +447,27 @@ test("a future's session: inside a segment open, between segments closed, the TA
     ["2026-11-16T00:45:00Z", null, "day"],           // Mon 08:45
   ];
   for (const [iso, periods, segment] of cases) {
-    const now = Date.parse(iso);
+    const now = at(iso);
     const q = future(now - 10_000, periods);
     assert.equal(futuresSegment(q, now), segment, `${iso} ${periods ? "line" : "table"}`);
     assert.equal(sessionOf(q, now), segment ? "open" : "closed", iso);
   }
-  // A periods value without segments (here ownPeriods' closed session): the TAIFEX hours decide (resolved 15).
-  const friday = Date.parse("2026-11-13T20:59:58Z");
-  assert.equal(sessionOf(future(friday, { pre: null, regular: [friday, friday], post: null }), Date.parse("2026-11-16T00:45:00Z")), "open");
+  // A periods value without segments (here ownPeriods' closed session): the TAIFEX hours decide.
+  const friday = at("2026-11-13T20:59:58Z");
+  assert.equal(sessionOf(future(friday, { pre: null, regular: [friday, friday], post: null }), at("2026-11-16T00:45:00Z")), "open");
 });
 
 test("a future reads Live in both sessions, closed with its last trade in a break, and never stale there", () => {
   const tx = (key, params) => t("zh-TW", key, params);
-  const night = Date.parse("2026-11-09T17:00:00Z");                    // 01:00
+  const night = at("2026-11-09T17:00:00Z");                            // 01:00
   assert.equal(freshness(future(night - 20_000), "open", night).state, "live");
   assert.equal(sessionName(future(night - 20_000), "open", night), "night");
-  const nine = Date.parse("2026-11-10T01:00:00Z");                     // 09:00
+  const nine = at("2026-11-10T01:00:00Z");                             // 09:00
   assert.equal(freshness(future(nine - 10_000), "open", nine).state, "live");
   assert.equal(sessionName(future(nine - 10_000), "open", nine), "day");
   assert.equal(freshness(future(nine - 121_000), "open", nine).state, "stalled");
-  const last = Date.parse("2026-11-09T21:00:00Z");                     // 05:00
-  const now = Date.parse("2026-11-09T22:30:00Z");                      // 06:30
+  const last = at("2026-11-09T21:00:00Z");                             // 05:00
+  const now = at("2026-11-09T22:30:00Z");                              // 06:30
   const q = future(last);
   const fresh = freshness(q, sessionOf(q, now), now);
   assert.equal(fresh.state, "closed");
@@ -478,7 +475,7 @@ test("a future reads Live in both sessions, closed with its last trade in a brea
     `${tx("session.closed")} · ${[formatStaleDate(last, now, "zh-TW"), formatTime(last)].filter(Boolean).join(" ")}`);
   assert.equal(sessionName(q, "closed", now), "closed");
   for (const iso of ["2026-11-09T21:00:00.001Z", "2026-11-09T21:01:00Z", "2026-11-09T22:30:00Z", "2026-11-10T05:45:30Z"]) {
-    assert.equal(msUntilStale(future(Date.parse(iso) - 30_000), "closed", Date.parse(iso)), null, iso);
+    assert.equal(msUntilStale(future(at(iso) - 30_000), "closed", at(iso)), null, iso);
   }
   assert.equal(msUntilStale(future(nine - 20_000), "open", nine), 100_001);
   // A stock's session name is its session.
@@ -486,12 +483,12 @@ test("a future reads Live in both sessions, closed with its last trade in a brea
 });
 
 test("a future at its reported limit is lit while live and after its session, never while stalled", () => {
-  const at = (timestamp) => ({ ...future(timestamp), price: 45625, limitUp: 45625, limitDown: 37331 });
-  const nine = Date.parse("2026-11-10T01:00:00Z");
-  assert.equal(shownLimit(at(nine - 10_000), sessionOf(at(nine - 10_000), nine), nine), "up");
-  assert.equal(shownLimit(at(nine - 121_000), "open", nine), null);
-  const last = Date.parse("2026-11-10T05:44:00Z");                     // 13:44
-  const after = Date.parse("2026-11-10T06:30:00Z");                    // 14:30
-  assert.equal(sessionOf(at(last), after), "closed");
-  assert.equal(shownLimit(at(last), "closed", after), "up");
+  const atLimit = (timestamp) => ({ ...future(timestamp), price: 45625, limitUp: 45625, limitDown: 37331 });
+  const nine = at("2026-11-10T01:00:00Z");
+  assert.equal(shownLimit(atLimit(nine - 10_000), sessionOf(atLimit(nine - 10_000), nine), nine), "up");
+  assert.equal(shownLimit(atLimit(nine - 121_000), "open", nine), null);
+  const last = at("2026-11-10T05:44:00Z");                             // 13:44
+  const after = at("2026-11-10T06:30:00Z");                            // 14:30
+  assert.equal(sessionOf(atLimit(last), after), "closed");
+  assert.equal(shownLimit(atLimit(last), "closed", after), "up");
 });

@@ -30,10 +30,14 @@ export const CLOSE_0509 = Date.parse("2026-11-09T05:31:00Z");
 // the US ticker WTX (NMS), which is what WTX without & answers.
 export const FUTURES_ROWS = jsonFixture("yahootw-stocklist-futures");
 // 13:36:30 in Taipei on 2026-11-10, just after both futures recordings.
-export const FUT_NOW = Date.parse("2026-11-10T05:36:30Z");
+export const FUT_NOW = at("2026-11-10T05:36:30Z");
 // Yahoo 奇摩股市's WTX& line recorded at 13:36 on 2026-11-10: 1 133 one-minute points from 15:00 the day before (the
 // first without a trade) to 13:36, currentTradingPeriod 15:00 → 13:45, sourceTradingPeriods [15:00 → 05:00], [08:45 → 13:45].
 export const FUTURES_TICK = jsonFixture("yahootw-tick-futures");
+// That line's sessions for Tuesday 2026-11-10's trading day: Monday 15:00 → Tuesday 05:00, 08:45 → 13:45 (Taipei); and
+// its periods as decoded, with those segments.
+export const SEGMENTS = [[1794207600000, 1794258000000], [1794271500000, 1794289500000]];
+export const LINE_PERIODS = { pre: null, regular: [1794207600000, 1794289500000], post: null, segments: SEGMENTS };
 // Yahoo 奇摩股市 rows probed at 15:19 in Taipei on 2026-11-10, the night session open: WTX& 42 459 (15:19:54) and WMT&
 // 42 456 (15:19:52), their limits reset to the new trading day (46 910 / 38 382, previous close 42 646), and 2330.TW at
 // its 14:30 after-hours trade. marketStatus still reads close.

@@ -12,7 +12,7 @@ const width = (id) => TABLE_COLUMNS.find((column) => column.id === id).width;
 // What `ids` take with the name at its minimum, the gaps, the left gutter and the right inset.
 const needed = (ids) => ids.reduce((sum, id) => sum + (width(id) ?? NAME_MIN_WIDTH), 0) + COLUMN_GAP * (ids.length - 1) + GUTTER + RIGHT_INSET;
 
-test("the limits the spec names", () => {
+test("the band, table and name keep their size limits", () => {
   assert.equal(BAND_MAX_HEIGHT, 72);
   assert.equal(TABLE_MIN_WIDTH, 720);
   assert.equal(TABLE_MAX_WIDTH, 1280);

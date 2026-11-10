@@ -6,17 +6,16 @@ import { yahoo, yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { finnhub } from "../mods/wickline/providers/finnhub.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
-import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
+import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf } from "../mods/wickline/freshness.js";
 import { collapsedRow, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, NIGHT, advance, at, chart, chartSymbol, day, fakeHost, isLine,
-  jsonFixture, lineSymbol, ok, start, stop, yq,
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, NIGHT, SEGMENTS, advance, at, chart, chartSymbol, day,
+  fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop, yq,
 } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay, yahootw } from "../mods/wickline/providers/yahootw.js";
-import { mergeOverlay } from "../mods/wickline/watchlist.js";
 
 const BASE = "https://data-api.binance.vision";
 
@@ -414,9 +413,13 @@ const BOTH = { version: 1, sources: { tw: {
   yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION },
 } } };
 const ONLY_YAHOOTW = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
-// The recorded Yahoo 奇摩股市 rows, each one that has a trade traded at `time`, with some rows' fields replaced.
-const stockList = (time, bySymbol = {}) => ok(TW_ROWS.map((row) => ({
-  ...row, ...(row.regularMarketTime !== "-" && { regularMarketTime: new Date(time).toISOString() }), ...bySymbol[row.symbol],
+// Yahoo 奇摩股市 on with a consent to an older text: awaiting re-confirmation.
+const STALE_YAHOOTW = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
+// The recorded Yahoo 奇摩股市 rows (`rows`, the stock ones by default), each one that has a trade traded at `time`, with
+// some rows' fields replaced.
+const stockList = (time, bySymbol = {}, rows = TW_ROWS) => ok(rows.map((row) => ({
+  ...row, ...(row.regularMarketTime && row.regularMarketTime !== "-" && { regularMarketTime: new Date(time).toISOString() }),
+  ...bySymbol[row.symbol],
 })));
 // The recorded MIS row for 2330, traded at `time`.
 const misAt = (time) => ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(time) }] });
@@ -724,7 +727,7 @@ test("a wake during an overlay round adds a round, it aborts none", async () => 
 const NOT_FOUND = { status: 404, ok: false, text: "" };
 test("after the statement changes, a consent to the old one leaves Taiwan on its fallback, and indices and futures say why", async () => {
   const host = twOnlyHost(["2330.TW", "^TWOII", "WTX&"]);
-  host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
+  host.prefs = STALE_YAHOOTW;
   await soleRun(host, (w) => {
     assert.deepEqual(host.requests.filter(isYahootw), []);
     assert.equal(w.errors["WTX&"].code, "yahootw.reconfirm");
@@ -742,7 +745,7 @@ test("after the statement changes, a consent to the old one leaves Taiwan on its
 
 test("turning Yahoo 奇摩股市 off while its consent awaits re-confirmation, with the list paused, leaves no re-confirm reason", async () => {
   const host = twOnlyHost(["^TWOII", "WTX&"]);
-  host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
+  host.prefs = STALE_YAHOOTW;
   await soleRun(host, (w) => {
     assert.equal(w.errors["^TWOII"].code, "yahootw.reconfirm");
     host.store = { ...host.store, paused: true };
@@ -779,10 +782,8 @@ async function soleRun(host, check, from = TW_NOW) {
   await stop(w, host, runs);
 }
 
-// The recorded futures rows, each that has a trade traded at `time`, with some rows' fields replaced.
-const futuresAt = (time, bySymbol = {}) => ok(FUTURES_ROWS.map((row) => ({
-  ...row, ...(row.regularMarketTime && { regularMarketTime: new Date(time).toISOString() }), ...bySymbol[row.symbol],
-})));
+// The recorded futures rows, as stockList gives them.
+const futuresAt = (time, bySymbol = {}) => stockList(time, bySymbol, FUTURES_ROWS);
 // Yahoo 奇摩股市 on and consented, the futures rows as recorded, no line unless given; run with soleRun(host, check, FUT_NOW).
 function futuresHost(symbols = ["WTX&"], options = {}) {
   const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => ok(FUTURES_ROWS), line: offline, ...options });
@@ -1144,7 +1145,7 @@ test("without Yahoo 奇摩股市 a future stays listed as one unavailable line, 
 test("a future awaiting Yahoo 奇摩股市's re-confirmation gives that reason, and the futures reason once it is off", async () => {
   const host = futuresHost();
   // Switched on, with a consent to an older statement.
-  host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
+  host.prefs = STALE_YAHOOTW;
   await soleRun(host, (w) => {
     assert.equal(w.errors["WTX&"].code, "yahootw.reconfirm");
     assert.deepEqual(host.requests.filter(isYahootw), []);
@@ -1154,7 +1155,7 @@ test("a future awaiting Yahoo 奇摩股市's re-confirmation gives that reason, 
   }, FUT_NOW);
 });
 
-// Spec quote-sources, "A failed round keeps the last price" (the rule from Task 1b, now for a future).
+// A failed round keeps the last price, as for a TW-only index, now for a future.
 test("a failed round keeps a future's last price, cached with the reason", async () => {
   let hang = false;
   const host = futuresHost(["WTX&"], { yahootw: () => (hang ? new Promise(() => {}) : futuresAt(host.clock - 5_000)) });
@@ -1169,8 +1170,7 @@ test("a failed round keeps a future's last price, cached with the reason", async
   }, FUT_NOW);
 });
 
-// Spec quote-sources, "A name-only answer keeps the last price" and "A failed round keeps the last price" (a missing
-// row), for a future.
+// A name-only answer keeps the last price, and so does a failed round (a missing row), for a future.
 test("after a price, a name-only answer keeps a future's price unmarked, and a missing row keeps it cached as not found", async () => {
   let answer = "priced";
   const host = futuresHost(["WTX&"], {
@@ -1223,9 +1223,9 @@ test("a future answered from another exchange reads not found", async () => {
 });
 
 test("at 20:00 a stock beside a trading future still reads closed at 13:30", async () => {
-  const now = Date.parse("2026-11-10T12:00:05Z");
-  const close = Date.parse("2026-11-10T05:30:00Z");
-  const open = { regular: { start: Date.parse("2026-11-10T01:00:00Z") / 1000, end: close / 1000 } };
+  const now = at("2026-11-10T12:00:05Z");
+  const close = at("2026-11-10T05:30:00Z");
+  const open = { regular: { start: at("2026-11-10T01:00:00Z") / 1000, end: close / 1000 } };
   const host = futuresHost(["2330.TW", "WTX&"], {
     yahootw: () => ok([{ ...TW_ROWS[0], exchange: "TAI", regularMarketTime: new Date(close).toISOString() },
       { ...FUTURES_ROWS[0], regularMarketTime: "2026-11-10T12:00:00Z" }]),
@@ -1233,13 +1233,13 @@ test("at 20:00 a stock beside a trading future still reads closed at 13:30", asy
   });
   const tx = (key, params) => t("zh-TW", key, params);
   await soleRun(host, (w) => {
-    const at = now + 5_000;
-    const quote = w.shown("2330.TW", at);
+    const later = now + 5_000;
+    const quote = w.shown("2330.TW", later);
     assert.equal(quote.timestamp, close);
-    const fresh = freshness(quote, sessionOf(quote, at), at);
+    const fresh = freshness(quote, sessionOf(quote, later), later);
     assert.equal(fresh.state, "closed");
-    assert.equal(freshnessLabel(quote, fresh, at, "zh-TW", tx),
-      `${tx("session.closed")} · ${[formatStaleDate(close, at, "zh-TW"), formatTime(close)].filter(Boolean).join(" ")}`);
+    assert.equal(freshnessLabel(quote, fresh, later, "zh-TW", tx),
+      `${tx("session.closed")} · ${[formatStaleDate(close, later, "zh-TW"), formatTime(close)].filter(Boolean).join(" ")}`);
   }, now);
 });
 
@@ -1367,16 +1367,15 @@ const futuresLineOf = (symbol, spans, segments) => {
   } }]);
 };
 const futuresLine = (symbol, from, to, segments) => futuresLineOf(symbol, [[from, to]], segments);
-const SEGMENTS = [[1794207600000, 1794258000000], [1794271500000, 1794289500000]];            // Tue's trading day
-const NEXT_SEGMENTS = [[Date.parse("2026-11-10T07:00:00Z"), Date.parse("2026-11-10T21:00:00Z")],
-  [Date.parse("2026-11-11T00:45:00Z"), Date.parse("2026-11-11T05:45:00Z")]];                    // Wed's
-const MON_1500 = Date.parse("2026-11-09T07:00:00Z");
+const NEXT_SEGMENTS = [[at("2026-11-10T07:00:00Z"), at("2026-11-10T21:00:00Z")],
+  [at("2026-11-11T00:45:00Z"), at("2026-11-11T05:45:00Z")]];                                    // Wed's
+const MON_1500 = at("2026-11-09T07:00:00Z");
 // Monday 2026-11-16's trading day, as its line would give it: Friday 15:00 → Saturday 05:00, Monday 08:45 → 13:45.
-const FRI_1500 = Date.parse("2026-11-13T07:00:00Z");
-const FRI_SEGMENTS = [[FRI_1500, Date.parse("2026-11-13T21:00:00Z")], [Date.parse("2026-11-16T00:45:00Z"), Date.parse("2026-11-16T05:45:00Z")]];
+const FRI_1500 = at("2026-11-13T07:00:00Z");
+const FRI_SEGMENTS = [[FRI_1500, at("2026-11-13T21:00:00Z")], [at("2026-11-16T00:45:00Z"), at("2026-11-16T05:45:00Z")]];
 
 test("22:00 in the night session: Live, and the detail names the night session", async () => {
-  const from = Date.parse("2026-11-10T14:00:00Z");
+  const from = at("2026-11-10T14:00:00Z");
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(host.clock - 20_000),
     line: (symbol) => futuresLine(symbol, NEXT_SEGMENTS[0][0], from - 60_000, NEXT_SEGMENTS),
@@ -1394,8 +1393,8 @@ test("22:00 in the night session: Live, and the detail names the night session",
 });
 
 test("06:30 in the morning break: closed at 05:00, polled gently", async () => {
-  const from = Date.parse("2026-11-09T22:30:00Z");
-  const last = Date.parse("2026-11-09T21:00:00Z");
+  const from = at("2026-11-09T22:30:00Z");
+  const last = at("2026-11-09T21:00:00Z");
   const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, last, SEGMENTS) });
   await soleRun(host, async (w) => {
     const now = host.clock;
@@ -1415,24 +1414,24 @@ test("06:30 in the morning break: closed at 05:00, polled gently", async () => {
 // stale 75 s after the first check; in the break it never does. The staleInMs assertion is the guard; the redraw bound is a
 // backstop (it passes before the change too, since a real-time age always grows).
 test("a break never spins the idle wake", async () => {
-  const from = Date.parse("2026-11-09T21:00:30Z"); // 05:00:30
-  const last = Date.parse("2026-11-09T20:59:50Z"); // 04:59:50
+  const from = at("2026-11-09T21:00:30Z"); // 05:00:30
+  const last = at("2026-11-09T20:59:50Z"); // 04:59:50
   const host = futuresHost(["WTX&"], {
-    yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-09T20:59:00Z"), SEGMENTS),
+    yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-09T20:59:00Z"), SEGMENTS),
   });
   host.clock = from;
   const w = new Watchlist(host);
   let redraws = 0;
   const runs = w.providerIds().map((id) => w.runProvider(id, { sleep: host.sleep, changed: () => { redraws++; } }));
   await advance(host, from + 5_000);
-  for (const at of [from + 5_000, from + 30_000]) assert.equal(w.staleInMs(["WTX&"], at), LIVE_MAX_AGE_MS, String(at));
+  for (const now of [from + 5_000, from + 30_000]) assert.equal(w.staleInMs(["WTX&"], now), LIVE_MAX_AGE_MS, String(now));
   await advance(host, from + 600_000);
   assert.ok(redraws < 100, String(redraws));
   await stop(w, host, runs);
 });
 
 test("01:00 in the night session: Live, with the line from 15:00", async () => {
-  const from = Date.parse("2026-11-09T17:00:00Z");
+  const from = at("2026-11-09T17:00:00Z");
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(host.clock - 20_000),
     line: (symbol) => futuresLine(symbol, MON_1500, from - 60_000, SEGMENTS),
@@ -1447,7 +1446,7 @@ test("01:00 in the night session: Live, with the line from 15:00", async () => {
 });
 
 test("09:00 after a night: Live, read by the line's own sessions", async () => {
-  const from = Date.parse("2026-11-10T01:00:00Z");
+  const from = at("2026-11-10T01:00:00Z");
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(host.clock - 10_000),
     line: (symbol) => futuresLine(symbol, MON_1500, from - 60_000, SEGMENTS),
@@ -1461,13 +1460,13 @@ test("09:00 after a night: Live, read by the line's own sessions", async () => {
   }, from);
 });
 
-// Spec quote-freshness, "Monday after Friday night".
+// Friday's night session belongs to Monday's trading day, so its line is still drawn on Monday morning.
 test("Monday 09:00 after Friday night: Live in the day session, with Friday night's line", async () => {
-  const from = Date.parse("2026-11-16T01:00:00Z");
+  const from = at("2026-11-16T01:00:00Z");
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(host.clock - 10_000),
     // Friday night's 840 minutes, then Monday's first 15.
-    line: (symbol) => futuresLineOf(symbol, [[FRI_1500, Date.parse("2026-11-13T20:59:00Z")], [FRI_SEGMENTS[1][0], from - 60_000]], FRI_SEGMENTS),
+    line: (symbol) => futuresLineOf(symbol, [[FRI_1500, at("2026-11-13T20:59:00Z")], [FRI_SEGMENTS[1][0], from - 60_000]], FRI_SEGMENTS),
   });
   await soleRun(host, (w) => {
     const now = host.clock;
@@ -1479,14 +1478,14 @@ test("Monday 09:00 after Friday night: Live in the day session, with Friday nigh
   }, from);
 });
 
-// Saturday 04:59:59 belongs to Monday's trading day (Task 3), so on Sunday it is not an earlier day: no noLive. The
-// round's `asked.twOnly` lists futures as well (Task 2), so it would be accepted as an earlier day's row anyway.
+// Saturday 04:59:59 belongs to Monday's trading day, so on Sunday it is not an earlier day: no noLive. The round's
+// `asked.anyDay` lists futures as well, so it would be accepted as an earlier day's row anyway.
 test("on Sunday, Friday night's last price reads closed with its date, polled gently", async () => {
-  const from = Date.parse("2026-11-15T14:00:00Z"); // Sun 22:00
-  const last = Date.parse("2026-11-13T20:59:59Z"); // Sat 04:59:59
+  const from = at("2026-11-15T14:00:00Z"); // Sun 22:00
+  const last = at("2026-11-13T20:59:59Z"); // Sat 04:59:59
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(last),
-    line: (symbol) => futuresLine(symbol, FRI_1500, Date.parse("2026-11-13T20:59:00Z"), FRI_SEGMENTS),
+    line: (symbol) => futuresLine(symbol, FRI_1500, at("2026-11-13T20:59:00Z"), FRI_SEGMENTS),
   });
   const tx = (key, params) => t("zh-TW", key, params);
   await soleRun(host, async (w) => {
@@ -1507,8 +1506,8 @@ test("on Sunday, Friday night's last price reads closed with its date, polled ge
 });
 
 test("13:50 after the day session: closed, polled gently", async () => {
-  const from = Date.parse("2026-11-10T05:50:00Z");
-  const last = Date.parse("2026-11-10T05:44:59Z");
+  const from = at("2026-11-10T05:50:00Z");
+  const last = at("2026-11-10T05:44:59Z");
   const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, last, SEGMENTS) });
   await soleRun(host, async (w) => {
     const now = host.clock;
@@ -1519,11 +1518,11 @@ test("13:50 after the day session: closed, polled gently", async () => {
 });
 
 test("the night opens with its first trade, before the line brings the new trading day's sessions", async () => {
-  const from = Date.parse("2026-11-10T06:59:50Z");  // 14:59:50
-  const first = Date.parse("2026-11-10T07:00:02Z"); // 15:00:02
+  const from = at("2026-11-10T06:59:50Z");          // 14:59:50
+  const first = at("2026-11-10T07:00:02Z"); // 15:00:02
   const host = futuresHost(["WTX&"], {
-    yahootw: () => futuresAt(host.clock < first ? Date.parse("2026-11-10T05:44:59Z") : first),
-    line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-10T05:44:00Z"), SEGMENTS),
+    yahootw: () => futuresAt(host.clock < first ? at("2026-11-10T05:44:59Z") : first),
+    line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-10T05:44:00Z"), SEGMENTS),
   });
   await soleRun(host, async (w) => {
     assert.equal(sessionOf(w.shown("WTX&", host.clock), host.clock), "closed");
@@ -1539,7 +1538,7 @@ test("the night opens with its first trade, before the line brings the new tradi
 // The first round hangs and times out at 10 s; the row says so, and the next ask comes at the session's cadence: 10 s at
 // night (the TAIFEX hours, since the row has no quote), 60 s in a break.
 test("a failed round says why, and retries at the session's cadence", async () => {
-  for (const [from, at22s, at72s] of [[Date.parse("2026-11-10T14:00:00Z"), 2, null], [Date.parse("2026-11-09T22:30:00Z"), 1, 2]]) {
+  for (const [from, at22s, at72s] of [[at("2026-11-10T14:00:00Z"), 2, null], [at("2026-11-09T22:30:00Z"), 1, 2]]) {
     const label = new Date(from).toISOString();
     const host = futuresHost(["WTX&"], {
       yahootw: () => (host.clock < from + 10_000 ? new Promise(() => {}) : futuresAt(host.clock - 5_000)),
@@ -1562,10 +1561,10 @@ test("a failed round says why, and retries at the session's cadence", async () =
 // 120 s, and its prices come at the break's 60 s cadence, not every 10 s.
 test("a break and a weekend ask a future's line no more", async () => {
   for (const [from, last, line] of [
-    [Date.parse("2026-11-09T22:30:00Z"), Date.parse("2026-11-09T21:00:00Z"),
-      (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-09T21:00:00Z"), SEGMENTS)],                // 06:30
-    [Date.parse("2026-11-15T14:00:00Z"), Date.parse("2026-11-13T20:59:59Z"),
-      (symbol) => futuresLine(symbol, FRI_1500, Date.parse("2026-11-13T20:59:00Z"), FRI_SEGMENTS)],            // Sun 22:00
+    [at("2026-11-09T22:30:00Z"), at("2026-11-09T21:00:00Z"),
+      (symbol) => futuresLine(symbol, MON_1500, at("2026-11-09T21:00:00Z"), SEGMENTS)],                        // 06:30
+    [at("2026-11-15T14:00:00Z"), at("2026-11-13T20:59:59Z"),
+      (symbol) => futuresLine(symbol, FRI_1500, at("2026-11-13T20:59:00Z"), FRI_SEGMENTS)],                    // Sun 22:00
   ]) {
     const label = new Date(from).toISOString();
     const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line });
@@ -1580,7 +1579,7 @@ test("a break and a weekend ask a future's line no more", async () => {
 
 // A future still without a price in a break is asked again as its session opens, not up to the break's 60 s later.
 test("a future without a price yet is asked as its session opens", async () => {
-  for (const open of [Date.parse("2026-11-10T00:45:00Z"), Date.parse("2026-11-10T07:00:00Z")]) { // 08:45, 15:00
+  for (const open of [at("2026-11-10T00:45:00Z"), at("2026-11-10T07:00:00Z")]) { // 08:45, 15:00
     const label = new Date(open).toISOString();
     const host = futuresHost(["WTX&"], {
       yahootw: () => futuresAt(host.clock, host.clock < open ? { "WTX&": { price: { raw: "-" } } } : {}),
@@ -1599,14 +1598,14 @@ test("a future without a price yet is asked as its session opens", async () => {
 // At 15:00 the wake usually comes before the night's first trade; the row still reads the day's segments, so the
 // next ask must not wait the break's 60 s.
 test("at 15:00 a priced future is asked every 10 s until the night's first trade", async () => {
-  const from = Date.parse("2026-11-10T06:59:50Z");  // 14:59:50
-  const first = Date.parse("2026-11-10T07:00:05Z"); // 15:00:05
+  const from = at("2026-11-10T06:59:50Z");          // 14:59:50
+  const first = at("2026-11-10T07:00:05Z"); // 15:00:05
   const host = futuresHost(["WTX&"], {
-    yahootw: () => futuresAt(host.clock < first ? Date.parse("2026-11-10T05:44:59Z") : first),
-    line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-10T05:44:00Z"), SEGMENTS),
+    yahootw: () => futuresAt(host.clock < first ? at("2026-11-10T05:44:59Z") : first),
+    line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-10T05:44:00Z"), SEGMENTS),
   });
   await soleRun(host, async (w) => {
-    await advance(host, Date.parse("2026-11-10T07:00:20Z"));
+    await advance(host, at("2026-11-10T07:00:20Z"));
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     assert.equal(quote.timestamp, first);
@@ -1616,13 +1615,13 @@ test("at 15:00 a priced future is asked every 10 s until the night's first trade
 
 // With no night trade (a holiday), the 10 s asks end a minute after 15:00 and the row reads closed throughout.
 test("a minute after 15:00 without a night trade, the break's cadence is back", async () => {
-  const from = Date.parse("2026-11-10T06:59:50Z");  // 14:59:50
-  const last = Date.parse("2026-11-10T05:44:59Z");  // 13:44:59
+  const from = at("2026-11-10T06:59:50Z");          // 14:59:50
+  const last = at("2026-11-10T05:44:59Z");          // 13:44:59
   const host = futuresHost(["WTX&"], {
-    yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-10T05:44:00Z"), SEGMENTS),
+    yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-10T05:44:00Z"), SEGMENTS),
   });
   await soleRun(host, async (w) => {
-    const opening = Date.parse("2026-11-10T07:00:00Z");
+    const opening = at("2026-11-10T07:00:00Z");
     await advance(host, opening + 55_000);
     // 14:59:50, then 15:00:00 to 15:00:50 every 10 s.
     assert.equal(stockLists(host).length, 7);
@@ -1636,11 +1635,11 @@ test("a minute after 15:00 without a night trade, the break's cadence is back", 
 });
 
 test("at 08:45 a priced future from the night is asked again and reads Live", async () => {
-  const from = Date.parse("2026-11-10T00:44:30Z"); // 08:44:30
-  const open = Date.parse("2026-11-10T00:45:00Z");
+  const from = at("2026-11-10T00:44:30Z"); // 08:44:30
+  const open = at("2026-11-10T00:45:00Z");
   const host = futuresHost(["WTX&"], {
-    yahootw: () => futuresAt(host.clock < open ? Date.parse("2026-11-09T20:59:59Z") : host.clock),
-    line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-09T20:59:00Z"), SEGMENTS),
+    yahootw: () => futuresAt(host.clock < open ? at("2026-11-09T20:59:59Z") : host.clock),
+    line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-09T20:59:00Z"), SEGMENTS),
   });
   await soleRun(host, async (w) => {
     assert.equal(sessionOf(w.shown("WTX&", host.clock), host.clock), "closed");

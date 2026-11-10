@@ -3,13 +3,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { USER_AGENT, priceLimit } from "../mods/wickline/quotes.js";
 import {
-  YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, taipeiDay, tradingDay, yahootw,
+  YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, ownPeriods, taipeiDay, tradingDay, yahootw,
 } from "../mods/wickline/providers/yahootw.js";
 import { t } from "../mods/wickline/i18n.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_ROWS, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, NIGHT, jsonFixture, ok,
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_ROWS, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, LINE_PERIODS, NIGHT, at, day,
+  jsonFixture, ok,
 } from "./helpers.mjs";
-import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
 
 // A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads. Its last two
 // rows, ^TWII and ^TWOII, were recorded after that day's close and keep their `exchange`.
@@ -18,7 +18,7 @@ const ROWS = jsonFixture("yahootw-stocklist");
 const NOW = 1794188480000;
 const SYMBOLS = ["2330.TW", "0056.TW", "0050.TW", "6488.TWO"];
 // The recorded rows with some rows' fields replaced, by symbol.
-const changed = (bySymbol) => ok(ROWS.map((row) => ({ ...row, ...bySymbol[row.symbol] })));
+const changed = (bySymbol, rows = ROWS) => ok(rows.map((row) => ({ ...row, ...bySymbol[row.symbol] })));
 const decode = (response, symbols = SYMBOLS) => yahootw.decode(yahootw.requests(symbols)[0], response, NOW);
 
 test("constants and cadence", () => {
@@ -275,7 +275,7 @@ test("a Yahoo 奇摩股市 price at its own limit is at the limit", () => {
 
 // The earlier-day answers (EARLIER_ROWS, EARLIER_TICK) are described in helpers.mjs.
 const twOnly = (symbols, response, now, anyDay = ["^TWOII"]) =>
-  yahootw.decode(yahootw.requests(symbols, { anyDay: anyDay })[0], response, now);
+  yahootw.decode(yahootw.requests(symbols, { anyDay })[0], response, now);
 
 test("a line answer gives its trading periods, also without a point from today", () => {
   const S = TODAY_0900;
@@ -307,7 +307,7 @@ test("a TW-only quote's periods: its line's from its own day, else closed for an
   const earlier = { symbol: "^TWOII", day: taipeiDay(CLOSE_0509), tradeTime: CLOSE_0509 };
   assert.deepEqual(ownPeriods(earlier, null, NIGHT), { pre: null, regular: [CLOSE_0509, CLOSE_0509], post: null });
   // Its own day's line periods win over the closed session.
-  const close = { pre: null, regular: [Date.parse("2026-11-09T01:00:00Z"), Date.parse("2026-11-09T05:30:00Z")], post: null };
+  const close = day("2026-11-09T01:00:00Z", "2026-11-09T05:30:00Z");
   assert.equal(ownPeriods(earlier, close, NIGHT), close);
 });
 
@@ -340,10 +340,8 @@ test("earlier-day rows keep their own time and leave feed time and noLive alone"
 
 const FUTURES = ["WTX&", "WTX@", "WMT&", "WTF&", "WTE&"];
 const futures = (response, now = FUT_NOW, symbols = FUTURES) => yahootw.decode(yahootw.requests(symbols, { anyDay: symbols })[0], response, now);
-const changedFutures = (bySymbol) => ok(FUTURES_ROWS.map((row) => ({ ...row, ...bySymbol[row.symbol] })));
 
 test("a future's trading day starts at 15:00 in Taipei, and Friday night is Monday's", () => {
-  const at = (iso) => Date.parse(iso);
   assert.equal(tradingDay("WTX&", at("2026-11-09T07:00:00Z")), taipeiDay(at("2026-11-10T05:35:37Z"))); // Mon 15:00 → Tue's
   assert.equal(tradingDay("WTX&", at("2026-11-09T06:59:59Z")), taipeiDay(at("2026-11-09T06:59:59Z"))); // Mon 14:59:59 → Mon's
   assert.equal(tradingDay("WTX&", at("2026-11-10T15:59:59Z")), tradingDay("WTX&", at("2026-11-10T16:00:00Z"))); // midnight
@@ -364,7 +362,7 @@ test("a future's trading day starts at 15:00 in Taipei, and Friday night is Mond
 
 test("futures rows from TAIFEX are priced, timed at TAIFEX's newest trade", () => {
   const { quotes, errors } = futures(ok(FUTURES_ROWS));
-  const newest = Date.parse("2026-11-10T05:35:37Z");
+  const newest = at("2026-11-10T05:35:37Z");
   assert.deepEqual(Object.keys(quotes).sort(), [...FUTURES].sort());
   assert.deepEqual(errors, {});
   assert.deepEqual(quotes["WTX&"], {
@@ -373,23 +371,23 @@ test("futures rows from TAIFEX are priced, timed at TAIFEX's newest trade", () =
     day: tradingDay("WTX&", FUT_NOW), fetchedAt: FUT_NOW,
   });
   assert.equal(quotes["WTF&"].timestamp, newest);
-  assert.equal(quotes["WTF&"].tradeTime, Date.parse("2026-11-10T05:33:19Z"));
+  assert.equal(quotes["WTF&"].tradeTime, at("2026-11-10T05:33:19Z"));
 });
 
 test("a future past its reported limit is shown, not discarded, and not lit", () => {
-  const above = futures(changedFutures({ "WTX&": { price: { raw: "46000" } } }));
+  const above = futures(changed({ "WTX&": { price: { raw: "46000" } } }, FUTURES_ROWS));
   assert.equal(above.quotes["WTX&"].price, 46000);
   assert.equal(above.errors["WTX&"], undefined);
   assert.equal(priceLimit(above.quotes["WTX&"]), null);
-  assert.equal(futures(changedFutures({ "WTX&": { price: { raw: "36000" } } })).quotes["WTX&"].price, 36000);
-  assert.equal(priceLimit(futures(changedFutures({ "WTX&": { price: { raw: "45625" } } })).quotes["WTX&"]), "up");
+  assert.equal(futures(changed({ "WTX&": { price: { raw: "36000" } } }, FUTURES_ROWS)).quotes["WTX&"].price, 36000);
+  assert.equal(priceLimit(futures(changed({ "WTX&": { price: { raw: "45625" } } }, FUTURES_ROWS)).quotes["WTX&"]), "up");
   // A stock is still checked.
   assert.equal(decode(changed({ "2330.TW": { price: { raw: "2400" } } })).errors["2330.TW"].code, "yahootw.outOfLimits");
 });
 
 test("a futures-form row not on TAIFEX gives nothing, not even its name", () => {
   for (const exchange of ["NMS", null, "-"]) {
-    const { quotes, errors, names } = futures(changedFutures({ "WTX&": { exchange } }));
+    const { quotes, errors, names } = futures(changed({ "WTX&": { exchange } }, FUTURES_ROWS));
     assert.equal(quotes["WTX&"], undefined, String(exchange));
     assert.equal(errors["WTX&"], undefined, String(exchange));
     assert.equal(names["WTX&"], undefined, String(exchange));
@@ -398,58 +396,58 @@ test("a futures-form row not on TAIFEX gives nothing, not even its name", () => 
 });
 
 test("quiet rows keep their own market's clock: a 20:00 future never times a stock", () => {
-  const now = Date.parse("2026-11-10T12:00:05Z"); // 20:00:05 in Taipei
+  const now = at("2026-11-10T12:00:05Z"); // 20:00:05 in Taipei
   const stock = { ...ROWS[0], exchange: "TAI", regularMarketTime: "2026-11-10T05:30:00Z" };
   const future = { ...FUTURES_ROWS[0], regularMarketTime: "2026-11-10T12:00:00Z" };
   const { quotes } = yahootw.decode(yahootw.requests(["2330.TW", "WTX&"], { anyDay: ["WTX&"] })[0], ok([stock, future]), now);
-  assert.equal(quotes["2330.TW"].timestamp, Date.parse("2026-11-10T05:30:00Z"));
-  assert.equal(quotes["WTX&"].timestamp, Date.parse("2026-11-10T12:00:00Z"));
+  assert.equal(quotes["2330.TW"].timestamp, at("2026-11-10T05:30:00Z"));
+  assert.equal(quotes["WTX&"].timestamp, at("2026-11-10T12:00:00Z"));
 });
 
-// Passes before and after this task: it fails an implementation that groups the feed time by exchange.
+// It fails an implementation that groups the feed time by exchange.
 test("a quiet TPEx stock still takes the batch's newest stock trade", () => {
   const { quotes } = decode(changed({ "2330.TW": { exchange: "TAI" }, "0050.TW": { exchange: "TAI" }, "6488.TWO": { exchange: "TWO" } }));
-  assert.equal(quotes["6488.TWO"].timestamp, Date.parse("2026-11-09T01:41:13Z"));
-  assert.equal(quotes["6488.TWO"].tradeTime, Date.parse("2026-11-09T01:28:59Z"));
-  assert.equal(quotes["0050.TW"].timestamp, Date.parse("2026-11-09T01:41:13Z"));
+  assert.equal(quotes["6488.TWO"].timestamp, at("2026-11-09T01:41:13Z"));
+  assert.equal(quotes["6488.TWO"].tradeTime, at("2026-11-09T01:28:59Z"));
+  assert.equal(quotes["0050.TW"].timestamp, at("2026-11-09T01:41:13Z"));
 });
 
 test("the night's first rows: a new trading day with new limits, and a stock beside them keeps its own trade", () => {
-  const now = Date.parse("2026-11-10T07:20:00Z"); // 15:20 in Taipei
+  const now = at("2026-11-10T07:20:00Z"); // 15:20 in Taipei
   const request = yahootw.requests(["WTX&", "WMT&", "2330.TW"], { anyDay: ["WTX&", "WMT&"] })[0];
   const { quotes, noLive } = yahootw.decode(request, ok(FUTURES_NIGHT_ROWS), now);
   const wtx = quotes["WTX&"];
   assert.deepEqual([wtx.price, wtx.limitUp, wtx.limitDown, wtx.previousClose], [42459, 46910, 38382, 42646]);
   assert.equal(wtx.day, tradingDay("WTX&", now));
   assert.notEqual(wtx.day, taipeiDay(now));
-  assert.equal(wtx.timestamp, Date.parse("2026-11-10T07:19:54Z"));
+  assert.equal(wtx.timestamp, at("2026-11-10T07:19:54Z"));
   // The futures clock times WMT& at WTX&'s trade; the stock clock leaves 2330.TW at its 14:30 trade.
-  assert.equal(quotes["WMT&"].timestamp, Date.parse("2026-11-10T07:19:54Z"));
-  assert.equal(quotes["2330.TW"].timestamp, Date.parse("2026-11-10T06:30:00Z"));
+  assert.equal(quotes["WMT&"].timestamp, at("2026-11-10T07:19:54Z"));
+  assert.equal(quotes["2330.TW"].timestamp, at("2026-11-10T06:30:00Z"));
   assert.equal(noLive, undefined);
 });
 
 test("a night trade stamped just past 15:00 by Yahoo's clock counts while the local clock still reads 14:59", () => {
-  const now = Date.parse("2026-11-10T06:59:58Z"); // 14:59:58 locally
-  const { quotes, noLive } = futures(changedFutures({ "WTX&": { regularMarketTime: "2026-11-10T07:00:01Z" } }), now, ["WTX&"]);
+  const now = at("2026-11-10T06:59:58Z"); // 14:59:58 locally
+  const { quotes, noLive } = futures(changed({ "WTX&": { regularMarketTime: "2026-11-10T07:00:01Z" } }, FUTURES_ROWS), now, ["WTX&"]);
   assert.equal(quotes["WTX&"].day, tradingDay("WTX&", now) + 1);
-  assert.equal(quotes["WTX&"].timestamp, Date.parse("2026-11-10T07:00:01Z"));
+  assert.equal(quotes["WTX&"].timestamp, at("2026-11-10T07:00:01Z"));
   assert.equal(noLive, undefined);
 });
 
 test("a futures trade far ahead of the local clock is not today's and never sets the feed time", () => {
-  const now = Date.parse("2026-11-10T06:59:58Z"); // 14:59:58 locally
-  const { quotes } = futures(changedFutures({ "WTX&": { regularMarketTime: "2026-11-10T07:59:58Z" } }), now); // an hour ahead
+  const now = at("2026-11-10T06:59:58Z"); // 14:59:58 locally
+  const { quotes } = futures(changed({ "WTX&": { regularMarketTime: "2026-11-10T07:59:58Z" } }, FUTURES_ROWS), now); // an hour ahead
   assert.equal(quotes["WTX&"], undefined);
   const others = FUTURES.filter((symbol) => symbol !== "WTX&").map((symbol) => quotes[symbol].tradeTime);
   assert.equal(quotes["WTX@"].timestamp, Math.max(...others));
 });
 
 test("a night trade after midnight is the same trading day: priced live, no noLive", () => {
-  const now = Date.parse("2026-11-10T16:00:30Z"); // 00:00:30 Wednesday
-  const { quotes, noLive } = futures(changedFutures({ "WTX&": { regularMarketTime: "2026-11-10T15:59:50Z" } }), now, ["WTX&"]);
+  const now = at("2026-11-10T16:00:30Z"); // 00:00:30 Wednesday
+  const { quotes, noLive } = futures(changed({ "WTX&": { regularMarketTime: "2026-11-10T15:59:50Z" } }, FUTURES_ROWS), now, ["WTX&"]);
   assert.equal(quotes["WTX&"].day, tradingDay("WTX&", now));
-  assert.equal(quotes["WTX&"].timestamp, Date.parse("2026-11-10T15:59:50Z"));
+  assert.equal(quotes["WTX&"].timestamp, at("2026-11-10T15:59:50Z"));
   assert.equal(noLive, undefined);
 });
 
@@ -458,10 +456,10 @@ test("a future's line keeps its trading day from 15:00, also after midnight", ()
   const { day, series, lastAt } = recorded.lines["WTX&"];
   assert.equal(day, tradingDay("WTX&", FUT_NOW));
   assert.deepEqual([series.length, series[0], series.at(-1), lastAt], [1132, 41235, 42599, 1794288960000]);
-  assert.deepEqual(recorded.periods["WTX&"].regular, [1794207600000, 1794289500000]);
+  assert.deepEqual(recorded.periods["WTX&"].regular, LINE_PERIODS.regular);
   // 01:00: ten hours of night minutes since 15:00 the day before, none cut at midnight.
-  const one = Date.parse("2026-11-09T17:00:00Z");
-  const start = Date.parse("2026-11-09T07:00:00Z") / 1000;
+  const one = at("2026-11-09T17:00:00Z");
+  const start = at("2026-11-09T07:00:00Z") / 1000;
   const closes = Array.from({ length: 600 }, (_, i) => 42000 + i);
   const night = decodeTick("WTX&", ok([{ symbol: "WTX&", chart: { meta: { symbol: "WTX&" },
     timestamp: closes.map((_, i) => start + i * 60), indicators: { quote: [{ close: closes }] } } }]), one);
@@ -471,13 +469,12 @@ test("a future's line keeps its trading day from 15:00, also after midnight", ()
 
 test("a future's line gives its sessions from sourceTradingPeriods", () => {
   const { periods } = yahootw.decode(yahootw.requests(["WTX&"]).find((r) => r.kind === "line"), ok(FUTURES_TICK), FUT_NOW);
-  assert.deepEqual(periods["WTX&"], { pre: null, regular: [1794207600000, 1794289500000], post: null,
-    segments: [[1794207600000, 1794258000000], [1794271500000, 1794289500000]] });
+  assert.deepEqual(periods["WTX&"], LINE_PERIODS);
 });
 
 test("a future's line periods belong to its trading day, which began at 15:00 the day before", () => {
-  const nine = Date.parse("2026-11-10T01:00:00Z"); // 09:00 Tuesday
+  const nine = at("2026-11-10T01:00:00Z"); // 09:00 Tuesday
   const quote = { symbol: "WTX&", day: tradingDay("WTX&", nine - 10_000), tradeTime: nine - 10_000 };
-  const periods = { pre: null, regular: [1794207600000, 1794289500000], post: null };
+  const periods = { pre: null, regular: LINE_PERIODS.regular, post: null };
   assert.equal(ownPeriods(quote, periods, nine), periods);
 });
