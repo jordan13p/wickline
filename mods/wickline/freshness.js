@@ -125,6 +125,12 @@ export function msUntilTaifexOpens(now) {
   return starts.length ? Math.min(...starts) - now : null;
 }
 
+/** When the latest TAIFEX session that opened by `now` (on its Taipei day or the day before) opened, in ms; null if none. */
+export function taifexOpenedAt(now) {
+  const starts = taifexSegments(now).map(([start]) => start).filter((start) => start <= now);
+  return starts.length ? Math.max(...starts) : null;
+}
+
 /** The detail's session key suffix: a trading future's "day" or "night", else `session` itself. */
 export function sessionName(quote, session, now) {
   return (session === "open" && kindOf(quote.symbol) === "future" && futuresSegment(quote, now)) || session;

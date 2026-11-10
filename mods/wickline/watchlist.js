@@ -1,7 +1,7 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, msUntilTaifexOpens, sessionOf } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, msUntilTaifexOpens, sessionOf, taifexOpenedAt } from "./freshness.js";
 import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -54,6 +54,8 @@ const TIMED_OUT = {};
 // A minute's length, and how far a line's last minute may end before its price's own last trade.
 const MINUTE_MS = 60_000;
 const LINE_LAG_MS = 120_000;
+// How long after a TAIFEX opening a future without a trade since then is still asked at the open cadence.
+const OPENING_WINDOW_MS = 60_000;
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
@@ -629,6 +631,17 @@ export class Watchlist {
   }
 
   /**
+   * Whether a future among `symbols` has had no trade since a TAIFEX session opened, under OPENING_WINDOW_MS ago.
+   * For the cadence only: until that first trade the row may still read the session before (ownPeriods keeps the
+   * line's periods for the trade's own day), so the wake at the opening would otherwise wait the break's interval.
+   */
+  awaitingOpen(provider, symbols, now) {
+    const opened = taifexOpenedAt(now);
+    if (opened === null || now - opened >= OPENING_WINDOW_MS) return false;
+    return symbols.some((symbol) => kindOf(symbol) === "future" && !(this.priced(provider, symbol)?.tradeTime >= opened));
+  }
+
+  /**
    * One provider's loop, until stop(). Each round starts the provider's interval after the
    * previous one ends (or when its cooldown ends, if later); an edit starts one at once.
    */
@@ -681,10 +694,11 @@ export class Watchlist {
       if (state.manual || state.dirty) continue;
       const idle = paused || !symbols.length || state.disabled || hidden;
       const now = this.host.now();
-      // A break's interval ends at TAIFEX's next opening, so a future's first price of a session is not up to an
-      // interval late.
+      // A break's interval ends at TAIFEX's next opening, and is the open one just after it while a future awaits its
+      // first trade (awaitingOpen), so a session's first price is not up to the break's interval late.
       const opens = symbols.some((symbol) => kindOf(symbol) === "future") ? msUntilTaifexOpens(now) : null;
-      const interval = provider.intervalMs(this.sessionFor(symbols, now));
+      const session = this.awaitingOpen(provider, symbols, now) ? "open" : this.sessionFor(symbols, now);
+      const interval = provider.intervalMs(session);
       const due = now + (idle ? 0 : Math.max(opens === null ? interval : Math.min(interval, opens), state.retryAt - now));
       await this.rest(state, symbols, due, io);
     }
