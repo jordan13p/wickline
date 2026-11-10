@@ -2,7 +2,9 @@
 // Yahoo Finance's delayed Taiwan quotes ahead of TWSE MIS. Off until the person turns it on and consents.
 // This file holds the host, limits and decoder; the switch and consent live in settings.js and the
 // settings dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, limitPair, positive, positiveOrNull, withinLimits } from "../quotes.js";
+import {
+  HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, withinLimits,
+} from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 import { period } from "./yahoo.js";
 
@@ -25,10 +27,6 @@ export function taipeiDay(ms) {
 
 // `{ raw: "2240" }` → 2240; `"-"` (no value yet) or anything not positive → null.
 const number = (field) => positiveOrNull(field?.raw);
-
-// An exchange code (TAI, TWO) and a currency (TWD) as sent; anything else is null.
-const exchangeCode = (value) => (typeof value === "string" && /^[A-Z]{2,5}$/.test(value) ? value : null);
-const currencyCode = (value) => (typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : null);
 
 const time = (value) => {
   const ms = typeof value === "string" ? Date.parse(value) : NaN;
@@ -62,29 +60,29 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   const wanted = new Set(symbols);
   const anyDaySymbols = new Set(anyDay);
   const today = taipeiDay(now);
-  const accepted = [];
-  const earlier = [];
+  // Every accepted quote, each with its own trade's Taipei day.
+  const priced = [];
   const errors = {};
   // A placeholder row still names its stock.
   const names = {};
-  let priced = false;
+  let anyPrice = false;
   for (const row of body) {
     const symbol = typeof row?.symbol === "string" && wanted.has(row.symbol) ? row.symbol : null;
     if (!symbol) continue;
     const name = cleanText(row.symbolName);
     if (name) names[symbol] = name;
     const price = number(row.price);
-    if (price) priced = true;
+    if (price) anyPrice = true;
     const tradeTime = time(row.regularMarketTime);
     const day = tradeTime === null ? null : taipeiDay(tradeTime);
-    const dayOk = day === today || (day !== null && day < today && anyDaySymbols.has(symbol));
+    const dayOk = day !== null && (day === today || (day < today && anyDaySymbols.has(symbol)));
     if (!price || !dayOk || row.exchangeDataDelayedBy !== 0) continue;
     const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
     if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("yahootw.outOfLimits");
       continue;
     }
-    (day === today ? accepted : earlier).push({
+    priced.push({
       symbol,
       source: "yahootw",
       name,
@@ -102,13 +100,12 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       fetchedAt: now,
     });
   }
+  const todays = priced.filter((quote) => quote.day === today);
   // Unused when nothing was accepted today (Math.max of none is -Infinity, but no quote takes it).
-  const feedTime = Math.max(...accepted.map((quote) => quote.tradeTime));
-  const quotes = Object.fromEntries([
-    ...accepted.map((quote) => [quote.symbol, { ...quote, timestamp: feedTime }]),
-    ...earlier.map((quote) => [quote.symbol, { ...quote, timestamp: quote.tradeTime }]),
-  ]);
-  return { quotes, errors, names, ...(priced && !accepted.length && { noLive: new QuoteError("yahootw.noLiveRows") }) };
+  const feedTime = Math.max(...todays.map((quote) => quote.tradeTime));
+  const quotes = Object.fromEntries(priced.map((quote) =>
+    [quote.symbol, { ...quote, timestamp: quote.day === today ? feedTime : quote.tradeTime }]));
+  return { quotes, errors, names, ...(anyPrice && !todays.length && { noLive: new QuoteError("yahootw.noLiveRows") }) };
 }
 
 /**

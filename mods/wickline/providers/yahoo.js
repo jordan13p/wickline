@@ -1,6 +1,6 @@
 // Yahoo Finance: stocks, ETFs, indices and currencies, one ticker per request.
 // No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanSeries, cleanText, normalizeSymbol, positive } from "../quotes.js";
+import { HEADERS, QuoteError, cleanSeries, cleanText, currencyCode, exchangeCode, normalizeSymbol, positive } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the only Yahoo host.
@@ -49,9 +49,9 @@ export function decodeYahoo(symbol, response, now) {
     name: cleanText(meta.longName) ?? cleanText(meta.shortName) ?? symbol,
     price: meta.regularMarketPrice,
     changePercent: positive(close) ? (meta.regularMarketPrice - close) / close * 100 : null,
-    currency: typeof meta.currency === "string" && /^[A-Z]{3}$/.test(meta.currency) ? meta.currency : null,
+    currency: currencyCode(meta.currency),
     // The exchange Yahoo names (NMS, TAI, OSA…), which gives an index its market (resolvedMarket).
-    exchange: typeof meta.exchangeName === "string" && /^[A-Z]{2,5}$/.test(meta.exchangeName) ? meta.exchangeName : null,
+    exchange: exchangeCode(meta.exchangeName),
     timestamp: meta.regularMarketTime * 1000,
     fetchedAt: now,
     delaySeconds: typeof delay === "number" && Number.isFinite(delay) && delay >= 0 ? delay : null,

@@ -118,6 +118,10 @@ export const cleanText = (value) => typeof value === "string"
   ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 100) || null
   : null;
 
+// An exchange code (NMS, TAI, OSA…) and a currency (USD, TWD) as a source sends them; anything else is null.
+export const exchangeCode = (value) => (typeof value === "string" && /^[A-Z]{2,5}$/.test(value) ? value : null);
+export const currencyCode = (value) => (typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : null);
+
 const MAX_POINTS = 400;
 
 /** Finite closes in order; gaps (null bars) are dropped. */

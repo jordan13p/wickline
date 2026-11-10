@@ -629,10 +629,10 @@ export class Watchlist {
     const configKey = JSON.stringify(config);
     // A new address asks every line again.
     if (state.configKey !== configKey) { state.configKey = configKey; state.linesAt = {}; }
-    // Only Finnhub's requests carry the key; no other source is ever handed it. The TW-only symbols go to the
-    // requests only, never to config(): a change there would make sync() restart every round.
-    const keyed = provider === finnhub ? { ...config, finnhubKey: this.finnhubKey } : config;
-    const asked = { ...keyed, twOnly: [...this.twOnly.keys()] };
+    // Only Finnhub's requests carry the key; no other source is ever handed it. The TW-only symbols go to Yahoo
+    // 奇摩股市's requests only, never to config(): a change there would make sync() restart every round.
+    const asked = provider === finnhub ? { ...config, finnhubKey: this.finnhubKey }
+      : provider === yahootw ? { ...config, twOnly: [...this.twOnly.keys()] } : config;
     const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));
