@@ -25,6 +25,21 @@ export function taipeiDay(ms) {
   return Math.floor((ms + TAIPEI_OFFSET_MS) / DAY_MS);
 }
 
+/**
+ * The trading periods a quote of a symbol this source prices alone is read by (Watchlist#baseQuote):
+ * - `periods` (its last line's) while their regular session starts on the quote's own Taipei day or later;
+ * - else, for a quote from an earlier Taipei day than `now`'s, a session that ended at its own trade, so it reads
+ *   closed with its date;
+ * - else null: today's price without today's periods reads unconfirmed, never closed.
+ * Before the open the line still gives the day before's periods, and a feed that stalls must never be taken for
+ * the close.
+ */
+export function ownPeriods(quote, periods, now) {
+  const day = taipeiDay(quote.tradeTime);
+  if (periods?.regular && taipeiDay(periods.regular[0]) >= day) return periods;
+  return day < taipeiDay(now) ? { pre: null, regular: [quote.tradeTime, quote.tradeTime], post: null } : null;
+}
+
 // `{ raw: "2240" }` → 2240; `"-"` (no value yet) or anything not positive → null.
 const number = (field) => positiveOrNull(field?.raw);
 

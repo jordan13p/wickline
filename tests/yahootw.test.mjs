@@ -7,6 +7,7 @@ import {
 } from "../mods/wickline/providers/yahootw.js";
 import { t } from "../mods/wickline/i18n.js";
 import { CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, NIGHT, jsonFixture, ok } from "./helpers.mjs";
+import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
 
 // A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads. Its last two
 // rows, ^TWII and ^TWOII, were recorded after that day's close and keep their `exchange`.
@@ -290,6 +291,22 @@ test("a line answer gives its trading periods, also without a point from today",
   assert.deepEqual(recorded.periods["^TWOII"].regular, [Date.parse("2026-11-09T01:00:00Z"), Date.parse("2026-11-09T05:30:00Z")]);
   // Without periods, none.
   assert.equal(lineOf("2330.TW", tick("2330.TW", [2200])).periods, undefined);
+});
+
+test("a TW-only quote's periods: its line's from its own day, else closed for an earlier day, else none", () => {
+  const S = TODAY_0900 * 1000;
+  const E = (TODAY_0900 + 16_200) * 1000;
+  const own = { pre: null, regular: [S, E], post: null };
+  const before = { pre: null, regular: [S - 86_400_000, E - 86_400_000], post: null };
+  const today = { symbol: "^TWOII", day: taipeiDay(NOW), tradeTime: NOW - 60_000 };
+  assert.equal(ownPeriods(today, own, NOW), own);
+  assert.equal(ownPeriods(today, before, NOW), null);
+  assert.equal(ownPeriods(today, null, NOW), null);
+  const earlier = { symbol: "^TWOII", day: taipeiDay(CLOSE_0509), tradeTime: CLOSE_0509 };
+  assert.deepEqual(ownPeriods(earlier, null, NIGHT), { pre: null, regular: [CLOSE_0509, CLOSE_0509], post: null });
+  // Its own day's line periods win over the closed session.
+  const close = { pre: null, regular: [Date.parse("2026-11-09T01:00:00Z"), Date.parse("2026-11-09T05:30:00Z")], post: null };
+  assert.equal(ownPeriods(earlier, close, NIGHT), close);
 });
 
 test("an earlier day's row is a TW-only symbol's quote, stamped with its own time", () => {

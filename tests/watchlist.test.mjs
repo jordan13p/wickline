@@ -14,6 +14,7 @@ import {
 } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay } from "../mods/wickline/providers/yahootw.js";
+import { mergeOverlay } from "../mods/wickline/watchlist.js";
 
 const BASE = "https://data-api.binance.vision";
 
@@ -389,6 +390,18 @@ test("pickOverlay: with none live, a real-time base no older than the newest ove
   assert.equal(pick({ ...yq("2330.TW", "TAI", NOW - 10_000), fetchedAt: NOW }), "finnhub");
   assert.equal(pick({ ...yq("AAPL", "NMS", NOW - 1_000), fetchedAt: NOW }, { finnhub: { timestamp: NOW - 60_000 } }), "finnhub");
   assert.equal(pick(undefined), "finnhub");
+});
+
+test("mergeOverlay: a quote over itself keeps its own name, currency and periods, and no line but its own", () => {
+  const own = { symbol: "^TWOII", source: "yahootw", name: "櫃檯指數", currency: "TWD", price: 321.97, previousClose: 304.02,
+    timestamp: 1, fetchedAt: 2, day: 5 };
+  const periods = { pre: null, regular: [0, 1], post: null };
+  const row = mergeOverlay({ ...own, periods }, own, null);
+  assert.deepEqual([row.name, row.localName, row.currency, row.periods], ["櫃檯指數", "櫃檯指數", "TWD", periods]);
+  assert.deepEqual([row.series, row.chartSource, row.chartTimestamp, row.chartFetchedAt], [[], null, null, null]);
+  const line = { day: 5, series: [320, 321], lastAt: 0 };
+  assert.deepEqual(mergeOverlay({ ...own, periods }, own, line).series, [320, 321, 321.97]);
+  assert.equal(mergeOverlay({ ...own, periods }, own, line).chartSource, "yahootw");
 });
 
 // Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
