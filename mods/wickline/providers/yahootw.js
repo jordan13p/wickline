@@ -20,6 +20,9 @@ const TAIPEI_OFFSET_MS = 8 * 3_600_000;
 const DAY_MS = 86_400_000;
 // 15:00, a TAIFEX night session's open, is the next day's 00:00 once this is added.
 const NIGHT_TO_NEXT_DAY_MS = 9 * 3_600_000;
+// How far a future's trade may be ahead of the local clock and still count for a later trading day (a clock a
+// little behind Yahoo's at 15:00); a trade further ahead is a bad time, never the feed time.
+const FUTURE_AHEAD_MS = 5 * 60_000;
 
 /** @typedef {import("./provider.js").Provider} Provider */
 
@@ -76,8 +79,8 @@ function checkStatus(response) {
 
 /**
  * Overlays by requested symbol. A row is priced only when its price is positive, its trade is from today's
- * trading day (see tradingDay; a future's also from a later one, as the local clock may be a little behind
- * Yahoo's at 15:00; for a symbol in `anyDay`, which only this source prices, also from an earlier day) and it
+ * trading day (see tradingDay; a future's also from a later one while at most 5 minutes ahead of `now`, as the
+ * local clock may be a little behind Yahoo's at 15:00; for a symbol in `anyDay`, which only this source prices, also from an earlier day) and it
  * is not delayed; a price outside the row's own limits gets an error instead, except a future's (TAIFEX's
  * limits are not checked; they are still kept). A futures-form row from any exchange but TFE gives nothing,
  * not even its name. Any other row (a placeholder `-`, yesterday's close, delayed data), or a requested
@@ -115,7 +118,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const tradeTime = time(row.regularMarketTime);
     const day = tradeTime === null ? null : tradingDay(symbol, tradeTime);
     const today = tradingDay(symbol, now);
-    const isToday = day === today || (future && day > today);
+    const isToday = day === today || (future && day > today && tradeTime - now <= FUTURE_AHEAD_MS);
     const dayOk = day !== null && (isToday || (day < today && anyDaySymbols.has(symbol)));
     if (!price || !dayOk || row.exchangeDataDelayedBy !== 0) continue;
     const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));

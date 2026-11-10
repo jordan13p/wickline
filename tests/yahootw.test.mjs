@@ -321,6 +321,10 @@ test("an earlier day's row is a TW-only symbol's quote, stamped with its own tim
   assert.deepEqual(twOnly(["^TWOII"], ok(EARLIER_ROWS), NIGHT, []).quotes, {});
 });
 
+test("a TW-only row with a price but no trade time gives no quote", () => {
+  assert.equal(twOnly(["^TWOII"], changed({ "^TWOII": { regularMarketTime: "-" } }), NOW).quotes["^TWOII"], undefined);
+});
+
 test("earlier-day rows keep their own time and leave feed time and noLive alone", () => {
   const yesterday = "2026-11-08T05:31:00Z";
   const { quotes, noLive } = twOnly(["2330.TW", "^TWOII"], changed({ "^TWOII": { regularMarketTime: yesterday } }), NOW);
@@ -431,6 +435,14 @@ test("a night trade stamped just past 15:00 by Yahoo's clock counts while the lo
   assert.equal(quotes["WTX&"].day, tradingDay("WTX&", now) + 1);
   assert.equal(quotes["WTX&"].timestamp, Date.parse("2026-11-10T07:00:01Z"));
   assert.equal(noLive, undefined);
+});
+
+test("a futures trade far ahead of the local clock is not today's and never sets the feed time", () => {
+  const now = Date.parse("2026-11-10T06:59:58Z"); // 14:59:58 locally
+  const { quotes } = futures(changedFutures({ "WTX&": { regularMarketTime: "2026-11-10T07:59:58Z" } }), now); // an hour ahead
+  assert.equal(quotes["WTX&"], undefined);
+  const others = FUTURES.filter((symbol) => symbol !== "WTX&").map((symbol) => quotes[symbol].tradeTime);
+  assert.equal(quotes["WTX@"].timestamp, Math.max(...others));
 });
 
 test("a night trade after midnight is the same trading day: priced live, no noLive", () => {
