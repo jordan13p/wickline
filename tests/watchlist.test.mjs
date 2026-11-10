@@ -8,7 +8,9 @@ import { Watchlist, WATCHLIST_KEY, pickOverlay, readPreferences } from "../mods/
 import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
-import { advance, chart, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
+import {
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, NIGHT, advance, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop,
+} from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay } from "../mods/wickline/providers/yahootw.js";
 
@@ -26,7 +28,7 @@ test("reads saved preferences defensively", () => {
 test("refreshes stocks spaced apart and crypto in one batch", async () => {
   const host = fakeHost((url) => url.includes("binance")
     ? ok([{ symbol: "BTCUSDT", lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 }])
-    : chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+    : chart({ ...AAPL, symbol: chartSymbol(url) }));
   const w = new Watchlist(host);
   w.add("BTC/USDT"); w.add("MSFT"); w.add("AAPL");
   const runs = start(w, host);
@@ -41,7 +43,7 @@ test("each source keeps its request order and spacing", async () => {
   const host = fakeHost((url) => url.includes("ticker/24hr")
     ? ok([{ symbol: "BTCUSDT", lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 }])
     : url.includes("klines") ? ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"]])
-    : chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+    : chart({ ...AAPL, symbol: chartSymbol(url) }));
   const sent = [];
   const fetch = host.fetch;
   host.fetch = (url, headers) => { sent.push({ url, at: host.clock, headers }); return fetch(url, headers); };
@@ -96,7 +98,7 @@ test("a rate limit defers the rest of the round", async () => {
 });
 
 test("removing a ticker drops its quote; pause stops automatic rounds", async () => {
-  const host = fakeHost((url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+  const host = fakeHost((url) => chart({ ...AAPL, symbol: chartSymbol(url) }));
   const w = new Watchlist(host);
   w.add("AAPL");
   const runs = start(w, host);
@@ -117,7 +119,7 @@ test("removing a ticker drops its quote; pause stops automatic rounds", async ()
 });
 
 test("refreshing means a round the person asked for, not an automatic one", async () => {
-  const host = fakeHost((url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+  const host = fakeHost((url) => chart({ ...AAPL, symbol: chartSymbol(url) }));
   const w = new Watchlist(host);
   w.add("AAPL");
   // What the view would draw on each redraw: [loading, refreshing].
@@ -163,7 +165,7 @@ test("a new symbol goes to the top; a duplicate stays where it is", () => {
 });
 
 test("a Yahoo cooldown holds stocks, also for Refresh", async () => {
-  const host = fakeHost((url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+  const host = fakeHost((url) => chart({ ...AAPL, symbol: chartSymbol(url) }));
   const w = new Watchlist(host);
   w.add("AAPL");
   w.sources.yahoo.retryAt = 30_000;
@@ -179,7 +181,7 @@ test("a Yahoo cooldown holds stocks, also for Refresh", async () => {
 });
 
 test("another copy's edit is picked up at once", async () => {
-  const host = fakeHost((url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) }));
+  const host = fakeHost((url) => chart({ ...AAPL, symbol: chartSymbol(url) }));
   const a = new Watchlist(host);
   const b = new Watchlist(host);
   a.add("AAPL");
@@ -412,7 +414,7 @@ function taiwanHost(prefs, {
 } = {}) {
   const host = fakeHost((url) => isLine(url) ? host.line(lineSymbol(url)) : isYahootw(url) ? host.yahootw(url)
     : url.startsWith(MIS_URL) ? host.mis(url)
-    : host.yahoo(decodeURIComponent(url.split("/chart/")[1].split("?")[0])));
+    : host.yahoo(chartSymbol(url)));
   Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis, line, yahoo });
   host.store = { version: 1, symbols: ["2330.TW"], paused: false };
   return host;
@@ -684,7 +686,7 @@ test("a wake during an overlay round adds a round, it aborts none", async () => 
   assert.equal(w.shown("2330.TW").source, "yahootw");
   assert.equal(stockLists(host).length, 2);
   assert.ok(stockLists(host)[1].includes("%5ETWII"), stockLists(host)[1]);
-  assert.deepEqual(host.requests.filter((url) => url.includes("/chart/")).map((url) => decodeURIComponent(url.split("/chart/")[1].split("?")[0])),
+  assert.deepEqual(host.requests.filter((url) => url.includes("/chart/")).map(chartSymbol),
     ["2330.TW", "^TWII"]);
   await stop(w, host, runs);
 });
@@ -731,15 +733,10 @@ test("^TWOII, unknown to Yahoo Finance, is priced by Yahoo 奇摩股市 alone", 
   });
 });
 
-// Recorded at 08:14 in Taipei on 2026-11-10 (see yahootw.test.mjs): the rows still carry the day before's 13:31 close.
-const EARLIER_ROWS = jsonFixture("yahootw-stocklist-earlier-day");
-const NIGHT = Date.parse("2026-11-09T18:00:00Z");
-const CLOSE_0509 = Date.parse("2026-11-09T05:31:00Z");
-
 test("overnight, a TW-only symbol shows its last close and polls gently", async () => {
   const tx = (key, params) => t("en", key, params);
   // The recorded line (the day before's periods and minutes), and one with no point from today and no periods.
-  for (const line of [() => ok(jsonFixture("yahootw-tick-earlier-day")), (symbol) => tickAt(symbol, CLOSE_0509, [321.97])]) {
+  for (const line of [() => ok(EARLIER_TICK), (symbol) => tickAt(symbol, CLOSE_0509, [321.97])]) {
     const host = twOnlyHost(["^TWOII"], { yahootw: () => ok(EARLIER_ROWS), line });
     await twOnlyRun(host, async (w) => {
       const now = NIGHT + 5_000;
@@ -848,7 +845,7 @@ test("after the open, a TW-only row is not read closed by the day before's perio
   const open = Date.parse("2026-11-10T01:00:00Z");
   const host = twOnlyHost(["^TWOII"], {
     yahootw: () => (host.clock >= open ? stockList(host.clock - 5_000) : ok(EARLIER_ROWS)),
-    line: () => ok(jsonFixture("yahootw-tick-earlier-day")),
+    line: () => ok(EARLIER_TICK),
   });
   const lines = () => host.requests.filter(isLine).length;
   // 08:57:30: the day before's close, and its line's periods, are known before the open.

@@ -5,7 +5,7 @@ import { MESSAGES_EN, USER_AGENT } from "../mods/wickline/quotes.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
-import { advance, chart, fakeHost, ok, start, stop } from "./helpers.mjs";
+import { advance, chart, chartSymbol, fakeHost, ok, start, stop } from "./helpers.mjs";
 import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/wickline/providers/finnhub.js";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { MIS_CONSENT_VERSION, mis } from "../mods/wickline/providers/mis.js";
@@ -438,7 +438,7 @@ test("only Finnhub's requests carry the key", async () => {
         .map((symbol) => ({ symbol, lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 })));
     }
     if (url.includes("klines")) return ok([[1, "1", "2", "0.5", "1.5"]]);
-    return yahooUs(decodeURIComponent(url.split("/chart/")[1].split("?")[0]));
+    return yahooUs(chartSymbol(url));
   });
   host.prefs = { version: 1, keyRev: 0, sources: { us: { provider: "finnhub" }, tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
   host.secrets = { [SECRET_KEY_FINNHUB]: KEY };
@@ -554,7 +554,7 @@ const yahooUs = (symbol, fields = {}) => chart({
 // `yahoo` answers Yahoo Finance per symbol.
 function usHost(us = {}, { yahoo = (symbol) => yahooUs(symbol) } = {}) {
   const host = fakeHost((url) => (url.includes("/quote?symbol=") ? host.finnhub(url)
-    : host.yahoo(decodeURIComponent(url.split("/chart/")[1].split("?")[0]))));
+    : host.yahoo(chartSymbol(url))));
   host.finnhub = () => ok(QUOTE);
   host.yahoo = yahoo;
   host.prefs = finnhubOn(us);

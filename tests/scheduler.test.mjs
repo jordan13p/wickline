@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/wickline/watchlist.js";
 import { LIVE_MAX_AGE_MS, freshness } from "../mods/wickline/freshness.js";
-import { advance, chart, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
+import { advance, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { yahoo } from "../mods/wickline/providers/yahoo.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
@@ -13,7 +13,7 @@ const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_7
 const ticker = (url) => ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1]))
   .map((symbol) => ({ symbol, lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 })));
 const lines = () => ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"]]);
-const yahooChart = (url) => chart({ ...AAPL, symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]) });
+const yahooChart = (url) => chart({ ...AAPL, symbol: chartSymbol(url) });
 const never = () => new Promise(() => {});
 
 const count = (host, part) => host.requests.filter((url) => url.includes(part)).length;
@@ -577,7 +577,7 @@ function yahootwHost(symbols, sources = YAHOOTW_ON) {
         .map((symbol) => ({ ...TW_ROW, symbol, regularMarketTime: time })));
     }
     if (url.startsWith(MIS_URL)) return ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(host.clock - 5_000) }] });
-    return chart({ symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
+    return chart({ symbol: chartSymbol(url), regularMarketPrice: 2200,
       regularMarketTime: Math.floor(host.clock / 1000) - 1_200, previousClose: 2135, currency: "TWD", currentTradingPeriod: TW_PERIODS });
   });
   const minute = Math.floor(TW_START / 60_000) * 60;

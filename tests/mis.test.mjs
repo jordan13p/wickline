@@ -7,7 +7,7 @@ import { displayName } from "../mods/wickline/format.js";
 import { detailSource } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
-import { advance, chart, fakeHost, start, stop } from "./helpers.mjs";
+import { advance, chart, chartSymbol, fakeHost, start, stop } from "./helpers.mjs";
 import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel } from "../mods/wickline/providers/mis.js";
 
 // Recorded answers from MIS during trading hours (2026-11-05), only these symbols' rows.
@@ -210,7 +210,7 @@ test("an overlay's own line is drawn only on its price's Taipei day", () => {
 
 const CONSENTED = { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
 const yahooTw = (url) => chart({
-  symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
+  symbol: chartSymbol(url), regularMarketPrice: 2200,
   regularMarketTime: 1, previousClose: 2260, currency: "TWD",
 });
 const misCount = (host) => host.requests.filter((url) => url.startsWith(MIS_URL)).length;

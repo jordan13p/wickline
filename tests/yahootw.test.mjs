@@ -6,7 +6,7 @@ import {
   YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, taipeiDay, yahootw,
 } from "../mods/wickline/providers/yahootw.js";
 import { t } from "../mods/wickline/i18n.js";
-import { jsonFixture, ok } from "./helpers.mjs";
+import { CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, NIGHT, jsonFixture, ok } from "./helpers.mjs";
 
 // A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads. Its last two
 // rows, ^TWII and ^TWOII, were recorded after that day's close and keep their `exchange`.
@@ -270,13 +270,7 @@ test("a Yahoo 奇摩股市 price at its own limit is at the limit", () => {
   assert.equal(none.limitDown, null);
 });
 
-// Recorded at 08:14 in Taipei on 2026-11-10, trimmed to the fields Wickline reads: ^TWOII and ^TWII still carry the day
-// before's 13:31 close (delay 0), and ^TWOII's line still carries that day's periods and minutes.
-const EARLIER_ROWS = jsonFixture("yahootw-stocklist-earlier-day");
-const EARLIER_TICK = jsonFixture("yahootw-tick-earlier-day");
-// 02:00 in Taipei on 2026-11-10, the night after the recorded close.
-const NIGHT = Date.parse("2026-11-09T18:00:00Z");
-const CLOSE_0509 = Date.parse("2026-11-09T05:31:00Z");
+// The earlier-day answers (EARLIER_ROWS, EARLIER_TICK) are described in helpers.mjs.
 const twOnly = (symbols, response, now, anyDay = ["^TWOII"]) =>
   yahootw.decode(yahootw.requests(symbols, { twOnly: anyDay })[0], response, now);
 

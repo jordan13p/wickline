@@ -9,7 +9,18 @@ export const jsonFixture = (name) => JSON.parse(readFileSync(new URL(`fixtures/$
 // A Yahoo 奇摩股市 line request, and the one symbol it asks for.
 export const isLine = (url) => url.startsWith(YAHOOTW_BASE) && url.includes("ApacLibraCharts");
 export const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symbols=")[1]))[0];
+// The symbol a Yahoo Finance chart request asks for.
+export const chartSymbol = (url) => decodeURIComponent(url.split("/chart/")[1].split("?")[0]);
 export const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } });
+
+// Yahoo 奇摩股市 recorded at 08:14 in Taipei on 2026-11-10, trimmed to the fields Wickline reads: ^TWOII and ^TWII
+// still carry the day before's 13:31 close (delay 0), and ^TWOII's line still carries that day's periods and minutes.
+export const EARLIER_ROWS = jsonFixture("yahootw-stocklist-earlier-day");
+export const EARLIER_TICK = jsonFixture("yahootw-tick-earlier-day");
+// 02:00 in Taipei on 2026-11-10, the night after the recorded close.
+export const NIGHT = Date.parse("2026-11-09T18:00:00Z");
+// The recorded close, 13:31 in Taipei on 2026-11-09.
+export const CLOSE_0509 = Date.parse("2026-11-09T05:31:00Z");
 
 export function fakeHost(respond) {
   const host = {
