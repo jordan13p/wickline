@@ -65,7 +65,7 @@ test("requests: batches of 50 to the fixed host, then one line request per symbo
     assert.equal(request.headers["User-Agent"], USER_AGENT);
   }
   // A TW-only symbol may be priced from an earlier day: the batch's own ones ride on its price request.
-  assert.deepEqual(yahootw.requests(["2330.TW", "^TWOII"], { twOnly: ["^TWOII", "^TWZZ"] }).map((r) => r.anyDay),
+  assert.deepEqual(yahootw.requests(["2330.TW", "^TWOII"], { anyDay: ["^TWOII", "^TWZZ"] }).map((r) => r.anyDay),
     [["^TWOII"], undefined, undefined]);
   assert.deepEqual(yahootw.requests(["2330.TW"])[0].anyDay, []);
   // The host is fixed: no address in the settings changes it.
@@ -275,7 +275,7 @@ test("a Yahoo 奇摩股市 price at its own limit is at the limit", () => {
 
 // The earlier-day answers (EARLIER_ROWS, EARLIER_TICK) are described in helpers.mjs.
 const twOnly = (symbols, response, now, anyDay = ["^TWOII"]) =>
-  yahootw.decode(yahootw.requests(symbols, { twOnly: anyDay })[0], response, now);
+  yahootw.decode(yahootw.requests(symbols, { anyDay: anyDay })[0], response, now);
 
 test("a line answer gives its trading periods, also without a point from today", () => {
   const S = TODAY_0900;
@@ -339,7 +339,7 @@ test("earlier-day rows keep their own time and leave feed time and noLive alone"
 });
 
 const FUTURES = ["WTX&", "WTX@", "WMT&", "WTF&", "WTE&"];
-const futures = (response, now = FUT_NOW, symbols = FUTURES) => yahootw.decode(yahootw.requests(symbols, { twOnly: symbols })[0], response, now);
+const futures = (response, now = FUT_NOW, symbols = FUTURES) => yahootw.decode(yahootw.requests(symbols, { anyDay: symbols })[0], response, now);
 const changedFutures = (bySymbol) => ok(FUTURES_ROWS.map((row) => ({ ...row, ...bySymbol[row.symbol] })));
 
 test("a future's trading day starts at 15:00 in Taipei, and Friday night is Monday's", () => {
@@ -401,7 +401,7 @@ test("quiet rows keep their own market's clock: a 20:00 future never times a sto
   const now = Date.parse("2026-11-10T12:00:05Z"); // 20:00:05 in Taipei
   const stock = { ...ROWS[0], exchange: "TAI", regularMarketTime: "2026-11-10T05:30:00Z" };
   const future = { ...FUTURES_ROWS[0], regularMarketTime: "2026-11-10T12:00:00Z" };
-  const { quotes } = yahootw.decode(yahootw.requests(["2330.TW", "WTX&"], { twOnly: ["WTX&"] })[0], ok([stock, future]), now);
+  const { quotes } = yahootw.decode(yahootw.requests(["2330.TW", "WTX&"], { anyDay: ["WTX&"] })[0], ok([stock, future]), now);
   assert.equal(quotes["2330.TW"].timestamp, Date.parse("2026-11-10T05:30:00Z"));
   assert.equal(quotes["WTX&"].timestamp, Date.parse("2026-11-10T12:00:00Z"));
 });
@@ -416,7 +416,7 @@ test("a quiet TPEx stock still takes the batch's newest stock trade", () => {
 
 test("the night's first rows: a new trading day with new limits, and a stock beside them keeps its own trade", () => {
   const now = Date.parse("2026-11-10T07:20:00Z"); // 15:20 in Taipei
-  const request = yahootw.requests(["WTX&", "WMT&", "2330.TW"], { twOnly: ["WTX&", "WMT&"] })[0];
+  const request = yahootw.requests(["WTX&", "WMT&", "2330.TW"], { anyDay: ["WTX&", "WMT&"] })[0];
   const { quotes, noLive } = yahootw.decode(request, ok(FUTURES_NIGHT_ROWS), now);
   const wtx = quotes["WTX&"];
   assert.deepEqual([wtx.price, wtx.limitUp, wtx.limitDown, wtx.previousClose], [42459, 46910, 38382, 42646]);

@@ -172,7 +172,7 @@ export class Watchlist {
     // price stays in that source's overlay slot.
     this.quotes = {};
     this.overlays = {};
-    // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its Taipei
+    // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its trading
     // day), kept only while that source's price for the symbol is.
     this.lines = {};
     // By symbol: the last name an overlay gave (its Chinese name), kept while that source fails.
@@ -313,12 +313,9 @@ export class Watchlist {
    */
   baseQuote(symbol, now = this.host.now()) {
     const sole = this.soleSource(symbol);
-    if (sole) {
-      const own = this.overlays[symbol]?.[sole.id];
-      const quote = own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
-      return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
-    }
-    const quote = this.quotes[symbol];
+    const own = sole && this.overlays[symbol]?.[sole.id];
+    const quote = !sole ? this.quotes[symbol]
+      : own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
     return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
   }
 
@@ -535,24 +532,20 @@ export class Watchlist {
       for (const key of Object.keys(record)) if (!keep.has(key)) delete record[key];
     }
     const config = this.config();
-    // Yahoo 奇摩股市 off: every TW-only symbol goes back to Yahoo Finance, so turning it on again starts over.
-    // Until Yahoo Finance answers again (paused, or backing off), the row says what it last said: not found,
-    // or, while the consent awaits re-confirmation, that. A re-confirm reason left on an index goes once
-    // nothing awaits confirmation (a future's is recomputed below).
     if (!config.on[yahootw.id]) {
-      for (const symbol of this.twOnly) if (keep.has(symbol)) this.errors[symbol] = this.unpricedReason(symbol, config);
-      this.twOnly.clear();
-      if (!config.yahootwPending) {
-        for (const [symbol, error] of Object.entries(this.errors)) {
-          if (error.code === "yahootw.reconfirm" && kindOf(symbol) !== "future") this.errors[symbol] = this.unpricedReason(symbol, config);
-        }
+      // Off: every TW-only symbol goes back to Yahoo Finance, so turning it on again starts over. Until Yahoo
+      // Finance answers again (paused, or backing off), its row says what it last said: not found, or, while the
+      // consent awaits re-confirmation, that. No other source prices a future, so its row says why. A re-confirm
+      // reason left on any row is taken again, so it goes once nothing awaits confirmation.
+      for (const [symbol, error] of Object.entries(this.errors)) {
+        if (error.code === "yahootw.reconfirm") this.errors[symbol] = this.unpricedReason(symbol, config);
       }
-    }
-    // No other source prices a future, so with Yahoo 奇摩股市 off its row says why; on, that reason goes at once.
-    for (const symbol of preferences.symbols) {
-      if (kindOf(symbol) === "future" && !this.soleSource(symbol, config)) this.errors[symbol] = this.unpricedReason(symbol, config);
-    }
-    if (config.on[yahootw.id]) {
+      for (const symbol of preferences.symbols) {
+        if (this.twOnly.has(symbol) || kindOf(symbol) === "future") this.errors[symbol] = this.unpricedReason(symbol, config);
+      }
+      this.twOnly.clear();
+    } else {
+      // On: those reasons go at once.
       for (const [symbol, error] of Object.entries(this.errors)) {
         if (error.code === "yahootw.futuresNeedSource" || error.code === "yahootw.reconfirm") delete this.errors[symbol];
       }
@@ -694,12 +687,15 @@ export class Watchlist {
       if (state.manual || state.dirty) continue;
       const idle = paused || !symbols.length || state.disabled || hidden;
       const now = this.host.now();
-      // A break's interval ends at TAIFEX's next opening, and is the open one just after it while a future awaits its
-      // first trade (awaitingOpen), so a session's first price is not up to the break's interval late.
-      const opens = symbols.some((symbol) => kindOf(symbol) === "future") ? msUntilTaifexOpens(now) : null;
-      const session = this.awaitingOpen(provider, symbols, now) ? "open" : this.sessionFor(symbols, now);
-      const interval = provider.intervalMs(session);
-      const due = now + (idle ? 0 : Math.max(opens === null ? interval : Math.min(interval, opens), state.retryAt - now));
+      let due = now;
+      if (!idle) {
+        // A break's interval ends at TAIFEX's next opening, and is the open one just after it while a future awaits
+        // its first trade (awaitingOpen), so a session's first price is not up to the break's interval late.
+        const futures = symbols.some((symbol) => kindOf(symbol) === "future");
+        const opens = futures ? msUntilTaifexOpens(now) : null;
+        const session = futures && this.awaitingOpen(provider, symbols, now) ? "open" : this.sessionFor(symbols, now);
+        due += Math.max(Math.min(provider.intervalMs(session), opens ?? Infinity), state.retryAt - now);
+      }
       await this.rest(state, symbols, due, io);
     }
   }
@@ -735,7 +731,7 @@ export class Watchlist {
     // Only Finnhub's requests carry the key; no other source is ever handed it. The symbols Yahoo 奇摩股市 prices
     // alone go to its requests only, never to config(): a change there would make sync() restart every round.
     const asked = provider === finnhub ? { ...config, finnhubKey: this.finnhubKey }
-      : provider === yahootw ? { ...config, twOnly: symbols.filter((s) => this.soleSource(s, config) === yahootw) } : config;
+      : provider === yahootw ? { ...config, anyDay: symbols.filter((symbol) => this.soleSource(symbol, config)) } : config;
     const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));
@@ -891,20 +887,19 @@ export class Watchlist {
       for (const symbol of request.symbols) {
         const overlay = result.quotes[symbol];
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
+        const had = this.overlays[symbol]?.[provider.id];
+        if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
         if (this.soleSource(symbol) === provider) {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
           // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
           // rejected with a reason still names it), never as not found, else nothing once named, else not found
           // (by this source once it priced it, so the kept price reads cached, and always for a future, which
           // Yahoo Finance never sees).
-          const priced = this.overlays[symbol]?.[provider.id];
-          if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
           if (overlay || (!error && result.names?.[symbol])) delete this.errors[symbol];
-          else this.errors[symbol] = error ?? notice(priced || kindOf(symbol) === "future" ? "yahootw.notFound" : "yahoo.notFound");
+          else this.errors[symbol] = error ?? notice((had || kindOf(symbol) === "future") ? "yahootw.notFound" : "yahoo.notFound");
           continue;
         }
-        if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
-        else this.dropOverlay(provider, symbol);
+        if (!overlay) this.dropOverlay(provider, symbol);
         this.setEntry(this.overlayErrors, symbol, provider.id, overlay ? undefined : error);
       }
       return;

@@ -725,7 +725,7 @@ const NOT_FOUND = { status: 404, ok: false, text: "" };
 test("after the statement changes, a consent to the old one leaves Taiwan on its fallback, and indices and futures say why", async () => {
   const host = twOnlyHost(["2330.TW", "^TWOII", "WTX&"]);
   host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     assert.deepEqual(host.requests.filter(isYahootw), []);
     assert.equal(w.errors["WTX&"].code, "yahootw.reconfirm");
     assert.equal(w.errors["^TWOII"].code, "yahootw.reconfirm");
@@ -743,7 +743,7 @@ test("after the statement changes, a consent to the old one leaves Taiwan on its
 test("turning Yahoo 奇摩股市 off while its consent awaits re-confirmation, with the list paused, leaves no re-confirm reason", async () => {
   const host = twOnlyHost(["^TWOII", "WTX&"]);
   host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     assert.equal(w.errors["^TWOII"].code, "yahootw.reconfirm");
     host.store = { ...host.store, paused: true };
     host.prefs = undefined;
@@ -769,7 +769,7 @@ function twOnlyHost(symbols = ["^TWOII"], options = {}) {
 
 // Every source from `from`, then `check(w, host)` once the clock is at `from + 5 s`. Each redraw renders, and a
 // render calls sync(), as in main.js.
-async function twOnlyRun(host, check, from = TW_NOW) {
+async function soleRun(host, check, from = TW_NOW) {
   host.clock = from;
   const w = new Watchlist(host);
   host.changed = () => w.sync();
@@ -783,7 +783,7 @@ async function twOnlyRun(host, check, from = TW_NOW) {
 const futuresAt = (time, bySymbol = {}) => ok(FUTURES_ROWS.map((row) => ({
   ...row, ...(row.regularMarketTime && { regularMarketTime: new Date(time).toISOString() }), ...bySymbol[row.symbol],
 })));
-// Yahoo 奇摩股市 on and consented, the futures rows as recorded, no line unless given; run with twOnlyRun(host, check, FUT_NOW).
+// Yahoo 奇摩股市 on and consented, the futures rows as recorded, no line unless given; run with soleRun(host, check, FUT_NOW).
 function futuresHost(symbols = ["WTX&"], options = {}) {
   const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => ok(FUTURES_ROWS), line: offline, ...options });
   host.store = { version: 1, symbols, paused: false };
@@ -808,19 +808,19 @@ test("an index is pending until its first quote, overlay or error", async () => 
     assert.equal(w.pendingIndex("^TWII"), false);
   });
   // Priced by Yahoo 奇摩股市 alone: its market is known from that source.
-  await twOnlyRun(twOnlyHost(["^TWOII"]), (w) => {
+  await soleRun(twOnlyHost(["^TWOII"]), (w) => {
     assert.ok(w.shown("^TWOII", TW_NOW + 5_000));
     assert.equal(w.pendingIndex("^TWOII"), false);
   });
   // Not found by either source.
-  await twOnlyRun(twOnlyHost(["^TWXYZ"]), (w) => {
+  await soleRun(twOnlyHost(["^TWXYZ"]), (w) => {
     assert.equal(w.errors["^TWXYZ"].code, "yahoo.notFound");
     assert.equal(w.pendingIndex("^TWXYZ"), false);
   });
 });
 
 test("^TWOII, unknown to Yahoo Finance, is priced by Yahoo 奇摩股市 alone", async () => {
-  await twOnlyRun(twOnlyHost(), (w, host) => {
+  await soleRun(twOnlyHost(), (w, host) => {
     const now = TW_NOW + 5_000;
     const quote = w.shown("^TWOII", now);
     assert.equal(quote.source, "yahootw");
@@ -838,7 +838,7 @@ test("overnight, a TW-only symbol shows its last close and polls gently", async 
   // The recorded line (the day before's periods and minutes), and one with no point from today and no periods.
   for (const line of [() => ok(EARLIER_TICK), (symbol) => tickAt(symbol, CLOSE_0509, [321.97])]) {
     const host = twOnlyHost(["^TWOII"], { yahootw: () => ok(EARLIER_ROWS), line });
-    await twOnlyRun(host, async (w) => {
+    await soleRun(host, async (w) => {
       const now = NIGHT + 5_000;
       const quote = w.shown("^TWOII", now);
       assert.deepEqual([quote.source, quote.price, quote.timestamp], ["yahootw", 321.97, CLOSE_0509]);
@@ -859,7 +859,7 @@ test("overnight, a TW-only symbol shows its last close and polls gently", async 
 });
 
 test("a ^TW symbol neither source knows says not found", async () => {
-  await twOnlyRun(twOnlyHost(["^TWZZ"]), async (w, host) => {
+  await soleRun(twOnlyHost(["^TWZZ"]), async (w, host) => {
     assert.equal(w.errors["^TWZZ"].code, "yahoo.notFound");
     assert.equal(stockLists(host).length, 1);
     assert.ok(stockLists(host)[0].includes("%5ETWZZ"), stockLists(host)[0]);
@@ -873,11 +873,11 @@ test("a ^TW symbol neither source knows says not found", async () => {
 
 test("a rate limit shows on a TW-only row", async () => {
   const limited = { status: 429, ok: false, text: "" };
-  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => limited }), (w) => {
+  await soleRun(twOnlyHost(["^TWOII"], { yahootw: () => limited }), (w) => {
     assert.equal(w.errors["^TWOII"].code, "yahootw.rateLimited");
   });
   // A rate-limited line keeps the price it was asked beside, drawn as cached: the row says why.
-  await twOnlyRun(twOnlyHost(["^TWOII"], { line: () => limited }), (w) => {
+  await soleRun(twOnlyHost(["^TWOII"], { line: () => limited }), (w) => {
     const quote = w.shown("^TWOII");
     assert.deepEqual([quote.source, quote.price, quote.cached], ["yahootw", 321.97, true]);
     assert.equal(w.errors["^TWOII"].code, "request.deferred");
@@ -887,7 +887,7 @@ test("a rate limit shows on a TW-only row", async () => {
 test("a failed round keeps a TW-only index's last price, cached with the reason, until the next answer", async () => {
   let hang = false;
   const host = twOnlyHost(["^TWOII"], { yahootw: () => (hang ? new Promise(() => {}) : stockList(host.clock - 5_000)) });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const priced = w.shown("^TWOII");
     assert.equal(priced.cached, undefined);
     hang = true;
@@ -909,7 +909,7 @@ test("after a price, a name-only answer keeps a TW-only index's last price and l
   const host = twOnlyHost(["^TWOII"], {
     yahootw: () => stockList(host.clock - 5_000, placeholder ? { "^TWOII": { price: { raw: "-" }, regularMarketTime: "-" } } : {}),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const priced = w.shown("^TWOII");
     placeholder = true;
     await advance(host, TW_NOW + 25_000);
@@ -925,7 +925,7 @@ test("after a price, an answer without its row keeps a TW-only index's last pric
   const host = twOnlyHost(["^TWOII"], {
     yahootw: () => (absent ? ok(TW_ROWS.filter((row) => row.symbol !== "^TWOII")) : stockList(host.clock - 5_000)),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const priced = w.shown("^TWOII");
     absent = true;
     await advance(host, TW_NOW + 25_000);
@@ -941,7 +941,7 @@ test("after a price, an answer that rejects its row keeps a TW-only index's last
   // Limits the recorded price (321.97) is above: the decoder discards it with a reason.
   const limits = { "^TWOII": { limitUpPrice: { raw: "320.00" }, limitDownPrice: { raw: "290.00" } } };
   const host = twOnlyHost(["^TWOII"], { yahootw: () => stockList(host.clock - 5_000, rejected ? limits : {}) });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const priced = w.shown("^TWOII");
     assert.ok(priced.series.length);
     rejected = true;
@@ -957,7 +957,7 @@ test("after a price, an answer that rejects its row keeps a TW-only index's last
 test("a symbol turned TW-only keeps no Yahoo Finance quote", async () => {
   let known = true;
   const host = twOnlyHost(["^TWII"], { yahoo: (symbol) => (known ? atTai(symbol) : NOT_FOUND), line: offline });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     assert.equal(w.quotes["^TWII"].source, "yahoo");
     known = false;
     const asked = charts(host, "^TWII");
@@ -976,7 +976,7 @@ test("a symbol turned TW-only keeps no Yahoo Finance quote", async () => {
 
 // A TW-only row has no base to fall back to: its own error says why, and no fallback note repeats it.
 test("a TW-only row's failure is its error alone, not also an overlay error", async () => {
-  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => new Promise(() => {}) }), async (w, host) => {
+  await soleRun(twOnlyHost(["^TWOII"], { yahootw: () => new Promise(() => {}) }), async (w, host) => {
     await advance(host, TW_NOW + 20_000);
     assert.equal(w.errors["^TWOII"].code, "request.timeout");
     assert.equal(w.overlayError("^TWOII"), null);
@@ -986,14 +986,14 @@ test("a TW-only row's failure is its error alone, not also an overlay error", as
 // During the session, a TW-only row still from the day before is no real-time price.
 test("a lone earlier-day row does not hide that nothing is real time", async () => {
   const yesterday = { "^TWOII": { regularMarketTime: "2026-11-08T05:31:00Z" } };
-  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(TW_NOW - 5_000, yesterday) }), (w) => {
+  await soleRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(TW_NOW - 5_000, yesterday) }), (w) => {
     assert.equal(w.shown("^TWOII").timestamp, Date.parse("2026-11-08T05:31:00Z"));
     assert.deepEqual(w.problems().map(({ provider, code }) => [provider, code]), [["yahootw", "yahootw.noLiveRows"]]);
   });
 });
 
 test("the move to TW-only does not restart Yahoo's round", async () => {
-  await twOnlyRun(twOnlyHost(["2330.TW", "^TWOII"]), (w, host) => {
+  await soleRun(twOnlyHost(["2330.TW", "^TWOII"]), (w, host) => {
     assert.equal(w.shown("^TWOII").source, "yahootw");
     // The renders' sync() found nothing changed: the TW-only set is not part of config().
     assert.equal(w.sync(), false);
@@ -1003,7 +1003,7 @@ test("the move to TW-only does not restart Yahoo's round", async () => {
 });
 
 test("a mistyped symbol never reaches the Taiwan host", async () => {
-  await twOnlyRun(twOnlyHost(["APPL"]), (w, host) => {
+  await soleRun(twOnlyHost(["APPL"]), (w, host) => {
     assert.equal(w.errors.APPL.code, "yahoo.notFound");
     assert.deepEqual(host.requests.filter((url) => isYahootw(url) && url.includes("APPL")), []);
   });
@@ -1012,7 +1012,7 @@ test("a mistyped symbol never reaches the Taiwan host", async () => {
 test("with Yahoo 奇摩股市 off, ^TWOII is not found", async () => {
   const host = twOnlyHost();
   host.prefs = undefined;
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
     assert.equal(w.marketFor("^TWOII"), "other");
     assert.deepEqual(host.requests.filter(isYahootw), []);
@@ -1020,7 +1020,7 @@ test("with Yahoo 奇摩股市 off, ^TWOII is not found", async () => {
 });
 
 test("turning Yahoo 奇摩股市 off, then on, starts over", async () => {
-  await twOnlyRun(twOnlyHost(), async (w, host) => {
+  await soleRun(twOnlyHost(), async (w, host) => {
     assert.equal(w.shown("^TWOII").source, "yahootw");
     host.prefs = undefined;
     assert.equal(w.sync(), true);
@@ -1049,7 +1049,7 @@ test("after the open, a TW-only row is not read closed by the day before's perio
   });
   const lines = () => host.requests.filter(isLine).length;
   // 08:57:30: the day before's close, and its line's periods, are known before the open.
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     assert.equal(sessionOf(w.shown("^TWOII", host.clock), host.clock), "closed");
     assert.equal(lines(), 1);
     // The round at 09:00:30 prices today's first row and asks the line again at once.
@@ -1074,7 +1074,7 @@ test("a stalled TW-only price from today is not read closed", async () => {
   const DAY_S = 86_400;
   const dayBefore = { regular: { start: OPEN_NOW.regular.start - DAY_S, end: OPEN_NOW.regular.end - DAY_S } };
   for (const line of [(symbol) => tickAt(symbol, TW_NOW - 60_000, [321.97], dayBefore), offline]) {
-    await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(TW_NOW - 5_000), line }), async (w, host) => {
+    await soleRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(TW_NOW - 5_000), line }), async (w, host) => {
       const now = TW_NOW + 300_000;
       await advance(host, now);
       const quote = w.shown("^TWOII", now);
@@ -1085,14 +1085,14 @@ test("a stalled TW-only price from today is not read closed", async () => {
     });
   }
   // An earlier day's price still reads closed.
-  await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => ok(EARLIER_ROWS), line: offline }), (w) => {
+  await soleRun(twOnlyHost(["^TWOII"], { yahootw: () => ok(EARLIER_ROWS), line: offline }), (w) => {
     const quote = w.shown("^TWOII", NIGHT + 5_000);
     assert.equal(sessionOf(quote, NIGHT + 5_000), "closed");
   }, NIGHT);
 });
 
 test("turning Yahoo 奇摩股市 off while paused says not found at once", async () => {
-  await twOnlyRun(twOnlyHost(), (w, host) => {
+  await soleRun(twOnlyHost(), (w, host) => {
     assert.equal(w.errors["^TWOII"], undefined);
     w.pause(true);
     host.prefs = undefined;
@@ -1107,7 +1107,7 @@ test("a future goes to Yahoo 奇摩股市 alone, never with the Finnhub key", as
   host.prefs = { version: 1, sources: { us: { provider: "finnhub" }, tw: BOTH.sources.tw } };
   host.secrets = { [SECRET_KEY_FINNHUB]: "k".repeat(20) };
   host.store = { version: 1, symbols: ["WTX&", "AAPL", "2330.TW"], paused: false };
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     const config = w.config();
     for (const provider of [yahoo, finnhub, mis]) assert.equal(w.serves(provider, "WTX&", config), false, provider.id);
     assert.equal(w.serves(yahootw, "WTX&", config), true);
@@ -1125,7 +1125,7 @@ test("a future goes to Yahoo 奇摩股市 alone, never with the Finnhub key", as
 test("without Yahoo 奇摩股市 a future stays listed as one unavailable line, and turning it on prices it", async () => {
   const host = futuresHost();
   host.prefs = undefined;
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     assert.equal(w.errors["WTX&"].code, "yahootw.futuresNeedSource");
     assert.equal(w.shown("WTX&"), undefined);
     assert.equal(collapsedRow({ quote: w.shown("WTX&"), failed: w.errors["WTX&"] }), true);
@@ -1145,7 +1145,7 @@ test("a future awaiting Yahoo 奇摩股市's re-confirmation gives that reason, 
   const host = futuresHost();
   // Switched on, with a consent to an older statement.
   host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     assert.equal(w.errors["WTX&"].code, "yahootw.reconfirm");
     assert.deepEqual(host.requests.filter(isYahootw), []);
     host.prefs = undefined;
@@ -1158,7 +1158,7 @@ test("a future awaiting Yahoo 奇摩股市's re-confirmation gives that reason, 
 test("a failed round keeps a future's last price, cached with the reason", async () => {
   let hang = false;
   const host = futuresHost(["WTX&"], { yahootw: () => (hang ? new Promise(() => {}) : futuresAt(host.clock - 5_000)) });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     assert.equal(w.shown("WTX&").price, 42604);
     hang = true;
     // Whatever the cadence (10 s or 60 s), a hung round has timed out by then.
@@ -1178,7 +1178,7 @@ test("after a price, a name-only answer keeps a future's price unmarked, and a m
       : answer === "name" ? futuresAt(host.clock - 5_000, { "WTX&": { price: { raw: "-" }, regularMarketTime: "-" } })
       : ok(FUTURES_ROWS.filter((row) => row.symbol !== "WTX&"))),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     answer = "name";
     await advance(host, FUT_NOW + 75_000);
     let kept = w.shown("WTX&");
@@ -1193,7 +1193,7 @@ test("after a price, a name-only answer keeps a future's price unmarked, and a m
 });
 
 test("a futures code Yahoo 奇摩股市 does not answer reads not found on Yahoo 奇摩股市", async () => {
-  await twOnlyRun(futuresHost(["WTXP&"]), (w, host) => {
+  await soleRun(futuresHost(["WTXP&"]), (w, host) => {
     assert.equal(w.errors["WTXP&"].code, "yahootw.notFound");
     assert.ok(stockLists(host)[0].includes("WTXP%26"), stockLists(host)[0]);
     assert.equal(charts(host, "WTXP&"), 0);
@@ -1202,7 +1202,7 @@ test("a futures code Yahoo 奇摩股市 does not answer reads not found on Yahoo
 });
 
 test("WTX& is priced by Yahoo 奇摩股市 alone: name, price, change, line and limits", async () => {
-  await twOnlyRun(futuresHost(["WTX&"], { line: () => ok(FUTURES_TICK) }), (w, host) => {
+  await soleRun(futuresHost(["WTX&"], { line: () => ok(FUTURES_TICK) }), (w, host) => {
     const now = FUT_NOW + 5_000;
     const quote = w.shown("WTX&", now);
     assert.deepEqual([quote.source, quote.name, quote.localName, quote.price, quote.currency], ["yahootw", "台指期近一", "台指期近一", 42604, "TWD"]);
@@ -1216,7 +1216,7 @@ test("WTX& is priced by Yahoo 奇摩股市 alone: name, price, change, line and 
 });
 
 test("a future answered from another exchange reads not found", async () => {
-  await twOnlyRun(futuresHost(["WTX&"], { yahootw: () => futuresAt(FUT_NOW - 5_000, { "WTX&": { exchange: "NMS" } }) }), (w) => {
+  await soleRun(futuresHost(["WTX&"], { yahootw: () => futuresAt(FUT_NOW - 5_000, { "WTX&": { exchange: "NMS" } }) }), (w) => {
     assert.equal(w.errors["WTX&"].code, "yahootw.notFound");
     assert.equal(w.shown("WTX&"), undefined);
   }, FUT_NOW);
@@ -1232,7 +1232,7 @@ test("at 20:00 a stock beside a trading future still reads closed at 13:30", asy
     yahoo: (symbol) => twYahoo(symbol, { exchangeName: "TAI", currentTradingPeriod: open }),
   });
   const tx = (key, params) => t("zh-TW", key, params);
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     const at = now + 5_000;
     const quote = w.shown("2330.TW", at);
     assert.equal(quote.timestamp, close);
@@ -1381,7 +1381,7 @@ test("22:00 in the night session: Live, and the detail names the night session",
     yahootw: () => futuresAt(host.clock - 20_000),
     line: (symbol) => futuresLine(symbol, NEXT_SEGMENTS[0][0], from - 60_000, NEXT_SEGMENTS),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     const session = sessionOf(quote, now);
@@ -1397,7 +1397,7 @@ test("06:30 in the morning break: closed at 05:00, polled gently", async () => {
   const from = Date.parse("2026-11-09T22:30:00Z");
   const last = Date.parse("2026-11-09T21:00:00Z");
   const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, last, SEGMENTS) });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     assert.equal(freshness(quote, sessionOf(quote, now), now).state, "closed");
@@ -1437,7 +1437,7 @@ test("01:00 in the night session: Live, with the line from 15:00", async () => {
     yahootw: () => futuresAt(host.clock - 20_000),
     line: (symbol) => futuresLine(symbol, MON_1500, from - 60_000, SEGMENTS),
   });
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
@@ -1452,7 +1452,7 @@ test("09:00 after a night: Live, read by the line's own sessions", async () => {
     yahootw: () => futuresAt(host.clock - 10_000),
     line: (symbol) => futuresLine(symbol, MON_1500, from - 60_000, SEGMENTS),
   });
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     assert.deepEqual(quote.periods.segments, SEGMENTS);
@@ -1469,7 +1469,7 @@ test("Monday 09:00 after Friday night: Live in the day session, with Friday nigh
     // Friday night's 840 minutes, then Monday's first 15.
     line: (symbol) => futuresLineOf(symbol, [[FRI_1500, Date.parse("2026-11-13T20:59:00Z")], [FRI_SEGMENTS[1][0], from - 60_000]], FRI_SEGMENTS),
   });
-  await twOnlyRun(host, (w) => {
+  await soleRun(host, (w) => {
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     assert.deepEqual(quote.periods.segments, FRI_SEGMENTS);
@@ -1489,7 +1489,7 @@ test("on Sunday, Friday night's last price reads closed with its date, polled ge
     line: (symbol) => futuresLine(symbol, FRI_1500, Date.parse("2026-11-13T20:59:00Z"), FRI_SEGMENTS),
   });
   const tx = (key, params) => t("zh-TW", key, params);
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     const fresh = freshness(quote, sessionOf(quote, now), now);
@@ -1510,7 +1510,7 @@ test("13:50 after the day session: closed, polled gently", async () => {
   const from = Date.parse("2026-11-10T05:50:00Z");
   const last = Date.parse("2026-11-10T05:44:59Z");
   const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, last, SEGMENTS) });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const now = host.clock;
     assert.equal(sessionOf(w.shown("WTX&", now), now), "closed");
     await advance(host, from + 15_000);
@@ -1525,7 +1525,7 @@ test("the night opens with its first trade, before the line brings the new tradi
     yahootw: () => futuresAt(host.clock < first ? Date.parse("2026-11-10T05:44:59Z") : first),
     line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-10T05:44:00Z"), SEGMENTS),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     assert.equal(sessionOf(w.shown("WTX&", host.clock), host.clock), "closed");
     await advance(host, from + 75_000);
     const now = from + 75_000;
@@ -1544,7 +1544,7 @@ test("a failed round says why, and retries at the session's cadence", async () =
     const host = futuresHost(["WTX&"], {
       yahootw: () => (host.clock < from + 10_000 ? new Promise(() => {}) : futuresAt(host.clock - 5_000)),
     });
-    await twOnlyRun(host, async (w) => {
+    await soleRun(host, async (w) => {
       await advance(host, from + 11_000);
       assert.equal(w.errors["WTX&"].code, "request.timeout", label);
       assert.equal(stockLists(host).length, 1, label);
@@ -1569,7 +1569,7 @@ test("a break and a weekend ask a future's line no more", async () => {
   ]) {
     const label = new Date(from).toISOString();
     const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(last), line });
-    await twOnlyRun(host, async () => {
+    await soleRun(host, async () => {
       assert.equal(host.requests.filter(isLine).length, 1, label);
       await advance(host, from + 600_000);
       assert.equal(host.requests.filter(isLine).length, 1, label);
@@ -1585,7 +1585,7 @@ test("a future without a price yet is asked as its session opens", async () => {
     const host = futuresHost(["WTX&"], {
       yahootw: () => futuresAt(host.clock, host.clock < open ? { "WTX&": { price: { raw: "-" } } } : {}),
     });
-    await twOnlyRun(host, async (w) => {
+    await soleRun(host, async (w) => {
       assert.ok(!w.shown("WTX&", host.clock), label);
       await advance(host, open + 1_000);
       const now = open + 1_000;
@@ -1605,7 +1605,7 @@ test("at 15:00 a priced future is asked every 10 s until the night's first trade
     yahootw: () => futuresAt(host.clock < first ? Date.parse("2026-11-10T05:44:59Z") : first),
     line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-10T05:44:00Z"), SEGMENTS),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     await advance(host, Date.parse("2026-11-10T07:00:20Z"));
     const now = host.clock;
     const quote = w.shown("WTX&", now);
@@ -1621,7 +1621,7 @@ test("a minute after 15:00 without a night trade, the break's cadence is back", 
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-10T05:44:00Z"), SEGMENTS),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     const opening = Date.parse("2026-11-10T07:00:00Z");
     await advance(host, opening + 55_000);
     // 14:59:50, then 15:00:00 to 15:00:50 every 10 s.
@@ -1642,7 +1642,7 @@ test("at 08:45 a priced future from the night is asked again and reads Live", as
     yahootw: () => futuresAt(host.clock < open ? Date.parse("2026-11-09T20:59:59Z") : host.clock),
     line: (symbol) => futuresLine(symbol, MON_1500, Date.parse("2026-11-09T20:59:00Z"), SEGMENTS),
   });
-  await twOnlyRun(host, async (w) => {
+  await soleRun(host, async (w) => {
     assert.equal(sessionOf(w.shown("WTX&", host.clock), host.clock), "closed");
     await advance(host, open + 1_000);
     const now = open + 1_000;

@@ -227,14 +227,14 @@ export const yahootw = {
   linesMs: (session) => (session === "open" || session === "unknown" ? 120_000 : 600_000),
   linesPerRound: 3,
   // The price batches, then a line request per symbol; the round picks the lines once the prices are in.
-  // A batch's TW-only symbols (`config.twOnly`) go with it as `anyDay`: see decodeStockList.
+  // A batch's symbols this source prices alone (`config.anyDay`) go with it as `anyDay`: see decodeStockList.
   requests(symbols, config) {
-    const twOnly = new Set(config?.twOnly ?? []);
+    const anyDay = new Set(config?.anyDay ?? []);
     const requests = [];
     for (let i = 0; i < symbols.length; i += YAHOOTW_BATCH) {
       const batch = symbols.slice(i, i + YAHOOTW_BATCH);
       const url = `${YAHOOTW_BASE}StockServices.stockList;symbols=${batch.map(encodeURIComponent).join(",")}`;
-      requests.push({ url, headers: HEADERS, symbols: batch, kind: "quote", anyDay: batch.filter((symbol) => twOnly.has(symbol)) });
+      requests.push({ url, headers: HEADERS, symbols: batch, kind: "quote", anyDay: batch.filter((symbol) => anyDay.has(symbol)) });
     }
     for (const symbol of symbols) {
       const url = `${YAHOOTW_BASE}FinanceChartService.ApacLibraCharts;type=tick;symbols=${encodeURIComponent(JSON.stringify([symbol]))}`;
