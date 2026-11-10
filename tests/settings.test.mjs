@@ -316,9 +316,9 @@ test("marketState: Taiwan", () => {
 });
 
 test("marketState: US", () => {
-  assert.deepEqual(marketState(us({ provider: "finnhub" }), "us"), { live: false, source: "yahoo" });
+  assert.deepEqual(marketState(us({ provider: "finnhub" }), "us"), { live: true, source: "yahoo" });
   assert.deepEqual(marketState(us({ provider: "finnhub" }), "us", { keyAvailable: true }), { live: true, source: "finnhub" });
-  assert.deepEqual(marketState(us({ provider: "yahoo" }), "us", { keyAvailable: true }), { live: false, source: "yahoo" });
+  assert.deepEqual(marketState(us({ provider: "yahoo" }), "us", { keyAvailable: true }), { live: true, source: "yahoo" });
 });
 
 test("marketState: crypto and other", () => {
@@ -377,7 +377,13 @@ test("marketStatus: the source in use and whether it is failing", () => {
   const finnhub = us({ provider: "finnhub" });
   const savedKey = { ...NO_KEY, saved: true };
   assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us", key: savedKey }), { live: true, source: "finnhub", problem: true });
-  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us" }), { live: false, source: "yahoo", problem: false });
+  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us" }), { live: true, source: "yahoo", problem: false });
+});
+
+test("the US falls back to real time; Taiwan and other markets to delayed", () => {
+  const off = readSettings(undefined);
+  assert.deepEqual(["us", "tw", "other"].map((market) => marketState(off, market).live), [true, false, false]);
+  assert.deepEqual(status({ saved: off, health: [{ provider: "yahoo", code: "yahoo.unreachable" }], market: "us" }), { live: true, source: "yahoo", problem: true });
 });
 
 test("marketStatus: health counts only while its source's settings are as saved", () => {
@@ -398,13 +404,13 @@ test("marketStatus: health counts only while its source's settings are as saved"
   path.sources.us.finnhubUrl = "https://finnhub.io/api/v2";
   assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: savedKey }),
     { live: true, source: "finnhub", problem: false });
-  // Remove pending is a change too: no key is left, so the market reads delayed, not failing.
+  // Remove pending is a change too: no key is left, so the market reads Yahoo Finance in real time, not failing.
   assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: { ...savedKey, removing: true } }),
-    { live: false, source: "yahoo", problem: false });
+    { live: true, source: "yahoo", problem: false });
   // Unchanged, the old problem still shows.
   assert.deepEqual(status({ saved: crypto, health: region, market: "crypto" }), { live: true, source: "binance", problem: true });
   assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: savedKey }),
-    { live: false, source: "yahoo", problem: false });
+    { live: true, source: "yahoo", problem: false });
   assert.deepEqual(status({ saved: finnhub, health: [{ provider: "finnhub", code: "finnhub.rateLimited", params: {} }], market: "us", key: savedKey }),
     { live: true, source: "finnhub", problem: true });
   // A Finnhub stop lifts only by what caused it: a budget edit keeps a refused key refused.
@@ -412,23 +418,23 @@ test("marketStatus: health counts only while its source's settings are as saved"
   budget.sources.us.budgetPerMinute = 30;
   for (const code of ["finnhub.invalidKey", "finnhub.noKey", "finnhub.secretUnreadable", "finnhub.redirected", "finnhub.badUrl"]) {
     assert.deepEqual(status({ saved: finnhub, draft: budget, health: stop(code), market: "us", key: savedKey }),
-      { live: false, source: "yahoo", problem: false }, code);
+      { live: true, source: "yahoo", problem: false }, code);
   }
   // A new address does not lift a refused key; a key typed does not lift a refused address.
   assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.invalidKey"), market: "us", key: savedKey }),
-    { live: false, source: "yahoo", problem: false });
+    { live: true, source: "yahoo", problem: false });
   assert.deepEqual(currentHealth({ saved: finnhub, draft: copy(finnhub), health: stop("finnhub.badUrl"), keyEdited: true }), stop("finnhub.badUrl"));
-  // Yahoo Finance reads no settings: no edit drops its problem, so a delayed market it serves reads Problem.
+  // Yahoo Finance reads no settings: no edit drops its problem, so the US fallback it serves in real time reads Problem.
   const yahooDown = [{ provider: "yahoo", code: "yahoo.unreachable", params: {} }];
-  assert.deepEqual(status({ saved: finnhub, draft: budget, health: yahooDown, market: "us" }), { live: false, source: "yahoo", problem: true });
+  assert.deepEqual(status({ saved: finnhub, draft: budget, health: yahooDown, market: "us" }), { live: true, source: "yahoo", problem: true });
   // A typed key decides alone: a malformed one is not saved, and the refused saved key is not used either.
   const badKey = { ...savedKey, typed: "bad key", typedValid: false };
   assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: badKey }),
-    { live: false, source: "yahoo", problem: false });
+    { live: true, source: "yahoo", problem: false });
   // A refused address refuses every key, typed or saved: after Save the US uses Yahoo Finance.
   const typedKey = { ...savedKey, typed: "new-key" };
   assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: typedKey }),
-    { live: false, source: "yahoo", problem: false });
+    { live: true, source: "yahoo", problem: false });
   assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: typedKey }),
     { live: true, source: "finnhub", problem: false });
   // A change on another market's page leaves this one's health in force.

@@ -516,3 +516,22 @@ test("the settings dialog reads Yahoo's delay from the exchange table", () => {
 test("only a price that may not be current draws a ring", () => {
   assert.match(code(read(new URL("ui/parts.js", MOD))), /const HOLLOW = \["unconfirmed", "stalled", "delayed"\];/);
 });
+
+test("the US page says what Finnhub adds, and Yahoo's real-time pace", () => {
+  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
+  const us = dialog.slice(dialog.indexOf("function usPage("), dialog.indexOf("function cryptoPage("));
+  assert.match(us, /details\(\s*note\(t, view\.tx\("sources\.us\.faster"\)\)/);
+  const delay = dialog.slice(dialog.indexOf("function delayText("), dialog.indexOf("function pageTitle("));
+  assert.match(delay, /realtime[^;]*"settings\.liveEveryMinute"/);
+});
+
+test("the docs call Yahoo's US prices real time, and name lunch, FX and futures", () => {
+  for (const name of ["README.md", "RECIPE.md"]) {
+    const doc = read(new URL(name, ROOT));
+    assert.doesNotMatch(doc, /United States \| Yahoo Finance \(delayed\)|Real time for up to|showing Yahoo/, name);
+    for (const word of ["Lunch", "22:00 UTC", "indicative"]) assert.ok(doc.includes(word), `${name} ${word}`);
+  }
+  const zh = read(new URL("README.zh-TW.md", ROOT));
+  assert.doesNotMatch(zh, /美股 \| Yahoo Finance（延遲）/);
+  for (const word of ["午休", "22:00 UTC", "參考報價"]) assert.ok(zh.includes(word), word);
+});

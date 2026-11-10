@@ -21,7 +21,7 @@
 
 ## Highlights
 
-- One source per market: Yahoo Finance for stocks and indexes, Binance Spot for crypto, and real time for Taiwan (Yahoo TW Stock, TWSE MIS) or US stocks (Finnhub, your own key) only if you turn it on.
+- One source per market: Yahoo Finance for stocks and indexes (real time for US stocks, updated every minute), Binance Spot for crypto, plus real time for Taiwan (Yahoo TW Stock, TWSE MIS) or US updates about every 15–30 s (Finnhub, your own key) only if you turn it on.
 - Live or delayed at a glance: every row says where its price comes from and how old it is; a delayed or cached price never looks live.
 - Five interface languages: English, 繁體中文, 简体中文, 日本語 and 한국어, with red-up or green-up colors.
 - Drag a row to reorder the list; every open copy follows at once.
@@ -32,20 +32,22 @@
 
 | Market | Default | Optional real-time | Notes |
 |---|---|---|---|
-| United States | Yahoo Finance (delayed) | Finnhub, with your own API key | Finnhub prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. |
+| United States | Yahoo Finance (real time, updates every minute) | Finnhub (updates about every 15–30 s), with your own API key | Both are real time; Finnhub only updates more often. It prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. |
 | Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. A `^TW…` index Yahoo Finance lacks, such as 櫃檯指數 (`^TWOII`), needs Yahoo TW Stock on and consented; otherwise it reads not found. |
-| Hong Kong, China, Japan, Korea | Yahoo Finance (delayed) | — | Delays vary by exchange; Yahoo usually does not report them. |
+| Hong Kong, China, Japan, Korea | Yahoo Finance (delayed 15 or 20 min) | — | Hong Kong, China and Japan 15 min, Korea 20 min (Taiwan 20 min). During the lunch break (Tokyo 11:30–12:30, Hong Kong 12:00–13:00, Shanghai and Shenzhen 11:30–13:00 local time) a row reads `Lunch`. An exchange Wickline does not know reads `Yahoo · delayed`, its delay not provided. |
+| Currencies | Yahoo Finance (real time, updates every minute) | — | Quotes such as `EURUSD=X` are indicative, not traded prices. The currency market reads closed from Friday 22:00 to Sunday 22:00 UTC. |
+| Futures | Yahoo Finance (delayed 10 min) | — | Futures such as `ES=F` are never shown stopped, and CME's daily trading halt is not marked. |
 | Crypto | Binance Spot (real time) | — | Binance is unavailable in some regions, such as the United States; you can set another address that serves the same API. |
 
 Each row has a dot and a label:
 
-- **Filled dot**: live. A real-time source, the market trading, the quote at most 120 seconds old; the label says `Live`, and the source's name is in the detail view.
-- **Ring**: delayed or stalled. Yahoo's prices (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds (`quote stopped at 13:05`), or a session not known yet.
-- **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`).
+- **Filled dot**: live. A real-time source (Yahoo Finance too, for US stocks, US indexes and currencies), the market trading, the quote at most 120 seconds old; the label says `Live`, and the source's name is in the detail view.
+- **Ring**: delayed or stalled. Yahoo's prices from a delayed exchange (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds or a delayed one older than its delay plus 5 minutes (`quote stopped at 13:05`), or a session not known yet.
+- **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`, `Lunch`).
 
 **Lit price.** A Taiwan stock exactly at its limit-up or limit-down, as its real-time source (TWSE MIS or Yahoo TW Stock) reports it, shows its price on a solid block in the gain or loss color, the way Taiwan's quote boards light a stock at its limit; hover it for `Limit up 563.00`. Limits are never computed, so other markets, and Taiwan on Yahoo Finance alone, never light; nor does a stalled quote, or the trial match before the open.
 
-Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, Yahoo TW Stock and TWSE MIS every 10 seconds while Taiwan trades (60 otherwise), Finnhub about every 30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
+Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, Yahoo TW Stock and TWSE MIS every 10 seconds while Taiwan trades (60 otherwise), Finnhub about every 15–30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
 
 ## Install
 
@@ -117,7 +119,7 @@ Type a symbol into the add field and press Enter; a new symbol goes to the top o
 
 The gear icon opens a dialog with a sidebar: a page for each market under **Data sources** (in your interface language's market order, each marked `● Live` or `○ Delayed` by what your unsaved choices would use), then **Display** and **Disclaimer & privacy**. It opens on the first market page. Nothing changes until you press Save; Cancel or Esc drops your edits, and the footer names whatever keeps Save disabled, even on another page.
 
-**Market pages.** Every page has the same shape: its title with the state and source it would use, the real-time sources in order, each with a switch, then what is used when none works (Yahoo Finance and its delay, always on). **United States**: Finnhub, with your own API key (a free-plan key is enough), the requests per minute and how many symbols that covers. A saved key is never shown again: the page says `Saved ••••` with its last four characters and a **Remove** button, also while Finnhub is off; leave the field empty to keep it, or type a new key to replace it. **Taiwan**: 1 Yahoo TW Stock, 2 TWSE MIS, both off at first; each runs only after you read its own statement and tick its own consent box, and once that consent is saved its row folds to one line, `✓ Consented · View`, whose link reads **Hide** in place while the statement shows. **Crypto**: Binance Spot, always on, with no fallback. **Other markets**: Yahoo Finance only. A source's current problem shows under its row. The addresses sit under **Advanced**, folded until you open it or one of them is refused: the TWSE MIS and Binance addresses (`https://` only) and the Finnhub URL, which stays on `https://finnhub.io` (only its path can change).
+**Market pages.** Every page has the same shape: its title with the state and source it would use, the real-time sources in order, each with a switch, then what is used when none works (Yahoo Finance, always on: `Real time, updates every minute` for the United States, `Delayed 20 min` for Taiwan). **United States**: Finnhub, which updates about every 15–30 s instead of every minute, with your own API key (a free-plan key is enough), the requests per minute and how many symbols that covers. A saved key is never shown again: the page says `Saved ••••` with its last four characters and a **Remove** button, also while Finnhub is off; leave the field empty to keep it, or type a new key to replace it. **Taiwan**: 1 Yahoo TW Stock, 2 TWSE MIS, both off at first; each runs only after you read its own statement and tick its own consent box, and once that consent is saved its row folds to one line, `✓ Consented · View`, whose link reads **Hide** in place while the statement shows. **Crypto**: Binance Spot, always on, with no fallback. **Other markets**: Yahoo Finance only. A source's current problem shows under its row. The addresses sit under **Advanced**, folded until you open it or one of them is refused: the TWSE MIS and Binance addresses (`https://` only) and the Finnhub URL, which stays on `https://finnhub.io` (only its path can change).
 
 **Display.** The interface language (it changes only the text, not the quotes), the gain and loss colors (automatic by language, red-up or green-up) and a button to Herdr's own appearance settings; light and dark themes come from Herdr.
 
@@ -151,7 +153,7 @@ Hosts, and when Wickline contacts them:
 
 **Why is Yahoo TW Stock off by default?** Its quote interface is one that tw.stock.yahoo.com uses internally, not offered publicly to third-party programs, and the site's robots.txt disallows automated access to it; it may change, be blocked or stop at any time. When on, it is asked for prices about every 10 seconds while the market is open (about every 60 seconds otherwise) and for each stock's intraday chart about every 2 minutes (otherwise about every 10 minutes until the day's chart is complete). Wickline uses it only after you read its own responsibility statement in Settings and tick its consent box; whether to use it, and whether that complies with Yahoo's terms of service, is your own judgment and responsibility. The Traditional Chinese statement prevails.
 
-**Why only 15 real-time US stocks?** Finnhub's free plan allows 60 requests a minute. Wickline prices as many US stocks as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US stocks in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
+**Why do only 15 US stocks get Finnhub's faster updates?** Finnhub's free plan allows 60 requests a minute. Wickline asks Finnhub for as many US stocks as your budget divided by 4, so each symbol updates about every 15–30 seconds with half the budget left for retries and a second copy. The first US stocks in your list get Finnhub; the rest update every minute from Yahoo Finance, also in real time, and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
 
 **Why is Binance unavailable for me?** Binance refuses requests from some regions, such as the United States, and the crypto rows then say Binance is not available in this region. Stocks are unaffected. You can set another Binance address that serves the same API in Settings.
 

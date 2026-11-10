@@ -2,7 +2,7 @@
 // language prompt was dismissed, and where each source lives. No Herdr imports,
 // so tests run it under Node.
 import { LANGUAGES } from "./i18n.js";
-import { marketOrder } from "./markets.js";
+import { TYPICAL_EXCHANGE, exchangeRule, marketOrder } from "./markets.js";
 import { BINANCE_URL } from "./providers/binance.js";
 import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
@@ -143,12 +143,13 @@ function realtimeSources(settings, market, keyAvailable) {
 /**
  * The source a market would use with `settings`, and whether it is real time: the first real-time source
  * switched on (and consented to) that is not `failing` (provider ids), as the panel's rows pick it; the
- * first one when all of them are; Yahoo Finance when none is on. `keyAvailable`: a Finnhub key would be
- * there after Save (the key is never in the settings).
+ * first one when all of them are; Yahoo Finance when none is on, real time as the exchange table says for
+ * the market's typical exchange (the US yes; Taiwan and other markets no). `keyAvailable`: a Finnhub key
+ * would be there after Save (the key is never in the settings).
  */
 export function marketState(settings, market, { keyAvailable = false, failing = [] } = {}) {
   const sources = realtimeSources(settings, market, keyAvailable);
-  if (!sources.length) return { live: false, source: "yahoo" };
+  if (!sources.length) return { live: exchangeRule(TYPICAL_EXCHANGE[market] ?? null, "").realtime, source: "yahoo" };
   return { live: true, source: sources.find((source) => !failing.includes(source)) ?? sources[0] };
 }
 

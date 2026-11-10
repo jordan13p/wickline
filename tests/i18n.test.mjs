@@ -153,3 +153,15 @@ test("a price at its limit is named in every language", () => {
 test("the lunch break is named in every language", () => {
   assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.lunch")), ["Lunch", "午休", "午休", "昼休み", "점심 휴장"]);
 });
+
+test("Finnhub is faster updates; Yahoo's US prices are not called delayed", () => {
+  assert.equal(t("en", "sources.us.faster"), "Updates about every 15–30 s instead of every minute.");
+  assert.equal(t("en", "settings.liveEveryMinute"), "Real time, updates every minute");
+  assert.equal(t("en", "sources.us.cap", { cap: 15 }), "Faster updates for up to 15 US symbols; the rest update every minute from Yahoo.");
+  assert.equal(t("en", "notice.overCap", { symbol: "AAPL", cap: 15 }), "Added AAPL. Finnhub's limit is 15 US symbols, so it updates every minute from Yahoo.");
+  assert.equal(t("en", "notice.overCapPushed", { symbol: "AAPL", pushed: "NVDA", cap: 15 }), "Added AAPL. NVDA now updates every minute from Yahoo: Finnhub's limit is 15 US symbols.");
+  assert.equal(t("en", "finnhub.overCap", { cap: 15 }), "Over the Finnhub limit of 15: updates every minute");
+  // The person's wording for each source's pace, in Chinese.
+  assert.equal(t("zh-TW", "settings.liveEveryMinute"), "即時，每分鐘更新");
+  assert.match(t("zh-TW", "sources.us.faster"), /^約每 15–30 秒更新/);
+});

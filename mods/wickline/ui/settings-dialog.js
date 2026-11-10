@@ -70,10 +70,11 @@ function shownStatus(view, market, key) {
   return { ...status, dotState, label };
 }
 
-// How late Yahoo Finance is for the market: the exchange table's rule for the market's typical exchange, else
-// a plain "Delayed" (by exchange).
+// How fresh Yahoo Finance is for the market: the exchange table's rule for the market's typical exchange (real
+// time, or its minutes late), else a plain "Delayed" (by exchange).
 function delayText(view, market) {
-  const { delayS } = exchangeRule(TYPICAL_EXCHANGE[market] ?? null, "");
+  const { realtime, delayS } = exchangeRule(TYPICAL_EXCHANGE[market] ?? null, "");
+  if (realtime) return view.tx("settings.liveEveryMinute");
   return delayS !== null ? view.tx("settings.delayedMinutes", { minutes: delayS / 60 }) : view.tx("settings.delayed");
 }
 
@@ -243,8 +244,8 @@ function finnhubParts(view, t, errors) {
   ];
 }
 
-// United States: Finnhub with the person's key, else Yahoo Finance. With Finnhub off, a saved key stays
-// until Remove and Save, so its line stays too.
+// United States: Finnhub with the person's key (how often it updates, on or off), else Yahoo Finance. With
+// Finnhub off, a saved key stays until Remove and Save, so its line stays too.
 function usPage(view, t, errors, status) {
   const us = view.draft.sources.us;
   const on = us.provider === "finnhub";
@@ -255,6 +256,7 @@ function usPage(view, t, errors, status) {
     sourceRow(view, t, "1", "finnhub", view.tx("settings.ownKey"),
       toggle(t, "bw-finnhub", on, view.tx("src.finnhub"), (value) => { us.provider = value ? "finnhub" : "yahoo"; })),
     details(
+      note(t, view.tx("sources.us.faster")),
       healthLine(view, t, "finnhub"),
       view.keyWarning ? div().w_full().min_w(0).text_size(11.5).text_color(t.blocked).child(view.say(view.keyWarning)) : null,
       ...(on ? finnhubParts(view, t, errors) : saved ? [
