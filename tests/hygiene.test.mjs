@@ -367,6 +367,19 @@ test("the disclosure names every host and the key file in all four places", () =
   }
 });
 
+// The Yahoo 奇摩股市 host is named with what it is asked for, in every place the disclosure lives.
+test("the disclosure says Yahoo 奇摩股市 is asked for futures too", () => {
+  const future = { en: /futures/, "zh-TW": /期貨/, "zh-CN": /期货/, ja: /先物/, ko: /선물/ };
+  const places = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]]
+    .map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n")]);
+  // Sentences end with 。, or with a period and a space (the host names keep their own dots).
+  for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.hosts`, lang, STRINGS[lang]["privacy.hosts"].split(/(?<=。)|(?<=\.)\s+/)]);
+  for (const [name, lang, parts] of places) {
+    const naming = parts.filter((part) => part.includes("tw.stock.yahoo.com"));
+    assert.ok(naming.some((part) => future[lang].test(part)), name);
+  }
+});
+
 // The one program, the owner-only key file, the fixed Finnhub host and the real revoke, in all four places.
 // README and RECIPE name `chmod 600` for technical readers; the app says the same fact in plain words.
 const OWNER_ONLY = {

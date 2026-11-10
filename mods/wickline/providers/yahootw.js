@@ -13,7 +13,7 @@ export const YAHOOTW_BASE = "https://tw.stock.yahoo.com/_td-stock/api/resource/"
 export const YAHOOTW_BATCH = 50;
 // Raise it with any change in substance to the statement or consent text (zh-TW prevails): a consent
 // given to an older text no longer turns it on. Independent of MIS's.
-export const YAHOOTW_CONSENT_VERSION = 1;
+export const YAHOOTW_CONSENT_VERSION = 2;
 
 const TAIPEI_OFFSET_MS = 8 * 3_600_000;
 const DAY_MS = 86_400_000;

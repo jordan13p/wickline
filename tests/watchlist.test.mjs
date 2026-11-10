@@ -722,6 +722,19 @@ test("a wake during an overlay round adds a round, it aborts none", async () => 
 
 // A ^TW… index Yahoo Finance does not know (404) is priced by Yahoo 奇摩股市 alone, while it is on: TW-only.
 const NOT_FOUND = { status: 404, ok: false, text: "" };
+test("after the statement changes, a consent to the old one leaves Taiwan on its fallback, and indices and futures say why", async () => {
+  const host = twOnlyHost(["2330.TW", "^TWOII", "WTX&"]);
+  host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
+  await twOnlyRun(host, (w) => {
+    assert.deepEqual(host.requests.filter(isYahootw), []);
+    assert.equal(w.errors["WTX&"].code, "yahootw.reconfirm");
+    assert.equal(w.errors["^TWOII"].code, "yahootw.reconfirm");
+    assert.equal(w.shown("2330.TW").source, "yahoo");
+    assert.equal(charts(host, "WTX&"), 0);
+    assert.deepEqual(w.problems().map(({ provider, code, stopped }) => [provider, code, stopped]), [["yahootw", "yahootw.reconfirm", true]]);
+  });
+});
+
 // ^TWOII's line on the trading morning, with a regular session around the clock.
 const OPEN_NOW = { regular: { start: TW_NOW / 1000 - 3600, end: TW_NOW / 1000 + 3600 } };
 const charts = (host, symbol) => host.requests.filter((url) => url.includes(`/chart/${encodeURIComponent(symbol)}?`)).length;

@@ -182,9 +182,18 @@ test("Yahoo 奇摩股市 needs its own consent", () => {
 });
 
 test("consent versions are independent", () => {
-  const settings = tw({ yahootw: true, yahootwAck: { version: 1 }, mis: true, misAck: { version: 1 } });
+  const settings = tw({ yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: 1 } });
   assert.equal(yahootwEnabled(settings), true);
   assert.equal(misReconfirm(settings), true);
+});
+
+test("a consent to statement v1 asks again", () => {
+  assert.equal(YAHOOTW_CONSENT_VERSION, 2);
+  const v1 = tw({ yahootw: true, yahootwAck: { version: 1 } });
+  assert.equal(yahootwEnabled(v1), false);
+  assert.equal(yahootwReconfirm(v1), true);
+  assert.equal(validateSettings(v1)["sources.tw.yahootwAck"], "yahootw.consentNeeded");
+  assert.equal(consentCollapsed(v1, v1, "yahootw"), false);
 });
 
 test("a fresh install has both Taiwan switches off", () => {

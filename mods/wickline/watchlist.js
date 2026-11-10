@@ -290,12 +290,13 @@ export class Watchlist {
   }
 
   /**
-   * Why a symbol only Yahoo 奇摩股市 can price has no price while it is off (`config`: config()). A future says the
-   * source must be turned on, or confirmed again; a TW-only index says what Yahoo Finance last said: not found.
+   * Why a symbol only Yahoo 奇摩股市 can price has no price while it is off (`config`: config()). Awaiting
+   * re-confirmation, either kind says so. Otherwise a future says the source must be turned on; a TW-only index
+   * says what Yahoo Finance last said: not found.
    */
   unpricedReason(symbol, config) {
-    if (kindOf(symbol) !== "future") return notice("yahoo.notFound");
-    return notice(config.yahootwPending ? "yahootw.reconfirm" : "yahootw.futuresNeedSource");
+    if (config.yahootwPending) return notice("yahootw.reconfirm");
+    return notice(kindOf(symbol) === "future" ? "yahootw.futuresNeedSource" : "yahoo.notFound");
   }
 
   /**
@@ -886,17 +887,21 @@ export class Watchlist {
       this.quotes[symbol] = quote;
       delete this.errors[symbol];
     }
-    const yahootwOn = this.config().on[yahootw.id];
+    const config = this.config();
     for (const [symbol, error] of Object.entries(result.errors)) {
       this.errors[symbol] = coded(error);
+      if (error.code !== "yahoo.notFound" || !isTaiwanForm(symbol)) continue;
       // A Taiwan index Yahoo Finance does not know may be Yahoo 奇摩股市's alone; the error stays until it is priced.
       // A TW-only row keeps nothing of a quote Yahoo Finance gave before; a Yahoo 奇摩股市 overlay already held
       // stays, as the symbol's own quote.
-      if (error.code === "yahoo.notFound" && isTaiwanForm(symbol) && yahootwOn) {
+      if (config.on[yahootw.id]) {
         this.twOnly.add(symbol);
         delete this.linePeriods[symbol];
         delete this.quotes[symbol];
         this.setEntry(this.overlayErrors, symbol, yahootw.id, undefined);
+      } else if (config.yahootwPending) {
+        // Not found is true but not the whole story: the person's consent to the old statement is what holds it back.
+        this.errors[symbol] = this.unpricedReason(symbol, config);
       }
     }
     if (routes) this.wakeResolved(before);

@@ -22,7 +22,7 @@ const decode = (response, symbols = SYMBOLS) => yahootw.decode(yahootw.requests(
 test("constants and cadence", () => {
   assert.equal(YAHOOTW_BASE, "https://tw.stock.yahoo.com/_td-stock/api/resource/");
   assert.equal(YAHOOTW_BATCH, 50);
-  assert.equal(YAHOOTW_CONSENT_VERSION, 1);
+  assert.equal(YAHOOTW_CONSENT_VERSION, 2);
   assert.equal(yahootw.id, "yahootw");
   assert.deepEqual(yahootw.markets, ["tw"]);
   assert.equal(yahootw.overlay, true);

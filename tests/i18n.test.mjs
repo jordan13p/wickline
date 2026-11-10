@@ -4,6 +4,30 @@ import assert from "node:assert/strict";
 import { LANGUAGES, LANGUAGE_LABELS, STRINGS, t } from "../mods/wickline/i18n.js";
 import { MESSAGES_EN } from "../mods/wickline/quotes.js";
 
+test("the statement names what is queried by exchange, in the person's words", () => {
+  const tw = STRINGS["zh-TW"]["yahootw.statement"];
+  for (const sentence of [
+    "查詢你清單中下列商品的價格：臺灣證券交易所的上市股票、ETF 與加權指數，證券櫃檯買賣中心的上櫃股票與櫃買指數，以及臺灣期貨交易所的期貨",
+    "取代延遲約 20 分鐘的 Yahoo Finance 報價；Yahoo Finance 沒有的指數與期貨，只由 Yahoo 奇摩股市提供",
+    "會捨棄超出當日漲跌停範圍的股票價格；非當日的價格只用於 Yahoo Finance 沒有的商品，並標示其日期",
+  ]) assert.ok(tw.includes(sentence), sentence);
+  for (const old of ["查詢你清單中的台股價格", "會捨棄超出該股當日漲跌停範圍或非當日的價格"]) assert.ok(!tw.includes(old), old);
+  assert.equal(t("zh-TW", "yahootw.reconfirm"), "Yahoo 奇摩股市的說明已更新。在設定重新確認前，台股、指數與期貨都不會使用它。");
+  // Sentence 3 names stock prices in every language: futures prices are never discarded (Q8).
+  const stockPrices = {
+    en: "discards a stock price outside the day's price limits", "zh-TW": "超出當日漲跌停範圍的股票價格",
+    "zh-CN": "超出当日涨跌停范围的股票价格", ja: "当日の値幅制限を超える株式の価格", ko: "당일 가격 제한폭을 벗어난 주식 가격",
+  };
+  for (const [lang, words] of Object.entries(stockPrices)) assert.ok(t(lang, "yahootw.statement").includes(words), lang);
+  const words = { en: [/indices/, /futures/], "zh-TW": [/指數/, /期貨/], "zh-CN": [/指数/, /期货/], ja: [/指数/, /先物/], ko: [/지수/, /선물/] };
+  for (const [lang, [index, future]] of Object.entries(words)) {
+    for (const key of ["yahootw.statement", "yahootw.reconfirm"]) {
+      assert.match(t(lang, key), index, `${lang} ${key}`);
+      assert.match(t(lang, key), future, `${lang} ${key}`);
+    }
+  }
+});
+
 const tokens = (text) => new Set([...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
 
 test("five languages with their own names", () => {
