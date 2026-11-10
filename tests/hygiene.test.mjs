@@ -322,6 +322,10 @@ test("RECIPE.md stays under the gallery's size limit", () => {
   assert.ok(statSync(new URL("RECIPE.md", ROOT)).size <= 60_000, "RECIPE.md over 60,000 bytes");
 });
 
+test("RECIPE-internals.md stays a short companion", () => {
+  assert.ok(statSync(new URL("RECIPE-internals.md", ROOT)).size <= 30_000, "RECIPE-internals.md over 30,000 bytes");
+});
+
 // Field-level build details live beside the recipe, so the gallery's copy stays under its limit.
 test("RECIPE.md links to RECIPE-internals.md, which exists", () => {
   assert.match(read(new URL("RECIPE.md", ROOT)), /\]\(RECIPE-internals\.md\)/);
@@ -373,8 +377,10 @@ const NOTHING_ELSE = {
   en: /No other programs run/, "zh-TW": /不執行其他任何程式/, "zh-CN": /不运行其他任何程序/,
   ja: /それ以外のプログラムは実行しません/, ko: /그 밖의 프로그램은 실행하지 않습니다/,
 };
+// The companion holds build details, not the disclosure: it is only checked for what it must never claim.
+const COMPANION = "RECIPE-internals.md";
 test("the disclosure names the chmod, the fixed Finnhub host and how to revoke the key", () => {
-  const docs = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]].map(([name, lang]) => [name, lang, read(new URL(name, ROOT))]);
+  const docs = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"], [COMPANION, "en"]].map(([name, lang]) => [name, lang, read(new URL(name, ROOT))]);
   for (const lang of Object.keys(STRINGS)) {
     docs.push([`${lang} privacy`, lang, ["privacy.hosts", "privacy.programs", "privacy.storage"].map((key) => STRINGS[lang][key]).join(" ")]);
   }
@@ -389,10 +395,10 @@ test("the disclosure names the chmod, the fixed Finnhub host and how to revoke t
       assert.match(programs, /macOS/, `macOS in ${name}`);
       assert.match(programs, /Linux/, `Linux in ${name}`);
       assert.match(programs, NOTHING_ELSE[lang], `nothing else runs in ${name}`);
-    } else {
+    } else if (name !== COMPANION) {
       assert.ok(text.includes("chmod 600"), `chmod 600 in ${name}`);
     }
-    assert.match(text, revoke[lang], `revoke in ${name}`);
+    if (name !== COMPANION) assert.match(text, revoke[lang], `revoke in ${name}`);
     if (settable[lang]) assert.doesNotMatch(text, settable[lang], `a settable Finnhub host in ${name}`);
     assert.doesNotMatch(text, /Programs: none|No programs|(?<!除此之外)不執行任何程式|不執行程式|(?<!除此之外)不运行任何程序/, `"no programs" in ${name}`);
   }
