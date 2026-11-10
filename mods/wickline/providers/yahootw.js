@@ -41,11 +41,18 @@ export function taipeiDay(ms) {
  * its Taipei day.
  */
 export function tradingDay(symbol, ms) {
-  if (kindOf(symbol) !== "future") return taipeiDay(ms);
+  return dayOf(symbol)(ms);
+}
+
+// A future's trading day (see tradingDay).
+function futuresDay(ms) {
   let day = taipeiDay(ms + NIGHT_TO_NEXT_DAY_MS);
   while (!TAIFEX_HOURS.weekdays.includes(weekdayOf(day))) day++;
   return day;
 }
+
+// A symbol's trading day of a time in ms, its kind read once: for a decoder that asks it for many times.
+const dayOf = (symbol) => (kindOf(symbol) === "future" ? futuresDay : taipeiDay);
 
 /**
  * The trading periods a quote of a symbol this source prices alone is read by (Watchlist#baseQuote):
@@ -58,10 +65,10 @@ export function tradingDay(symbol, ms) {
  * the close.
  */
 export function ownPeriods(quote, periods, now) {
-  const dayOf = (ms) => tradingDay(quote.symbol, ms);
-  const day = dayOf(quote.tradeTime);
-  if (periods?.regular && dayOf(periods.regular[0]) >= day) return periods;
-  return day < dayOf(now) ? { pre: null, regular: [quote.tradeTime, quote.tradeTime], post: null } : null;
+  const dayAt = dayOf(quote.symbol);
+  const day = dayAt(quote.tradeTime);
+  if (periods?.regular && dayAt(periods.regular[0]) >= day) return periods;
+  return day < dayAt(now) ? { pre: null, regular: [quote.tradeTime, quote.tradeTime], post: null } : null;
 }
 
 // `{ raw: "2240" }` → 2240; `"-"` (no value yet) or anything not positive → null.
@@ -83,11 +90,11 @@ function checkStatus(response) {
 /**
  * Overlays by requested symbol. A row is priced only when its price is positive, its trade is from today's
  * trading day (see tradingDay; a future's also from a later one while at most 5 minutes ahead of `now`, as the
- * local clock may be a little behind Yahoo's at 15:00; for a symbol in `anyDay`, which only this source prices, also from an earlier day) and it
- * is not delayed; a price outside the row's own limits gets an error instead, except a future's (TAIFEX's
- * limits are not checked; they are still kept). A futures-form row from any exchange but TFE gives nothing,
- * not even its name. Any other row (a placeholder `-`, yesterday's close, delayed data), or a requested
- * symbol missing from the answer, has no overlay and no error. Each quote priced today is timed at the
+ * local clock may be a little behind Yahoo's at 15:00; for a symbol in `anyDay`, which only this source prices,
+ * also from an earlier day) and it is not delayed; a price outside the row's own limits gets an error instead,
+ * except a future's (TAIFEX's limits are not checked; they are still kept). A futures-form row from any exchange
+ * but TFE gives nothing, not even its name. Any other row (a placeholder `-`, yesterday's close, delayed data), or a
+ * requested symbol missing from the answer, has no overlay and no error. Each quote priced today is timed at the
  * newest trade among today's on its own market clock (the feed's time): futures on theirs, every other row
  * (stocks and indices, TAI and TWO together) on the stock clock, so a quiet stock is as current as the stock
  * feed and never stamped with a night futures trade. An earlier day's quote keeps its own trade's time, so it
@@ -102,6 +109,8 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   if (!Array.isArray(body)) throw new QuoteError("yahootw.unreadable");
   const wanted = new Set(symbols);
   const anyDaySymbols = new Set(anyDay);
+  // Today's trading day on each market clock.
+  const todayOn = { future: futuresDay(now), stock: taipeiDay(now) };
   // Every accepted quote, each with its own trade's trading day, and with its market clock when priced for today.
   const priced = [];
   const errors = {};
@@ -112,6 +121,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const symbol = typeof row?.symbol === "string" && wanted.has(row.symbol) ? row.symbol : null;
     if (!symbol) continue;
     const future = kindOf(symbol) === "future";
+    const clock = future ? "future" : "stock";
     // A futures code answered from another exchange is not the TAIFEX contract asked for: not even its name is taken.
     if (future && exchangeCode(row.exchange) !== "TFE") continue;
     const name = cleanText(row.symbolName);
@@ -120,7 +130,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     if (price) anyPrice = true;
     const tradeTime = time(row.regularMarketTime);
     const day = tradeTime === null ? null : tradingDay(symbol, tradeTime);
-    const today = tradingDay(symbol, now);
+    const today = todayOn[clock];
     const isToday = day === today || (future && day > today && tradeTime - now <= FUTURE_AHEAD_MS);
     const dayOk = day !== null && (isToday || (day < today && anyDaySymbols.has(symbol)));
     if (!price || !dayOk || row.exchangeDataDelayedBy !== 0) continue;
@@ -129,7 +139,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       errors[symbol] = new QuoteError("yahootw.outOfLimits");
       continue;
     }
-    priced.push([isToday && (future ? "future" : "stock"), {
+    priced.push([isToday && clock, {
       symbol,
       source: "yahootw",
       name,
@@ -178,13 +188,14 @@ export function decodeTick(symbol, response, now) {
   if (chart.meta?.symbol !== symbol) throw new QuoteError("yahootw.otherTicker");
   const times = Array.isArray(chart.timestamp) ? chart.timestamp : [];
   const closes = chart.indicators?.quote?.[0]?.close;
-  const today = tradingDay(symbol, now);
+  const dayAt = dayOf(symbol);
+  const today = dayAt(now);
   const series = [];
   let last = null;
   let lastAt = null;
   times.forEach((seconds, i) => {
     // Checked before the close is taken, so yesterday's last close never fills today's first minutes.
-    if (tradingDay(symbol, seconds * 1000) !== today) return;
+    if (dayAt(seconds * 1000) !== today) return;
     if (positive(closes?.[i])) last = closes[i];
     if (last === null) return;
     series.push(last);
