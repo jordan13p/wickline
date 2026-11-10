@@ -11,6 +11,7 @@ import { QuoteError } from "../quotes.js";
  * @typedef {{
  *   id: "yahoo"|"binance"|"mis"|"yahootw"|"finnhub",
  *   markets: string[],
+ *   kinds: string[],
  *   overlay?: boolean,
  *   manualRefresh?: boolean,
  *   cap?(config: object): number,

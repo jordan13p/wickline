@@ -127,6 +127,8 @@ export function decodeTick(symbol, response, now) {
 export const yahootw = {
   id: "yahootw",
   markets: ["tw"],
+  // A Taiwan index (^TWII) is live here, 20 minutes late on Yahoo Finance.
+  kinds: ["stock", "index"],
   overlay: true,
   spacingMs: () => 0,
   intervalMs: (session) => (session === "open" || session === "unknown" ? 10_000 : 60_000),
@@ -139,7 +141,7 @@ export const yahootw = {
     const requests = [];
     for (let i = 0; i < symbols.length; i += YAHOOTW_BATCH) {
       const batch = symbols.slice(i, i + YAHOOTW_BATCH);
-      requests.push({ url: `${YAHOOTW_BASE}StockServices.stockList;symbols=${batch.join(",")}`, headers: HEADERS, symbols: batch, kind: "quote" });
+      requests.push({ url: `${YAHOOTW_BASE}StockServices.stockList;symbols=${batch.map(encodeURIComponent).join(",")}`, headers: HEADERS, symbols: batch, kind: "quote" });
     }
     for (const symbol of symbols) {
       const url = `${YAHOOTW_BASE}FinanceChartService.ApacLibraCharts;type=tick;symbols=${encodeURIComponent(JSON.stringify([symbol]))}`;

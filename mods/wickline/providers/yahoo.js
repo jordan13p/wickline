@@ -67,6 +67,7 @@ export function decodeYahoo(symbol, response, now) {
 export const yahoo = {
   id: "yahoo",
   markets: ["us", "tw", "hk", "cn", "jp", "kr", "other"],
+  kinds: ["stock", "index", "other"],
   // Stock requests are spaced at least this far apart.
   spacingMs: () => 1_000,
   intervalMs: () => 60_000,

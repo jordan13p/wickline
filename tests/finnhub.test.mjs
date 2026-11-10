@@ -438,7 +438,7 @@ test("only Finnhub's requests carry the key", async () => {
         .map((symbol) => ({ symbol, lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 })));
     }
     if (url.includes("klines")) return ok([[1, "1", "2", "0.5", "1.5"]]);
-    return yahooUs(url);
+    return yahooUs(decodeURIComponent(url.split("/chart/")[1].split("?")[0]));
   });
   host.prefs = { version: 1, keyRev: 0, sources: { us: { provider: "finnhub" }, tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
   host.secrets = { [SECRET_KEY_FINNHUB]: KEY };
@@ -522,20 +522,41 @@ test("choosing Finnhub again with the same saved key starts it at once", async (
   }
 });
 
+// An index is not a stock: once Yahoo names its exchange it counts as US, but Finnhub never asks for it, and it
+// never takes a place under the cap.
+test("an index never takes Finnhub's place", async () => {
+  const host = usHost({ budgetPerMinute: 4 }, { yahoo: (symbol) => yahooUs(symbol, symbol === "^DJI" ? { exchangeName: "DJI" } : {}) });
+  host.store = { version: 1, symbols: ["^DJI", "AAPL"], paused: false };
+  assert.equal(finnhubCap(4), 1);
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, 62_000);
+  assert.equal(w.exchangeOf("^DJI"), "DJI");
+  assert.ok(finnhubUrls(host).length > 0);
+  assert.ok(finnhubUrls(host).every((url) => url.endsWith("symbol=AAPL")), finnhubUrls(host).join(" "));
+  assert.equal(w.overCap("AAPL"), false);
+  assert.equal(w.overCap("^DJI"), false);
+  assert.equal(w.add("^GSPC").code, "notice.added");
+  await stop(w, host, runs);
+});
+
 // ---- helpers ----
 
 function finnhubOn(us = {}, keyRev = 0) {
   return { version: 1, keyRev, sources: { us: { provider: "finnhub", ...us } } };
 }
 
-const yahooUs = (url) => chart({
-  symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 230.1,
-  regularMarketTime: 1, previousClose: 228, currency: "USD",
+// Yahoo Finance's answer for `symbol`, with `fields` added to its meta.
+const yahooUs = (symbol, fields = {}) => chart({
+  symbol, regularMarketPrice: 230.1, regularMarketTime: 1, previousClose: 228, currency: "USD", ...fields,
 });
 
-function usHost(us = {}) {
-  const host = fakeHost((url) => (url.includes("/quote?symbol=") ? host.finnhub(url) : yahooUs(url)));
+// `yahoo` answers Yahoo Finance per symbol.
+function usHost(us = {}, { yahoo = (symbol) => yahooUs(symbol) } = {}) {
+  const host = fakeHost((url) => (url.includes("/quote?symbol=") ? host.finnhub(url)
+    : host.yahoo(decodeURIComponent(url.split("/chart/")[1].split("?")[0]))));
   host.finnhub = () => ok(QUOTE);
+  host.yahoo = yahoo;
   host.prefs = finnhubOn(us);
   host.secrets = { [SECRET_KEY_FINNHUB]: KEY };
   return host;

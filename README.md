@@ -32,8 +32,8 @@
 
 | Market | Default | Optional real-time | Notes |
 |---|---|---|---|
-| United States | Yahoo Finance (delayed) | Finnhub, with your own API key | Finnhub prices the first 15 US symbols at its default budget of 60 requests per minute; the rest stay on Yahoo. |
-| Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. |
+| United States | Yahoo Finance (delayed) | Finnhub, with your own API key | Finnhub prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. |
+| Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. |
 | Hong Kong, China, Japan, Korea | Yahoo Finance (delayed) | — | Delays vary by exchange; Yahoo usually does not report them. |
 | Crypto | Binance Spot (real time) | — | Binance is unavailable in some regions, such as the United States; you can set another address that serves the same API. |
 
@@ -139,7 +139,7 @@ Hosts, and when Wickline contacts them:
 
 - **Programs**: only `chmod 600` on `data/wickline/secrets.json` right after you save a Finnhub key, on macOS and Linux, so other accounts on this computer cannot read it. If it fails, the dialog says so and the key stays saved. Nothing else is run.
 - **Storage**: the watchlist in Herdr's shared state under `wickline.watchlist.v1`, the settings under `wickline.settings.v1`, and the tab a docked panel opened Wickline in under `wickline.dockTab` (so the panel can step aside while it is open). Each open copy also keeps its chosen market filter, and nothing else, under `wickline.filter` in its own `localStorage`, a file under `data/wickline/` in Herdr's folder. A Finnhub key you save is kept in plaintext in `data/wickline/secrets.json` in Herdr's folder on this computer, never in the shared state. On macOS and Linux the file is readable by your account only; any program running as you (another Herdr mod included) can still read it, so use a free-plan key. To remove the key, press **Remove** on the United States page and save (the file is deleted and every copy drops the key within one refresh), or delete that file; turning Finnhub off alone keeps it. Backups such as Time Machine may still hold an old key: to revoke it for good, regenerate the key on Finnhub. No other file is read or written.
-- **Finnhub**: only the first US symbols your budget covers are asked (15 at the default 60 requests per minute). Every open copy sends its own requests, so two copies use the budget twice as fast.
+- **Finnhub**: only the first US stocks your budget covers are asked (15 at the default 60 requests per minute); indexes stay on Yahoo Finance. Every open copy sends its own requests, so two copies use the budget twice as fast.
 - No telemetry, no analytics and no intermediate server: requests go directly from this computer to each source.
 - Keep one copy of Wickline open. Each copy, even one in a background tab, runs its own refresh loops, so a second copy doubles every request. A docked block that is not shown sends nothing, and, when shown again, fetches at once in the sources that skipped a round while it was hidden.
 
@@ -151,7 +151,7 @@ Hosts, and when Wickline contacts them:
 
 **Why is Yahoo TW Stock off by default?** Its quote interface is one that tw.stock.yahoo.com uses internally, not offered publicly to third-party programs, and the site's robots.txt disallows automated access to it; it may change, be blocked or stop at any time. When on, it is asked for prices about every 10 seconds while the market is open (about every 60 seconds otherwise) and for each stock's intraday chart about every 2 minutes (otherwise about every 10 minutes until the day's chart is complete). Wickline uses it only after you read its own responsibility statement in Settings and tick its consent box; whether to use it, and whether that complies with Yahoo's terms of service, is your own judgment and responsibility. The Traditional Chinese statement prevails.
 
-**Why only 15 real-time US symbols?** Finnhub's free plan allows 60 requests a minute. Wickline prices as many US symbols as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US symbols in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
+**Why only 15 real-time US stocks?** Finnhub's free plan allows 60 requests a minute. Wickline prices as many US stocks as your budget divided by 4, so each symbol refreshes about every 30 seconds with half the budget left for retries and a second copy. The first US stocks in your list get Finnhub; the rest show Yahoo and say they are over the limit. Raise the requests per minute in Settings if your plan allows more.
 
 **Why is Binance unavailable for me?** Binance refuses requests from some regions, such as the United States, and the crypto rows then say Binance is not available in this region. Stocks are unaffected. You can set another Binance address that serves the same API in Settings.
 

@@ -77,6 +77,7 @@ export function decodeKlines(response) {
 export const binance = {
   id: "binance",
   markets: ["crypto"],
+  kinds: ["pair"],
   spacingMs: () => 0,
   // Tickers; a pair's line is asked again only once `linesMs` has passed.
   intervalMs: () => 15_000,

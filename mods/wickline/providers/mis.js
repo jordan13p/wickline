@@ -87,6 +87,8 @@ export function decodeMis(symbols, response, now) {
 export const mis = {
   id: "mis",
   markets: ["tw"],
+  // Its index codes are another scheme (tse_t00.tw): stocks only.
+  kinds: ["stock"],
   overlay: true,
   spacingMs: () => 0,
   intervalMs: (session) => (session === "open" || session === "unknown" ? 10_000 : 60_000),

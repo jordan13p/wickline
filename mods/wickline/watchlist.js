@@ -2,7 +2,7 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
-import { marketOf } from "./markets.js";
+import { kindOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -220,15 +220,15 @@ export class Watchlist {
     }
   }
 
-  /** The US symbols Finnhub prices: the first `finnhubCap(budget)` in list order. */
+  /** The US stocks Finnhub prices: the first `finnhubCap(budget)` in list order. */
   finnhubSymbols() {
     return this.symbolsFor(finnhub);
   }
 
-  /** A listed US symbol left on Yahoo because Finnhub's budget is used up by the ones before it. */
+  /** A listed US stock left on Yahoo because Finnhub's budget is used up by the ones before it. */
   overCap(symbol) {
     const config = this.config();
-    return config.on.finnhub && marketOf(symbol) === "us" && this.preferences.symbols.includes(symbol)
+    return config.on.finnhub && this.serves(finnhub, symbol) && this.preferences.symbols.includes(symbol)
       && !this.symbolsFor(finnhub, config).includes(symbol);
   }
 
@@ -311,8 +311,8 @@ export class Watchlist {
     const config = this.config();
     const cap = finnhubCap(config.budgetPerMinute);
     if (this.overCap(symbol)) return notice("notice.overCap", { symbol, cap });
-    // The symbol went to the top, so a US symbol Finnhub priced before may have lost its place under the
-    // cap. With Finnhub off, or a symbol of another market, both lists are the same.
+    // The symbol went to the top, so a US stock Finnhub priced before may have lost its place under the
+    // cap. With Finnhub off, or a symbol Finnhub does not price, both lists are the same.
     const kept = new Set(this.symbolsFor(finnhub, config));
     const pushed = this.symbolsFor(finnhub, config, before).find((s) => !kept.has(s));
     return pushed ? notice("notice.overCapPushed", { symbol, pushed, cap }) : message;
@@ -468,12 +468,20 @@ export class Watchlist {
   }
 
   /**
+   * Whether `provider` prices `symbol`: it declares the symbol's market (an index's from its quote's exchange,
+   * see resolvedMarket) and its kind.
+   */
+  serves(provider, symbol) {
+    return provider.markets.includes(resolvedMarket(symbol, this.exchangeOf(symbol))) && provider.kinds.includes(kindOf(symbol));
+  }
+
+  /**
    * The listed symbols (or those of `list`) a provider quotes, up to its cap; none for an overlay source
    * that is off.
    */
   symbolsFor(provider, config = this.config(), list = this.preferences.symbols) {
     if (provider.overlay && !config.on[provider.id]) return [];
-    const symbols = list.filter((symbol) => provider.markets.includes(marketOf(symbol)));
+    const symbols = list.filter((symbol) => this.serves(provider, symbol));
     return provider.cap ? symbols.slice(0, Math.max(0, provider.cap(config))) : symbols;
   }
 
@@ -753,6 +761,7 @@ export class Watchlist {
       }
       return;
     }
+    const before = this.overlaySymbols();
     for (const [symbol, quote] of Object.entries(result.quotes)) {
       // A source with its own line requests keeps the last line until a new one arrives.
       if (provider.linesMs) quote.series = this.quotes[symbol]?.series ?? [];
@@ -760,6 +769,29 @@ export class Watchlist {
       delete this.errors[symbol];
     }
     for (const [symbol, error] of Object.entries(result.errors)) this.errors[symbol] = coded(error);
+    this.wakeResolved(before);
+  }
+
+  /** Each overlay source's symbols, by provider id: what `wakeResolved` compares. */
+  overlaySymbols() {
+    const config = this.config();
+    return Object.fromEntries(OVERLAYS.map((provider) => [provider.id, this.symbolsFor(provider, config).join(",")]));
+  }
+
+  /**
+   * A base answer that named an index's exchange can hand the index to an overlay source (`before`:
+   * overlaySymbols() from before the answer): each source whose symbols changed rounds again now, not after its
+   * idle wait; one in a round adds a round after it. Never restart(): that would drop the rounds in flight,
+   * this base one too.
+   */
+  wakeResolved(before) {
+    const after = this.overlaySymbols();
+    for (const provider of OVERLAYS) {
+      if (before[provider.id] === after[provider.id]) continue;
+      const state = this.sources[provider.id];
+      state.dirty = true;
+      wake(state);
+    }
   }
 
   // Sets one provider's entry in a per-symbol record (undefined clears it), dropping a symbol left empty.

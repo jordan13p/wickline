@@ -381,8 +381,9 @@ const BOTH = { version: 1, sources: { tw: {
   yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION },
 } } };
 const ONLY_YAHOOTW = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
-// The recorded Yahoo 奇摩股市 rows, each one that has a trade traded at `time`, with some rows' fields replaced.
-const stockList = (time, bySymbol = {}) => ok(TW_ROWS.map((row) => ({
+// The recorded Yahoo 奇摩股市 rows and any `extra` ones, each one that has a trade traded at `time`, with some rows'
+// fields replaced.
+const stockList = (time, bySymbol = {}, extra = []) => ok([...TW_ROWS, ...extra].map((row) => ({
   ...row, ...(row.regularMarketTime !== "-" && { regularMarketTime: new Date(time).toISOString() }), ...bySymbol[row.symbol],
 })));
 // The recorded MIS row for 2330, traded at `time`.
@@ -390,22 +391,28 @@ const misAt = (time) => ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: Str
 const offline = () => { throw new Error("offline"); };
 const isYahootw = (url) => url.startsWith(YAHOOTW_BASE);
 
-// A Yahoo 奇摩股市 line answer for `symbol`: one close a minute, the last at `time` (ms).
-const tickAt = (symbol, time, closes) => ok([{ symbol, chart: {
-  meta: { symbol }, timestamp: closes.map((_, i) => Math.floor(time / 1000) - (closes.length - 1 - i) * 60),
+// A Yahoo 奇摩股市 line answer for `symbol`: one close a minute, the last at `time` (ms), and `periods` (if any) as
+// its meta's currentTradingPeriod.
+const tickAt = (symbol, time, closes, periods) => ok([{ symbol, chart: {
+  meta: { symbol, ...(periods && { currentTradingPeriod: periods }) },
+  timestamp: closes.map((_, i) => Math.floor(time / 1000) - (closes.length - 1 - i) * 60),
   indicators: { quote: [{ close: closes }] },
 } }]);
 // Yahoo Finance's line under every Taiwan row.
 const BASE_SERIES = [2190, 2195];
+// Yahoo Finance's answer for a Taiwan row today, with `fields` added to its meta.
+const twYahoo = (symbol, fields = {}) => ok({ chart: { result: [{ meta: { symbol, regularMarketPrice: 2200,
+  regularMarketTime: 1_794_187_000, previousClose: 2135, currency: "TWD", ...fields }, indicators: { quote: [{ close: BASE_SERIES }] } }], error: null } });
 
+// `yahoo` answers Yahoo Finance per symbol; `rows` are added to the recorded Yahoo 奇摩股市 rows.
 function taiwanHost(prefs, {
-  yahootw = () => stockList(TW_NOW - 5_000), mis = () => misAt(TW_NOW - 5_000), line = (symbol) => tickAt(symbol, TW_NOW - 60_000, [2200, 2205]),
+  rows = [], yahootw = () => stockList(TW_NOW - 5_000, {}, rows), mis = () => misAt(TW_NOW - 5_000),
+  line = (symbol) => tickAt(symbol, TW_NOW - 60_000, [2200, 2205]), yahoo = (symbol) => twYahoo(symbol),
 } = {}) {
   const host = fakeHost((url) => isLine(url) ? host.line(lineSymbol(url)) : isYahootw(url) ? host.yahootw(url)
     : url.startsWith(MIS_URL) ? host.mis(url)
-    : ok({ chart: { result: [{ meta: { symbol: decodeURIComponent(url.split("/chart/")[1].split("?")[0]), regularMarketPrice: 2200,
-      regularMarketTime: 1_794_187_000, previousClose: 2135, currency: "TWD" }, indicators: { quote: [{ close: BASE_SERIES }] } }], error: null } }));
-  Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis, line });
+    : host.yahoo(decodeURIComponent(url.split("/chart/")[1].split("?")[0])));
+  Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis, line, yahoo });
   host.store = { version: 1, symbols: ["2330.TW"], paused: false };
   return host;
 }
@@ -633,4 +640,50 @@ test("a hung line keeps the price, drops the line and shows the problem until a 
 
 test("identity", () => {
   assert.equal(WATCHLIST_KEY, "wickline.watchlist.v1");
+});
+
+// Yahoo Finance names ^TWII's exchange (TAI): from then on it is a Taiwan index, priced live by Yahoo 奇摩股市.
+const atTai = (symbol) => twYahoo(symbol, { exchangeName: "TAI" });
+const stockLists = (host) => host.requests.filter((url) => isYahootw(url) && url.includes("StockServices"));
+const chartCount = (host) => host.requests.filter((url) => url.includes("/chart/")).length;
+
+test("a Taiwan index reaches Yahoo 奇摩股市 as soon as Yahoo Finance names its exchange", async () => {
+  const host = taiwanHost(BOTH, { yahoo: atTai });
+  host.store = { version: 1, symbols: ["^TWII"], paused: false };
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  // Well inside the 120 s an idle Yahoo 奇摩股市 loop would otherwise sleep.
+  await advance(host, TW_NOW + 5_000);
+  assert.ok(stockLists(host).some((url) => url.includes("%5ETWII")), stockLists(host).join(" "));
+  // MIS prices stocks only.
+  assert.equal(host.requests.filter((url) => url.startsWith(MIS_URL)).length, 0);
+  // Yahoo Finance's round was not restarted: one request for the one symbol.
+  assert.equal(chartCount(host), 1);
+  assert.equal(w.shown("^TWII").source, "yahootw");
+  await stop(w, host, runs);
+});
+
+test("a wake during an overlay round adds a round, it aborts none", async () => {
+  const host = taiwanHost(BOTH, { yahoo: atTai });
+  host.store = { version: 1, symbols: ["2330.TW", "^TWII"], paused: false };
+  // Yahoo 奇摩股市's first answer waits until released; any later one never comes, so only the first can price
+  // 2330.TW.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let answers = 0;
+  host.yahootw = () => (answers++ ? new Promise(() => {}) : held.then(() => stockList(TW_NOW - 5_000)));
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  // Yahoo Finance answers ^TWII a second after 2330.TW (its spacing), with the first stockList still out.
+  await advance(host, TW_NOW + 1_000);
+  assert.equal(w.exchangeOf("^TWII"), "TAI");
+  assert.equal(stockLists(host).length, 1);
+  release();
+  await advance(host, TW_NOW + 2_000);
+  assert.equal(w.shown("2330.TW").source, "yahootw");
+  assert.equal(stockLists(host).length, 2);
+  assert.ok(stockLists(host)[1].includes("%5ETWII"), stockLists(host)[1]);
+  assert.deepEqual(host.requests.filter((url) => url.includes("/chart/")).map((url) => decodeURIComponent(url.split("/chart/")[1].split("?")[0])),
+    ["2330.TW", "^TWII"]);
+  await stop(w, host, runs);
 });

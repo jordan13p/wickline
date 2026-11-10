@@ -8,7 +8,8 @@ import {
 import { t } from "../mods/wickline/i18n.js";
 import { jsonFixture, ok } from "./helpers.mjs";
 
-// A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads.
+// A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads. Its last two
+// rows, ^TWII and ^TWOII, were recorded after that day's close and keep their `exchange`.
 const ROWS = jsonFixture("yahootw-stocklist");
 // 09:41:20 in Taipei, seven seconds after the answer's newest trade.
 const NOW = 1794188480000;
@@ -63,6 +64,19 @@ test("requests: batches of 50 to the fixed host, then one line request per symbo
   // The host is fixed: no address in the settings changes it.
   assert.equal(yahootw.requests(["2330.TW"], { misUrl: "https://mirror.test" })[0].url,
     "https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.stockList;symbols=2330.TW");
+});
+
+// An index's symbol starts with ^, which a URL must not carry bare.
+test("stockList symbols are URL-encoded", () => {
+  assert.ok(yahootw.requests(["^TWII", "2330.TW"])[0].url.endsWith("symbols=%5ETWII,2330.TW"));
+});
+
+// An index has no price limits: its rows say "-".
+test("recorded index rows decode as overlays without limits", () => {
+  const { quotes } = decode(ok(ROWS), ["^TWII"]);
+  const index = quotes["^TWII"];
+  assert.deepEqual([index.price, index.name, index.limitUp, index.limitDown], [41661.7, "加權指數", null, null]);
+  assert.equal(priceLimit(index), null);
 });
 
 test("prices today's rows with the answer's newest trade as their time", () => {

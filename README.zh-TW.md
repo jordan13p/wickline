@@ -32,8 +32,8 @@
 
 | 市場 | 預設 | 可選即時來源 | 說明 |
 |---|---|---|---|
-| 美股 | Yahoo Finance（延遲） | Finnhub，需你自己的 API 金鑰 | 預設額度每分鐘 60 次時，Finnhub 提供清單中前 15 檔美股的報價，其餘仍用 Yahoo。 |
-| 台股 | Yahoo Finance（延遲 20 分鐘） | Yahoo 奇摩股市與證交所 MIS，各自同意後才會開啟 | 兩者都不是公開介面。即時的 Yahoo 奇摩股市價格優先，其次是 MIS；超出該股當日漲跌停範圍的價格會被捨棄，該列改顯示下一個來源。 |
+| 美股 | Yahoo Finance（延遲） | Finnhub，需你自己的 API 金鑰 | 預設額度每分鐘 60 次時，Finnhub 提供清單中前 15 檔美股的報價，其餘與指數仍用 Yahoo Finance。 |
+| 台股 | Yahoo Finance（延遲 20 分鐘） | Yahoo 奇摩股市與證交所 MIS，各自同意後才會開啟 | 兩者都不是公開介面。即時的 Yahoo 奇摩股市價格優先，其次是 MIS；超出該股當日漲跌停範圍的價格會被捨棄，該列改顯示下一個來源。Yahoo 奇摩股市也提供台股指數（如加權指數 `^TWII`）的即時報價。 |
 | 港股、陸股、日股、韓股 | Yahoo Finance（延遲） | — | 延遲時間依交易所而定，Yahoo 通常不回報。 |
 | 加密貨幣 | Binance Spot（即時） | — | 部分地區（例如美國）無法使用 Binance；可改設提供相同 API 的其他網址。 |
 
@@ -139,7 +139,7 @@ agent 會先告訴你 Wickline 會連線到哪些主機，再複製 mod、合併
 
 - **程式**：只在 macOS 與 Linux 上、你儲存 Finnhub API 金鑰之後，對 `data/wickline/secrets.json` 執行 `chmod 600`，讓這台電腦上的其他帳號無法讀取。若執行失敗，設定視窗會提示，API 金鑰仍會保存。除此之外不執行任何程式。
 - **儲存**：自選清單存於 Herdr 共用狀態的 `wickline.watchlist.v1`，設定存於 `wickline.settings.v1`，停靠面板把 Wickline 開在哪個分頁則存於 `wickline.dockTab`（讓面板在該分頁開著時讓位）。每個開啟的 copy 另在自己的 `localStorage`（Herdr 資料夾內 `data/wickline/` 下的檔案）以 `wickline.filter` 記住所選的市場篩選，只存這一項。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 `data/wickline/secrets.json`，不會寫入共用狀態。在 macOS 與 Linux 上，只有你的帳號能讀取這個檔案；但以你的身分執行的程式（包括其他 Herdr mod）仍讀得到，所以請使用免費方案的 API 金鑰。若要移除 API 金鑰，請在「美股」頁按「移除」後儲存（檔案會被刪除，每個 copy 會在下一次更新內捨棄它），或刪除該檔案；只關閉 Finnhub 則會保留 API 金鑰。Time Machine 等備份可能仍留有舊的 API 金鑰：若要徹底撤銷，請到 Finnhub 重新產生 API 金鑰。不讀寫其他檔案。
-- **Finnhub**：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍。
+- **Finnhub**：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔），指數仍用 Yahoo Finance。每個開啟的 copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍。
 - 沒有遙測、沒有分析、沒有中繼伺服器：請求直接從這台電腦送到各個來源。
 - 請只開一個 Wickline。每個 copy（即使在背景分頁）都會跑自己的更新迴圈，開第二個就會讓所有請求加倍。停靠（docked）的區塊在未顯示時不會送出任何請求，重新顯示時，會立刻為隱藏期間略過回合的來源更新。
 
