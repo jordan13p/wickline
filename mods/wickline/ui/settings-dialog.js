@@ -160,29 +160,40 @@ function advanced(view, t, market, fields, error) {
 }
 
 // A Taiwan source switched on: once consent to its current statement is saved, one line, "✓ Consented ·
-// View", whose link reads Hide in the same place while the statement shows below it; until then the
-// statement, which text prevails and the box (Save waits for it). The statements show in full in the
-// reader's language, wrapped to the page, which scrolls; the Traditional Chinese text prevails.
+// View", whose link reads Hide in the same place while the statement shows below it. Until then, its key
+// points, a link that shows the full statement in place (and hides it again), which text prevails and the box
+// (Save waits for it), so the box is reachable without opening the full text. Every text wraps to the page,
+// which scrolls, in the reader's language; the Traditional Chinese text prevails.
 function consentParts(view, t, source) {
   const tw = view.draft.sources.tw;
   const [ack, version] = CONSENTS[source];
   const agreed = consentGiven(tw, source);
   const collapsible = consentCollapsed(view.settings, view.draft, source);
-  const open = !collapsible || view.statementOpen.has(source);
-  const consented = collapsible ? h_flex().w_full().min_w(0).gap(4).items_center().text_size(11.5)
-    .child(div().flex_none().text_color(t.muted).child(`✓ ${view.tx("settings.consented")} ·`))
-    .child(link(t, `bw-${source}-statement-link`, view.tx(open ? "settings.hideStatement" : "settings.viewStatement"), (cx) => {
-      if (open) view.statementOpen.delete(source);
-      else view.statementOpen.add(source);
-      cx.notify();
-    })) : null;
-  if (!open) return [consented];
-  return [
-    consented,
-    div().w_full().min_w(0).text_size(11.5).text_color(t.muted).child(view.tx(`${source}.statement`)),
+  const open = view.statementOpen.has(source);
+  const flip = (cx) => {
+    if (open) view.statementOpen.delete(source);
+    else view.statementOpen.add(source);
+    cx.notify();
+  };
+  const statement = div().w_full().min_w(0).text_size(11.5).text_color(t.muted).child(view.tx(`${source}.statement`));
+  const box = [
     note(t, view.tx(`${source}.prevails`)),
     checkbox(t, `bw-${source}-consent`, agreed, view.tx(`${source}.consent`), (on) => { tw[ack] = on ? { version } : null; }),
     agreed ? null : note(t, view.tx(`${source}.consentNeeded`)),
+  ];
+  if (collapsible) {
+    const consented = h_flex().w_full().min_w(0).gap(4).items_center().text_size(11.5)
+      .child(div().flex_none().text_color(t.muted).child(`✓ ${view.tx("settings.consented")} ·`))
+      .child(link(t, `bw-${source}-statement-link`, view.tx(open ? "settings.hideStatement" : "settings.viewStatement"), flip));
+    if (!open) return [consented];
+    return [consented, statement, ...box];
+  }
+  return [
+    div().w_full().min_w(0).text_size(11.5).text_color(t.muted).child(view.tx(`${source}.summary`)),
+    h_flex().w_full().min_w(0).text_size(11.5)
+      .child(link(t, `bw-${source}-statement-link`, view.tx(open ? "settings.hideFullStatement" : "settings.fullStatement"), flip)),
+    open ? statement : null,
+    ...box,
   ];
 }
 

@@ -347,10 +347,24 @@ test("the READMEs and RECIPE carry the settings tab's disclaimer", () => {
   assert.ok(read(new URL("ui/settings-dialog.js", MOD)).includes('"disclaimer.key"'), "the tab shows disclaimer.key");
 });
 
-// The prevailing Traditional Chinese statements, word for word as the Taiwan card shows them.
+// The prevailing Traditional Chinese statements, word for word as the Taiwan card shows them: one quote,
+// its paragraphs in order, each on a `> ` line of its own and parted by a bare `>`.
 test("README.zh-TW.md quotes both Taiwan statements", () => {
   const readme = read(new URL("README.zh-TW.md", ROOT));
-  for (const key of ["mis.statement", "yahootw.statement"]) assert.ok(readme.includes(STRINGS["zh-TW"][key]), key);
+  for (const key of ["mis.statement", "yahootw.statement"]) {
+    const quote = STRINGS["zh-TW"][key].split("\n\n").map((paragraph) => `> ${paragraph}`).join("\n>\n");
+    assert.ok(readme.includes(quote), key);
+  }
+});
+
+// Key points first: until consented, a source shows its summary and a link that opens the full statement
+// in place; the box stays below, reachable without opening it.
+test("the consent shows key points first and the full statement on request", () => {
+  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
+  const parts = dialog.slice(dialog.indexOf("function consentParts("), dialog.indexOf("function taiwanPage("));
+  assert.match(parts, /view\.tx\(`\$\{source\}\.summary`\)/);
+  assert.match(parts, /"settings\.hideFullStatement" : "settings\.fullStatement"/);
+  assert.ok(parts.indexOf(".summary`") < parts.indexOf('"settings.fullStatement"'), "key points before the link");
 });
 
 test("the disclosure names every host and the key file in all four places", () => {

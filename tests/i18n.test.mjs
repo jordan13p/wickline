@@ -4,24 +4,78 @@ import assert from "node:assert/strict";
 import { LANGUAGES, LANGUAGE_LABELS, STRINGS, t } from "../mods/wickline/i18n.js";
 import { MESSAGES_EN } from "../mods/wickline/quotes.js";
 
+// The approved Traditional Chinese texts, word for word: they prevail over every translation.
+const APPROVED = {
+  "yahootw.statement": [
+    "Yahoo 奇摩股市（tw.stock.yahoo.com）的報價資料只供該網站自己使用，並未開放給其他程式，網站的 robots.txt 也不允許程式自動存取。Wickline 與 Yahoo 沒有任何關係，也未取得 Yahoo 的授權。",
+    "開啟後，Wickline 會從這台電腦直接向 Yahoo 奇摩股市查詢你清單中的以下商品：上市股票、ETF 與加權指數（臺灣證券交易所），上櫃股票與櫃買指數（證券櫃檯買賣中心），以及期貨（臺灣期貨交易所）。交易時段約每 10 秒更新報價、每 2 分鐘更新走勢圖，其他時段則放慢為約 60 秒與 10 分鐘。這些報價會取代 Yahoo Finance 延遲約 20 分鐘的報價；Yahoo Finance 沒有的指數與期貨，只由 Yahoo 奇摩股市提供。",
+    "資料可能延遲、有誤或中斷，Yahoo 也可能隨時變更、限制或停止提供。Wickline 會捨棄超出當日漲跌停範圍的股票價格；非當日的價格只用於 Yahoo Finance 沒有的商品，並會標示日期。其餘價格是否正確，無法保證。",
+    "是否使用，以及使用方式是否符合 Yahoo 的服務條款，由你自行判斷；使用這些資料的一切後果，由你自行承擔。資料僅供個人參考，不構成投資建議。",
+  ].join("\n\n"),
+  "mis.statement": [
+    "證交所 MIS（mis.twse.com.tw）是臺灣證券交易所的「基本市況報導網站」，不是提供給程式使用的 API。Wickline 與臺灣證券交易所沒有任何關係，也未取得授權。",
+    "開啟後，Wickline 會從這台電腦直接向 MIS 查詢你清單中的台股，交易時段約每 10 秒一次，取代 Yahoo Finance 延遲約 20 分鐘的價格；走勢圖仍來自 Yahoo Finance。",
+    "資料可能延遲、有誤或中斷，MIS 也可能隨時變更或停止提供。Wickline 會捨棄超出該股當日漲跌停範圍的價格；其餘價格是否正確，無法保證。",
+    "是否使用，以及使用方式是否符合臺灣證券交易所網站的使用條款，由你自行判斷；使用這些資料的一切後果，由你自行承擔。資料僅供個人參考，不構成投資建議。",
+  ].join("\n\n"),
+  "yahootw.consent": "我已閱讀並了解以上說明，願意自行承擔使用 Yahoo 奇摩股市資料的責任，並遵守 Yahoo 的服務條款。",
+  "mis.consent": "我已閱讀並了解以上說明，願意自行承擔使用證交所 MIS 資料的責任，並遵守臺灣證券交易所網站的使用條款。",
+  "yahootw.reconfirm": "Yahoo 奇摩股市的說明已更新，請到設定重新確認；確認前暫停使用其報價。",
+  "mis.reconfirm": "證交所 MIS 的說明已更新，請到設定重新確認；確認前暫停使用其報價。",
+  "yahootw.summary": [
+    "• 非官方資料來源：Wickline 與 Yahoo 沒有任何關係，資料可能延遲、有誤或中斷。",
+    "• 查詢你清單中的台股、指數與期貨，交易時段約每 10 秒一次。",
+    "• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議。",
+  ].join("\n"),
+  "mis.summary": [
+    "• 非官方用法：MIS 是證交所的看盤網站，不是提供給程式的 API；Wickline 與證交所沒有任何關係。",
+    "• 查詢你清單中的台股，交易時段約每 10 秒一次，取代延遲約 20 分鐘的報價。",
+    "• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議。",
+  ].join("\n"),
+  "settings.fullStatement": "查看完整說明",
+  "settings.hideFullStatement": "收起完整說明",
+};
+
+test("the Traditional Chinese consent texts are the approved ones", () => {
+  for (const [key, text] of Object.entries(APPROVED)) assert.equal(STRINGS["zh-TW"][key], text, key);
+});
+
+// Plain wording, key points first: four paragraphs (what it is, what is asked, what may go wrong, who decides)
+// and three key points, in every language.
+test("every statement has four paragraphs and every summary three key points", () => {
+  for (const lang of LANGUAGES) {
+    for (const source of ["yahootw", "mis"]) {
+      const paragraphs = STRINGS[lang][`${source}.statement`].split("\n\n");
+      assert.equal(paragraphs.length, 4, `${lang} ${source}.statement`);
+      for (const paragraph of paragraphs) assert.ok(paragraph.trim() === paragraph && paragraph && !paragraph.includes("\n"), `${lang} ${source}.statement`);
+      const points = STRINGS[lang][`${source}.summary`].split("\n");
+      assert.equal(points.length, 3, `${lang} ${source}.summary`);
+      for (const point of points) assert.match(point, /^• \S/, `${lang} ${source}.summary`);
+    }
+    for (const key of ["settings.fullStatement", "settings.hideFullStatement"]) assert.ok(STRINGS[lang][key], `${lang} ${key}`);
+  }
+});
+
 test("the statement names what is queried by exchange, in the person's words", () => {
-  const tw = STRINGS["zh-TW"]["yahootw.statement"];
-  for (const sentence of [
-    "查詢你清單中下列商品的價格：臺灣證券交易所的上市股票、ETF 與加權指數，證券櫃檯買賣中心的上櫃股票與櫃買指數，以及臺灣期貨交易所的期貨",
-    "取代延遲約 20 分鐘的 Yahoo Finance 報價；Yahoo Finance 沒有的指數與期貨，只由 Yahoo 奇摩股市提供",
-    "會捨棄超出當日漲跌停範圍的股票價格；非當日的價格只用於 Yahoo Finance 沒有的商品，並標示其日期",
-  ]) assert.ok(tw.includes(sentence), sentence);
-  for (const old of ["查詢你清單中的台股價格", "會捨棄超出該股當日漲跌停範圍或非當日的價格"]) assert.ok(!tw.includes(old), old);
-  assert.equal(t("zh-TW", "yahootw.reconfirm"), "Yahoo 奇摩股市的說明已更新。在設定重新確認前，台股、指數與期貨都不會使用它。");
   // Sentence 3 names stock prices in every language: futures prices are never discarded (Q8).
   const stockPrices = {
     en: "discards a stock price outside the day's price limits", "zh-TW": "超出當日漲跌停範圍的股票價格",
     "zh-CN": "超出当日涨跌停范围的股票价格", ja: "当日の値幅制限を超える株式の価格", ko: "당일 가격 제한폭을 벗어난 주식 가격",
   };
   for (const [lang, words] of Object.entries(stockPrices)) assert.ok(t(lang, "yahootw.statement").includes(words), lang);
+  const exchanges = {
+    en: ["Taiwan Stock Exchange (TWSE)", "Taipei Exchange (TPEx)", "Taiwan Futures Exchange (TAIFEX)"],
+    "zh-TW": ["臺灣證券交易所", "證券櫃檯買賣中心", "臺灣期貨交易所"],
+    "zh-CN": ["台湾证券交易所", "证券柜台买卖中心", "台湾期货交易所"],
+    ja: ["台湾証券取引所", "台湾の店頭市場（TPEx）", "台湾先物取引所"],
+    ko: ["대만증권거래소", "대만 장외시장(TPEx)", "대만선물거래소"],
+  };
+  for (const [lang, names] of Object.entries(exchanges)) {
+    for (const name of names) assert.ok(t(lang, "yahootw.statement").includes(name), `${lang} ${name}`);
+  }
   const words = { en: [/indices/, /futures/], "zh-TW": [/指數/, /期貨/], "zh-CN": [/指数/, /期货/], ja: [/指数/, /先物/], ko: [/지수/, /선물/] };
   for (const [lang, [index, future]] of Object.entries(words)) {
-    for (const key of ["yahootw.statement", "yahootw.reconfirm"]) {
+    for (const key of ["yahootw.statement", "yahootw.summary"]) {
       assert.match(t(lang, key), index, `${lang} ${key}`);
       assert.match(t(lang, key), future, `${lang} ${key}`);
     }

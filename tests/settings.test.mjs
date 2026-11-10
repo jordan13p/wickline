@@ -196,6 +196,16 @@ test("a consent to statement v1 asks again", () => {
   assert.equal(consentCollapsed(v1, v1, "yahootw"), false);
 });
 
+// Rewording the MIS statement in plain words changes nothing in substance: a saved MIS consent still stands.
+test("a saved MIS consent still stands after the plain rewording", () => {
+  assert.equal(MIS_CONSENT_VERSION, 2);
+  const saved = tw({ mis: true, misAck: { version: MIS_CONSENT_VERSION } });
+  assert.equal(misEnabled(saved), true);
+  assert.equal(misReconfirm(saved), false);
+  assert.deepEqual(validateSettings(saved), {});
+  assert.equal(consentCollapsed(saved, saved, "mis"), true);
+});
+
 test("a fresh install has both Taiwan switches off", () => {
   const { tw: fresh } = readSettings(undefined).sources;
   assert.equal(fresh.mis, false);
