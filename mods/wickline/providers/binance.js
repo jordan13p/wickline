@@ -46,7 +46,6 @@ export function decodeBinance(pairs, response, now) {
       currency: pair.split("/")[1],
       timestamp: time,
       fetchedAt: now,
-      delaySeconds: 0,
       series: [],
       open: positive(Number(ticker.openPrice)) ? Number(ticker.openPrice) : null,
       high: positive(Number(ticker.highPrice)) ? Number(ticker.highPrice) : null,

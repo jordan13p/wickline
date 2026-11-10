@@ -105,8 +105,6 @@ export function mergeOverlay(base, overlay, line) {
     limitUp: overlay.limitUp ?? null,
     limitDown: overlay.limitDown ?? null,
     currency: base?.currency ?? null,
-    delaySeconds: 0,
-    chartDelaySeconds: own ? 0 : base?.delaySeconds ?? null,
     series: own ? [...own, overlay.price] : base?.series ?? [],
     periods: base?.periods ?? null,
     chartSource: own ? overlay.source : base?.source ?? null,

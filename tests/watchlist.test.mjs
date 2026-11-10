@@ -544,7 +544,7 @@ test("the Yahoo 奇摩股市 line ends at the shown price, and is used only whil
   await firstRound(taiwanHost(BOTH, { yahootw: () => at2210() }), (w) => {
     const quote = w.shown("2330.TW");
     assert.deepEqual(quote.series, [2200, 2205, 2210]);
-    assert.deepEqual([quote.source, quote.chartSource, quote.chartDelaySeconds], ["yahootw", "yahootw", 0]);
+    assert.deepEqual([quote.source, quote.chartSource], ["yahootw", "yahootw"]);
   });
   // A stale Yahoo 奇摩股市 price yields to a live MIS one, and its line goes with it.
   await firstRound(taiwanHost(BOTH, { yahootw: () => at2210(TW_NOW - 180_000) }), (w) => {

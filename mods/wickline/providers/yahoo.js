@@ -36,7 +36,6 @@ export function decodeYahoo(symbol, response, now) {
     throw new QuoteError("yahoo.incomplete");
   }
   const close = positive(meta.previousClose) ? meta.previousClose : meta.chartPreviousClose;
-  const delay = meta.exchangeDataDelayedBy;
   const bars = body.chart.result[0].indicators?.quote?.[0] ?? {};
   const series = cleanSeries(bars.close);
   const opens = cleanSeries(bars.open);
@@ -54,7 +53,6 @@ export function decodeYahoo(symbol, response, now) {
     exchange: exchangeCode(meta.exchangeName),
     timestamp: meta.regularMarketTime * 1000,
     fetchedAt: now,
-    delaySeconds: typeof delay === "number" && Number.isFinite(delay) && delay >= 0 ? delay : null,
     series,
     open: opens[0] ?? null,
     high: positive(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : highs.length ? Math.max(...highs) : null,

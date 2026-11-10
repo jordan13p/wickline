@@ -8,7 +8,7 @@ import { formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 
 const now = 1_000_000;
-const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, delaySeconds: null, periods: null, ...fields });
+const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
 const say = (lang) => (key, params) => t(lang, key, params);
 
 test("freshness constants", () => {
@@ -29,11 +29,11 @@ test("freshness states", () => {
     [quote({ symbol: "2330.TW", source: "mis", timestamp: now - 120_000 }), "open", { state: "live", delayMinutes: null, stoppedAt: null }],
     [quote({ symbol: "2330.TW", source: "mis", timestamp: now - 121_000 }), "open", { state: "stalled", delayMinutes: null, stoppedAt: now - 121_000 }],
     [quote({ source: "finnhub" }), "unknown", { state: "unconfirmed", delayMinutes: null, stoppedAt: null }],
-    [quote({ symbol: "2330.TW", exchange: "TAI", delaySeconds: 0 }), "open", { state: "delayed", delayMinutes: 20, stoppedAt: null }],
-    [quote({ delaySeconds: 0 }), "open", { state: "delayed", delayMinutes: null, stoppedAt: null }],
+    [quote({ symbol: "2330.TW", exchange: "TAI" }), "open", { state: "delayed", delayMinutes: 20, stoppedAt: null }],
+    [quote({}), "open", { state: "delayed", delayMinutes: null, stoppedAt: null }],
     [quote({ symbol: "0700.HK", exchange: "HKG" }), "open", { state: "delayed", delayMinutes: 15, stoppedAt: null }],
     // A delayed quote whose session is unknown is still delayed, never live.
-    [quote({ delaySeconds: 0 }), "unknown", { state: "delayed", delayMinutes: null, stoppedAt: null }],
+    [quote({}), "unknown", { state: "delayed", delayMinutes: null, stoppedAt: null }],
     [quote({}), "closed", { state: "closed", delayMinutes: null, stoppedAt: null }],
     [quote({ symbol: "2330.TW", source: "mis" }), "closed", { state: "closed", delayMinutes: null, stoppedAt: null }],
     [quote({}), "pre", { state: "pre", delayMinutes: null, stoppedAt: null }],
@@ -58,7 +58,7 @@ test("the session of a quote", () => {
 // The detail dialog names the state first, then the source, for the price and for the line.
 test("the detail source line reads state · source", () => {
   const NOW = 1794188480000;
-  const own = { symbol: "2330.TW", source: "yahootw", timestamp: NOW - 10_000, chartSource: "yahootw", chartDelaySeconds: 0 };
+  const own = { symbol: "2330.TW", source: "yahootw", timestamp: NOW - 10_000, chartSource: "yahootw" };
   assert.deepEqual(detailSource(own, "open", NOW, say("zh-TW")), [["價格：即時 · Yahoo 奇摩股市"], ["走勢：即時 · Yahoo 奇摩股市"]]);
   assert.deepEqual(detailSource(own, "open", NOW, say("en")), [["Price: Live · Yahoo TW Stock"], ["Line: Live · Yahoo TW Stock"]]);
   // A stalled price makes its own line read stalled too, with the time it stopped.
@@ -66,7 +66,7 @@ test("the detail source line reads state · source", () => {
   const stalled = t("zh-TW", "freshness.stalled", { time: formatTime(old.timestamp) });
   assert.deepEqual(detailSource(old, "open", NOW, say("zh-TW")), [[`價格：${stalled} · Yahoo 奇摩股市`], [`走勢：${stalled} · Yahoo 奇摩股市`]]);
   // A line from another source keeps its own delay.
-  const mis = { symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: NOW - 10_000, chartSource: "yahoo", chartDelaySeconds: null };
+  const mis = { symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: NOW - 10_000, chartSource: "yahoo" };
   assert.deepEqual(detailSource(mis, "open", NOW, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
   assert.deepEqual(detailSource({ ...mis, symbol: "AAPL", source: "finnhub", exchange: "NMS" }, "open", NOW, say("en")),
     [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
@@ -74,7 +74,7 @@ test("the detail source line reads state · source", () => {
   assert.deepEqual(detailSource(own, "closed", NOW, say("en")), [["Price: Market closed · Yahoo TW Stock"], ["Line: Market closed · Yahoo TW Stock"]]);
   assert.deepEqual(detailSource({ ...mis, chartSource: null }, "unknown", NOW, say("en")), [["Price: Session unknown · TWSE MIS"]]);
   // Base only: unchanged.
-  const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: NOW, delaySeconds: null };
+  const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: NOW };
   assert.deepEqual(detailSource(base, "open", NOW, say("en")), [["Yahoo Finance · regular session", "delayed 20 min"]]);
 });
 

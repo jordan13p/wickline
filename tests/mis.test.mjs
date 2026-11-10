@@ -160,7 +160,7 @@ test("HTML answer fails visibly", () => {
 
 const YAHOO_2330 = {
   symbol: "2330.TW", source: "yahoo", exchange: "TAI", name: "Taiwan Semiconductor", price: 2200, changePercent: -2.65, currency: "TWD",
-  timestamp: 1_000, fetchedAt: 2_000, delaySeconds: null, series: [2190, 2200], open: 2250, high: 2260, low: 2180,
+  timestamp: 1_000, fetchedAt: 2_000, series: [2190, 2200], open: 2250, high: 2260, low: 2180,
   previousClose: 2260, periods: { pre: null, regular: [0, 10_000], post: null },
 };
 const MIS_2330 = {
@@ -181,7 +181,6 @@ test("overlay merges over Yahoo", () => {
   // A field MIS did not send keeps Yahoo's.
   assert.equal(merged.low, 2180);
   assert.equal(merged.changePercent, (2267.5 - 2260) / 2260 * 100);
-  assert.equal(merged.delaySeconds, 0);
   assert.deepEqual(merged.series, YAHOO_2330.series);
   assert.deepEqual(merged.periods, YAHOO_2330.periods);
   assert.equal(merged.currency, "TWD");
@@ -469,11 +468,10 @@ test("the detail line puts the chart's delay on the chart", () => {
   const merged = mergeOverlay(YAHOO_2330, MIS_2330);
   assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
   assert.deepEqual(detailSource(merged, "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: delayed 20 min · Yahoo Finance"]]);
-  // The chart reads its base's exchange: NMS is live (Yahoo's reported 900 s is ignored); no exchange, no delay known.
-  const us = { ...YAHOO_2330, symbol: "AAPL", exchange: "NMS", delaySeconds: 900 };
+  // The chart reads its base's exchange: NMS is live; no exchange, no delay known.
+  const us = { ...YAHOO_2330, symbol: "AAPL", exchange: "NMS" };
   // Any real-time overlay over a US Yahoo quote (Finnhub's case).
   const over = { ...MIS_2330, symbol: "AAPL" };
-  assert.equal(mergeOverlay(us, over).chartDelaySeconds, 900);
   assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: Live · Yahoo Finance"]]);
   assert.deepEqual(detailSource(mergeOverlay({ ...us, exchange: null }, over), "open", 5_000, say("en"))[1], ["Line: delay not provided · Yahoo Finance"]);
   // A real-time price before Yahoo's first quote; a plain Yahoo row keeps its wording.
