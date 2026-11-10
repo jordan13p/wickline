@@ -5,21 +5,21 @@ import { isCryptoPair } from "./quotes.js";
 // Yahoo exchange suffixes.
 const SUFFIXES = { TW: "tw", TWO: "tw", HK: "hk", SS: "cn", SZ: "cn", T: "jp", KS: "kr", KQ: "kr" };
 
-/** "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges), by form alone. */
-export function marketOf(symbol) {
-  if (isCryptoPair(symbol)) return "crypto";
-  // Indices start with ^, currencies and futures contain =.
-  if (/^\^|=/.test(symbol)) return "other";
-  const dot = symbol.lastIndexOf(".");
-  if (dot === -1) return "us";
-  return SUFFIXES[symbol.slice(dot + 1)] ?? "other";
-}
-
 /** "pair", "index" (a leading ^), "other" (a currency or future: it has =) or "stock". */
 export function kindOf(symbol) {
   if (isCryptoPair(symbol)) return "pair";
   if (symbol.startsWith("^")) return "index";
   return symbol.includes("=") ? "other" : "stock";
+}
+
+/** "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges), by form alone. */
+export function marketOf(symbol) {
+  const kind = kindOf(symbol);
+  if (kind === "pair") return "crypto";
+  if (kind !== "stock") return "other";
+  const dot = symbol.lastIndexOf(".");
+  if (dot === -1) return "us";
+  return SUFFIXES[symbol.slice(dot + 1)] ?? "other";
 }
 
 /** An index of Taiwan form (^TW…): Yahoo 奇摩股市 may know one that Yahoo Finance does not. */

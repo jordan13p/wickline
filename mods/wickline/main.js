@@ -88,8 +88,9 @@ export default class Wickline extends View {
     // A symbol's market for the filter and the fading rows: the watchlist's (an index's from the exchange its
     // quote reports), or, for a row still fading out (its quote already dropped), the one its row was drawn with.
     this.marketFor = (symbol) => {
-      const fading = this.watch.exchangeOf(symbol) === null && this.leaving.find((g) => g.symbol === symbol);
-      return fading ? resolvedMarket(symbol, fading.row.quote?.exchange ?? null) : this.watch.marketFor(symbol);
+      const exchange = this.watch.exchangeOf(symbol);
+      const ghost = exchange === null ? this.leaving.find((g) => g.symbol === symbol) : null;
+      return resolvedMarket(symbol, ghost ? ghost.row.quote?.exchange ?? null : exchange);
     };
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};

@@ -467,7 +467,7 @@ export class Watchlist {
 
   /** What the loops act on: whether paused, and the symbols each provider quotes (order does not matter). */
   loopKey() {
-    return JSON.stringify([this.preferences.paused, this.symbolLists(PROVIDERS).map((symbols) => symbols.sort())]);
+    return JSON.stringify([this.preferences.paused, this.symbolLists(PROVIDERS).map((symbols) => [...symbols].sort())]);
   }
 
   /** The symbols each of `providers` quotes (see symbolsFor), in that order. */
@@ -828,11 +828,12 @@ export class Watchlist {
       this.quotes[symbol] = quote;
       delete this.errors[symbol];
     }
+    const yahootwOn = this.config().on[yahootw.id];
     for (const [symbol, error] of Object.entries(result.errors)) {
       this.errors[symbol] = coded(error);
       // A Taiwan index Yahoo Finance does not know may be Yahoo 奇摩股市's alone; the error stays until it is priced.
       // A TW-only row keeps nothing of a quote Yahoo Finance gave before.
-      if (error.code === "yahoo.notFound" && isTaiwanForm(symbol) && this.config().on[yahootw.id]) {
+      if (error.code === "yahoo.notFound" && isTaiwanForm(symbol) && yahootwOn) {
         this.twOnly.set(symbol, null);
         delete this.quotes[symbol];
       }
