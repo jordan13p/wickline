@@ -832,10 +832,62 @@ test("a rate limit shows on a TW-only row", async () => {
   await twOnlyRun(twOnlyHost(["^TWOII"], { yahootw: () => limited }), (w) => {
     assert.equal(w.errors["^TWOII"].code, "yahootw.rateLimited");
   });
-  // A rate-limited line drops the price it was asked beside: the row says why.
+  // A rate-limited line keeps the price it was asked beside, drawn as cached: the row says why.
   await twOnlyRun(twOnlyHost(["^TWOII"], { line: () => limited }), (w) => {
-    assert.equal(w.shown("^TWOII"), undefined);
+    const quote = w.shown("^TWOII");
+    assert.deepEqual([quote.source, quote.price, quote.cached], ["yahootw", 321.97, true]);
     assert.equal(w.errors["^TWOII"].code, "request.deferred");
+  });
+});
+
+test("a failed round keeps a TW-only index's last price, cached with the reason, until the next answer", async () => {
+  let hang = false;
+  const host = twOnlyHost(["^TWOII"], { yahootw: () => (hang ? new Promise(() => {}) : stockList(host.clock - 5_000)) });
+  await twOnlyRun(host, async (w) => {
+    const priced = w.shown("^TWOII");
+    assert.equal(priced.cached, undefined);
+    hang = true;
+    // The next round (10 s on: the line's periods say open) hangs and times out 10 s later.
+    await advance(host, TW_NOW + 30_000);
+    const kept = w.shown("^TWOII");
+    assert.deepEqual([kept.source, kept.price, kept.timestamp, kept.cached], ["yahootw", priced.price, priced.timestamp, true]);
+    assert.equal(w.errors["^TWOII"].code, "request.timeout");
+    assert.equal(w.overlayError("^TWOII"), null);
+    hang = false;
+    await advance(host, TW_NOW + 60_000);
+    assert.equal(w.shown("^TWOII").cached, undefined);
+    assert.equal(w.errors["^TWOII"], undefined);
+  });
+});
+
+test("after a price, a name-only answer keeps a TW-only index's last price and line, not cached", async () => {
+  let placeholder = false;
+  const host = twOnlyHost(["^TWOII"], {
+    yahootw: () => stockList(host.clock - 5_000, placeholder ? { "^TWOII": { price: { raw: "-" }, regularMarketTime: "-" } } : {}),
+  });
+  await twOnlyRun(host, async (w) => {
+    const priced = w.shown("^TWOII");
+    placeholder = true;
+    await advance(host, TW_NOW + 25_000);
+    const kept = w.shown("^TWOII");
+    assert.deepEqual([kept.price, kept.timestamp, kept.cached], [priced.price, priced.timestamp, undefined]);
+    assert.deepEqual(kept.series, priced.series);
+    assert.equal(w.errors["^TWOII"], undefined);
+  });
+});
+
+test("after a price, an answer without its row keeps a TW-only index's last price, cached as not found", async () => {
+  let absent = false;
+  const host = twOnlyHost(["^TWOII"], {
+    yahootw: () => (absent ? ok(TW_ROWS.filter((row) => row.symbol !== "^TWOII")) : stockList(host.clock - 5_000)),
+  });
+  await twOnlyRun(host, async (w) => {
+    const priced = w.shown("^TWOII");
+    absent = true;
+    await advance(host, TW_NOW + 25_000);
+    const kept = w.shown("^TWOII");
+    assert.deepEqual([kept.price, kept.cached], [priced.price, true]);
+    assert.equal(w.errors["^TWOII"].code, "yahootw.notFound");
   });
 });
 

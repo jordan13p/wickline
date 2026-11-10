@@ -289,14 +289,15 @@ export class Watchlist {
 
   /**
    * What a row is built on. With a sole source: that source's own quote, read by the trading periods ownPeriods
-   * gives it. Otherwise the base quote; one whose last fetch failed is marked `cached`, so freshness ages it to
-   * now, never by its last good fetch.
+   * gives it. Otherwise the base quote. Either one, kept through a failure or a missing row, is marked `cached`,
+   * so freshness ages it to now, never by its last good fetch.
    */
   baseQuote(symbol, now = this.host.now()) {
     const sole = this.soleSource(symbol);
     if (sole) {
       const own = this.overlays[symbol]?.[sole.id];
-      return own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
+      const quote = own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
+      return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
     }
     const quote = this.quotes[symbol];
     return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
@@ -820,7 +821,7 @@ export class Watchlist {
 
   // Back off this provider only: at least a minute, doubling up to 15 minutes; the rest of the
   // round's quote requests are deferred. A rate-limited line of an overlay source defers all its
-  // prices, sent or not, so its rows fall to the next source.
+  // prices, sent or not, so its rows fall to the next source (one it prices alone keeps its price, cached).
   backOff(provider, state, requests, index, limited) {
     state.failures++;
     const backoff = Math.min(900_000, 60_000 * 2 ** Math.min(state.failures - 1, 4));
@@ -838,13 +839,19 @@ export class Watchlist {
       for (const symbol of request.symbols) {
         const overlay = result.quotes[symbol];
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
+        if (this.soleSource(symbol) === provider) {
+          // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
+          // does, and its own row says why: nothing once its source prices or names it, else a failure as itself,
+          // never as not found, else not found (by this source once it priced it, so the kept price reads cached).
+          const priced = this.overlays[symbol]?.[provider.id];
+          if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
+          if (overlay || result.names?.[symbol]) delete this.errors[symbol];
+          else this.errors[symbol] = error ?? notice(priced ? "yahootw.notFound" : "yahoo.notFound");
+          continue;
+        }
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
         else this.dropOverlay(provider, symbol);
-        // A symbol this source prices alone has no base, so its own row says why it shows nothing: nothing once
-        // its source prices or names it, else a failure as itself, never as not found, else not found.
-        if (this.soleSource(symbol) !== provider) this.setEntry(this.overlayErrors, symbol, provider.id, overlay ? undefined : error);
-        else if (overlay || result.names?.[symbol]) delete this.errors[symbol];
-        else this.errors[symbol] = error ?? notice("yahoo.notFound");
+        this.setEntry(this.overlayErrors, symbol, provider.id, overlay ? undefined : error);
       }
       return;
     }
@@ -913,13 +920,12 @@ export class Watchlist {
     }
   }
 
-  // A symbol whose request was not answered: a base quote stays, marked cached; an overlay goes, and a symbol
-  // this source prices alone, which has no base, says why in its own row.
+  // A symbol whose request was not answered: a base quote stays, marked cached, and so does the quote of a symbol
+  // this source prices alone, which has no base; an overlay goes.
   fail(provider, symbol, error) {
-    if (!provider.overlay) { this.errors[symbol] = error; return; }
+    if (!provider.overlay || this.soleSource(symbol) === provider) { this.errors[symbol] = error; return; }
     this.dropOverlay(provider, symbol);
-    if (this.soleSource(symbol) === provider) this.errors[symbol] = error;
-    else this.setEntry(this.overlayErrors, symbol, provider.id, error);
+    this.setEntry(this.overlayErrors, symbol, provider.id, error);
   }
 
   // An overlay's line goes with its price, so a line is never drawn with a later price it did not end at.

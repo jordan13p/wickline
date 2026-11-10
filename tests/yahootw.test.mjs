@@ -146,8 +146,8 @@ test("an answer with prices but none accepted says so; one with no price at all 
   assert.deepEqual(delayed.quotes, {});
   assert.deepEqual(delayed.errors, {});
   assert.equal(delayed.noLive.code, "yahootw.noLiveRows");
-  assert.equal(t("zh-TW", "yahootw.noLiveRows"), "Yahoo 奇摩股市回傳的報價都不是即時資料，暫時改用其他來源。");
-  assert.equal(t("en", "yahootw.noLiveRows"), "Yahoo TW Stock returned no real-time prices; other sources are used for now.");
+  assert.equal(t("zh-TW", "yahootw.noLiveRows"), "Yahoo 奇摩股市回傳的報價都不是即時資料。");
+  assert.equal(t("en", "yahootw.noLiveRows"), "Yahoo TW Stock returned no real-time prices.");
   const yesterday = decode(changed(Object.fromEntries(SYMBOLS.map((symbol) => [symbol, { regularMarketTime: "2026-11-08T05:30:00Z" }]))));
   assert.equal(yesterday.noLive.code, "yahootw.noLiveRows");
   // Before the open, or every stock halted: placeholders only.

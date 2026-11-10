@@ -165,3 +165,12 @@ test("Finnhub is faster updates; Yahoo's US prices are not called delayed", () =
   assert.equal(t("zh-TW", "settings.liveEveryMinute"), "即時，每分鐘更新");
   assert.match(t("zh-TW", "sources.us.faster"), /^約每 15–30 秒更新/);
 });
+
+test("Yahoo 奇摩股市's no-real-time note claims no fallback, and its not-found names it", () => {
+  assert.equal(t("en", "yahootw.noLiveRows"), "Yahoo TW Stock returned no real-time prices.");
+  assert.equal(t("zh-TW", "yahootw.noLiveRows"), "Yahoo 奇摩股市回傳的報價都不是即時資料。");
+  const fallback = { en: /other sources/, "zh-TW": /其他來源/, "zh-CN": /其他来源/, ja: /ほかのソース/, ko: /다른 소스/ };
+  for (const [lang, words] of Object.entries(fallback)) assert.doesNotMatch(t(lang, "yahootw.noLiveRows"), words, lang);
+  assert.equal(t("zh-TW", "yahootw.notFound"), "Yahoo 奇摩股市查無此代號。");
+  assert.equal(t("en", "yahootw.notFound"), "Ticker not found on Yahoo TW Stock.");
+});
