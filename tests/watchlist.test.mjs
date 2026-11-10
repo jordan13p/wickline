@@ -732,6 +732,24 @@ test("after the statement changes, a consent to the old one leaves Taiwan on its
     assert.equal(w.shown("2330.TW").source, "yahoo");
     assert.equal(charts(host, "WTX&"), 0);
     assert.deepEqual(w.problems().map(({ provider, code, stopped }) => [provider, code, stopped]), [["yahootw", "yahootw.reconfirm", true]]);
+    // Confirming again clears the reason at once.
+    host.prefs = ONLY_YAHOOTW;
+    assert.equal(w.sync(), true);
+    assert.equal(w.errors["^TWOII"], undefined);
+    assert.equal(w.errors["WTX&"], undefined);
+  });
+});
+
+test("turning Yahoo 奇摩股市 off while its consent awaits re-confirmation, with the list paused, leaves no re-confirm reason", async () => {
+  const host = twOnlyHost(["^TWOII", "WTX&"]);
+  host.prefs = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
+  await twOnlyRun(host, (w) => {
+    assert.equal(w.errors["^TWOII"].code, "yahootw.reconfirm");
+    host.store = { ...host.store, paused: true };
+    host.prefs = undefined;
+    assert.equal(w.sync(), true);
+    assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
+    assert.equal(w.errors["WTX&"].code, "yahootw.futuresNeedSource");
   });
 });
 

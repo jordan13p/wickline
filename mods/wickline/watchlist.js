@@ -529,10 +529,17 @@ export class Watchlist {
     }
     const config = this.config();
     // Yahoo 奇摩股市 off: every TW-only symbol goes back to Yahoo Finance, so turning it on again starts over.
-    // Until Yahoo Finance answers again (paused, or backing off), the row says what it last said: not found.
+    // Until Yahoo Finance answers again (paused, or backing off), the row says what it last said: not found,
+    // or, while the consent awaits re-confirmation, that. A re-confirm reason left on an index goes once
+    // nothing awaits confirmation (a future's is recomputed below).
     if (!config.on[yahootw.id]) {
       for (const symbol of this.twOnly) if (keep.has(symbol)) this.errors[symbol] = this.unpricedReason(symbol, config);
       this.twOnly.clear();
+      if (!config.yahootwPending) {
+        for (const [symbol, error] of Object.entries(this.errors)) {
+          if (error.code === "yahootw.reconfirm" && kindOf(symbol) !== "future") this.errors[symbol] = this.unpricedReason(symbol, config);
+        }
+      }
     }
     // No other source prices a future, so with Yahoo 奇摩股市 off its row says why; on, that reason goes at once.
     for (const symbol of preferences.symbols) {
