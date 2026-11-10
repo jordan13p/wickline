@@ -197,9 +197,9 @@ test("a consent to statement v1 asks again", () => {
 });
 
 // Rewording the MIS statement in plain words changes nothing in substance: a saved MIS consent still stands.
+// Version 2 is what 0.4.0 saved.
 test("a saved MIS consent still stands after the plain rewording", () => {
-  assert.equal(MIS_CONSENT_VERSION, 2);
-  const saved = tw({ mis: true, misAck: { version: MIS_CONSENT_VERSION } });
+  const saved = tw({ mis: true, misAck: { version: 2 } });
   assert.equal(misEnabled(saved), true);
   assert.equal(misReconfirm(saved), false);
   assert.deepEqual(validateSettings(saved), {});

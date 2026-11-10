@@ -365,6 +365,11 @@ test("the consent shows key points first and the full statement on request", () 
   assert.match(parts, /view\.tx\(`\$\{source\}\.summary`\)/);
   assert.match(parts, /"settings\.hideFullStatement" : "settings\.fullStatement"/);
   assert.ok(parts.indexOf(".summary`") < parts.indexOf('"settings.fullStatement"'), "key points before the link");
+  // Each key point its own row (its text hangs past the bullet), and the link discloses like Advanced.
+  assert.match(parts, /\.summary`\)\.split\("\\n"\)/);
+  assert.match(parts, /open \? "⌄" : "›"/);
+  // Not yet consented: only the full statement waits for the link; the box follows it either way.
+  assert.match(parts, /\n    open \? statement : null,\n    \.\.\.box,\n  \];\n\}/);
 });
 
 test("the disclosure names every host and the key file in all four places", () => {

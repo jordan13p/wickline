@@ -188,10 +188,17 @@ function consentParts(view, t, source) {
     if (!open) return [consented];
     return [consented, statement, ...box];
   }
+  // Each key point a row of its own, so a wrapped line hangs under its text, not under the bullet.
+  const points = view.tx(`${source}.summary`).split("\n").map((point) => h_flex().w_full().min_w(0).items_start()
+    .child(div().flex_none().w(10).child("•"))
+    .child(div().flex_1().min_w(0).child(point.replace(/^• /, ""))));
+  // Disclosed like Advanced: a chevron in a 10 px column before the label.
+  const label = h_flex().gap(6).items_center()
+    .child(div().flex_none().w(10).child(open ? "⌄" : "›"))
+    .child(view.tx(open ? "settings.hideFullStatement" : "settings.fullStatement"));
   return [
-    div().w_full().min_w(0).text_size(11.5).text_color(t.muted).child(view.tx(`${source}.summary`)),
-    h_flex().w_full().min_w(0).text_size(11.5)
-      .child(link(t, `bw-${source}-statement-link`, view.tx(open ? "settings.hideFullStatement" : "settings.fullStatement"), flip)),
+    v_flex().w_full().min_w(0).gap(2).text_size(11.5).text_color(t.muted).children(points),
+    h_flex().w_full().min_w(0).text_size(11.5).child(link(t, `bw-${source}-statement-link`, label, flip)),
     open ? statement : null,
     ...box,
   ];

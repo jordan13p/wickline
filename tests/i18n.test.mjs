@@ -23,14 +23,14 @@ const APPROVED = {
   "yahootw.reconfirm": "Yahoo 奇摩股市的說明已更新，請到設定重新確認；確認前暫停使用其報價。",
   "mis.reconfirm": "證交所 MIS 的說明已更新，請到設定重新確認；確認前暫停使用其報價。",
   "yahootw.summary": [
-    "• 非官方資料來源：Wickline 與 Yahoo 沒有任何關係，資料可能延遲、有誤或中斷。",
-    "• 查詢你清單中的台股、指數與期貨，交易時段約每 10 秒一次。",
-    "• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議。",
+    "• 非官方資料來源：Wickline 與 Yahoo 沒有任何關係，資料可能延遲、有誤或中斷",
+    "• 查詢你清單中的台股、指數與期貨，交易時段約每 10 秒一次",
+    "• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議",
   ].join("\n"),
   "mis.summary": [
-    "• 非官方用法：MIS 是證交所的看盤網站，不是提供給程式的 API；Wickline 與證交所沒有任何關係。",
-    "• 查詢你清單中的台股，交易時段約每 10 秒一次，取代延遲約 20 分鐘的報價。",
-    "• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議。",
+    "• 非官方用法：MIS 是證交所的看盤網站，不是提供給程式的 API；Wickline 與證交所沒有任何關係",
+    "• 查詢你清單中的台股，交易時段約每 10 秒一次，取代延遲約 20 分鐘的報價",
+    "• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議",
   ].join("\n"),
   "settings.fullStatement": "查看完整說明",
   "settings.hideFullStatement": "收起完整說明",
@@ -50,7 +50,8 @@ test("every statement has four paragraphs and every summary three key points", (
       for (const paragraph of paragraphs) assert.ok(paragraph.trim() === paragraph && paragraph && !paragraph.includes("\n"), `${lang} ${source}.statement`);
       const points = STRINGS[lang][`${source}.summary`].split("\n");
       assert.equal(points.length, 3, `${lang} ${source}.summary`);
-      for (const point of points) assert.match(point, /^• \S/, `${lang} ${source}.summary`);
+      // List items, no full stop: a lone 。 wrapped onto a line of its own.
+      for (const point of points) assert.match(point, /^• \S.*[^。.]$/, `${lang} ${source}.summary`);
     }
     for (const key of ["settings.fullStatement", "settings.hideFullStatement"]) assert.ok(STRINGS[lang][key], `${lang} ${key}`);
   }
