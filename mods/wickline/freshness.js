@@ -56,8 +56,12 @@ function quoteAgeMs(quote, now) {
 }
 
 // A real-time Yahoo Finance quote whose trade is from before today's open: the previous close, not a live
-// price, until a fetch brings a trade from today.
-const beforeOpen = (quote) => quote.source === "yahoo" && isRealtime(quote) && quote.timestamp < quote.periods?.regular?.[0];
+// price, until a fetch brings a trade from today. Not FX: its regular period is the UTC day, so the minute
+// before 00:00 is not a close.
+function beforeOpen(quote) {
+  if (quote.source !== "yahoo" || !isRealtime(quote)) return false;
+  return !exchangeRule(quote.exchange, quote.symbol).fx && quote.timestamp < quote.periods?.regular?.[0];
+}
 
 // A delayed quote's minutes late, from its exchange's rule; null when the rule gives none.
 function delayMinutes(quote) {

@@ -383,6 +383,13 @@ test("an overlay's age still runs from its own time to now, whatever its fetch t
   }
 });
 
+test("FX just after 00:00 UTC is live with the last minute's quote: its day starts then, not a session", () => {
+  const now = at("2026-11-10T00:00:20Z");
+  const eur = fetched({ ...yq("EURUSD=X", "CCY", at("2026-11-09T23:59:45Z"), day("2026-11-10T00:00:00Z", "2026-11-10T23:59:00Z")), symbol: "EURUSD=X" }, now);
+  assert.equal(sessionOf(eur, now), "open");
+  assert.deepEqual(freshness(eur, "open", now), { state: "live", delayMinutes: null, stoppedAt: null });
+});
+
 test("a Yahoo quote without a fetch time counts as fetched now", () => {
   const T = at("2026-11-10T15:00:00Z");
   const aapl = yq("AAPL", "NMS", T - 10_000, US_DAY);
