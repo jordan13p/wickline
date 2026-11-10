@@ -54,6 +54,10 @@ function quoteAgeMs(quote, now) {
   return at - start - Math.max(0, Math.min(at, lunchEnd) - Math.max(start, lunchStart));
 }
 
+// A real-time Yahoo Finance quote whose trade is from before today's open: the previous close, not a live
+// price, until a fetch brings a trade from today.
+const beforeOpen = (quote) => quote.source === "yahoo" && isRealtime(quote) && quote.timestamp < quote.periods?.regular?.[0];
+
 // A delayed quote's minutes late, from its exchange's rule; null when the rule gives none.
 function delayMinutes(quote) {
   const { delayS } = exchangeRule(quote.exchange, quote.symbol);
@@ -116,14 +120,15 @@ export function msUntilStale(quote, session, now) {
   if (limit === null) return null;
   const left = limit - quoteAgeMs(quote, now) + 1;
   // A Yahoo quote's age stands still until its next fetch: once past its limit it stays stale, else only
-  // the fetch guard can turn it.
-  if (quote.source !== "yahoo" || left <= 0) return left;
+  // the fetch guard can turn it. A previous close never stalls by age (beforeOpen), only by that guard.
+  if (quote.source !== "yahoo" || (left <= 0 && !beforeOpen(quote))) return left;
   return FETCH_MAX_AGE_MS - (now - fetchedAt(quote, now)) + 1;
 }
 
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
- * as new). unconfirmed: real time while the session is not known. stalled: past its msUntilStale, real time
+ * as new). unconfirmed: real time while the session is not known, or a real-time Yahoo quote still at the
+ * previous close after today's open (beforeOpen), until today's first trade or the fetch guard. stalled: past its msUntilStale, real time
  * or delayed. delayed: any other quote, with its exchange's minutes when the table holds them; a future or an
  * exchange without a delay never stalls. closed / pre / post / lunch: the session.
  */
@@ -133,6 +138,7 @@ export function freshness(quote, session, now) {
   if (realtime && session === "unknown") return result("unconfirmed");
   const left = msUntilStale(quote, session, now);
   if (left !== null && left <= 0) return result("stalled", null, quote.timestamp);
+  if (beforeOpen(quote)) return result("unconfirmed");
   return realtime ? result("live") : result("delayed", delayMinutes(quote));
 }
 

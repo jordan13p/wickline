@@ -331,13 +331,23 @@ test("a long list does not flicker: a Yahoo quote stays live until its next fetc
   assert.equal(msUntilStale(aapl, "open", fetchAt + 100_000), 200_001);
 });
 
-test("Yahoo at the US open: yesterday's close fetched a minute before the open does not read stopped", () => {
+test("Yahoo at the US open: yesterday's close reads unconfirmed, never live or stopped, until today's first trade", () => {
   const now = at("2026-11-10T14:30:20Z"); // 09:30:20 in New York
-  const aapl = fetched(yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), at("2026-11-10T14:29:00Z"));
-  assert.notEqual(freshness(aapl, "open", now).state, "stalled");
-  // Its age counts from the open: the same close fetched 120 s after it is live, 121 s after it stopped.
-  assert.equal(freshness(fetched(aapl, at("2026-11-10T14:32:00Z")), "open", at("2026-11-10T14:32:00Z")).state, "live");
-  assert.equal(freshness(fetched(aapl, at("2026-11-10T14:32:01Z")), "open", at("2026-11-10T14:32:01Z")).state, "stalled");
+  const close = yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY); // yesterday's 16:00 close
+  const unconfirmed = { state: "unconfirmed", delayMinutes: null, stoppedAt: null };
+  assert.deepEqual(freshness(fetched(close, at("2026-11-10T14:30:05Z")), "open", now), unconfirmed);
+  // Fetched before the open, or long after it with no trade yet: still unconfirmed.
+  assert.deepEqual(freshness(fetched(close, at("2026-11-10T14:29:00Z")), "open", now), unconfirmed);
+  assert.deepEqual(freshness(fetched(close, at("2026-11-10T14:40:00Z")), "open", at("2026-11-10T14:40:10Z")), unconfirmed);
+  // A fetch that brings a 09:30:10 trade: live.
+  const traded = fetched(yq("AAPL", "NMS", at("2026-11-10T14:30:10Z"), US_DAY), at("2026-11-10T14:30:15Z"));
+  assert.deepEqual(freshness(traded, "open", now), { state: "live", delayMinutes: null, stoppedAt: null });
+  // Not fetched for 5 minutes is still a stop, as for any Yahoo quote.
+  const lastFetch = fetched(close, at("2026-11-10T14:30:05Z"));
+  assert.equal(freshness(lastFetch, "open", lastFetch.fetchedAt + 300_000).state, "unconfirmed");
+  assert.equal(freshness(lastFetch, "open", lastFetch.fetchedAt + 300_001).state, "stalled");
+  assert.equal(msUntilStale(lastFetch, "open", at("2026-11-10T14:40:00Z")), left(300_000, 595_000));
+  assert.equal(msUntilStale(fetched(close, at("2026-11-10T14:40:00Z")), "open", at("2026-11-10T14:41:00Z")), left(300_000, 60_000));
 });
 
 test("a Yahoo quote not fetched for 5 minutes reads stopped while its market is open", () => {
