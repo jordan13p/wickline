@@ -6,7 +6,7 @@ import { STRINGS } from "../mods/wickline/i18n.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
-import { advance, chart, chartSymbol, fakeHost, ok, start, stop } from "./helpers.mjs";
+import { advance, at, chart, chartSymbol, day, fakeHost, ok, start, stop, yq } from "./helpers.mjs";
 import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/wickline/providers/finnhub.js";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { MIS_CONSENT_VERSION, mis } from "../mods/wickline/providers/mis.js";
@@ -558,6 +558,17 @@ test("a row past the cap shows its Yahoo quote as live", async () => {
   assert.equal(shown.source, "yahoo");
   assert.equal(freshness(shown, sessionOf(shown, host.clock), host.clock).state, "live");
   await stop(w, host, runs);
+});
+
+test("a Finnhub price held back gives way to a fresh Yahoo quote", () => {
+  const w = new Watchlist(usHost());
+  const now = at("2026-11-10T15:00:00Z"); // 10:00 in New York
+  w.quotes.AAPL = { ...yq("AAPL", "NMS", now - 10_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")), price: 230.1, fetchedAt: now };
+  // Finnhub in a rate limit's cooldown: its last price, 3 minutes old, stays among the overlays.
+  w.overlays.AAPL = { finnhub: { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 180_000, fetchedAt: now - 180_000 } };
+  const shown = w.shown("AAPL", now);
+  assert.deepEqual([shown.source, shown.price], ["yahoo", 230.1]);
+  assert.equal(freshness(shown, sessionOf(shown, now), now).state, "live");
 });
 
 // ---- helpers ----

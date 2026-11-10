@@ -378,6 +378,19 @@ test("pickOverlay: first live in order, else newest, ties keep order, none → n
   assert.equal(pickOverlay({}, order, NOW), null);
 });
 
+test("pickOverlay: with none live, a real-time base no older than the newest overlay shows instead", () => {
+  const NOW = 1_000_000;
+  const stale = { finnhub: { timestamp: NOW - 180_000 } };
+  const pick = (base, byProvider = stale) => pickOverlay(byProvider, ["finnhub"], NOW, base)?.id ?? null;
+  assert.equal(pick({ ...yq("AAPL", "NMS", NOW - 10_000), fetchedAt: NOW }), null);
+  assert.equal(pick({ ...yq("AAPL", "NMS", NOW - 180_000), fetchedAt: NOW }), null); // a tie keeps the base
+  // An older base, a delayed one or a live overlay: the overlay still shows.
+  assert.equal(pick({ ...yq("AAPL", "NMS", NOW - 180_001), fetchedAt: NOW }), "finnhub");
+  assert.equal(pick({ ...yq("2330.TW", "TAI", NOW - 10_000), fetchedAt: NOW }), "finnhub");
+  assert.equal(pick({ ...yq("AAPL", "NMS", NOW - 1_000), fetchedAt: NOW }, { finnhub: { timestamp: NOW - 60_000 } }), "finnhub");
+  assert.equal(pick(undefined), "finnhub");
+});
+
 // Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
 const TW_NOW = 1794188480000;
 const TW_ROWS = jsonFixture("yahootw-stocklist");

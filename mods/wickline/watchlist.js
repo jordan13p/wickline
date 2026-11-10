@@ -1,7 +1,7 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { LIVE_MAX_AGE_MS, msUntilStale, sessionOf } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, sessionOf } from "./freshness.js";
 import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -69,9 +69,11 @@ function wake(state) {
 
 /**
  * The overlay a row shows, among a symbol's overlays keyed by provider id: the first of `order` that is
- * still live, else the newest, a tie keeping the earlier id. Null with none.
+ * still live (at most LIVE_MAX_AGE_MS old: the moment msUntilStale wakes an idle loop for, in any session),
+ * else the newest, a tie keeping the earlier id. Null with none, or when none is live and the `base` quote is
+ * real time (isRealtime) and no older than the newest: a stale overlay never hides a fresher real-time price.
  */
-export function pickOverlay(byProvider, order, now) {
+export function pickOverlay(byProvider, order, now, base = null) {
   let newest = null;
   for (const id of order) {
     const overlay = byProvider[id];
@@ -79,7 +81,7 @@ export function pickOverlay(byProvider, order, now) {
     if (now - overlay.timestamp <= LIVE_MAX_AGE_MS) return { id, overlay };
     if (!newest || overlay.timestamp > newest.overlay.timestamp) newest = { id, overlay };
   }
-  return newest;
+  return newest && base && isRealtime(base) && base.timestamp >= newest.overlay.timestamp ? null : newest;
 }
 
 /**
@@ -287,7 +289,7 @@ export class Watchlist {
   }
 
   pick(symbol, now) {
-    return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now);
+    return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now, this.quotes[symbol]);
   }
 
   /**
