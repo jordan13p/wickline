@@ -43,13 +43,14 @@ const fetchedAt = (quote, now) => (quote.cached ? now : quote.fetchedAt ?? now);
 // Yahoo Finance quote's is taken when it was fetched, so it does not grow with the time a long list takes
 // to come round again; it counts from today's open at the earliest, so a market's first minutes do not read
 // stopped at the previous close, and a delayed one leaves out today's lunch break, so it does not read
-// stopped just after lunch (no real-time exchange has one).
+// stopped just after lunch (no real-time exchange has one). FX counts from its own time: its regular period
+// is the UTC day, so its 00:00 is no open and the minutes before it still count.
 function quoteAgeMs(quote, now) {
   if (quote.source !== "yahoo") return now - quote.timestamp;
   const at = fetchedAt(quote, now);
-  const open = quote.periods?.regular?.[0];
+  const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
+  const open = fx ? undefined : quote.periods?.regular?.[0];
   const start = open === undefined ? quote.timestamp : Math.max(quote.timestamp, open);
-  const { lunch } = exchangeRule(quote.exchange, quote.symbol);
   if (!lunch) return at - start;
   const [lunchStart, lunchEnd] = lunchWindow(lunch, at);
   return at - start - Math.max(0, Math.min(at, lunchEnd) - Math.max(start, lunchStart));

@@ -391,6 +391,18 @@ test("FX just after 00:00 UTC is live with the last minute's quote: its day star
   const eur = fetched({ ...yq("EURUSD=X", "CCY", at("2026-11-09T23:59:45Z"), day("2026-11-10T00:00:00Z", "2026-11-10T23:59:00Z")), symbol: "EURUSD=X" }, now);
   assert.equal(sessionOf(eur, now), "open");
   assert.deepEqual(freshness(eur, "open", now), { state: "live", delayMinutes: null, stoppedAt: null });
+  // Its age counts from the quote, not 00:00: 23:58:00 fetched at 00:01:59 is 4 minutes old.
+  const later = at("2026-11-10T00:01:59Z");
+  const old = fetched({ ...eur, timestamp: at("2026-11-09T23:58:00Z") }, later);
+  assert.deepEqual(freshness(old, "open", later), { state: "stalled", delayMinutes: null, stoppedAt: old.timestamp });
+});
+
+test("a cached Yahoo quote still at the previous close reads stalled once the open plus 120 s has passed", () => {
+  const open = at("2026-11-10T14:30:00Z");
+  const close = { ...fetched(yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), open - 60_000), cached: true };
+  assert.equal(freshness(close, "open", open + 120_000).state, "unconfirmed");
+  assert.deepEqual(freshness(close, "open", open + 120_001), { state: "stalled", delayMinutes: null, stoppedAt: close.timestamp });
+  assert.equal(msUntilStale(close, "open", open + 60_000), 60_001);
 });
 
 test("a Yahoo quote without a fetch time counts as fetched now", () => {
