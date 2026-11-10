@@ -5,7 +5,7 @@
 import {
   HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, withinLimits,
 } from "../quotes.js";
-import { TAIFEX_HOURS, kindOf, weekdayOf } from "../markets.js";
+import { MINUTE_MS, TAIFEX_HOURS, kindOf, localDay, weekdayOf } from "../markets.js";
 import { failEach, parseJson } from "./provider.js";
 import { period } from "./yahoo.js";
 
@@ -16,23 +16,17 @@ export const YAHOOTW_BATCH = 50;
 // given to an older text no longer turns it on. Independent of MIS's.
 export const YAHOOTW_CONSENT_VERSION = 2;
 
-const MINUTE_MS = 60_000;
-const DAY_MS = 86_400_000;
-// Taipei's clock is TAIFEX's: UTC+8, no daylight saving.
-const TAIPEI_OFFSET_MS = TAIFEX_HOURS.offsetMin * MINUTE_MS;
 // The open of the TAIFEX session that runs past midnight (the night's, 15:00) is the next day's 00:00 once this is
 // added.
 const NIGHT_TO_NEXT_DAY_MS = (24 * 60 - TAIFEX_HOURS.sessions.find(({ to }) => to > 24 * 60).from) * MINUTE_MS;
 // How far a future's trade may be ahead of the local clock and still count, on any trading day (a clock a little
 // behind Yahoo's, which at 15:00 stamps the next trading day); a trade further ahead is a bad time, never the feed time.
-const FUTURE_AHEAD_MS = 5 * 60_000;
+const FUTURE_AHEAD_MS = 5 * MINUTE_MS;
 
 /** @typedef {import("./provider.js").Provider} Provider */
 
-/** The day number in Taipei (UTC+8, no daylight saving) of a time in ms; computed by hand, as QuickJS has no `Intl`. */
-export function taipeiDay(ms) {
-  return Math.floor((ms + TAIPEI_OFFSET_MS) / DAY_MS);
-}
+/** The day number in Taipei (UTC+8, no daylight saving; Taipei's clock is TAIFEX's) of a time in ms. */
+export const taipeiDay = (ms) => localDay(TAIFEX_HOURS.offsetMin, ms);
 
 /**
  * A symbol's trading day number. A future's starts at 15:00 Taipei and belongs to the next trading weekday:

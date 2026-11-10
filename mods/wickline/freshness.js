@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { stateText } from "./format.js";
-import { TAIFEX_HOURS, exchangeRule, kindOf, weekdayOf } from "./markets.js";
+import { DAY_MS, MINUTE_MS, TAIFEX_HOURS, exchangeRule, kindOf, localDay, weekdayOf } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
@@ -24,12 +24,6 @@ function staleAfterMs(quote) {
   const { delayS, futures } = exchangeRule(quote.exchange, quote.symbol);
   return futures || delayS === null ? null : (delayS + DELAYED_GRACE_S) * 1000;
 }
-
-const MINUTE_MS = 60_000;
-const DAY_MS = 86_400_000;
-
-// The day number of `ms` on a clock at a fixed UTC offset of `offsetMin`.
-const localDay = (offsetMin, ms) => Math.floor((ms + offsetMin * MINUTE_MS) / DAY_MS);
 
 // A window of the local day around `now` (its from and to in local minutes since midnight), as [start, end) in
 // ms, by the clock's fixed UTC offset: a lunch break, or a TAIFEX session.

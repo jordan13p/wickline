@@ -2,7 +2,7 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, msUntilTaifexOpens, sessionOf } from "./freshness.js";
-import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import { MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -51,8 +51,7 @@ const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadabl
 // The source is down or hung: the rest of the round would only wait out more timeouts.
 const SOURCE_DOWN = /\.(unreachable|timeout)$/;
 const TIMED_OUT = {};
-// A minute's length, and how far a line's last minute may end before its price's own last trade.
-const MINUTE_MS = 60_000;
+// How far a line's last minute may end before its price's own last trade.
 const LINE_LAG_MS = 120_000;
 
 const notice = (code, params = {}) => ({ code, params });

@@ -68,6 +68,12 @@ export const TAIFEX_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 
   { from: 900, to: 1740 },  // night, 15:00–05:00 the next day
 ] });
 
+export const MINUTE_MS = 60_000;
+export const DAY_MS = 86_400_000;
+
+/** The day number of `ms` on a clock at a fixed UTC offset of `offsetMin`; by hand, as QuickJS has no `Intl`. */
+export const localDay = (offsetMin, ms) => Math.floor((ms + offsetMin * MINUTE_MS) / DAY_MS);
+
 /** The weekday of a day number (days since 1970-01-01 on any fixed-offset clock), Sunday 0: day 0 was a Thursday. */
 export const weekdayOf = (day) => (day + 4) % 7;
 
