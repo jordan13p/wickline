@@ -1,7 +1,7 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { LIVE_MAX_AGE_MS, sessionOf } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, quoteAgeMs, sessionOf, staleAfterMs } from "./freshness.js";
 import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -560,12 +560,16 @@ export class Watchlist {
     return symbols.length ? best : "unknown";
   }
 
-  /** How long until the newest of `symbols`' quotes is older than LIVE_MAX_AGE_MS (at most that). */
+  /**
+   * How long until the first of `symbols`' shown quotes turns stale, each at its own moment (staleAfterMs past
+   * its quoteAgeMs); at most LIVE_MAX_AGE_MS, also when none ever does.
+   */
   staleInMs(symbols, now) {
     let wait = LIVE_MAX_AGE_MS;
     for (const symbol of symbols) {
       const quote = this.shown(symbol, now);
-      const left = quote ? quote.timestamp + LIVE_MAX_AGE_MS + 1 - now : 0;
+      const limit = quote ? staleAfterMs(quote) : null;
+      const left = limit === null ? 0 : limit - quoteAgeMs(quote, now) + 1;
       if (left > 0 && left < wait) wait = left;
     }
     return wait;
@@ -630,8 +634,8 @@ export class Watchlist {
   }
 
   /**
-   * Sleeps until `due` (an idle loop: until a live price turns stale), or until poked. A long wait,
-   * such as a rate-limit cooldown, is cut where a live price turns stale: that wake only redraws.
+   * Sleeps until `due` (an idle loop: until a shown price turns stale), or until poked. A long wait,
+   * such as a rate-limit cooldown, is cut where a shown price turns stale: that wake only redraws.
    */
   async rest(state, symbols, due, io) {
     for (;;) {

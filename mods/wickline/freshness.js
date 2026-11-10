@@ -1,15 +1,41 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { stateText } from "./format.js";
-import { resolvedMarket } from "./markets.js";
+import { exchangeRule } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
 export const LIVE_MAX_AGE_MS = 120_000;
-// Yahoo reports no delay for Taiwan, whose quotes come 20 minutes late.
-export const TAIWAN_YAHOO_DELAY_S = 1200;
-// Providers whose prices are real time; any other source is delayed.
+// Providers whose prices are real time; Yahoo Finance is real time only for some exchanges (exchangeRule).
 export const REALTIME_SOURCES = new Set(["yahootw", "mis", "finnhub", "binance"]);
+// A delayed quote has stalled once it is older than its exchange's delay plus this.
+const DELAYED_GRACE_S = 300;
+
+/** A real-time source, or Yahoo Finance for a real-time exchange. */
+export const isRealtime = (quote) => REALTIME_SOURCES.has(quote.source)
+  || (quote.source === "yahoo" && exchangeRule(quote.exchange, quote.symbol).realtime);
+
+/** How old a quote may get while its market is open before it has stalled, in ms; null: it never does. */
+export function staleAfterMs(quote) {
+  if (isRealtime(quote)) return LIVE_MAX_AGE_MS;
+  const { delayS, futures } = exchangeRule(quote.exchange, quote.symbol);
+  return futures || delayS === null ? null : (delayS + DELAYED_GRACE_S) * 1000;
+}
+
+/**
+ * A quote's age against staleAfterMs. A delayed quote counts from today's open at the earliest, so a market's
+ * first minutes do not read stopped at the previous close; a real-time one always from its own time.
+ */
+export function quoteAgeMs(quote, now) {
+  const open = quote.periods?.regular?.[0];
+  return isRealtime(quote) || open === undefined ? now - quote.timestamp : now - Math.max(quote.timestamp, open);
+}
+
+// A delayed quote's minutes late, from its exchange's rule; null when the rule gives none.
+function delayMinutes(quote) {
+  const { delayS } = exchangeRule(quote.exchange, quote.symbol);
+  return delayS === null ? null : Math.ceil(delayS / 60);
+}
 
 /**
  * Where a stock's market is now: "pre", "open", "post" or "closed"; a pair trades around the clock.
@@ -37,19 +63,20 @@ export function sessionOf(quote, now) {
 const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delayMinutes, stoppedAt });
 
 /**
- * live: real time, trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts as new).
- * unconfirmed: real time while the session is not known. stalled: real time, trading, older.
- * delayed: any other source; minutes only when known. closed / pre / post: the session itself.
+ * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
+ * as new). unconfirmed: real time while the session is not known. stalled: trading and older than
+ * staleAfterMs (quoteAgeMs), real time or delayed. delayed: any other quote, with its exchange's minutes when
+ * the table holds them; a future or an exchange without a delay never stalls. closed / pre / post: the session.
  */
 export function freshness(quote, session, now) {
   if (session === "closed" || session === "pre" || session === "post") return result(session);
-  if (REALTIME_SOURCES.has(quote.source)) {
+  const limit = staleAfterMs(quote);
+  const stale = limit !== null && quoteAgeMs(quote, now) > limit;
+  if (isRealtime(quote)) {
     if (session === "unknown") return result("unconfirmed");
-    return now - quote.timestamp <= LIVE_MAX_AGE_MS ? result("live") : result("stalled", null, quote.timestamp);
+    return stale ? result("stalled", null, quote.timestamp) : result("live");
   }
-  const seconds = quote.delaySeconds > 0 ? quote.delaySeconds
-    : resolvedMarket(quote.symbol, quote.exchange) === "tw" ? TAIWAN_YAHOO_DELAY_S : null;
-  return result("delayed", seconds === null ? null : Math.ceil(seconds / 60));
+  return session === "open" && stale ? result("stalled", null, quote.timestamp) : result("delayed", delayMinutes(quote));
 }
 
 // After the close, how long a price still belongs to the session: TWSE's fixed-price trades end an hour later.
@@ -73,22 +100,26 @@ export function shownLimit(quote, session, now) {
 /**
  * The detail dialog's sources as lines, each a list of parts (joined with ` · `). A real-time price
  * names its state and source on one line: `Price: Live · TWSE MIS`; its line follows on its own, as the
- * same state when the line is the price's own source (Yahoo 奇摩股市), else with the delay from the
- * line's own source: `Line: delayed 20 min · Yahoo Finance`. A delayed stock keeps its plain wording
- * as one line of two parts; a pair is one part.
+ * same state when the line is the price's own source (Yahoo 奇摩股市), else as the line's own source
+ * reads: its session's state when that source is real time (never stalled: the merged time is the
+ * price's), else its exchange's delay: `Line: delayed 20 min · Yahoo Finance`. A delayed stock keeps its
+ * plain wording as one line of two parts, with its exchange's delay in every session; a pair is one part.
  * `tx(key, params)` translates; a `src.<id>` key names a provider.
  */
 export function detailSource(quote, session, now, tx) {
-  const minutes = (delayMinutes) => delayMinutes === null ? tx("freshness.delayUnknown")
-    : tx("freshness.delayedMinutes", { minutes: delayMinutes });
-  if (REALTIME_SOURCES.has(quote.source) && !isCryptoPair(quote.symbol)) {
+  const minutes = (q) => {
+    const late = delayMinutes(q);
+    return late === null ? tx("freshness.delayUnknown") : tx("freshness.delayedMinutes", { minutes: late });
+  };
+  if (isRealtime(quote) && !isCryptoPair(quote.symbol)) {
     const own = stateText(freshness(quote, session, now), tx);
     const price = tx("detail.priceFrom", { state: own, source: tx(`src.${quote.source}`) });
     if (!quote.chartSource) return [[price]];
     if (quote.chartSource === quote.source) return [[price], [tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })]];
-    const chart = { ...quote, source: quote.chartSource, delaySeconds: quote.chartDelaySeconds ?? null };
-    return [[price], [tx("detail.lineFrom", { state: minutes(freshness(chart, session, now).delayMinutes), source: tx(`src.${quote.chartSource}`) })]];
+    const chart = { ...quote, source: quote.chartSource };
+    const state = isRealtime(chart) ? stateText(freshness({ ...chart, timestamp: now }, session, now), tx) : minutes(chart);
+    return [[price], [tx("detail.lineFrom", { state, source: tx(`src.${quote.chartSource}`) })]];
   }
   if (isCryptoPair(quote.symbol)) return [[tx("detail.sourceCrypto")]];
-  return [[tx("detail.sourceStock"), minutes(freshness(quote, session, now).delayMinutes)]];
+  return [[tx("detail.sourceStock"), minutes(quote)]];
 }

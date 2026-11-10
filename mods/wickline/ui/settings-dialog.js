@@ -3,7 +3,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex, Input } from "gpui-base";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
-import { TAIWAN_YAHOO_DELAY_S } from "../freshness.js";
+import { TYPICAL_EXCHANGE, exchangeRule } from "../markets.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import {
   CONSENTS, SETTINGS_MARKETS, consentCollapsed, consentGiven, firstDraftError, marketStatus, settingsMarkets,
@@ -70,9 +70,11 @@ function shownStatus(view, market, key) {
   return { ...status, dotState, label };
 }
 
-// How late Yahoo Finance is for the market: 20 minutes for Taiwan, by exchange elsewhere.
+// How late Yahoo Finance is for the market: the exchange table's rule for the market's typical exchange, else
+// a plain "Delayed" (by exchange).
 function delayText(view, market) {
-  return market === "tw" ? view.tx("settings.delayedMinutes", { minutes: TAIWAN_YAHOO_DELAY_S / 60 }) : view.tx("settings.delayed");
+  const { delayS } = exchangeRule(TYPICAL_EXCHANGE[market] ?? null, "");
+  return delayS !== null ? view.tx("settings.delayedMinutes", { minutes: delayS / 60 }) : view.tx("settings.delayed");
 }
 
 // The market's name, and on the right the state and source the unsaved choices would use; a delay says how long.

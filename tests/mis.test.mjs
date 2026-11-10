@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { USER_AGENT, priceLimit, withinLimits } from "../mods/wickline/quotes.js";
 import { displayName } from "../mods/wickline/format.js";
-import { detailSource } from "../mods/wickline/freshness.js";
+import { detailSource, freshness, staleAfterMs } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
 import { advance, chart, chartSymbol, fakeHost, start, stop } from "./helpers.mjs";
@@ -159,7 +159,7 @@ test("HTML answer fails visibly", () => {
 // ---- Overlay over Yahoo, and routing through the scheduler ----
 
 const YAHOO_2330 = {
-  symbol: "2330.TW", source: "yahoo", name: "Taiwan Semiconductor", price: 2200, changePercent: -2.65, currency: "TWD",
+  symbol: "2330.TW", source: "yahoo", exchange: "TAI", name: "Taiwan Semiconductor", price: 2200, changePercent: -2.65, currency: "TWD",
   timestamp: 1_000, fetchedAt: 2_000, delaySeconds: null, series: [2190, 2200], open: 2250, high: 2260, low: 2180,
   previousClose: 2260, periods: { pre: null, regular: [0, 10_000], post: null },
 };
@@ -196,6 +196,14 @@ test("overlay merges over Yahoo", () => {
   assert.equal(alone.localName, "台積電");
   assert.equal(mergeOverlay(YAHOO_2330, undefined), YAHOO_2330);
   assert.equal(mergeOverlay(undefined, undefined), undefined);
+});
+
+test("a real-time overlay over a delayed Yahoo base keeps its 120 s", () => {
+  const merged = mergeOverlay(YAHOO_2330, MIS_2330); // YAHOO_2330 carries exchange TAI (Step 5)
+  assert.equal(merged.exchange, "TAI");
+  assert.equal(staleAfterMs(merged), 120_000);
+  assert.equal(freshness(merged, "open", MIS_2330.timestamp + 120_000).state, "live");
+  assert.deepEqual(freshness(merged, "open", MIS_2330.timestamp + 121_000), { state: "stalled", delayMinutes: null, stoppedAt: MIS_2330.timestamp });
 });
 
 test("an overlay's own line is drawn only on its price's Taipei day", () => {
@@ -461,13 +469,13 @@ test("the detail line puts the chart's delay on the chart", () => {
   const merged = mergeOverlay(YAHOO_2330, MIS_2330);
   assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
   assert.deepEqual(detailSource(merged, "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: delayed 20 min · Yahoo Finance"]]);
-  // The base's own delay is kept for the chart: Yahoo's reported value, or none.
-  const us = { ...YAHOO_2330, symbol: "AAPL", delaySeconds: 900 };
+  // The chart reads its base's exchange: NMS is live (Yahoo's reported 900 s is ignored); no exchange, no delay known.
+  const us = { ...YAHOO_2330, symbol: "AAPL", exchange: "NMS", delaySeconds: 900 };
   // Any real-time overlay over a US Yahoo quote (Finnhub's case).
   const over = { ...MIS_2330, symbol: "AAPL" };
   assert.equal(mergeOverlay(us, over).chartDelaySeconds, 900);
-  assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: delayed 15 min · Yahoo Finance"]]);
-  assert.deepEqual(detailSource(mergeOverlay({ ...us, delaySeconds: null }, over), "open", 5_000, say("en"))[1], ["Line: delay not provided · Yahoo Finance"]);
+  assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: Live · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(mergeOverlay({ ...us, exchange: null }, over), "open", 5_000, say("en"))[1], ["Line: delay not provided · Yahoo Finance"]);
   // A real-time price before Yahoo's first quote; a plain Yahoo row keeps its wording.
   assert.deepEqual(detailSource(mergeOverlay(undefined, MIS_2330), "unknown", 5_000, say("en")), [["Price: Session unknown · TWSE MIS"]]);
   assert.deepEqual(detailSource(YAHOO_2330, "open", 5_000, say("en")), [["Yahoo Finance · regular session", "delayed 20 min"]]);

@@ -48,6 +48,47 @@ export function resolvedMarket(symbol, exchange) {
   return symbol.startsWith("^") ? exchangeMarket(exchange) ?? "other" : marketOf(symbol);
 }
 
+// Lunch breaks in local minutes since midnight; `offsetMin` is the exchange clock's fixed UTC offset (no DST).
+const TOKYO_LUNCH = { offsetMin: 540, from: 690, to: 750 };
+const HONG_KONG_LUNCH = { offsetMin: 480, from: 720, to: 780 };
+const CHINA_LUNCH = { offsetMin: 480, from: 690, to: 780 };
+
+const LIVE = { realtime: true, delayS: null };
+const late = (delayS, lunch = null, futures = false) => ({ realtime: false, delayS, lunch, futures });
+
+// How Yahoo Finance serves each exchange it reports. Closed on purpose: any other code reads as a delay not
+// provided, never a guess.
+const RULES = {
+  NMS: LIVE, NYQ: LIVE, PCX: LIVE, // measured 2026-11-09, lag 1–16 s
+  SNP: LIVE, DJI: LIVE, NIM: LIVE, // measured 2026-11-09
+  CCY: { ...LIVE, fx: true }, // measured 2026-11-10, lag 2–31 s; indicative quotes
+  TAI: late(1200), TWO: late(1200), // measured 2026-11-10, 1198–1220 s
+  KSC: late(1200), KOE: late(1200), // measured 2026-11-10, 1197–1210 s
+  JPX: late(900, TOKYO_LUNCH), OSA: late(900, TOKYO_LUNCH), // measured 2026-11-10 (899–901 s, after lunch); Yahoo help says 20
+  HKG: late(900, HONG_KONG_LUNCH), // measured 2026-11-10, 896–907 s
+  SHH: late(900, CHINA_LUNCH), SHZ: late(900, CHINA_LUNCH), // measured 2026-11-10, 898–901 s (help says 30)
+  CXI: late(900), // measured 2026-11-09, 1117 s
+  PNK: late(900), NYS: late(900), WCB: late(900), // Yahoo help (SLN2310)
+  CME: late(600, null, true), NYM: late(600, null, true), CMX: late(600, null, true), // measured 2026-11-10, 592–611 s
+  CBT: late(600, null, true), // CME Group, as CME; not measured
+};
+
+/**
+ * How fresh Yahoo Finance's quotes are for `exchange`: `realtime`, else `delayS` (null: not provided), the
+ * exchange's `lunch` break or null, and whether it trades `futures` or `fx`. Only without a reported exchange
+ * does the symbol's form decide: `=F` is a future with no delay known, `=X` real-time FX.
+ */
+export function exchangeRule(exchange, symbol) {
+  const none = { realtime: false, delayS: null, lunch: null, futures: false, fx: false };
+  if (exchange) return { ...none, ...RULES[exchange] };
+  if (symbol.endsWith("=F")) return { ...none, futures: true };
+  if (symbol.endsWith("=X")) return { ...none, ...LIVE, fx: true };
+  return none;
+}
+
+// The exchange a settings page's Yahoo fallback describes for its market.
+export const TYPICAL_EXCHANGE = { us: "NMS", tw: "TAI" };
+
 // The filter row shows only for a list long enough, and mixed enough, to be worth narrowing.
 export const FILTER_MIN_SYMBOLS = 8;
 export const FILTER_MIN_MARKETS = 2;

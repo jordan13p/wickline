@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { MESSAGES_EN, USER_AGENT } from "../mods/wickline/quotes.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
+import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { advance, chart, chartSymbol, fakeHost, ok, start, stop } from "./helpers.mjs";
 import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/wickline/providers/finnhub.js";
@@ -537,6 +538,25 @@ test("an index never takes Finnhub's place", async () => {
   assert.equal(w.overCap("AAPL"), false);
   assert.equal(w.overCap("^DJI"), false);
   assert.equal(w.add("^GSPC").code, "notice.added");
+  await stop(w, host, runs);
+});
+
+test("a row past the cap shows its Yahoo quote as live", async () => {
+  // Budget 8: a cap of 2. Yahoo's quotes are from NMS, timed 1 s, the session open until 100 000 s.
+  const meta = { exchangeName: "NMS", currentTradingPeriod: { regular: { start: 0, end: 100_000 } } };
+  const host = usHost({ budgetPerMinute: 8 }, { yahoo: (symbol) => yahooUs(symbol, meta) });
+  const w = new Watchlist(host);
+  w.add("AAPL"); w.add("MSFT"); // each add goes to the top
+  const runs = start(w, host);
+  await advance(host, 20_000);
+  assert.equal(w.shown("AAPL", host.clock).source, "finnhub");
+  w.add("NVDA"); // pushes AAPL past the cap
+  await advance(host, 21_000);
+  assert.equal(w.overCap("AAPL"), true);
+  assert.equal(w.overlays.AAPL?.finnhub, undefined);
+  const shown = w.shown("AAPL", host.clock);
+  assert.equal(shown.source, "yahoo");
+  assert.equal(freshness(shown, sessionOf(shown, host.clock), host.clock).state, "live");
   await stop(w, host, runs);
 });
 

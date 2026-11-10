@@ -2,8 +2,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, dropBefore, exchangeMarket, filterAfterAdd, filterAfterRemove, heldFilter, inFilter, isTaiwanForm, kindOf, marketFilters, marketOf, nextOf,
-  openFilter, readFilter, resolvedMarket, visibleSymbols,
+  FILTER_MIN_MARKETS, FILTER_MIN_SYMBOLS, FILTER_STORAGE_KEY, TYPICAL_EXCHANGE, dropBefore, exchangeMarket, exchangeRule, filterAfterAdd,
+  filterAfterRemove, heldFilter, inFilter, isTaiwanForm, kindOf, marketFilters, marketOf, nextOf, openFilter, readFilter, resolvedMarket,
+  visibleSymbols,
 } from "../mods/wickline/markets.js";
 
 test("routes symbols to markets", () => {
@@ -15,6 +16,35 @@ test("routes symbols to markets", () => {
     ["A^B", "us"],
   ];
   for (const [symbol, market] of table) assert.equal(marketOf(symbol), market, symbol);
+});
+
+const live = { realtime: true, delayS: null, lunch: null, futures: false, fx: false };
+const late = (delayS, lunch = null, futures = false) => ({ realtime: false, delayS, lunch, futures, fx: false });
+const TOKYO = { offsetMin: 540, from: 690, to: 750 };
+const HONG_KONG = { offsetMin: 480, from: 720, to: 780 };
+const CHINA = { offsetMin: 480, from: 690, to: 780 };
+
+test("exchangeRule: the closed table", () => {
+  for (const code of ["NMS", "NYQ", "PCX", "SNP", "DJI", "NIM"]) assert.deepEqual(exchangeRule(code, "AAPL"), live, code);
+  assert.deepEqual(exchangeRule("CCY", "EURUSD=X"), { ...live, fx: true });
+  for (const code of ["TAI", "TWO", "KSC", "KOE"]) assert.deepEqual(exchangeRule(code, "2330.TW"), late(1200), code);
+  for (const code of ["JPX", "OSA"]) assert.deepEqual(exchangeRule(code, "7203.T"), late(900, TOKYO), code);
+  assert.deepEqual(exchangeRule("HKG", "0700.HK"), late(900, HONG_KONG));
+  for (const code of ["SHH", "SHZ"]) assert.deepEqual(exchangeRule(code, "600519.SS"), late(900, CHINA), code);
+  for (const code of ["CXI", "PNK", "NYS", "WCB"]) assert.deepEqual(exchangeRule(code, "^VIX"), late(900), code);
+  for (const code of ["CME", "NYM", "CMX", "CBT"]) assert.deepEqual(exchangeRule(code, "ES=F"), late(600, null, true), code);
+  assert.deepEqual(exchangeRule("XYZ", "AAPL"), late(null));
+});
+
+test("exchangeRule: without an exchange, the suffix decides", () => {
+  assert.deepEqual(exchangeRule(null, "ES=F"), late(null, null, true));
+  assert.deepEqual(exchangeRule(undefined, "EURUSD=X"), { ...live, fx: true });
+  assert.deepEqual(exchangeRule(null, "2330.TW"), late(null));
+  assert.deepEqual(exchangeRule("", "AAPL"), late(null));
+  assert.deepEqual(exchangeRule("XYZ", "ES=F"), late(null)); // a reported exchange wins
+  assert.deepEqual(TYPICAL_EXCHANGE, { us: "NMS", tw: "TAI" });
+  assert.equal(exchangeRule(TYPICAL_EXCHANGE.tw, "").delayS, 1200);
+  assert.equal(exchangeRule(TYPICAL_EXCHANGE.us, "").realtime, true);
 });
 
 // 5 Taiwan, 4 US and 3 crypto symbols, Taiwan first.

@@ -504,3 +504,10 @@ test("render settles a choice a pending index held", () => {
   assert.ok(render.indexOf("this.watch.sync()") < render.indexOf("this.filterHeld"), "settles after watch.sync()");
   assert.match(render, /if \(this\.filterHeld[\s\S]*?filterAfterRemove\([^;]*\(\) => false\)/);
 });
+
+test("the settings dialog reads Yahoo's delay from the exchange table", () => {
+  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
+  const delay = dialog.slice(dialog.indexOf("function delayText("), dialog.indexOf("function pageTitle("));
+  assert.match(delay, /exchangeRule\(TYPICAL_EXCHANGE\[market\]/);
+  assert.doesNotMatch(dialog, /TAIWAN_YAHOO_DELAY_S/);
+});

@@ -959,3 +959,17 @@ test("turning Yahoo 奇摩股市 off while paused says not found at once", async
     assert.equal(w.errors["^TWOII"].code, "yahoo.notFound");
   });
 });
+
+test("the idle wake waits for each quote's own stale moment", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  const T = Date.parse("2026-11-10T02:00:00Z");
+  const periods = { pre: null, regular: [Date.parse("2026-11-10T01:30:00Z"), Date.parse("2026-11-10T08:00:00Z")], post: null };
+  for (const [symbol, exchange] of [["0700.HK", "HKG"], ["ES=F", "CME"], ["AAPL", "NMS"]]) {
+    w.quotes[symbol] = { symbol, source: "yahoo", exchange, timestamp: T, periods };
+  }
+  assert.equal(w.staleInMs(["0700.HK"], T), 120_000);
+  assert.equal(w.staleInMs(["0700.HK"], T + 1_100_000), 100_001);
+  assert.equal(w.staleInMs(["ES=F"], T + 1_100_000), 120_000);
+  assert.equal(w.staleInMs(["AAPL"], T + 60_000), 60_001);
+  assert.equal(w.staleInMs(["AAPL", "0700.HK"], T + 1_100_000), 100_001);
+});
