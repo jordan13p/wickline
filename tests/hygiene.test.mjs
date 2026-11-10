@@ -322,6 +322,13 @@ test("RECIPE.md stays under the gallery's size limit", () => {
   assert.ok(statSync(new URL("RECIPE.md", ROOT)).size <= 60_000, "RECIPE.md over 60,000 bytes");
 });
 
+// Field-level build details live beside the recipe, so the gallery's copy stays under its limit.
+test("RECIPE.md links to RECIPE-internals.md, which exists", () => {
+  assert.match(read(new URL("RECIPE.md", ROOT)), /\]\(RECIPE-internals\.md\)/);
+  assert.ok(statSync(new URL("RECIPE-internals.md", ROOT)).isFile(), "RECIPE-internals.md missing");
+  assert.match(read(new URL("RECIPE-internals.md", ROOT)), /^# Wickline — internals$/m);
+});
+
 // The settings tab's disclaimer block and the READMEs carry the same sentences.
 test("the READMEs and RECIPE carry the settings tab's disclaimer", () => {
   const keys = ["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"];

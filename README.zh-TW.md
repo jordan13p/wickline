@@ -182,4 +182,4 @@ node --test tests/
 herdr-app check "$PWD/mods/wickline"
 ```
 
-`RECIPE.md` 是完整的建構說明：Wickline 畫出什麼、如何運作，以及由哪些檔案組成。
+`RECIPE.md` 是完整的建構說明：Wickline 畫出什麼、如何運作，以及由哪些檔案組成；它連到的 `RECIPE-internals.md` 收錄欄位層級的建構細節。

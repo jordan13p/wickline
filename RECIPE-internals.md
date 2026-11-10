@@ -1,0 +1,44 @@
+# Wickline — internals
+
+Build details behind [RECIPE.md](RECIPE.md)'s Built from, needed only when rebuilding Wickline: each request and the fields it reads, the stored layouts, per-module notes beyond the module map, the logos and the icon drawing. Behavior, hosts, programs and storage locations are in RECIPE.md; nothing here changes them.
+
+## Network requests
+
+Each source's requests and the fields its decoder reads (headers, hosts and the person's URLs under RECIPE.md's Network):
+
+- `https://query1.finance.yahoo.com/v8/finance/chart/<symbol>?interval=5m&range=1d&includePrePost=false`: `chart.result[0].meta` (`regularMarketPrice`, `regularMarketTime`, `exchangeName`, `previousClose` else `chartPreviousClose`, `currency`, `longName`/`shortName`, `regularMarketDayHigh`/`Low`, `currentTradingPeriod.pre/regular/post`) and `indicators.quote[0]` (`close` for the line, the first `open`). A response whose `meta.symbol` differs from the request is rejected.
+- `https://data-api.binance.vision/api/v3/ticker/24hr?symbols=["BTCUSDT",...]`: `lastPrice`, `prevClosePrice`, `openPrice`, `highPrice`, `lowPrice`, `closeTime`.
+- `https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96`: closes (index 4) for the 24-hour line.
+- Finnhub (chosen, key saved): `https://finnhub.io/api/v1/quote?symbol=AAPL` (or the saved Finnhub URL with `/quote?symbol=`), header `X-Finnhub-Token: <key>`: `c`, `pc`, `o`, `h`, `l`, `t`.
+- Yahoo 奇摩股市 (on, consented): `https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.stockList;symbols=2330.TW,6488.TWO`: rows matched on `symbol`: `symbolName`, `regularMarketTime` (ISO), `exchangeDataDelayedBy`, `exchange`, `currency`, and as `{ raw }` (`-` when none) `price`, `regularMarketPreviousClose`, `regularMarketOpen`, `regularMarketDayHigh`/`Low`, `limitUpPrice`/`limitDownPrice`. Lines: `…/FinanceChartService.ApacLibraCharts;type=tick;symbols=%5B%222330.TW%22%5D`: `[0].chart` with `meta.symbol`, `meta.currentTradingPeriod`, `timestamp` (s) and `indicators.quote[0].close`.
+- MIS (on, consented): `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_2330.tw|otc_6488.tw&json=1&delay=0` (or the saved MIS URL with the same query): `msgArray[]` rows matched on `ex` and `c`, with `z` (last trade, `-` when none), `b`/`a` (best bids and asks, `_`-separated), `y`, `o`, `h`, `l`, `n`, `tlong` (ms), `u`/`w` (limit up and down).
+
+## Stored layouts
+
+The storage RECIPE.md lists, field by field:
+
+- `shared("wickline.watchlist.v1")`: `{ version: 1, symbols: [...], paused }`.
+- `shared("wickline.settings.v1")`: `{ version: 1, language: "en"|"zh-TW"|"zh-CN"|"ja"|"ko", colors: "auto"|"red-up"|"green-up", languagePromptDismissed, keyRev, sources: { us: { provider: "yahoo"|"finnhub", finnhubUrl, budgetPerMinute }, tw: { mis, yahootw, misUrl, misAck: { version } | null, yahootwAck: { version } | null, provider: "yahoo"|"mis" }, crypto: { binanceUrl } } }`.
+- `data/wickline/secrets.json`: `{ "finnhub.key": "<key>" }`.
+- `localStorage` `wickline.filter`: `all`, `us`, `tw`, `hk`, `cn`, `jp`, `kr`, `crypto` or `other`; each use in a `try`.
+
+## Modules
+
+Notes beyond each module's line in RECIPE.md's Built from:
+
+- `main.js`: the `View` is `gpui-kit`'s `View`, with `gpui-base` `v_flex`, `h_flex`, `InputState`. The detail dialog opens with `openOverlay({ mod: "wickline", kind: "dialog", width: 440, props: { detail: quote } })` (`ui/detail-dialog.js`), the settings dialog as a modal one with `settings: { tab, health }` (`ui/settings-dialog.js`); draft, inputs and Save stay on the view.
+- `ui/`: built from `gpui-kit` `div`, `svg`, `PathBuilder`, `Background`, `window.paint_path` and `gpui-base` `h_flex`, `v_flex`, `Input`, `Checkbox`, `Switch`. `rowFrame` holds the handle, `×`, hairline and drop line. `chart` paints each by `window.paint_path(...)` as an absolute layer over a sized `div`: the line (`PathBuilder.stroke`, 2px with the fill by default, else 1.25px; 1.5px in the sidebar and table), the rule (`.dash_array([3, 3])`), the fill (`PathBuilder.fill()`, closed along the bottom); `chartGeometry` (`format.js`) gives `[x%, y%]` points, 8% headroom, the previous close in range.
+- `watchlist.js`: the host's `shown()` defaults to true and comes from `layout()` for a docked block. `main.js` runs each source's `runProvider(id, io)` in its own `cx.spawn`, with its `cx.sleep` and `cx.notify()`. Each source keeps a cooldown and a problem (`problems()`: status lines, the dialog's `health`) and quotes the symbols of its markets and kinds, within its `cap` (first in list order). An overlay source writes its own prices and errors (by symbol, then source), never the base quotes; the `line` a row merges is that source's same-day line or the base's. An index whose market resolves wakes each overlay source it joins, never a full restart. The Finnhub key, reread when `keyRev` changes, stays in memory and requests, never `config()`. Edits (`restore` undoes `remove`) are synchronous, bump a revision (a round in flight drops its late results) and wake every loop, as `sync()` does for another copy's edit.
+- `secrets.js`: the `system` holds `platform()` (from `window().platform`) and `chmod(path)`, the one `exec` under Programs, run after each write on `macos` and `linux` only; the folder is `appHome()` + `/data/wickline`. The file goes with its last key; save and remove resolve false when chmod failed (the key is still written).
+- `layout.js`: `TABLE_COLUMNS` (id, width, alignment); `tableColumns(width)` gives the ids that fit, in display order; `nameWidth`.
+- `moves.js`: runs only `tab.new`, `tab.select`, `pane.split`, `pane.close`, `layout.hide`, `layout.show` and `layout.select`. Its `syncDock` (from `render`, for the view) and `onScreen` (for the loops) read the block's place, yield and shown state, both clearing a stale `wickline.dockTab`.
+- `markets.js`: `marketOf` judges by form; the kinds are stock, index, pair and other. `exchangeRule(exchange, symbol)` gives `{ realtime, delayS, lunch, futures, fx }` (`.TW`/`.TWO` TAI's if unlisted, `=F`/`=X` without one); `TYPICAL_EXCHANGE` (us NMS, tw TAI). The market filter is read per render.
+- `motion.js`: `rowsWithGhosts` keeps a removed row, from data copied before its quote goes, at its measured height and old place, unless the filter hides it; `settleOffset` starts a dropped row at `relative().top(from)`, its move in measured row heights. A native `transition` (`opacity`, `height`, `top`) animates only a later change, so `playRow` draws the start value, flips to the end 32 ms later (two `cx.sleep`s), then drops the state.
+- `i18n.js`: the tables use `{name}` placeholders; English includes `quotes.js`'s error texts. The watchlist hands the view `{ code, params }` (a removal's adds `undo`); the view translates when it draws.
+- `settings.js`: `readSettings` checks every field, defaults otherwise; `validateSettings` maps a field path to an error code, `{}` when valid; `mergeSettings` keeps unknown keys, also inside `sources`; for the consents an older statement version counts as none; in `currentHealth` a problem seen at opening holds while the settings its source reads are unchanged. Also `upIsRed` and the key's name, `finnhub.key`.
+
+## Assets
+
+- `assets/zh-TW/preview.png`: the Traditional Chinese README's screenshot.
+- `assets/logo-light.svg`, `assets/logo-dark.svg`: the three candles at 96px, side candles `#1f2328` or `#e6edf3`, the middle one `#3a7bd5` in both.
+- `icons/`: 24×24 viewBox, `stroke="currentColor"` 1.5, round caps and joins, no fill (`grip`: six filled `currentColor` dots).
