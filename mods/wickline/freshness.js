@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { stateText } from "./format.js";
-import { TAIFEX_HOURS, exchangeRule, kindOf } from "./markets.js";
+import { TAIFEX_HOURS, exchangeRule, kindOf, weekdayOf } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
@@ -28,9 +28,13 @@ function staleAfterMs(quote) {
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 
-// The local day's lunch break around `now` as [start, end) in ms, by the exchange clock's fixed UTC offset.
-function lunchWindow({ offsetMin, from, to }, now) {
-  const dayStart = Math.floor((now + offsetMin * MINUTE_MS) / DAY_MS) * DAY_MS - offsetMin * MINUTE_MS;
+// The day number of `ms` on a clock at a fixed UTC offset of `offsetMin`.
+const localDay = (offsetMin, ms) => Math.floor((ms + offsetMin * MINUTE_MS) / DAY_MS);
+
+// A window of the local day around `now` (its from and to in local minutes since midnight), as [start, end) in
+// ms, by the clock's fixed UTC offset: a lunch break, or a TAIFEX session.
+function localWindow({ offsetMin, from, to }, now) {
+  const dayStart = localDay(offsetMin, now) * DAY_MS - offsetMin * MINUTE_MS;
   return [dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS];
 }
 
@@ -52,7 +56,7 @@ function quoteAgeMs(quote, now) {
   const open = fx ? undefined : quote.periods?.regular?.[0];
   const start = open === undefined ? quote.timestamp : Math.max(quote.timestamp, open);
   if (!lunch) return at - start;
-  const [lunchStart, lunchEnd] = lunchWindow(lunch, at);
+  const [lunchStart, lunchEnd] = localWindow(lunch, at);
   return at - start - Math.max(0, Math.min(at, lunchEnd) - Math.max(start, lunchStart));
 }
 
@@ -83,10 +87,10 @@ export function marketSession(quote, now) {
   return "closed";
 }
 
-// From Friday 22:00 to Sunday 22:00 UTC, when the FX week is over: two hours later it is Saturday or Sunday
-// (day 0, 1970-01-01, was a Thursday: adding 4 to a day count gives its weekday, Sunday 0).
+// From Friday 22:00 to Sunday 22:00 UTC, when the FX week is over: two hours later (on a UTC+2 clock) it is
+// Saturday or Sunday.
 function fxWeekend(now) {
-  const weekday = (Math.floor((now + 120 * MINUTE_MS) / DAY_MS) + 4) % 7;
+  const weekday = weekdayOf(localDay(120, now));
   return weekday === 6 || weekday === 0;
 }
 
@@ -94,13 +98,10 @@ function fxWeekend(now) {
 // still running past midnight), on the weekdays it trades.
 function taifexSegments(now) {
   const { offsetMin, weekdays, sessions } = TAIFEX_HOURS;
-  const offset = offsetMin * MINUTE_MS;
-  const today = Math.floor((now + offset) / DAY_MS);
   const segments = [];
-  for (const day of [today - 1, today]) {
-    if (!weekdays.includes((day + 4) % 7)) continue;
-    const dayStart = day * DAY_MS - offset;
-    for (const { from, to } of sessions) segments.push([dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS]);
+  for (const at of [now - DAY_MS, now]) {
+    if (!weekdays.includes(weekdayOf(localDay(offsetMin, at)))) continue;
+    for (const { from, to } of sessions) segments.push(localWindow({ offsetMin, from, to }, at));
   }
   return segments;
 }
@@ -150,7 +151,7 @@ export function sessionOf(quote, now) {
   if (fx && fxWeekend(now)) return "closed";
   const session = marketSession(quote, now);
   if (session !== "open" || !lunch) return session;
-  const [lunchStart, lunchEnd] = lunchWindow(lunch, now);
+  const [lunchStart, lunchEnd] = localWindow(lunch, now);
   return now >= lunchStart && now < lunchEnd ? "lunch" : "open";
 }
 

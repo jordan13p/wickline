@@ -68,6 +68,9 @@ export const TAIFEX_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 
   { from: 900, to: 1740 },  // night, 15:00–05:00 the next day
 ] });
 
+/** The weekday of a day number (days since 1970-01-01 on any fixed-offset clock), Sunday 0: day 0 was a Thursday. */
+export const weekdayOf = (day) => (day + 4) % 7;
+
 const LIVE = { realtime: true, delayS: null };
 const late = (delayS, lunch = null) => ({ delayS, lunch });
 

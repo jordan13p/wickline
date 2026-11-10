@@ -5,7 +5,7 @@
 import {
   HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, withinLimits,
 } from "../quotes.js";
-import { kindOf } from "../markets.js";
+import { TAIFEX_HOURS, kindOf, weekdayOf } from "../markets.js";
 import { failEach, parseJson } from "./provider.js";
 import { period } from "./yahoo.js";
 
@@ -16,10 +16,13 @@ export const YAHOOTW_BATCH = 50;
 // given to an older text no longer turns it on. Independent of MIS's.
 export const YAHOOTW_CONSENT_VERSION = 2;
 
-const TAIPEI_OFFSET_MS = 8 * 3_600_000;
+const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
-// 15:00, a TAIFEX night session's open, is the next day's 00:00 once this is added.
-const NIGHT_TO_NEXT_DAY_MS = 9 * 3_600_000;
+// Taipei's clock is TAIFEX's: UTC+8, no daylight saving.
+const TAIPEI_OFFSET_MS = TAIFEX_HOURS.offsetMin * MINUTE_MS;
+// The open of the TAIFEX session that runs past midnight (the night's, 15:00) is the next day's 00:00 once this is
+// added.
+const NIGHT_TO_NEXT_DAY_MS = (24 * 60 - TAIFEX_HOURS.sessions.find(({ to }) => to > 24 * 60).from) * MINUTE_MS;
 // How far a future's trade may be ahead of the local clock and still count for a later trading day (a clock a
 // little behind Yahoo's at 15:00); a trade further ahead is a bad time, never the feed time.
 const FUTURE_AHEAD_MS = 5 * 60_000;
@@ -33,15 +36,15 @@ export function taipeiDay(ms) {
 
 /**
  * A symbol's trading day number. A future's starts at 15:00 Taipei and belongs to the next trading weekday:
- * taipeiDay(ms + 9 h), moved from a Saturday or a Sunday to the Monday after it, so Friday's night session (Saturday
- * 00:00–05:00 included) is Monday's. Holidays are not known. Any other symbol's is its Taipei day.
+ * taipeiDay(ms + 9 h), moved past the days TAIFEX does not trade (a Saturday or a Sunday) to the Monday after, so
+ * Friday's night session (Saturday 00:00–05:00 included) is Monday's. Holidays are not known. Any other symbol's is
+ * its Taipei day.
  */
 export function tradingDay(symbol, ms) {
   if (kindOf(symbol) !== "future") return taipeiDay(ms);
-  const day = taipeiDay(ms + NIGHT_TO_NEXT_DAY_MS);
-  // Day 0 (1970-01-01) was a Thursday; Sunday is 0.
-  const weekday = (day + 4) % 7;
-  return weekday === 6 ? day + 2 : weekday === 0 ? day + 1 : day;
+  let day = taipeiDay(ms + NIGHT_TO_NEXT_DAY_MS);
+  while (!TAIFEX_HOURS.weekdays.includes(weekdayOf(day))) day++;
+  return day;
 }
 
 /**
