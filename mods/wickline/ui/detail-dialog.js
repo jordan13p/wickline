@@ -48,7 +48,7 @@ export function detailView(view, t) {
     .when(hasLimits(q.limitUp, q.limitDown), (el) => el.child(h_flex().gap(12)
       .child(stat("detail.limitUpPrice", q.limitUp)).child(stat("detail.limitDownPrice", q.limitDown))
       .child(div().flex_1()).child(div().flex_1())))
-    .child(v_flex().gap(2).children(source.map((parts) => segments(t, parts))).child(segments(t, times)))
+    .child(v_flex().gap(2).children([...source, times].map((parts) => segments(t, parts))))
     .when(Boolean(q.error), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.tx("quote.cached", { reason: view.say(q.error) }))))
     .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback))));
 }

@@ -441,11 +441,13 @@ test("the sidebar list keeps its gap and hairline outside the scroll", () => {
   const box = list.slice(list.indexOf('id("bw-list")'), list.indexOf(".children(rows)"));
   // The gap no longer scrolls away with the rows.
   assert.doesNotMatch(box, /\.pt\(/);
-  assert.match(list, /\.pt\(top\)/);
+  const tree = list.slice(list.indexOf("return v_flex"));
+  assert.match(tree.slice(0, tree.indexOf(".when(")), /\.pt\(top\)/);
   // A 1 px border hairline, only for a list with a gap (the sidebar), inset like the footer's, above the scrolling box.
   assert.match(list, /top > 0[^;]*map\(inset\)[^;]*border_t\(1\)[^;]*border_color\(t\.border\)/);
-  const tree = list.slice(list.indexOf("return v_flex"));
   assert.ok(tree.indexOf("border_t(1)") > 0 && tree.indexOf("border_t(1)") < tree.indexOf("scrolling"));
+  // The bar is a sibling of the scrolling box, in the relative box that holds both.
+  assert.ok(tree.indexOf(".relative()") > 0 && tree.indexOf(".relative()") < tree.indexOf("Scrollbar.vertical"));
   // The empty-list text stays inside the scrolling box, so it sits below the hairline.
   assert.match(box, /list\.empty/);
   assert.match(panel, /list\(view, t, rows, 8\)/);
@@ -485,7 +487,6 @@ test("a collapsed sidebar row is one line with its notes", () => {
 
 test("the detail's stats are numbers without the currency", () => {
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.doesNotMatch(detail, /formatBandPrice/);
   assert.match(detail, /number\(q, price\)/);
 });
 

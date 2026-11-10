@@ -14,7 +14,7 @@ import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, REMOVE_W, RIGHT_INSET, SCROLL_LAN
 import { button, chart, dot, icon, iconButton, link, priceBox } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
-// Sidebar rows: three lines (one for a collapsed row; 16, 14 and 14 px, 2 px apart) on each side of the day line, which spans them.
+// The day line spans a sidebar row's three lines (16, 14 and 14 px, 2 px apart); see sidebarRow.
 const LINES_H = 48;
 // Every region outside the list's rows: the left gutter, and the right inset that holds the × column and
 // the scrollbar lane, so all of them end on one edge.
@@ -180,9 +180,13 @@ function waiting(view, row) {
   return view.tx(row.failed ? "row.unavailable" : view.watch.preferences.paused ? "row.notFetched" : "row.waiting");
 }
 
+// That text in a box the caller sizes, right-aligned to end where a price's digits end (a currency slot in
+// from the edge).
+const waitingCell = (view, t, row, box) => box.pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row));
+
 // One line of the sidebar grid. Its line height is its own height in px (a bare number is a multiplier), so
 // the glyphs and their descenders fit, and equal boxes put the left and right lines on one baseline. It is
-// drawn even when empty, so every row keeps the same height, except a collapsed row (see sidebarRow).
+// drawn even when empty, so a row keeps its three lines (a collapsed row is the exception, see sidebarRow).
 const lineBox = (height, el = div()) => el.flex_none().h(height).line_height(`${height}px`);
 
 // The price with its currency in its own slot, then the change and the change %, right-aligned on the
@@ -191,7 +195,7 @@ function priceStack(view, t, row) {
   const { quote, color } = row;
   const column = v_flex().flex_none().w(NUMBER_W + CODE_W).gap(2);
   if (!quote) {
-    return column.child(lineBox(16).pr(CODE_W).text_right().whitespace_nowrap().text_size(11).text_color(t.dim).child(waiting(view, row)))
+    return column.child(waitingCell(view, t, row, lineBox(16, div().whitespace_nowrap())))
       .child(lineBox(14)).child(lineBox(14));
   }
   const figure = (text) => lineBox(14).w(NUMBER_W).text_right().whitespace_nowrap().text_size(11).text_color(color).child(text);
@@ -322,7 +326,7 @@ function footer(view, t) {
       .child(view.tx(short ? "footer.short" : "footer.long")));
 }
 
-// Below TABLE_MIN_WIDTH: the header, the status line, the add field, three-line rows (one line when collapsed), the footer.
+// Below TABLE_MIN_WIDTH: the header, the status line, the add field, the rows (see sidebarRow), the footer.
 export function sidebar(view, root, t) {
   const filter = view.filterState();
   const now = Date.now();
@@ -341,34 +345,34 @@ export function sidebar(view, root, t) {
   return root.child(header).child(field).children(filterBar(view, t, filter)).child(list(view, t, rows, 8)).child(footer(view, t));
 }
 
-// A three-line grid (one line for a collapsed row, below): symbol, name and freshness on the left; the day
-// line spanning all three; the price, the change and the change % at a fixed width on the right, so a wider
-// pane gives its room to the left lines, and past NAME_ROOM to the day line. A row without a name of its own (a pair, a name that repeats
+// A three-line grid: symbol, name and freshness on the left; the day line spanning all three; the price,
+// the change and the change % at a fixed width on the right, so a wider pane gives its room to the left
+// lines, and past NAME_ROOM to the day line. A row without a name of its own (a pair, a name that repeats
 // the ticker) keeps line 2 empty. Notes go under the grid. The exception is a collapsed row (no price, its
-// fetch failed): the ticker and its state on one line, the reason under it. A fading row collapses as a
-// live one does, so a removed failed row fades from its short height.
+// fetch failed): the ticker and its state on one line, the reason under it, its state ending where a price's
+// digits end. One body and one frame call serve a live row and a fading one alike.
 function sidebarRow(view, t, symbol, place, now, ghost) {
   const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
-  const lineW = sparkWidth(view.size?.width);
-  // The collapsed row's state ends where a price's digits end, on priceStack's right edge.
-  const body = collapsedRow(row)
-    ? v_flex().py(8).gap(2)
-      .child(lineBox(16, h_flex().gap(COLUMN_GAP))
+  const grid = () => {
+    const lineW = sparkWidth(view.size?.width);
+    return h_flex().gap(COLUMN_GAP).items_start()
+      .child(v_flex().flex_1().min_w(0).gap(2)
+        .child(lineBox(16).child(div().font_semibold().truncate().child(symbol)))
+        .child(lineBox(14).child(div().text_size(11).text_color(t.muted).truncate().child(row.name)))
+        .child(lineBox(14, h_flex().gap(6).items_center())
+          .when(Boolean(row.dot), (line) => line.child(row.dot))
+          .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state))))
+      .child(row.quote ? chart(row.quote, row.color, t, { width: lineW, height: LINES_H, fill: true, stroke: 1.5 })
+        : div().flex_none().w(lineW).h(LINES_H))
+      .child(priceStack(view, t, row));
+  };
+  const body = v_flex().py(8).gap(2)
+    .child(collapsedRow(row)
+      ? lineBox(16, h_flex().gap(COLUMN_GAP))
         .child(div().flex_1().min_w(0).font_semibold().truncate().child(symbol))
-        .child(div().flex_none().w(NUMBER_W + CODE_W).pr(CODE_W).text_right().whitespace_nowrap().text_size(11).text_color(t.dim).child(waiting(view, row))))
-      .children(rowNotes(view, t, row))
-    : v_flex().py(8).gap(2)
-      .child(h_flex().gap(COLUMN_GAP).items_start()
-        .child(v_flex().flex_1().min_w(0).gap(2)
-          .child(lineBox(16).child(div().font_semibold().truncate().child(symbol)))
-          .child(lineBox(14).child(div().text_size(11).text_color(t.muted).truncate().child(row.name)))
-          .child(lineBox(14, h_flex().gap(6).items_center())
-            .when(Boolean(row.dot), (line) => line.child(row.dot))
-            .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state))))
-        .child(row.quote ? chart(row.quote, row.color, t, { width: lineW, height: LINES_H, fill: true, stroke: 1.5 })
-          : div().flex_none().w(lineW).h(LINES_H))
-        .child(priceStack(view, t, row)))
-      .children(rowNotes(view, t, row));
+        .child(waitingCell(view, t, row, div().flex_none().w(NUMBER_W + CODE_W).whitespace_nowrap()))
+      : grid())
+    .children(rowNotes(view, t, row));
   return ghost ? ghostFrame(t, ghost, body) : rowFrame(view, t, symbol, place, body, Boolean(row.quote));
 }
 
@@ -438,7 +442,7 @@ function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
       ? h_flex().flex_none().w(columnWidth("price")).items_baseline()
         .child(h_flex().flex_1().min_w(0).justify_end().child(row.price))
         .child(currencySlot(t, quote))
-      : cell("price").pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row))),
+      : waitingCell(view, t, row, cell("price"))),
     change: () => cell("change").text_right().whitespace_nowrap().text_color(color).child(quote ? signed(quote) : ""),
     changePct: () => cell("changePct").text_right().whitespace_nowrap().text_color(color).child(quote ? formatChange(quote.changePercent) : ""),
     high: () => figure("high", quote?.high),
