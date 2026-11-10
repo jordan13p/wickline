@@ -85,7 +85,7 @@ const late = (delayS, lunch = null) => ({ delayS, lunch });
 // stays here rather than in a provider, since the view reads both together.
 const RULES = {
   NMS: LIVE, NYQ: LIVE, PCX: LIVE, // measured 2026-11-09, lag 1–16 s
-  NGM: LIVE, NCM: LIVE, ASE: LIVE, BTS: LIVE, // Yahoo help: all US-listed stocks are real time; to confirm in a US session
+  NGM: LIVE, NCM: LIVE, ASE: LIVE, BTS: LIVE, // measured 2026-11-10 in a US session: NGM, NCM, ASE and BTS real time (0–34 s)
   SNP: LIVE, DJI: LIVE, NIM: LIVE, // measured 2026-11-09
   CCY: { ...LIVE, fx: true }, // measured 2026-11-10, lag 2–31 s; indicative quotes
   TAI: late(1200), TWO: late(1200), // measured 2026-11-10, 1198–1220 s
