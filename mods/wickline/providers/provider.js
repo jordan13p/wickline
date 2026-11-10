@@ -29,7 +29,7 @@ import { QuoteError } from "../quotes.js";
  * requests follow all its quote requests and a round sends at most that many due ones, longest-waiting
  * first. An `overlay` provider (Yahoo 奇摩股市,
  * TWSE MIS) is off until the person turns it on, and lays its prices over the base quote instead of replacing it;
- * its line, if any, is `{ day, series }`, drawn only with a price (`quote.day`) of the same Taipei day.
+ * its line, if any, is `{ day, series }`, drawn only with a price (`quote.day`) of the same trading day.
  * `cap` limits it to that many of its symbols, in list order; `manualRefresh: false` keeps Refresh
  * from starting an extra round (a request budget). `decode` does not throw
  * for an HTTP or body problem: the request's symbols each get that error instead.

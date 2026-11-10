@@ -11,8 +11,8 @@ import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { collapsedRow, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_ROWS, FUT_NOW, NIGHT, advance, at, chart, chartSymbol, day, fakeHost, isLine, jsonFixture,
-  lineSymbol, ok, start, stop, yq,
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, NIGHT, advance, at, chart, chartSymbol, day, fakeHost, isLine,
+  jsonFixture, lineSymbol, ok, start, stop, yq,
 } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay, yahootw } from "../mods/wickline/providers/yahootw.js";
@@ -1199,6 +1199,48 @@ test("a futures code Yahoo 奇摩股市 does not answer reads not found on Yahoo
     assert.equal(charts(host, "WTXP&"), 0);
     assert.equal(w.shown("WTXP&"), undefined);
   }, FUT_NOW);
+});
+
+test("WTX& is priced by Yahoo 奇摩股市 alone: name, price, change, line and limits", async () => {
+  await twOnlyRun(futuresHost(["WTX&"], { line: () => ok(FUTURES_TICK) }), (w, host) => {
+    const now = FUT_NOW + 5_000;
+    const quote = w.shown("WTX&", now);
+    assert.deepEqual([quote.source, quote.name, quote.localName, quote.price, quote.currency], ["yahootw", "台指期近一", "台指期近一", 42604, "TWD"]);
+    assert.ok(Math.abs(quote.changePercent - 1126 / 41478 * 100) < 1e-9);
+    assert.deepEqual([quote.limitUp, quote.limitDown], [45625, 37331]);
+    assert.deepEqual([quote.series.length, quote.series[0], quote.series.at(-1), quote.chartSource], [1133, 41235, 42604, "yahootw"]);
+    assert.equal(w.marketFor("WTX&"), "tw");
+    assert.equal(w.errors["WTX&"], undefined);
+    assert.equal(host.requests.filter(isLine).length, 1);
+  }, FUT_NOW);
+});
+
+test("a future answered from another exchange reads not found", async () => {
+  await twOnlyRun(futuresHost(["WTX&"], { yahootw: () => futuresAt(FUT_NOW - 5_000, { "WTX&": { exchange: "NMS" } }) }), (w) => {
+    assert.equal(w.errors["WTX&"].code, "yahootw.notFound");
+    assert.equal(w.shown("WTX&"), undefined);
+  }, FUT_NOW);
+});
+
+test("at 20:00 a stock beside a trading future still reads closed at 13:30", async () => {
+  const now = Date.parse("2026-11-10T12:00:05Z");
+  const close = Date.parse("2026-11-10T05:30:00Z");
+  const open = { regular: { start: Date.parse("2026-11-10T01:00:00Z") / 1000, end: close / 1000 } };
+  const host = futuresHost(["2330.TW", "WTX&"], {
+    yahootw: () => ok([{ ...TW_ROWS[0], exchange: "TAI", regularMarketTime: new Date(close).toISOString() },
+      { ...FUTURES_ROWS[0], regularMarketTime: "2026-11-10T12:00:00Z" }]),
+    yahoo: (symbol) => twYahoo(symbol, { exchangeName: "TAI", currentTradingPeriod: open }),
+  });
+  const tx = (key, params) => t("zh-TW", key, params);
+  await twOnlyRun(host, (w) => {
+    const at = now + 5_000;
+    const quote = w.shown("2330.TW", at);
+    assert.equal(quote.timestamp, close);
+    const fresh = freshness(quote, sessionOf(quote, at), at);
+    assert.equal(fresh.state, "closed");
+    assert.equal(freshnessLabel(quote, fresh, at, "zh-TW", tx),
+      `${tx("session.closed")} · ${[formatStaleDate(close, at, "zh-TW"), formatTime(close)].filter(Boolean).join(" ")}`);
+  }, now);
 });
 
 test("the add field takes a futures code; WTX alone stays a US ticker", () => {

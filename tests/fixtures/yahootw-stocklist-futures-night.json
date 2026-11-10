@@ -1,0 +1,134 @@
+[
+  {
+    "symbol": "WTX&",
+    "symbolName": "台指期近一",
+    "exchange": "TFE",
+    "price": {
+      "raw": "42459",
+      "fmt": "42,459.00",
+      "sort": 42459
+    },
+    "regularMarketTime": "2026-11-10T07:19:54Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "46910",
+      "fmt": "46,910.00",
+      "sort": 46910
+    },
+    "limitDownPrice": {
+      "raw": "38382",
+      "fmt": "38,382.00",
+      "sort": 38382
+    },
+    "regularMarketPreviousClose": {
+      "raw": "42646",
+      "fmt": "42,646.00",
+      "sort": 42646
+    },
+    "regularMarketOpen": {
+      "raw": "42503",
+      "fmt": "42,503.00",
+      "sort": 42503
+    },
+    "regularMarketDayHigh": {
+      "raw": "42630",
+      "fmt": "42,630.00",
+      "sort": 42630
+    },
+    "regularMarketDayLow": {
+      "raw": "42357",
+      "fmt": "42,357.00",
+      "sort": 42357
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  },
+  {
+    "symbol": "WMT&",
+    "symbolName": "小型台指近一",
+    "exchange": "TFE",
+    "price": {
+      "raw": "42456",
+      "fmt": "42,456.00",
+      "sort": 42456
+    },
+    "regularMarketTime": "2026-11-10T07:19:52Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "46910",
+      "fmt": "46,910.00",
+      "sort": 46910
+    },
+    "limitDownPrice": {
+      "raw": "38382",
+      "fmt": "38,382.00",
+      "sort": 38382
+    },
+    "regularMarketPreviousClose": {
+      "raw": "42646",
+      "fmt": "42,646.00",
+      "sort": 42646
+    },
+    "regularMarketOpen": {
+      "raw": "42510",
+      "fmt": "42,510.00",
+      "sort": 42510
+    },
+    "regularMarketDayHigh": {
+      "raw": "42632",
+      "fmt": "42,632.00",
+      "sort": 42632
+    },
+    "regularMarketDayLow": {
+      "raw": "42354",
+      "fmt": "42,354.00",
+      "sort": 42354
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  },
+  {
+    "symbol": "2330.TW",
+    "symbolName": "台積電",
+    "exchange": "TAI",
+    "price": {
+      "raw": "2285",
+      "fmt": "2,285",
+      "sort": 2285
+    },
+    "regularMarketTime": "2026-11-10T06:30:00Z",
+    "exchangeDataDelayedBy": 0,
+    "limitUpPrice": {
+      "raw": "2455",
+      "fmt": "2,455",
+      "sort": 2455
+    },
+    "limitDownPrice": {
+      "raw": "2015",
+      "fmt": "2,015",
+      "sort": 2015
+    },
+    "regularMarketPreviousClose": {
+      "raw": "2235",
+      "fmt": "2,235",
+      "sort": 2235
+    },
+    "regularMarketOpen": {
+      "raw": "2265",
+      "fmt": "2,265",
+      "sort": 2265
+    },
+    "regularMarketDayHigh": {
+      "raw": "2285",
+      "fmt": "2,285",
+      "sort": 2285
+    },
+    "regularMarketDayLow": {
+      "raw": "2230",
+      "fmt": "2,230",
+      "sort": 2230
+    },
+    "currency": "TWD",
+    "marketStatus": "close"
+  }
+]
