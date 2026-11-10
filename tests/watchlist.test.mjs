@@ -973,3 +973,24 @@ test("the idle wake waits for each quote's own stale moment", () => {
   assert.equal(w.staleInMs(["AAPL"], T + 60_000), 60_001);
   assert.equal(w.staleInMs(["AAPL", "0700.HK"], T + 1_100_000), 100_001);
 });
+
+test("the busiest session ranks lunch below open and unknown", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  const noon = Date.parse("2026-11-10T02:45:00Z"); // 11:45 JST
+  const quote = (symbol, exchange, open, close) => ({ symbol, source: "yahoo", exchange, timestamp: noon - 600_000,
+    periods: { pre: null, regular: [Date.parse(open), Date.parse(close)], post: null } });
+  w.quotes["7203.T"] = quote("7203.T", "JPX", "2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z");
+  w.quotes["2330.TW"] = quote("2330.TW", "TAI", "2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z");
+  w.quotes.AAPL = quote("AAPL", "NMS", "2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z");
+  assert.equal(w.sessionFor(["7203.T"], noon), "lunch");
+  assert.equal(w.sessionFor(["7203.T", "AAPL"], noon), "lunch");
+  assert.equal(w.sessionFor(["7203.T", "2330.TW"], noon), "open");
+  assert.equal(w.sessionFor(["7203.T", "MSFT"], noon), "unknown");
+  // A JPX quote from 11:30 JST: nothing turns stale over lunch, and the wake counts trading time after it.
+  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: Date.parse("2026-11-10T02:30:00Z") };
+  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T03:00:00Z")), 120_000); // 12:00 JST: the cap
+  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T03:49:00Z")), 60_001); // 12:49 JST: 19 min traded
+  // A quote from 11:10 JST at 11:45: its frozen age (20 min) would leave 1 ms, and the wake would spin all lunch.
+  w.quotes["7203.T"] = { ...w.quotes["7203.T"], timestamp: Date.parse("2026-11-10T02:10:00Z") };
+  assert.equal(w.staleInMs(["7203.T"], Date.parse("2026-11-10T02:45:00Z")), 120_000);
+});

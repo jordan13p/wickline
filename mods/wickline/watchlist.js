@@ -43,8 +43,9 @@ const SWITCHES = {
     retryOn: (settings) => JSON.stringify([settings.sources.us, settings.keyRev]),
   },
 };
-// A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open.
-const SESSION_RANK = { open: 3, "24h": 3, unknown: 2, pre: 1, post: 1, closed: 0 };
+// A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open, and a lunch break
+// ranks below a session not yet known but above pre/post.
+const SESSION_RANK = { open: 4, "24h": 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0 };
 // Errors about the source itself, not one symbol: shown as the source's problem.
 const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadable)$/;
 // The source is down or hung: the rest of the round would only wait out more timeouts.
@@ -543,7 +544,7 @@ export class Watchlist {
   }
 
   /**
-   * The busiest session among `symbols`: open > unknown (no quote yet) > pre/post > closed. Read from the
+   * The busiest session among `symbols`: open > unknown (no quote yet) > lunch > pre/post > closed. Read from the
    * base quotes (an overlay keeps the base's trading periods), and for a TW-only symbol from what it shows;
    * one with nothing to show (no source knows it) counts as closed, so it is never polled every 10 s.
    */
@@ -560,13 +561,14 @@ export class Watchlist {
 
   /**
    * How long until the first of `symbols`' shown quotes turns stale, each at its own moment (staleAfterMs past
-   * its quoteAgeMs); at most LIVE_MAX_AGE_MS, also when none ever does.
+   * its quoteAgeMs); at most LIVE_MAX_AGE_MS, also when none ever does. A quote at lunch is skipped: its age
+   * stands still until trading resumes, and the cap wakes the loop for that.
    */
   staleInMs(symbols, now) {
     let wait = LIVE_MAX_AGE_MS;
     for (const symbol of symbols) {
       const quote = this.shown(symbol, now);
-      const limit = quote ? staleAfterMs(quote) : null;
+      const limit = quote && sessionOf(quote, now) !== "lunch" ? staleAfterMs(quote) : null;
       const left = limit === null ? 0 : limit - quoteAgeMs(quote, now) + 1;
       if (left > 0 && left < wait) wait = left;
     }

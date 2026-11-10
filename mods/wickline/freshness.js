@@ -22,13 +22,28 @@ export function staleAfterMs(quote) {
   return futures || delayS === null ? null : (delayS + DELAYED_GRACE_S) * 1000;
 }
 
+const MINUTE_MS = 60_000;
+const DAY_MS = 86_400_000;
+
+// The local day's lunch break around `now` as [start, end) in ms, by the exchange clock's fixed UTC offset.
+function lunchWindow({ offsetMin, from, to }, now) {
+  const dayStart = Math.floor((now + offsetMin * MINUTE_MS) / DAY_MS) * DAY_MS - offsetMin * MINUTE_MS;
+  return [dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS];
+}
+
 /**
  * A quote's age against staleAfterMs. A delayed quote counts from today's open at the earliest, so a market's
- * first minutes do not read stopped at the previous close; a real-time one always from its own time.
+ * first minutes do not read stopped at the previous close, and without today's lunch break, so it does not
+ * read stopped just after lunch; a real-time one always from its own time.
  */
 export function quoteAgeMs(quote, now) {
   const open = quote.periods?.regular?.[0];
-  return isRealtime(quote) || open === undefined ? now - quote.timestamp : now - Math.max(quote.timestamp, open);
+  if (isRealtime(quote)) return now - quote.timestamp;
+  const start = open === undefined ? quote.timestamp : Math.max(quote.timestamp, open);
+  const { lunch } = exchangeRule(quote.exchange, quote.symbol);
+  if (!lunch) return now - start;
+  const [lunchStart, lunchEnd] = lunchWindow(lunch, now);
+  return now - start - Math.max(0, Math.min(now, lunchEnd) - Math.max(start, lunchStart));
 }
 
 // A delayed quote's minutes late, from its exchange's rule; null when the rule gives none.
@@ -50,26 +65,43 @@ export function marketSession(quote, now) {
   return "closed";
 }
 
+// From Friday 22:00 to Sunday 22:00 UTC, when the FX week is over.
+function fxWeekend(now) {
+  const date = new Date(now);
+  const weekday = date.getUTCDay();
+  return weekday === 6 || (weekday === 5 && date.getUTCHours() >= 22) || (weekday === 0 && date.getUTCHours() < 22);
+}
+
 /**
- * "open", "pre", "post" or "closed" from the quote's trading periods; a pair trades "24h";
- * a stock without a regular session (no Yahoo quote yet) is "unknown".
+ * "open", "pre", "post" or "closed" from the quote's trading periods, and "lunch" while open inside its
+ * exchange's lunch break (Yahoo's regular period runs through it); FX is "closed" over the weekend whatever
+ * its period says. A pair trades "24h"; a stock without a regular session (no Yahoo quote yet) is "unknown".
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";
   if (!quote.periods?.regular) return "unknown";
-  return marketSession(quote, now);
+  const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
+  if (fx && fxWeekend(now)) return "closed";
+  const session = marketSession(quote, now);
+  if (session !== "open" || !lunch) return session;
+  const [lunchStart, lunchEnd] = lunchWindow(lunch, now);
+  return now >= lunchStart && now < lunchEnd ? "lunch" : "open";
 }
 
 const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delayMinutes, stoppedAt });
+
+// Sessions a quote reads as, never stale: the market is not trading (regular-session prices only).
+const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
 
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
  * as new). unconfirmed: real time while the session is not known. stalled: trading and older than
  * staleAfterMs (quoteAgeMs), real time or delayed. delayed: any other quote, with its exchange's minutes when
- * the table holds them; a future or an exchange without a delay never stalls. closed / pre / post: the session.
+ * the table holds them; a future or an exchange without a delay never stalls. closed / pre / post / lunch:
+ * the session.
  */
 export function freshness(quote, session, now) {
-  if (session === "closed" || session === "pre" || session === "post") return result(session);
+  if (PAUSED.has(session)) return result(session);
   const limit = staleAfterMs(quote);
   const stale = limit !== null && quoteAgeMs(quote, now) > limit;
   if (isRealtime(quote)) {

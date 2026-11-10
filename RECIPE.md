@@ -89,8 +89,8 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
   | unconfirmed | real-time source, session not known yet | ring | the source name (`TWSE MIS`) |
   | stalled | trading: real time over 120 s old, delayed over its delay + 5 min since today's open | ring | `quote stopped at 13:05` |
   | delayed | Yahoo, delayed exchange | ring | the table's minutes (`delayed 20 min`), else `Yahoo · delayed`; futures and unknown exchanges never stall |
-  | closed | market closed | none | `Market closed · Oct 31 16:00` (the date only when not today) |
-  | pre / post | pre-market, after hours (prices are regular-session) | none | `Pre-market`, `After hours` |
+  | closed | market closed; FX from Friday 22:00 to Sunday 22:00 UTC | none | `Market closed · Oct 31 16:00` (the date only when not today) |
+  | pre / post / lunch | pre-market, after hours, lunch (JPX/OSA 11:30–12:30, HKG 12:00–13:00, SHH/SHZ 11:30–13:00 local; lunch minutes do not count toward a stop); prices are regular-session | none | `Pre-market`, `After hours`, `Lunch` (`午休`, `昼休み`, `점심 휴장`) |
 
   Yahoo Finance is live only from NMS, NYQ, PCX, SNP, DJI, NIM and CCY (indicative FX; `=X` with no exchange).
 - **Pause / Resume**: automatic rounds stop and start; Refresh still runs one round while paused. Cached quotes stay.
@@ -168,7 +168,7 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
 - A gradient to a fully transparent `#rrggbb00` stop draws as one flat color; use a solid fill with `.opacity(0.16)`.
 - Keep `×` beside the clickable row, not inside it.
 - No pointer capture: a release outside the list never arrives, so a drag ends on leaving it (`on_hover(false)`). A press sets the target to the row itself, so a click drops nothing.
-- Yahoo's chart endpoint is unofficial and regional. `exchangeDataDelayedBy` is absent, so delays come only from the exchange table: never a made-up delay. Never label cached data as fresh or an unknown delay as real time.
+- Yahoo's chart endpoint is unofficial and regional. `exchangeDataDelayedBy` is absent, so delays come only from the exchange table: never a made-up delay. Never label cached data as fresh or an unknown delay as real time. A changed lunch window is a table edit; CME's daily maintenance halt is not marked; US DST moves the real FX week by an hour.
 - A theme's own `done` color isn't necessarily green: keep the change colors on `ansi2`/`ansi1`.
 - `InputState` takes its placeholder only when made, outside `render`: a language change remakes the input (in other copies, from a task their next render wakes), keeping the text and focus.
 

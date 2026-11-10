@@ -209,3 +209,63 @@ test("the line under a real-time price never reads stalled", () => {
   const mis = { symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: NOW - 10_000, chartSource: "yahoo" };
   assert.deepEqual(detailSource(mis, "closed", NOW, say("en")), [["Price: Market closed · TWSE MIS"], ["Line: delayed 20 min · Yahoo Finance"]]);
 });
+
+const TOKYO_DAY = day("2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z"); // 09:00–15:30 JST
+const CN_DAY = day("2026-11-10T01:30:00Z", "2026-11-10T07:00:00Z");
+const sessions = (q, times) => times.map((hms) => sessionOf(q, at(`2026-11-10T${hms}Z`)));
+
+test("Tokyo's lunch break is a session of its own", () => {
+  const q = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), TOKYO_DAY); // timed 11:10 JST
+  assert.deepEqual(sessions(q, ["02:29:59", "02:30:00", "03:29:59", "03:30:00", "03:31:00"]), ["open", "lunch", "lunch", "open", "open"]);
+  const noon = at("2026-11-10T02:45:00Z"); // 11:45 JST
+  assert.equal(sessionOf(yq("^N225", "OSA", q.timestamp, TOKYO_DAY), noon), "lunch");
+  assert.deepEqual(freshness(q, sessionOf(q, noon), noon), { state: "lunch", delayMinutes: null, stoppedAt: null });
+  assert.equal(freshnessLabel(q, freshness(q, "lunch", noon), noon, "zh-TW", say("zh-TW")), "午休");
+  assert.equal(freshnessLabel(q, freshness(q, "lunch", noon), noon, "en", say("en")), "Lunch");
+  assert.deepEqual(detailSource(q, "lunch", noon, say("en")), [["Yahoo Finance · regular session", "delayed 15 min"]]);
+  assert.equal(shownLimit(q, "lunch", noon), null);
+  // Yesterday's periods (a copy that slept): closed, not lunch.
+  assert.equal(sessionOf({ ...q, periods: day("2026-11-09T00:00:00Z", "2026-11-09T06:30:00Z") }, noon), "closed");
+});
+
+test("Hong Kong and Shanghai lunch; Taiwan, Korea and the US have none", () => {
+  const hk = yq("0700.HK", "HKG", at("2026-11-10T03:00:00Z"), HK_DAY);
+  assert.deepEqual(sessions(hk, ["03:59:59", "04:00:00", "04:59:59", "05:00:00"]), ["open", "lunch", "lunch", "open"]);
+  const cn = yq("600519.SS", "SHH", at("2026-11-10T03:00:00Z"), CN_DAY);
+  assert.deepEqual(sessions(cn, ["03:29:59", "03:30:00", "04:59:59", "05:00:00"]), ["open", "lunch", "lunch", "open"]);
+  assert.deepEqual(sessions(yq("000858.SZ", "SHZ", cn.timestamp, CN_DAY), ["04:00:00"]), ["lunch"]);
+  const noon = at("2026-11-10T04:00:00Z"); // 12:00 in Taipei
+  const tw = yq("2330.TW", "TAI", at("2026-11-10T03:50:00Z"), day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"));
+  assert.equal(sessionOf(tw, noon), "open");
+  assert.equal(freshness(tw, sessionOf(tw, noon), noon).delayMinutes, 20);
+  for (const [symbol, exchange] of [["005930.KS", "KSC"], ["AAPL", "NMS"]]) assert.equal(sessionOf(yq(symbol, exchange, noon, TOKYO_DAY), noon), "open", symbol);
+});
+
+test("the minutes of a lunch break do not count toward a stop", () => {
+  const tokyo = yq("7203.T", "JPX", at("2026-11-10T02:30:00Z"), TOKYO_DAY); // the morning's last trade, 11:30 JST
+  assert.equal(quoteAgeMs(tokyo, at("2026-11-10T03:31:00Z")), 60_000);
+  assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:31:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null });
+  assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:40:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null }); // 12:40 JST: 10 min traded
+  assert.equal(freshness(tokyo, "open", at("2026-11-10T03:50:00Z")).state, "delayed"); // 12:50 JST: 20 min of trading
+  assert.equal(freshness(tokyo, "open", at("2026-11-10T03:50:00Z") + 1).state, "stalled");
+  const cn = yq("600519.SS", "SHH", at("2026-11-10T03:30:00Z"), CN_DAY);
+  assert.equal(freshness(cn, "open", at("2026-11-10T05:20:00Z")).state, "delayed"); // 13:20 CST
+  assert.equal(freshness(cn, "open", at("2026-11-10T05:20:00Z") + 1).state, "stalled");
+});
+
+test("FX reads closed from Friday 22:00 to Sunday 22:00 UTC", () => {
+  // Yahoo's period says open at each instant here.
+  const fx = (iso, exchange = "CCY") => {
+    const time = at(iso);
+    return [{ symbol: "EURUSD=X", source: "yahoo", exchange, timestamp: time - 5_000,
+      periods: { pre: null, regular: [time - 3_600_000, time + 3_600_000], post: null } }, time];
+  };
+  const session = (iso, exchange) => sessionOf(...fx(iso, exchange));
+  assert.deepEqual(["2026-11-13T21:59:59Z", "2026-11-13T22:00:00Z", "2026-11-14T12:00:00Z", "2026-11-15T21:59:59Z", "2026-11-15T22:00:00Z"].map((iso) => session(iso)),
+    ["open", "closed", "closed", "closed", "open"]);
+  assert.equal(session("2026-11-14T12:00:00Z", null), "closed"); // =X without an exchange
+  const [saturday, s] = fx("2026-11-14T12:00:00Z");
+  assert.equal(freshness({ ...saturday, timestamp: at("2026-11-13T21:59:00Z") }, sessionOf(saturday, s), s).state, "closed");
+  const [sunday, u] = fx("2026-11-15T22:01:00Z");
+  assert.equal(freshness(sunday, sessionOf(sunday, u), u).state, "live");
+});

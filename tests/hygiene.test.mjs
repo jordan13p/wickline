@@ -511,3 +511,8 @@ test("the settings dialog reads Yahoo's delay from the exchange table", () => {
   assert.match(delay, /exchangeRule\(TYPICAL_EXCHANGE\[market\]/);
   assert.doesNotMatch(dialog, /TAIWAN_YAHOO_DELAY_S/);
 });
+
+// Guard only (passes before the change): a lunch break is a session, no dot, like closed or pre-market.
+test("only a price that may not be current draws a ring", () => {
+  assert.match(code(read(new URL("ui/parts.js", MOD))), /const HOLLOW = \["unconfirmed", "stalled", "delayed"\];/);
+});

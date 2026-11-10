@@ -149,3 +149,7 @@ test("a price at its limit is named in every language", () => {
   }
 });
 
+
+test("the lunch break is named in every language", () => {
+  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.lunch")), ["Lunch", "午休", "午休", "昼休み", "점심 휴장"]);
+});
