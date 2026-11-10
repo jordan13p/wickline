@@ -186,7 +186,7 @@ test("a quote may get 120 s old for real time, its delay plus 5 min, else it nev
   for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) assert.equal(msUntilStale(yq(symbol, exchange, 0), "open", 0), null, symbol);
 });
 
-test("msUntilStale: the ms left before freshness reads stalled, null when it cannot this session", () => {
+test("msUntilStale: the ms left before freshness reads stalled; real time counts in every session, delayed only while open", () => {
   const T = at("2026-11-10T02:12:00Z"); // 10:12 in Hong Kong
   const hk = fetched(yq("0700.HK", "HKG", T, HK_DAY), T + 60_000);
   assert.equal(msUntilStale(hk, "open", T + 300_000), 60_001);
@@ -196,7 +196,12 @@ test("msUntilStale: the ms left before freshness reads stalled, null when it can
   const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: T };
   assert.equal(msUntilStale(finnhub, "open", T + 60_000), 60_001);
   assert.equal(msUntilStale(finnhub, "open", T + 120_001), 0);
-  for (const session of ["closed", "pre", "post", "lunch"]) assert.equal(msUntilStale(hk, session, T), null, session);
+  for (const session of ["closed", "pre", "post", "lunch"]) {
+    assert.equal(msUntilStale(hk, session, T), null, session);
+    // A real-time quote's moment is when its row may go to another source (pickOverlay), whatever the session.
+    assert.equal(msUntilStale(finnhub, session, T + 60_000), 60_001, session);
+    assert.equal(freshness(finnhub, session, T + 120_001).state, session);
+  }
   // A session not known yet: a delayed quote never stalls; real time still counts, for the overlay pick.
   assert.equal(msUntilStale(hk, "unknown", T + 1_200_001), null);
   assert.equal(msUntilStale(us, "unknown", T + 60_000), 240_001);

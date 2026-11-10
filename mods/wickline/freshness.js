@@ -104,12 +104,14 @@ const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
 /**
  * How long until a quote turns stale in `session`, in ms: at least 1 while it has not yet, 0 or less once it
  * has (older than staleAfterMs by quoteAgeMs, or a Yahoo Finance quote not fetched for FETCH_MAX_AGE_MS).
- * null when it never will this session: the market is not trading, a delayed quote's session is not open,
- * or it is a future or from an exchange without a delay. A real-time quote counts also while its session is
- * not known: it reads unconfirmed, but a stale overlay still hands its row to another source (pickOverlay).
+ * null when it never will this session: a delayed quote's session is not open, or it is a future or from an
+ * exchange without a delay. A real-time quote counts in every session, also while closed or not known yet:
+ * freshness reads it by its session then, but its moment is when pickOverlay (by the same LIVE_MAX_AGE_MS)
+ * hands the row to another source, so the idle wake must still land on it. A delayed quote is a Yahoo
+ * base, never handed over, and outside the open session it never reads stalled: nothing to wake for.
  */
 export function msUntilStale(quote, session, now) {
-  if (PAUSED.has(session) || (!isRealtime(quote) && session !== "open")) return null;
+  if (!isRealtime(quote) && session !== "open") return null;
   const limit = staleAfterMs(quote);
   if (limit === null) return null;
   const left = limit - quoteAgeMs(quote, now) + 1;

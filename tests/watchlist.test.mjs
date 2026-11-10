@@ -989,6 +989,20 @@ test("the idle wake skips a delayed quote whose session is not known yet", () =>
   assert.equal(w.staleInMs(["AAPL"], T + 240_000), 60_001);
 });
 
+test("after the Taiwan close the idle wake still lands when the shown overlay hands over", () => {
+  const w = new Watchlist(fakeHost(() => ok({})));
+  const tw = day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"); // 09:00–13:30 in Taipei
+  w.quotes["2330.TW"] = { ...yq("2330.TW", "TAI", at("2026-11-10T05:10:00Z"), tw), fetchedAt: at("2026-11-10T05:31:00Z") };
+  // Yahoo 奇摩股市 timed 13:31:00 comes first while live; MIS, 30 s newer, takes over once it is not.
+  const overlay = (source, iso) => ({ symbol: "2330.TW", source, price: 2200, timestamp: at(iso), fetchedAt: at(iso) });
+  w.overlays["2330.TW"] = { yahootw: overlay("yahootw", "2026-11-10T05:31:00Z"), mis: overlay("mis", "2026-11-10T05:31:30Z") };
+  const now = at("2026-11-10T05:32:00Z"); // 13:32, the market closed
+  assert.equal(sessionOf(w.shown("2330.TW", now), now), "closed");
+  assert.equal(w.shown("2330.TW", now).source, "yahootw");
+  assert.equal(w.staleInMs(["2330.TW"], now), 60_001);
+  assert.equal(w.shown("2330.TW", now + 60_001).source, "mis");
+});
+
 test("the busiest session ranks lunch below open and unknown", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
   const noon = at("2026-11-10T02:45:00Z"); // 11:45 JST
