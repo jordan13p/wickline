@@ -134,9 +134,10 @@ export function msUntilStale(quote, session, now) {
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
  * as new). unconfirmed: real time while the session is not known, or a real-time Yahoo quote still at the
- * previous close after today's open (beforeOpen), until today's first trade or the fetch guard. stalled: past its msUntilStale, real time
- * or delayed. delayed: any other quote, with its exchange's minutes when the table holds them; a future or an
- * exchange without a delay never stalls. closed / pre / post / lunch: the session.
+ * previous close after today's open (beforeOpen), until today's first trade or the fetch guard. stalled:
+ * past its msUntilStale, real time or delayed. delayed: any other quote, with its exchange's minutes when the
+ * table holds them; a future or an exchange without a delay never stalls. closed / pre / post / lunch: the
+ * session.
  */
 export function freshness(quote, session, now) {
   if (PAUSED.has(session)) return result(session);
@@ -188,7 +189,9 @@ export function detailSource(quote, session, now, tx) {
     const price = tx("detail.priceFrom", { state: own, source: tx(`src.${quote.source}`) });
     if (!quote.chartSource) return [[price]];
     if (quote.chartSource === quote.source) return [[price], [tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })]];
-    const chart = { ...quote, source: quote.chartSource, timestamp: quote.chartTimestamp, fetchedAt: quote.chartFetchedAt };
+    const chart = {
+      ...quote, source: quote.chartSource, timestamp: quote.chartTimestamp, fetchedAt: quote.chartFetchedAt,
+    };
     const state = isRealtime(chart) ? stateText(freshness(chart, session, now), tx) : delayWords(chart, tx);
     return [[price], [tx("detail.lineFrom", { state, source: tx(`src.${quote.chartSource}`) })]];
   }

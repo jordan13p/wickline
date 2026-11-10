@@ -310,6 +310,9 @@ test("a lunch break counts only where it overlaps the quote's trading time", () 
   // Timed 11:00 JST, fetched 11:20: lunch has not begun, nothing is taken off: exactly its 20 min, not stale.
   const early = yq("7203.T", "JPX", at("2026-11-10T02:00:00Z"), TOKYO_DAY);
   assert.equal(msUntilStale(fetched(early, at("2026-11-10T02:20:00Z")), "open", at("2026-11-10T02:20:00Z")), left(300_000, 0));
+  // Fetched 1 ms past its 20 min: stalled, so a lunch subtracted where it does not overlap would show.
+  const pastLimit = at("2026-11-10T02:20:00Z") + 1;
+  assert.deepEqual(freshness(fetched(early, pastLimit), "open", pastLimit), { state: "stalled", delayMinutes: null, stoppedAt: early.timestamp });
   const morning = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), TOKYO_DAY);
   // Its 20 min of trading end at 11:30, so it reads stalled only once the market reopens.
   assert.equal(freshness(morning, sessionOf(morning, at("2026-11-10T03:30:00Z")), at("2026-11-10T03:30:00Z")).state, "delayed");
