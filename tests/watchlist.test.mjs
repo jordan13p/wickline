@@ -1229,6 +1229,24 @@ test("a futures code Yahoo 奇摩股市 does not answer reads not found on Yahoo
   }, FUT_NOW);
 });
 
+// A code Yahoo 奇摩股市 has said it does not know has no session to keep up with: it must not hold the whole Taiwan batch
+// at the 10 s cadence every session. The opening wake still asks it once at each opening.
+test("a futures code not found on Yahoo 奇摩股市 leaves the batch at the closed cadence in a session", async () => {
+  const from = at("2026-11-10T14:00:00Z"); // 22:00, the night session
+  const close = at("2026-11-10T05:30:00Z");
+  const open = { regular: { start: at("2026-11-10T01:00:00Z") / 1000, end: close / 1000 } };
+  const host = futuresHost(["2330.TW", "WTXP&"], {
+    yahootw: () => ok([{ ...TW_ROWS[0], exchange: "TAI", regularMarketTime: new Date(close).toISOString() }]),
+    yahoo: (symbol) => twYahoo(symbol, { exchangeName: "TAI", currentTradingPeriod: open }),
+  });
+  await soleRun(host, async (w) => {
+    assert.equal(w.errors["WTXP&"].code, "yahootw.notFound");
+    const asked = stockLists(host).length;
+    await advance(host, from + 125_000);
+    assert.equal(stockLists(host).length - asked, 2);
+  }, from);
+});
+
 test("WTX& is priced by Yahoo 奇摩股市 alone: name, price, change, line and limits", async () => {
   await soleRun(futuresHost(["WTX&"], { line: () => ok(FUTURES_TICK) }), (w, host) => {
     const now = FUT_NOW + 5_000;

@@ -593,13 +593,17 @@ export class Watchlist {
    * The busiest session among `symbols`: open > unknown (no quote yet) > lunch > pre/post > closed. Read from the
    * base quotes (baseQuote: an overlay keeps the base's trading periods). A symbol with a sole source and
    * nothing to show (no source knows it) takes its form's session: a future's by TAIFEX's hours, so it is asked
-   * every 10 s in a session; any other counts as closed, so it is never polled every 10 s.
+   * every 10 s in a session; any other counts as closed, so it is never polled every 10 s. One that source has
+   * answered as not found counts as closed too, so a mistyped code never holds the batch at 10 s; the wake at
+   * each TAIFEX opening still asks it.
    */
   sessionFor(symbols, now) {
     let best = "closed";
     for (const symbol of symbols) {
       const quote = this.baseQuote(symbol, now);
-      const session = quote ? sessionOf(quote, now) : this.soleSource(symbol) ? soleSession(symbol, now) : "unknown";
+      const session = quote ? sessionOf(quote, now)
+        : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(symbol, now))
+        : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
     return symbols.length ? best : "unknown";
