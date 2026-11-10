@@ -54,10 +54,11 @@ const HONG_KONG_LUNCH = { offsetMin: 480, from: 720, to: 780 };
 const CHINA_LUNCH = { offsetMin: 480, from: 690, to: 780 };
 
 const LIVE = { realtime: true, delayS: null };
-const late = (delayS, lunch = null, futures = false) => ({ realtime: false, delayS, lunch, futures });
+const late = (delayS, lunch = null) => ({ delayS, lunch });
 
 // How Yahoo Finance serves each exchange it reports. Closed on purpose: any other code reads as a delay not
-// provided, never a guess.
+// provided, never a guess. It mixes Yahoo's facts (realtime, delayS) with the exchange's own (lunch, fx), and
+// stays here rather than in a provider, since the view reads both together.
 const RULES = {
   NMS: LIVE, NYQ: LIVE, PCX: LIVE, // measured 2026-11-09, lag 1–16 s
   SNP: LIVE, DJI: LIVE, NIM: LIVE, // measured 2026-11-09
@@ -69,9 +70,15 @@ const RULES = {
   SHH: late(900, CHINA_LUNCH), SHZ: late(900, CHINA_LUNCH), // measured 2026-11-10, 898–901 s (help says 30)
   CXI: late(900), // measured 2026-11-09, 1117 s
   PNK: late(900), NYS: late(900), WCB: late(900), // Yahoo help (SLN2310)
-  CME: late(600, null, true), NYM: late(600, null, true), CMX: late(600, null, true), // measured 2026-11-10, 592–611 s
-  CBT: late(600, null, true), // CME Group, as CME; not measured
+  CME: { ...late(600), futures: true }, NYM: { ...late(600), futures: true }, CMX: { ...late(600), futures: true }, // measured 2026-11-10, 592–611 s
+  CBT: { ...late(600), futures: true }, // CME Group, as CME; not measured
 };
+
+// Every rule in full, built once and shared by every caller, so frozen.
+const NONE = Object.freeze({ realtime: false, delayS: null, lunch: null, futures: false, fx: false });
+const FULL = new Map(Object.entries(RULES).map(([code, rule]) => [code, Object.freeze({ ...NONE, ...rule })]));
+const FUTURE_BY_FORM = Object.freeze({ ...NONE, futures: true });
+const FX_BY_FORM = Object.freeze({ ...NONE, ...LIVE, fx: true });
 
 /**
  * How fresh Yahoo Finance's quotes are for `exchange`: `realtime`, else `delayS` (null: not provided), the
@@ -79,11 +86,10 @@ const RULES = {
  * does the symbol's form decide: `=F` is a future with no delay known, `=X` real-time FX.
  */
 export function exchangeRule(exchange, symbol) {
-  const none = { realtime: false, delayS: null, lunch: null, futures: false, fx: false };
-  if (exchange) return { ...none, ...RULES[exchange] };
-  if (symbol.endsWith("=F")) return { ...none, futures: true };
-  if (symbol.endsWith("=X")) return { ...none, ...LIVE, fx: true };
-  return none;
+  if (exchange) return FULL.get(exchange) ?? NONE;
+  if (symbol.endsWith("=F")) return FUTURE_BY_FORM;
+  if (symbol.endsWith("=X")) return FX_BY_FORM;
+  return NONE;
 }
 
 // The exchange a settings page's Yahoo fallback describes for its market.
