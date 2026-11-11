@@ -285,6 +285,19 @@ export function sessionOf(quote, now) {
 
 const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delayMinutes, stoppedAt });
 
+// A price whose session sessionOf read from its exchange's hours (no periods; not a future) that is from today's
+// session and was already past its stale limit at the close: the hours say the market closed, not when this feed
+// stopped, so it stopped before the close and is never taken for it. From the next day's open window it is an earlier
+// day's trade and reads closed with its date.
+function stoppedBeforeClose(quote, now) {
+  if (quote.periods?.regular || kindOf(quote.symbol) === "future") return false;
+  const hours = hoursWindow(quote, now);
+  const limit = staleAfterMs(quote);
+  if (!hours?.weekday || limit === null) return false;
+  const [start, end] = hours.regular;
+  return now >= end && quote.timestamp >= start && quote.timestamp < end - limit;
+}
+
 // Sessions a quote reads as, never stale: the market is not trading (regular-session prices only).
 const PAUSED = new Set(["closed", "holiday", "noTrades", "pre", "post", "lunch"]);
 
@@ -316,9 +329,11 @@ export function msUntilStale(quote, session, now) {
  * real-time Yahoo quote still at the previous close after today's open (beforeOpen), until today's first trade
  * or the fetch guard. stalled: past its msUntilStale, real time or delayed. delayed: any other quote, with its
  * exchange's minutes when the table holds them; a Yahoo future (`=F`) or an exchange without a delay never
- * stalls. closed / holiday / noTrades / pre / post / lunch: the session.
+ * stalls. closed / holiday / noTrades / pre / post / lunch: the session, except a closed one read from the hours after
+ * a price that had stalled by the close (stoppedBeforeClose): stalled.
  */
 export function freshness(quote, session, now) {
+  if (session === "closed" && stoppedBeforeClose(quote, now)) return result("stalled", null, quote.timestamp);
   if (PAUSED.has(session)) return result(session);
   const realtime = isRealtime(quote);
   if (realtime && session === "unknown") return result("unconfirmed");

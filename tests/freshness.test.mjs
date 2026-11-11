@@ -793,3 +793,24 @@ test("the band's dot: hollow for 今日無成交, none for 休市 or closed", ()
   assert.equal(bandState(row({ kind: "listed", reason: "颱風" }), now), "holiday");
   assert.equal(bandState(row(null), at("2026-11-14T02:00:00Z")), "closed");   // Saturday
 });
+
+// A TW-only index priced by Yahoo 奇摩股市 alone, with no line periods yet, reads its session from TWSE's hours: a feed
+// that stopped at 11:00 must not read closed at 11:00 once the hours say the market closed.
+test("a price read by the hours that stopped well before the close keeps reading stalled after it", () => {
+  const eleven = at("2026-11-11T03:00:00Z");                         // 11:00 Taipei, Wednesday
+  const quote = (timestamp, now) => {
+    const own = { symbol: "^TWOII", source: "yahootw", exchange: "TWO", price: 300, timestamp, tradeTime: timestamp };
+    return { ...own, periods: ownPeriods(own, undefined, now) };
+  };
+  const state = (timestamp, now) => {
+    const q = quote(timestamp, now);
+    return freshness(q, sessionOf(q, now), now).state;
+  };
+  assert.equal(state(eleven, at("2026-11-11T05:00:00Z")), "stalled");         // 13:00, open
+  assert.equal(state(eleven, at("2026-11-11T05:31:00Z")), "stalled");         // 13:31, closed by the hours
+  assert.equal(state(eleven, at("2026-11-11T12:00:00Z")), "stalled");         // 20:00
+  assert.equal(freshness(quote(eleven, at("2026-11-11T05:31:00Z")), "closed", at("2026-11-11T05:31:00Z")).stoppedAt, eleven);
+  // A price fresh at the close reads closed; on the next Taipei day the price is an earlier day's, closed with its date.
+  assert.equal(state(at("2026-11-11T05:29:30Z"), at("2026-11-11T05:31:00Z")), "closed");
+  assert.equal(state(eleven, at("2026-11-11T16:01:00Z")), "closed");
+});

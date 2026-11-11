@@ -32,7 +32,8 @@ const FUTURE_AHEAD_MS = 5 * MINUTE_MS;
  *   night, and closed between sessions;
  * - else, for a quote from an earlier trading day than `now`'s, a session that ended at its own trade, so it reads
  *   closed with its date;
- * - else null: today's price without today's periods reads unconfirmed, never closed.
+ * - else null: today's price without today's periods reads its session from the exchange's hours (sessionOf),
+ *   and one that stalled before the close keeps reading stalled after it (freshness, stoppedBeforeClose).
  * Before the open the line still gives the day before's periods, and a feed that stalls must never be taken for
  * the close.
  */
