@@ -596,3 +596,7 @@ test("the docs call Yahoo's US prices real time, and name lunch, FX and futures"
   assert.doesNotMatch(zh, /美股 \| Yahoo Finance（延遲）/);
   for (const word of ["午休", "22:00 UTC", "參考報價"]) assert.ok(zh.includes(word), word);
 });
+
+test("the row's stale date is judged by the quote's own day", () => {
+  assert.match(code(read(new URL("ui/panel.js", MOD))), /formatStaleDate\(quote\.timestamp, now, view\.lang, dayFor\(quote\)\)/);
+});

@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeTone, chartGeometry, collapsedRow, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
+import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { formatDate, sessionTimesParts, stateText } from "../mods/wickline/format.js";
 import { freshness, sessionTimes } from "../mods/wickline/freshness.js";
 import { at, day, withTZ } from "./helpers.mjs";
@@ -131,7 +131,7 @@ test("the detail times: quoted, the last trade when it differs, fetched", () => 
   const at = (h, m, s) => new Date(2026, 10, 9, h, m, s).getTime();
   const now = at(9, 41, 20);
   // 0050.TW from Yahoo 奇摩股市: quoted at the feed's time, its own last trade earlier.
-  const quiet = { timestamp: at(9, 41, 13), tradeTime: at(9, 17, 12), fetchedAt: at(9, 41, 19) };
+  const quiet = { symbol: "AAPL", timestamp: at(9, 41, 13), tradeTime: at(9, 17, 12), fetchedAt: at(9, 41, 19) };
   assert.deepEqual(detailTimes(quiet, now, "en", tx), ["Quote at 09:41:13", "last trade 09:17:12", "Fetched 09:41:19"]);
   assert.deepEqual(detailTimes({ ...quiet, tradeTime: quiet.timestamp }, now, "en", tx), ["Quote at 09:41:13", "Fetched 09:41:19"]);
   const { tradeTime, ...plain } = quiet;
@@ -201,5 +201,25 @@ test("the session times line, per market kind, in local time", () => {
   withTZ("Europe/London", () => {
     assert.deepEqual(line(tw, nov), ["交易時段：01:00–05:30"]);
     assert.deepEqual(line(wtx, nov), ["交易時段：日盤 00:45–05:45", "夜盤 07:00–21:00"]);
+  });
+});
+
+test("a Taiwan row's \"today\" is the Taipei date, printed in local time", () => {
+  const zh = (key, params) => t("zh-TW", key, params);
+  const closed = { state: "closed", delayMinutes: null, stoppedAt: null };
+  const friday = at("2026-11-13T05:30:00Z"); // 13:30 Taipei Friday
+  const tw = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: friday, fetchedAt: friday };
+  const us = { ...tw, symbol: "AAPL", exchange: "NMS" };
+  withTZ("Europe/London", () => {
+    const now = at("2026-11-13T23:00:00Z"); // 23:00 London Friday, 07:00 Taipei Saturday
+    assert.equal(freshnessLabel(tw, closed, now, "zh-TW", zh), "已收盤 · 11/13 05:30");
+    assert.equal(freshnessLabel(us, closed, now, "zh-TW", zh), "已收盤 · 05:30");
+  });
+  withTZ("America/New_York", () => {
+    const now = at("2026-11-14T02:00:00Z"); // 21:00 New York Friday, 10:00 Taipei Saturday
+    assert.equal(formatStaleDate(tw.timestamp, now, "zh-TW", dayFor(tw)), "11/13");
+    assert.equal(detailTimes(tw, now, "zh-TW", zh)[0], "報價 11/13 00:30:00");
+    assert.equal(formatStaleDate(us.timestamp, now, "zh-TW", dayFor(us)), "");
+    assert.equal(dayFor({ symbol: "WTX&" })(friday), dayFor(tw)(friday));
   });
 });

@@ -1,6 +1,8 @@
 // How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
 // No Herdr imports, so tests run it under Node.
 import { isCryptoPair, positive } from "./quotes.js";
+import { taipeiDay } from "./calendar.js";
+import { resolvedMarket } from "./markets.js";
 
 /**
  * The line through `series`, scaled into its box as [x%, y%] points, and where
@@ -97,6 +99,14 @@ export function formatStaleDate(timestamp, now, lang = "en", day = localDate) {
   return day(timestamp) === day(now) ? "" : formatDate(timestamp, lang);
 }
 
+/**
+ * The day function a quote's "is it today" uses: taipeiDay for a Taiwan quote (resolvedMarket(symbol, exchange)
+ * === "tw": stocks, futures, TAI/TWO/TFE indices), else the local date. The date and time still print in local time.
+ */
+export function dayFor(quote) {
+  return resolvedMarket(quote.symbol, quote.exchange) === "tw" ? taipeiDay : localDate;
+}
+
 /** A local date as a row prints it: "Oct 31" in English, "10/31" in the other languages. */
 export function formatDate(timestamp, lang = "en") {
   const date = new Date(timestamp);
@@ -156,7 +166,7 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
       return fresh.delayMinutes === null ? tx("freshness.delayed")
         : tx("freshness.delayedMinutes", { minutes: fresh.delayMinutes });
     case "closed": {
-      const date = formatStaleDate(quote.timestamp, now, lang);
+      const date = formatStaleDate(quote.timestamp, now, lang, dayFor(quote));
       return `${tx("session.closed")} · ${date ? `${date} ` : ""}${formatTime(quote.timestamp)}`;
     }
     default:
@@ -169,7 +179,7 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
  * formatStaleDate), the last trade when it is not the quote's own time (Yahoo 奇摩股市 times a quiet stock at the
  * feed), the fetch.
  */
-export function detailTimes(quote, now, lang, tx, day = localDate) {
+export function detailTimes(quote, now, lang, tx, day = dayFor(quote)) {
   const date = formatStaleDate(quote.timestamp, now, lang, day);
   const lastTrade = quote.tradeTime && quote.tradeTime !== quote.timestamp
     ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })] : [];

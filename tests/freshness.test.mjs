@@ -8,7 +8,7 @@ import {
 import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
 import { usOffsetMin } from "../mods/wickline/markets.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
-import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
 import { LINE_PERIODS, SEGMENTS, at, day, yq } from "./helpers.mjs";
@@ -477,7 +477,7 @@ test("a future reads Live in both sessions, closed with its last trade in a brea
   const fresh = freshness(q, sessionOf(q, now), now);
   assert.equal(fresh.state, "closed");
   assert.equal(freshnessLabel(q, fresh, now, "zh-TW", tx),
-    `${tx("session.closed")} · ${[formatStaleDate(last, now, "zh-TW"), formatTime(last)].filter(Boolean).join(" ")}`);
+    `${tx("session.closed")} · ${[formatStaleDate(last, now, "zh-TW", dayFor(q)), formatTime(last)].filter(Boolean).join(" ")}`);
   assert.equal(sessionName(q, "closed", now), "closed");
   for (const iso of ["2026-11-09T21:00:00.001Z", "2026-11-09T21:01:00Z", "2026-11-09T22:30:00Z", "2026-11-10T05:45:30Z"]) {
     assert.equal(msUntilStale(future(at(iso) - 30_000), "closed", at(iso)), null, iso);
@@ -567,7 +567,7 @@ test("a Finnhub-first AAPL reads Live and 開盤中 at 09:31 New York, closed wi
   assert.equal(fresh.state, "closed");
   const tx = say("en");
   assert.equal(freshnessLabel(closed, fresh, evening, "en", tx),
-    `${tx("session.closed")} · ${[formatStaleDate(last, evening, "en"), formatTime(last)].filter(Boolean).join(" ")}`);
+    `${tx("session.closed")} · ${[formatStaleDate(last, evening, "en", dayFor(closed)), formatTime(last)].filter(Boolean).join(" ")}`);
 });
 
 test("a MIS-first 2330.TW at 10:00 Taipei reads Live and 開盤中", () => {
