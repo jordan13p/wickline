@@ -385,18 +385,18 @@ export class Watchlist {
   }
 
   /**
-   * The observation of `market`'s session opened at `open` as closureOf reads it, or undefined without
-   * one: `{ traded, newest, realtime, delayed }`, the latter two each source's latest answer of that kind as
-   * `{ at, source }`, in PROVIDERS order (the order that names a closure), leaving out an overlay source that is off
-   * now (`on`: config().on), so its answers stop counting the moment it is turned off.
+   * The observation of `market`'s session opened at `open` as closureOf reads it, or undefined without one:
+   * `{ traded, newest, answers }`, `answers` each source's latest answer as `{ at, source, realtime }`, real-time
+   * sources first and each kind in PROVIDERS order (the order that names a closure), leaving out an overlay source that
+   * is off now (`on`: config().on), so its answers stop counting the moment it is turned off.
    */
-  observed(market, open, on = this.config().on) {
+  observed(market, open, on) {
     const entry = this.seen[market][open];
     if (!entry) return undefined;
     const answers = PROVIDERS.filter(({ id }) => entry.answers[id] && (!OVERLAY_ORDER.includes(id) || on[id]))
       .map(({ id }) => ({ source: id, ...entry.answers[id] }));
-    const ofKind = (realtime) => answers.filter((answer) => answer.realtime === realtime).map(({ at, source }) => ({ at, source }));
-    return { traded: entry.newest >= open, newest: entry.newest, realtime: ofKind(true), delayed: ofKind(false) };
+    const ofKind = (realtime) => answers.filter((answer) => answer.realtime === realtime);
+    return { traded: entry.newest >= open, newest: entry.newest, answers: [...ofKind(true), ...ofKind(false)] };
   }
 
   /**

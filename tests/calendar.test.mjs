@@ -88,7 +88,8 @@ test("the inference's deadlines and recency", () => {
 
 test("closureOf infers per session from recent answers; a trade clears it; the other market vetoes; weekends never", () => {
   const T = { open: at("2026-11-11T01:00:00Z"), day: at("2026-11-11T00:45:00Z"), night: at("2026-11-11T07:00:00Z") }; // Wed 11/11
-  const obs = (fields) => ({ traded: false, newest: null, realtime: [], delayed: [], ...fields });
+  const obs = ({ realtime = [], delayed = [], ...fields }) => ({ traded: false, newest: null, ...fields,
+    answers: [...realtime.map((answer) => ({ ...answer, realtime: true })), ...delayed.map((answer) => ({ ...answer, realtime: false }))] });
   const rt = (time) => [{ at: time, source: "yahootw" }];
   const yf = (time) => [{ at: time, source: "yahoo" }];
   const by = (entries) => (market, open) => entries[`${market} ${open}`];

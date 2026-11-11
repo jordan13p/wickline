@@ -597,7 +597,7 @@ const reading = (quote, time) => {
 // `quietRealtime`, Yahoo Finance's for `quietDelayed`. `quietNight`: only the nights are observed, each answer carrying
 // the day's last trade (newest, just before its 15:00 open), so the night reads closed with its note. A trade is never
 // observed: one comes with an answer, which redraws the row itself.
-const answeredAt = (time, kind, source) => ({ traded: false, newest: null, realtime: [], delayed: [], [kind]: [{ at: time, source }] });
+const answeredAt = (time, kind, source) => ({ traded: false, newest: null, answers: [{ at: time, source, realtime: kind === "realtime" }] });
 const quietRealtime = (time) => () => answeredAt(time, "realtime", "yahootw");
 const quietDelayed = (time) => () => answeredAt(time, "delayed", "yahoo");
 const isNightOpen = (open) => new Date(open + 8 * 3_600_000).getUTCHours() === 15;

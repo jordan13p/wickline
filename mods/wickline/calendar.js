@@ -102,32 +102,11 @@ export const INFER_REALTIME_MS = 600_000;
 export const INFER_DELAYED_MS = 1_800_000;
 export const INFER_RECENT_MS = 120_000;
 
-// Each kind of answer in an observation, in the order that names a closure, with its deadline after the open.
-const INFER_DEADLINES = [["realtime", INFER_REALTIME_MS], ["delayed", INFER_DELAYED_MS]];
+// An answer's deadline after the open, by whether its source is real time.
+const INFER_DEADLINES = new Map([[true, INFER_REALTIME_MS], [false, INFER_DELAYED_MS]]);
 
-/**
- * The answer that lets the session opened at `open` read as having no trades at `now`, or null: none once it traded;
- * else the first answer (the real-time list first, each list in its own order) that is recent at its kind's deadline
- * while `now` is at or past that deadline (see INFER_RECENT_MS).
- */
-function quietAnswer(observation, open, now) {
-  if (!observation || observation.traded) return null;
-  for (const [kind, after] of INFER_DEADLINES) {
-    const deadline = open + after;
-    const answer = now >= deadline && observation[kind].find(({ at }) => at >= deadline - INFER_RECENT_MS);
-    if (answer) return answer;
-  }
-  return null;
-}
-
-// The next inference deadline after `now` of the session opened at `open`, from its observation, or null: the open
-// plus a kind's delay, for each kind with an answer, while the session has no trade.
-function nextDeadline(observation, open, now) {
-  if (!observation || observation.traded) return null;
-  const ahead = INFER_DEADLINES.filter(([kind, after]) => observation[kind].length && open + after > now)
-    .map(([, after]) => open + after);
-  return ahead.length ? Math.min(...ahead) : null;
-}
+// The answers that may yet name a closure of a session: none once it traded (see closureOf).
+const quietAnswers = (observation) => (!observation || observation.traded ? [] : observation.answers);
 
 /** The Taiwan market a symbol trades in, as closureOf names it: TAIFEX's futures, else TWSE/TPEx's stocks and indices. */
 export const twMarket = (symbol) => (kindOf(symbol) === "future" ? "future" : "stock");
@@ -135,14 +114,16 @@ export const twMarket = (symbol) => (kindOf(symbol) === "future" ? "future" : "s
 /**
  * What a Taiwan `market` ("stock" | "future") reads at `now`, from one observation of its current session (currentOpen):
  * `{ closure, deadline }`, its closure (closureRule; null once a trade came since that session's open, which clears
- * every closure, the removed night's included) and that session's next inference deadline (nextDeadline). `listed`
- * and `seen` as closureRule reads them.
+ * every closure, the removed night's included) and that session's next inference deadline (see INFER_REALTIME_MS).
+ * `listed` and `seen` as closureRule reads them.
  */
 export function closureOf(market, now, listed, seen) {
   const open = currentOpen(market, now);
   const observation = open === null ? undefined : seen(market, open);
   const closure = observation?.traded ? null : closureRule(market, now, open, listed, seen);
-  return { closure, deadline: nextDeadline(observation, open, now) };
+  // The next deadline: the open plus an answer's delay, for each answer, while the session has no trade.
+  const ahead = quietAnswers(observation).map(({ realtime }) => open + INFER_DEADLINES.get(realtime)).filter((at) => at > now);
+  return { closure, deadline: ahead.length ? Math.min(...ahead) : null };
 }
 
 /**
@@ -161,11 +142,11 @@ export const withClosure = (quote, { closure, deadline }) => ({
  * - "nightRemoved": a night a listed day removed;
  * - "nightNoTrades": a night without trades after a day that traded, inferred (`source` as above).
  * `listed(day)` gives the schedule's reason or null; `seen(market, open)` the observation of that market's session that
- * opened at `open`, or undefined: `{ traded, newest, realtime, delayed }`, whether a trade came at or after the open,
- * the newest trade time the answers carried, and each source's latest answer since the open by kind
- * (`[{ at, source }]`, in the order that names a closure). The first matching row, T being today in Taipei:
+ * opened at `open`, or undefined: `{ traded, newest, answers }`, whether a trade came at or after the open, the newest
+ * trade time the answers carried, and each source's latest answer since the open, `[{ at, source, realtime }]`, in the
+ * order that names a closure (real-time sources first). The first matching row, T being today in Taipei:
  * 1. a stock on a listed T: listed;
- * 2. a stock from 09:00 on a weekday T, its session quiet (quietAnswer) and no future traded since 08:45 T (the veto):
+ * 2. a stock from 09:00 on a weekday T, its session quiet (quietSince) and no future traded since 08:45 T (the veto):
  *    noTrades;
  * 3–5. a future from 00:00 to 05:00: after a T-1 that is not a weekday, listed on a listed T, else none; after a
  *    listed T-1 (its night removed), listed on a listed T, else nightRemoved; after an unlisted weekday, only with
@@ -184,8 +165,12 @@ function closureRule(market, now, open, listed, seen) {
   const before = today - 1;
   const minute = taipeiMinute(now);
   const reason = listed(today);
-  // The source that says the session of `market` that opened at `start` has no trade, or null.
-  const quietSince = (start) => quietAnswer(seen(market, start), start, now)?.source ?? null;
+  // The source that says the session of `market` that opened at `start` has no trade, or null: the first answer that is
+  // recent (INFER_RECENT_MS) at its deadline while `now` is at or past it.
+  const quietSince = (start) => quietAnswers(seen(market, start)).find(({ at, realtime }) => {
+    const deadline = start + INFER_DEADLINES.get(realtime);
+    return now >= deadline && at >= deadline - INFER_RECENT_MS;
+  })?.source ?? null;
   const tradedSince = (other, start) => Boolean(seen(other, start)?.traded);
   const dayOpen = (day) => taipeiAt(day, DAY_SESSION.from);
   const dayTraded = (day) => tradedSince("future", dayOpen(day))
