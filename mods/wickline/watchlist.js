@@ -4,7 +4,7 @@ import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.
 import {
   HOLIDAYS_URL, closureOf, currentOpen, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
-import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -1062,9 +1062,9 @@ export class Watchlist {
   apply(provider, request, result) {
     const now = this.host.now();
     if (provider.overlay) {
-      // An overlay source is real time. Yahoo 奇摩股市 gives each Taiwan market's newest trade among its rows, whatever
+      // An overlay source is real time (REALTIME_SOURCES). Yahoo 奇摩股市 gives each Taiwan market's newest trade among its rows, whatever
       // their day, so an answer of yesterday's prices still counts as one (noteTrade); any other, each priced row's.
-      const answer = { source: provider.id, realtime: true };
+      const answer = { source: provider.id, realtime: REALTIME_SOURCES.has(provider.id) };
       if (provider === yahootw) {
         for (const [market, time] of Object.entries(result.newestTrade ?? {})) this.noteTrade(market, time, answer, now);
       }
