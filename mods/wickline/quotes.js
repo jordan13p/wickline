@@ -121,6 +121,12 @@ export const cleanText = (value) => typeof value === "string"
   ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 100) || null
   : null;
 
+/**
+ * Whether a quote's time is a trade's: every source times a quote by a trade, except a MIS price taken from the order
+ * book (`fromBook`), timed by its snapshot. Where a trade is counted (Watchlist#observe) or printed as one (今日無成交).
+ */
+export const timedByTrade = (quote) => !quote.fromBook;
+
 // An exchange code (NMS, TAI, OSA…) and a currency (USD, TWD) as a source sends them; anything else is null.
 export const exchangeCode = (value) => (typeof value === "string" && /^[A-Z]{2,5}$/.test(value) ? value : null);
 export const currencyCode = (value) => (typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : null);

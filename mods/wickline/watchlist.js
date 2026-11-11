@@ -1,6 +1,6 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
-import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
+import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade } from "./quotes.js";
 import {
   HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
@@ -1126,7 +1126,7 @@ export class Watchlist {
    * Notes what one answer saw of each Taiwan market, once per market (noteTrade): the decoder's `newestTrade` when it
    * gives one (Yahoo 奇摩股市: each market's newest trade among its real-time rows, whatever their day, so an answer of
    * yesterday's prices still counts as one), else the newest trade among the answer's priced Taiwan rows (a row's own
-   * trade time, else its time; a MIS book price, `fromBook`, is timed by its snapshot and carries no trade), real time
+   * trade time, else its time; a quote not timedByTrade, a MIS book price, carries no trade), real time
    * as the row that set it is (isRealtime). Run once the rows are in, so an index reads its market by the exchange this answer
    * gave.
    */
@@ -1139,7 +1139,7 @@ export class Watchlist {
       for (const [symbol, quote] of Object.entries(result.quotes)) {
         if (this.marketFor(symbol) !== "tw") continue;
         const market = twMarket(symbol);
-        const time = quote.fromBook ? null : quote.tradeTime ?? quote.timestamp;
+        const time = timedByTrade(quote) ? quote.tradeTime ?? quote.timestamp : null;
         const newest = trades[market]?.time ?? null;
         const later = Number.isFinite(time) && (newest === null || time > newest);
         // Real time as the row that set the newest trade is (the first row until one does).

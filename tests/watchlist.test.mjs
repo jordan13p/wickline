@@ -9,7 +9,7 @@ import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance
 import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
-import { collapsedRow, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
+import { collapsedRow, detailTimes, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
   chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq, zhLabel,
@@ -2398,6 +2398,21 @@ test("a fresh MIS snapshot without a trade is no trade: it keeps an inferred and
   await soleRun(holiday, (w) => {
     assert.deepEqual(w.shown("2330.TW", holiday.clock).closure, { kind: "listed", reason: "行憲紀念日" });
   }, at("2026-12-25T02:00:00Z"));
+});
+
+// A MIS book price has no trade time (its time is the snapshot's): 今日無成交 prints no time for it, and the detail
+// gives the snapshot as the quote's time only, never as a trade.
+test("今日無成交 over a MIS book price prints no time", async () => {
+  const host = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  host.mis = misBookNow(host);
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-11-11T01:10:05Z"));
+    const quote = w.shown("2330.TW", host.clock);
+    assert.equal(quote.source, "mis");
+    assert.equal(quietLabel(quote, host.clock), "今日無成交");
+    const times = withTZ("Asia/Taipei", () => detailTimes(quote, host.clock, "zh-TW", (key, params) => t("zh-TW", key, params)));
+    assert.equal(times.some((part) => part.startsWith("最後成交")), false);
+  }, at("2026-11-11T01:04:30Z"));
 });
 
 // An inference deadline wakes the rows: Yahoo Finance's rounds land at hh:mm:30, so only the deadline wake can redraw
