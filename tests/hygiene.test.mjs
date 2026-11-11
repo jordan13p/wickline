@@ -634,7 +634,7 @@ test("the docs call Yahoo's US prices real time, and name lunch, FX and futures"
 });
 
 test("the row's stale date is judged by the quote's own day", () => {
-  assert.match(code(read(new URL("ui/panel.js", MOD))), /formatStaleDate\(quote\.timestamp, now, view\.lang, dayFor\(quote\)\)/);
+  assert.match(code(read(new URL("ui/panel.js", MOD))), /formatStaleDate\(quote, now, view\.lang\)/);
 });
 
 test("the status line shows the no-trades notes after the problems", () => {

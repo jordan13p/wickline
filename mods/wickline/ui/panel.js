@@ -4,7 +4,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { bandCurrency, collapsedRow, dayFor, displayName, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
+import { bandCurrency, collapsedRow, displayName, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
 import { CLOSED_STATES, freshness, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
@@ -151,7 +151,7 @@ function rowData(view, t, now, symbol, source) {
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
   // A closed, 休市 or 今日無成交 label carries its own date; any other quote from an earlier day gets one.
   const dated = CLOSED_STATES.has(fresh?.state);
-  const stale = quote && !dated ? formatStaleDate(quote.timestamp, now, view.lang, dayFor(quote)) : "";
+  const stale = quote && !dated ? formatStaleDate(quote, now, view.lang) : "";
   const label = quote ? freshnessLabel(quote, fresh, now, view.lang, (key, params) => view.tx(key, params)) : "";
   const shown = rowName(symbol, label, quote ? displayName(quote, view.lang) : null);
   return {

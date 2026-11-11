@@ -91,12 +91,12 @@ function localDate(ms) {
 }
 
 /**
- * A quote from an earlier day than `now`'s gets its date, so a closed market never reads as today's:
- * "Oct 31" in English, "10/31" in the other languages. `day(ms)` gives the comparable day key; the default is
- * the local calendar date.
+ * A quote from an earlier day than `now`'s, by its own day (dayFor), gets its date, so a closed market never reads as
+ * today's: "Oct 31" in English, "10/31" in the other languages.
  */
-export function formatStaleDate(timestamp, now, lang = "en", day = localDate) {
-  return day(timestamp) === day(now) ? "" : formatDate(timestamp, lang);
+export function formatStaleDate(quote, now, lang = "en") {
+  const day = dayFor(quote);
+  return day(quote.timestamp) === day(now) ? "" : formatDate(quote.timestamp, lang);
 }
 
 /**
@@ -169,7 +169,7 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
         : tx("freshness.delayedMinutes", { minutes: fresh.delayMinutes });
     case "closed":
     case "holiday": {
-      const date = formatStaleDate(quote.timestamp, now, lang, dayFor(quote));
+      const date = formatStaleDate(quote, now, lang);
       return `${tx(`session.${fresh.state}`)} · ${date ? `${date} ` : ""}${formatTime(quote.timestamp)}`;
     }
     case "noTrades":
@@ -180,12 +180,11 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
 }
 
 /**
- * The detail dialog's times, to the second: the quote's (with its date when not today by `day`, as in
- * formatStaleDate), the last trade when it is not the quote's own time (Yahoo 奇摩股市 times a quiet stock at the
- * feed), the fetch.
+ * The detail dialog's times, to the second: the quote's (with its date when not today, as in formatStaleDate), the
+ * last trade when it is not the quote's own time (Yahoo 奇摩股市 times a quiet stock at the feed), the fetch.
  */
-export function detailTimes(quote, now, lang, tx, day = dayFor(quote)) {
-  const date = formatStaleDate(quote.timestamp, now, lang, day);
+export function detailTimes(quote, now, lang, tx) {
+  const date = formatStaleDate(quote, now, lang);
   const lastTrade = quote.tradeTime && quote.tradeTime !== quote.timestamp
     ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })] : [];
   return [tx("detail.quoted", { time: `${date ? `${date} ` : ""}${formatTime(quote.timestamp, true)}` }), ...lastTrade,

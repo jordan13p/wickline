@@ -9,7 +9,7 @@ import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance
 import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
-import { collapsedRow, dayFor, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
+import { collapsedRow, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
   chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq,
@@ -997,7 +997,7 @@ test("overnight, a TW-only symbol shows its last close and polls gently", async 
       assert.equal(fresh.state, "closed");
       // Its own trade's date and time (the date shows where the local day has turned).
       assert.equal(freshnessLabel(quote, fresh, now, "en", tx),
-        `${tx("session.closed")} · ${[formatStaleDate(CLOSE_0509, now, "en", dayFor(quote)), formatTime(CLOSE_0509)].filter(Boolean).join(" ")}`);
+        `${tx("session.closed")} · ${[formatStaleDate(quote, now, "en"), formatTime(CLOSE_0509)].filter(Boolean).join(" ")}`);
       assert.equal(w.problems().length, 0);
       // The closed cadence: no round 10 s on, the next at 60 s.
       assert.equal(stockLists(host).length, 1);
@@ -1619,7 +1619,7 @@ test("at 20:00 a stock beside a trading future still reads closed at 13:30", asy
     const fresh = freshness(quote, sessionOf(quote, later), later);
     assert.equal(fresh.state, "closed");
     assert.equal(freshnessLabel(quote, fresh, later, "zh-TW", tx),
-      `${tx("session.closed")} · ${[formatStaleDate(close, later, "zh-TW", dayFor(quote)), formatTime(close)].filter(Boolean).join(" ")}`);
+      `${tx("session.closed")} · ${[formatStaleDate(quote, later, "zh-TW"), formatTime(close)].filter(Boolean).join(" ")}`);
   }, now);
 });
 
@@ -1873,7 +1873,7 @@ test("on Sunday, Friday night's last price reads closed with its date, polled ge
     const quote = w.shown("WTX&", now);
     const fresh = freshness(quote, sessionOf(quote, now), now);
     assert.equal(fresh.state, "closed");
-    const date = formatStaleDate(last, now, "zh-TW", dayFor(quote));
+    const date = formatStaleDate(quote, now, "zh-TW");
     assert.ok(date, "the date shows");
     assert.equal(freshnessLabel(quote, fresh, now, "zh-TW", tx), `${tx("session.closed")} · ${date} ${formatTime(last)}`);
     assert.deepEqual(w.problems(), []);

@@ -20,8 +20,8 @@ test("formats without Intl", () => {
   assert.equal(formatChange(-0.5), "-0.50%");
   assert.equal(formatChange(null), "—");
   const now = new Date(2026, 10, 2, 12).getTime();
-  assert.equal(formatStaleDate(new Date(2026, 10, 2, 9).getTime(), now), "");
-  assert.equal(formatStaleDate(new Date(2026, 9, 31, 16).getTime(), now), "Oct 31");
+  assert.equal(formatStaleDate({ symbol: "AAPL", timestamp: new Date(2026, 10, 2, 9).getTime() }, now), "");
+  assert.equal(formatStaleDate({ symbol: "AAPL", timestamp: new Date(2026, 9, 31, 16).getTime() }, now), "Oct 31");
 });
 
 test("signed: the day's change in the price's units", () => {
@@ -67,10 +67,10 @@ test("change and percent agree for one quote", () => {
 
 test("dates by language, times in 24 hours", () => {
   const now = new Date(2026, 10, 2, 12).getTime();
-  const oct31 = new Date(2026, 9, 31, 16).getTime();
+  const oct31 = { symbol: "AAPL", timestamp: new Date(2026, 9, 31, 16).getTime() };
   assert.equal(formatStaleDate(oct31, now, "en"), "Oct 31");
   for (const lang of ["zh-TW", "zh-CN", "ja", "ko"]) assert.equal(formatStaleDate(oct31, now, lang), "10/31", lang);
-  assert.equal(formatStaleDate(new Date(2026, 10, 2, 9).getTime(), now, "zh-TW"), "");
+  assert.equal(formatStaleDate({ symbol: "AAPL", timestamp: new Date(2026, 10, 2, 9).getTime() }, now, "zh-TW"), "");
   assert.equal(formatTime(new Date(2026, 10, 2, 21, 5, 7).getTime()), "21:05");
   assert.equal(formatTime(new Date(2026, 10, 2, 9, 5, 7).getTime(), true), "09:05:07");
 });
@@ -152,13 +152,18 @@ test("a row collapses only when it has no price and its fetch failed", () => {
   assert.equal(collapsedRow({ quote: { symbol: "2330.TW", price: 1000 }, failed: notFound }), false);
 });
 
-test("formatStaleDate and detailTimes compare by the day function they are given", () => {
+// A Taiwan quote's day is Taipei's (dayFor), not the local date: on a London clock, 23:30 on 11/1 is the same Taipei day
+// as 12:00 on 11/2, and 10:00 on 11/2 an earlier Taipei day than 18:00 (11/3 02:00 in Taipei).
+test("formatStaleDate and detailTimes compare by the quote's own day", () => {
   const tx = (key, params) => t("en", key, params);
-  const now = new Date(2026, 10, 2, 12).getTime();
+  withTZ("Europe/London", () => {
+    const now = at("2026-11-02T12:00:00Z");
+    const earlier = at("2026-11-01T23:30:00Z");
+    assert.equal(formatStaleDate({ symbol: "2330.TW", timestamp: earlier }, now, "en"), "");
+    assert.equal(formatStaleDate({ symbol: "2330.TW", timestamp: at("2026-11-02T10:00:00Z") }, at("2026-11-02T18:00:00Z"), "en"), "Nov 2");
+    assert.deepEqual(detailTimes({ symbol: "2330.TW", timestamp: earlier, fetchedAt: now }, now, "en", tx)[0], `Quote at ${formatTime(earlier, true)}`);
+  });
   const earlier = new Date(2026, 9, 31, 16).getTime();
-  assert.equal(formatStaleDate(earlier, now, "en", () => 0), "");
-  assert.equal(formatStaleDate(now - 1_000, now, "en", (ms) => ms), "Nov 2");
-  assert.deepEqual(detailTimes({ timestamp: earlier, fetchedAt: now }, now, "en", tx, () => 0)[0], `Quote at ${formatTime(earlier, true)}`);
   assert.deepEqual([formatDate(earlier, "en"), formatDate(earlier, "zh-TW")], ["Oct 31", "10/31"]);
 });
 
@@ -217,9 +222,9 @@ test("a Taiwan row's \"today\" is the Taipei date, printed in local time", () =>
   });
   withTZ("America/New_York", () => {
     const now = at("2026-11-14T02:00:00Z"); // 21:00 New York Friday, 10:00 Taipei Saturday
-    assert.equal(formatStaleDate(tw.timestamp, now, "zh-TW", dayFor(tw)), "11/13");
+    assert.equal(formatStaleDate(tw, now, "zh-TW"), "11/13");
     assert.equal(detailTimes(tw, now, "zh-TW", zh)[0], "報價 11/13 00:30:00");
-    assert.equal(formatStaleDate(us.timestamp, now, "zh-TW", dayFor(us)), "");
+    assert.equal(formatStaleDate(us, now, "zh-TW"), "");
     assert.equal(dayFor({ symbol: "WTX&" })(friday), dayFor(tw)(friday));
   });
 });
