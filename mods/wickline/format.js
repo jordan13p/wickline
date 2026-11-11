@@ -160,8 +160,8 @@ export function stateText(fresh, tx) {
  * A row's freshness label: the state for a real-time price ("Live"), its source only while unconfirmed,
  * the stop time, the delay, or the session when it is not trading. Closed, and a listed closed day ("holiday"),
  * carry the last trade's time, with its date when not today; a day without trades ("noTrades") always with its date,
- * so an inference never hides how old its price is, and no time at all for a price not timed by a trade (timedByTrade):
- * its time is no trade.
+ * so an inference never hides how old its price is. A price not timed by a trade (timedByTrade) gives any of the three
+ * its word alone: its time is no trade.
  * `tx(key, params)` translates.
  */
 export function freshnessLabel(quote, fresh, now, lang, tx) {
@@ -172,13 +172,13 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
       return fresh.delayMinutes === null ? tx("freshness.delayed")
         : tx("freshness.delayedMinutes", { minutes: fresh.delayMinutes });
     case "closed":
-    case "holiday": {
-      const date = formatStaleDate(quote, now, lang);
-      return `${tx(`session.${fresh.state}`)} · ${stamp(date, quote.timestamp)}`;
+    case "holiday":
+    case "noTrades": {
+      const word = tx(`session.${fresh.state}`);
+      if (!timedByTrade(quote)) return word;
+      const date = fresh.state === "noTrades" ? formatDate(quote.timestamp, lang) : formatStaleDate(quote, now, lang);
+      return `${word} · ${stamp(date, quote.timestamp)}`;
     }
-    case "noTrades":
-      return timedByTrade(quote) ? `${tx("session.noTrades")} · ${stamp(formatDate(quote.timestamp, lang), quote.timestamp)}`
-        : tx("session.noTrades");
     default:
       return stateText(fresh, tx);
   }

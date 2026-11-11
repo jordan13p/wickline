@@ -2415,6 +2415,16 @@ test("今日無成交 over a MIS book price prints no time", async () => {
   }, at("2026-11-11T01:04:30Z"));
 });
 
+test("休市 over a MIS book price prints no time", async () => {
+  const host = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
+  host.mis = misBookNow(host);
+  await soleRun(host, (w) => {
+    const quote = w.shown("2330.TW", host.clock);
+    assert.equal(quote.source, "mis");
+    assert.equal(quietLabel(quote, host.clock), "休市");
+  }, at("2026-12-25T02:00:00Z"));                          // 10:00 on the listed 12/25
+});
+
 // An inference deadline wakes the rows: Yahoo Finance's rounds land at hh:mm:30, so only the deadline wake can redraw
 // in [09:30:00, 09:30:01].
 test("a typhoon day with Yahoo Finance alone: delayed until 09:25, stopped from 09:25, 今日無成交 from 09:30", async () => {

@@ -123,7 +123,8 @@ export const cleanText = (value) => typeof value === "string"
 
 /**
  * Whether a quote's time is a trade's: every source times a quote by a trade, except a MIS price taken from the order
- * book (`fromBook`), timed by its snapshot. Where a trade is counted (Watchlist#observe) or printed as one (今日無成交).
+ * book (`fromBook`), timed by its snapshot. Where a trade is counted (Watchlist#observe) or printed as one (the closed,
+ * 休市 and 今日無成交 labels).
  */
 export const timedByTrade = (quote) => !quote.fromBook;
 
