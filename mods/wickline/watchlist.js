@@ -1122,7 +1122,7 @@ export class Watchlist {
    * gives one (Yahoo 奇摩股市: each market's newest trade among its real-time rows, whatever their day, so an answer of
    * yesterday's prices still counts as one), else the newest trade among the answer's priced Taiwan rows (a row's own
    * trade time, else its time; a MIS book price, `fromBook`, is timed by its snapshot and carries no trade), real time
-   * as its rows are (isRealtime). Run once the rows are in, so an index reads its market by the exchange this answer
+   * as the row that set it is (isRealtime). Run once the rows are in, so an index reads its market by the exchange this answer
    * gave.
    */
   observe(provider, result, now) {
@@ -1137,7 +1137,8 @@ export class Watchlist {
         const time = quote.fromBook ? null : quote.tradeTime ?? quote.timestamp;
         const newest = trades[market]?.time ?? null;
         const later = Number.isFinite(time) && (newest === null || time > newest);
-        trades[market] = { time: later ? time : newest, realtime: isRealtime(quote) };
+        // Real time as the row that set the newest trade is (the first row until one does).
+        if (later || !trades[market]) trades[market] = { time: later ? time : null, realtime: isRealtime(quote) };
       }
     }
     for (const [market, { time, realtime }] of Object.entries(trades)) this.noteTrade(market, time, { source: provider.id, realtime }, now);

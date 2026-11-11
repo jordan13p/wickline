@@ -2560,6 +2560,22 @@ test("with the schedule unreachable on a listed day, the rows read 今日無成�
   }, at("2026-12-25T01:04:30Z"));
 });
 
+// An answer's note carries the real-time flag of the row that set its newest trade, whatever the rows' order.
+test("an answer's trade is noted real time as its newest row is", () => {
+  const now = at("2026-11-11T01:05:00Z");                 // 09:05
+  const host = taiwanHost(undefined);
+  host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
+  const w = new Watchlist(host);
+  w.sync();
+  const quotes = {
+    "2330.TW": { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: now - 60_000 },  // delayed, newest
+    "0050.TW": { symbol: "0050.TW", source: "mis", timestamp: now - 600_000 },                    // real time, older
+  };
+  w.observe(yahoo, { quotes, errors: {} }, now);
+  const { answers, newest } = w.observed("stock", at("2026-11-11T01:00:00Z"), w.config().on);
+  assert.deepEqual([newest, answers.map(({ realtime }) => realtime)], [now - 60_000, [false]]);
+});
+
 test("the no-trades note is one line per source and stays out of the settings' health; a listed day has none", async () => {
   const host = taiwanHost(ONLY_YAHOOTW, {
     yahootw: () => ok([...JSON.parse(stockList(CLOSE_1110).text), ...JSON.parse(futuresAt(NIGHT_0459).text)]),
