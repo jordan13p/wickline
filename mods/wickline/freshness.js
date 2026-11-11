@@ -328,6 +328,9 @@ export function freshness(quote, session, now) {
   return realtime ? result("live") : result("delayed", delayMinutes(quote));
 }
 
+/** The states of a market closed for the rest of the day (a row's label carries its date): closed, 休市, 今日無成交. */
+export const CLOSED_STATES = new Set(["closed", "holiday", "noTrades"]);
+
 // After the close, how long a price still belongs to the session: TWSE's fixed-price trades end an hour later.
 const AFTER_CLOSE_MS = 90 * MINUTE_MS;
 
@@ -346,7 +349,7 @@ export function shownLimit(quote, session, now) {
   const regular = quote.periods?.regular;
   const end = regular && regular[1] + (kindOf(quote.symbol) === "future" ? 0 : AFTER_CLOSE_MS);
   const traded = Boolean(regular) && quote.timestamp >= regular[0] && quote.timestamp <= end;
-  const closed = state === "closed" || state === "holiday" || state === "noTrades" || state === "post";
+  const closed = CLOSED_STATES.has(state) || state === "post";
   return state === "live" || (closed && traded) ? priceLimit(quote) : null;
 }
 
