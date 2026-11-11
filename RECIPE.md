@@ -91,7 +91,7 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
   | delayed | Yahoo, delayed exchange | ring | the table's minutes (`delayed 20 min`), else `Yahoo · delayed`; Yahoo futures (`=F`) and unknown exchanges never stall |
   | closed | market closed; FX from Friday 22:00 to Sunday 22:00 UTC | none | `Market closed · Oct 31 16:00` (the date only when not today; a Taiwan row's today is Taipei's) |
   | holiday | a Taiwan weekday TWSE lists as closed: stocks from 00:00, futures from 05:00 (00:00 with no night before); unless traded since the open | none | `No trading · Dec 24 13:30` |
-  | noTrades | an unlisted Taiwan weekday inferred without trades (Closed days) | none | `No trades today · Nov 10 13:30`, always dated |
+  | noTrades | an unlisted Taiwan weekday inferred without trades (Closed days) | none | `No trades today · Nov 10 13:30`, the last trade's date and time (a book price: only an earlier day's date) |
   | pre / post / lunch | pre-market, after hours, lunch (JPX/OSA 11:30–12:30, HKG 12:00–13:00, SHH/SHZ 11:30–13:00 local; lunch minutes do not count toward a stop); prices are regular-session | none | `Pre-market`, `After hours`, `Lunch` (`午休`, `昼休み`, `점심 휴장`) |
 
   Yahoo: aged at its fetch, from today's open; unfetched 5 min: stalled; real time still at the prior close: unconfirmed.
