@@ -117,10 +117,10 @@ export function futuresSegment(quote, now) {
 }
 
 /**
- * The next moment after `now` at which `quote`'s session changes, in ms, or null; with `openingsOnly`, only a
+ * The next moment after `now` at which `quote`'s session changes, in ms, or null; with `{ openings: true }`, only a
  * moment a session opens. For now only a future's: a TAIFEX session opening later on the Taipei day of `now`.
  */
-export function nextEdge(quote, now, openingsOnly) {
+export function nextEdge(quote, now, { openings = false } = {}) {
   if (kindOf(quote.symbol) !== "future") return null;
   const starts = taifexSegments(now).map(([start]) => start).filter((start) => start > now);
   return starts.length ? Math.min(...starts) : null;

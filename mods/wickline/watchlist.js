@@ -634,11 +634,14 @@ export class Watchlist {
     return wait;
   }
 
-  /** The earliest nextEdge among `symbols`' shown quotes (a symbol without one as { symbol, periods: null }), or null. */
-  edgeAt(symbols, now, openingsOnly) {
+  /**
+   * The earliest nextEdge among `symbols`' shown quotes (a symbol without one as { symbol, periods: null }), or null;
+   * `mode` is nextEdge's (`{ openings: true }`: openings only).
+   */
+  edgeAt(symbols, now, mode) {
     let earliest = null;
     for (const symbol of symbols) {
-      const edge = nextEdge(this.shown(symbol, now) ?? { symbol, periods: null }, now, openingsOnly);
+      const edge = nextEdge(this.shown(symbol, now) ?? { symbol, periods: null }, now, mode);
       if (edge !== null && (earliest === null || edge < earliest)) earliest = edge;
     }
     return earliest;
@@ -701,7 +704,7 @@ export class Watchlist {
       if (!idle) {
         // A break's interval ends at TAIFEX's next opening, so a future's first price of a session is not up to an
         // interval late; from then on the row reads that session (ownPeriods), and its cadence with it.
-        const opens = this.edgeAt(symbols, now, true);
+        const opens = this.edgeAt(symbols, now, { openings: true });
         due += Math.max(Math.min(provider.intervalMs(this.sessionFor(symbols, now)), opens === null ? Infinity : opens - now),
           state.retryAt - now);
       }

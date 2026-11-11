@@ -514,11 +514,11 @@ test("a future's limit holds after its session only for a trade inside it, with 
 
 test("nextEdge: a future's next TAIFEX opening on its Taipei day; nothing yet for a stock", () => {
   const wtx = { symbol: "WTX&", periods: null };
-  assert.equal(nextEdge(wtx, at("2026-11-09T22:30:00Z"), true), at("2026-11-10T00:45:00Z")); // 06:30 → 08:45
-  assert.equal(nextEdge(wtx, at("2026-11-10T01:00:00Z"), true), at("2026-11-10T07:00:00Z")); // 09:00 → 15:00
-  assert.equal(nextEdge(wtx, at("2026-11-10T08:00:00Z"), true), null);                       // 16:00
-  assert.equal(nextEdge(wtx, at("2026-11-14T02:00:00Z"), true), null);                       // Saturday
-  assert.equal(nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), true), null);
+  assert.equal(nextEdge(wtx, at("2026-11-09T22:30:00Z"), { openings: true }), at("2026-11-10T00:45:00Z")); // 06:30 → 08:45
+  assert.equal(nextEdge(wtx, at("2026-11-10T01:00:00Z"), { openings: true }), at("2026-11-10T07:00:00Z")); // 09:00 → 15:00
+  assert.equal(nextEdge(wtx, at("2026-11-10T08:00:00Z"), { openings: true }), null);                       // 16:00
+  assert.equal(nextEdge(wtx, at("2026-11-14T02:00:00Z"), { openings: true }), null);                       // Saturday
+  assert.equal(nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), { openings: true }), null);
 });
 
 test("a Taiwan or US quote without periods reads its exchange's hours; any other has no session", () => {
