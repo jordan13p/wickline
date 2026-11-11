@@ -307,12 +307,13 @@ export class Watchlist {
   }
 
   /**
-   * What a row shows: its base quote (baseQuote) with its overlay, if any. A symbol with a sole source shows
-   * its own quote over itself: the name, currency and periods are its own, and the line only its own.
+   * What a row shows: its base quote (unmarkedBase) with its overlay, if any, then its closure (marked, once). A
+   * symbol with a sole source shows its own quote over itself: the name, currency and periods are its own, and the
+   * line only its own.
    */
   shown(symbol, now = this.host.now()) {
     const pick = this.pick(symbol, now);
-    const quote = mergeOverlay(this.baseQuote(symbol, now), pick?.overlay, pick && this.lines[pick.id]?.[symbol]);
+    const quote = mergeOverlay(this.unmarkedBase(symbol, now), pick?.overlay, pick && this.lines[pick.id]?.[symbol]);
     const localName = this.localNames[symbol];
     return this.marked(symbol, quote && localName && !quote.localName ? { ...quote, localName } : quote, now);
   }
@@ -336,17 +337,23 @@ export class Watchlist {
     return notice(kindOf(symbol) === "future" ? "yahootw.futuresNeedSource" : "yahoo.notFound");
   }
 
-  /**
-   * What a row is built on. With a sole source: that source's own quote, read by the trading periods ownPeriods
-   * gives it. Otherwise the base quote. Either one, kept through a failure or a missing row, is marked `cached`,
-   * so freshness ages it to now, never by its last good fetch.
-   */
+  /** What a row is built on (unmarkedBase), with its closure (marked). */
   baseQuote(symbol, now = this.host.now()) {
+    return this.marked(symbol, this.unmarkedBase(symbol, now), now);
+  }
+
+  /**
+   * What a row is built on, before its closure: shown() marks the row once, after its overlay. With a sole source:
+   * that source's own quote, read by the trading periods ownPeriods gives it. Otherwise the base quote. Either one,
+   * kept through a failure or a missing row, is marked `cached`, so freshness ages it to now, never by its last good
+   * fetch.
+   */
+  unmarkedBase(symbol, now) {
     const sole = this.soleSource(symbol);
     const own = sole && this.overlays[symbol]?.[sole.id];
     const quote = !sole ? this.quotes[symbol]
       : own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
-    return this.marked(symbol, quote && this.errors[symbol] ? { ...quote, cached: true } : quote, now);
+    return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
   }
 
   /**
