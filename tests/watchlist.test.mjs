@@ -11,7 +11,7 @@ import { t } from "../mods/wickline/i18n.js";
 import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf } from "../mods/wickline/freshness.js";
 import { collapsedRow, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, NIGHT, SEGMENTS, advance, at, chart, chartSymbol, day,
+  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, NIGHT, SEGMENTS, advance, at, chart, chartSymbol, day,
   fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop, yq,
 } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL, mis } from "../mods/wickline/providers/mis.js";
@@ -1259,6 +1259,21 @@ test("WTX& is priced by Yahoo 奇摩股市 alone: name, price, change, line and 
     assert.equal(w.errors["WTX&"], undefined);
     assert.equal(host.requests.filter(isLine).length, 1);
   }, FUT_NOW);
+});
+
+// The recorded night line's last close is at 22:20 (14:20Z); its answer lists every minute of the trading day.
+test("a future's night line that stopped while the price trades on is not drawn as live; one that agrees is", async () => {
+  const lastClose = at("2026-11-10T14:20:00Z");
+  for (const [now, frozen] of [[lastClose + 30_000, false], [lastClose + 30 * 60_000 + 30_000, true]]) {
+    const label = new Date(now).toISOString();
+    const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(host.clock - 10_000), line: () => ok(FUTURES_NIGHT_TICK) });
+    await soleRun(host, (w) => {
+      const quote = w.shown("WTX&", now + 5_000);
+      assert.equal(quote.source, "yahootw", label);
+      assert.equal(w.lines.yahootw?.["WTX&"] === undefined, frozen, label);
+      assert.equal(quote.chartSource === "yahootw", !frozen, label);
+    }, now);
+  }
 });
 
 test("a future answered from another exchange reads not found", async () => {

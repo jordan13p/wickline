@@ -493,8 +493,8 @@ test("a future's line keeps its trading day from 15:00, also after midnight", ()
   assert.equal(night.lines["WTX&"].day, tradingDay("WTX&", one));
 });
 
-// Yahoo 奇摩股市 lists the minutes still to come, without closes: a line never runs past `now`, so it has no flat tail and
-// its last minute is a trade's, which a frozen answer can be told by.
+// Yahoo 奇摩股市 lists the minutes still to come, without closes: a line never runs past `now`. Read at its own time, as
+// here, its last minute is its last trade's; read later, the minutes up to now carry that close (see the next test).
 test("a line ends at its last close at or before now, never at the minutes still to come", () => {
   const request = yahootw.requests(["WTX&"]).find((r) => r.kind === "line");
   const chart = FUTURES_NIGHT_TICK[0].chart;
@@ -510,6 +510,23 @@ test("a line ends at its last close at or before now, never at the minutes still
     const first = closes.findIndex((close) => close !== null);
     assert.equal(series.length, last - first + 1, label);
   }
+});
+
+// An answer that stopped at 22:20, read half an hour later: its minutes since then carry 22:20's close, but its last
+// trade stays at 22:20, so the watchlist can tell it is frozen.
+test("a line's last trade is its last close, not the minutes filled up to now", () => {
+  const request = yahootw.requests(["WTX&"]).find((r) => r.kind === "line");
+  const chart = FUTURES_NIGHT_TICK[0].chart;
+  const closes = chart.indicators.quote[0].close;
+  const last = closes.findLastIndex((close) => close !== null);
+  const lastClose = chart.timestamp[last] * 1000;
+  const now = lastClose + 30 * 60_000 + 30_000; // 22:50:30
+  const { series, lastAt } = yahootw.decode(request, ok(FUTURES_NIGHT_TICK), now).lines["WTX&"];
+  assert.equal(lastAt, lastClose);
+  // The series still runs to now's minute, flat after 22:20.
+  const first = closes.findIndex((close) => close !== null);
+  assert.equal(series.length, last + 30 - first + 1);
+  assert.deepEqual(series.slice(-31), Array(31).fill(closes[last]));
 });
 
 test("a future's line gives its sessions from sourceTradingPeriods", () => {
