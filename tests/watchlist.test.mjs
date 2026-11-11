@@ -2314,6 +2314,22 @@ test("a source turned off or a pause during the schedule wait sends nothing", as
   }
 });
 
+// A change during the wait starts the round again; a Refresh asked for while paused still goes out with it.
+test("a Refresh while paused survives a change during the schedule wait", async () => {
+  const from = at("2026-11-11T01:30:00Z");                 // 09:30
+  const host = taiwanHost(ONLY_MIS, { holidays: () => new Promise(() => {}) });
+  host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: true };
+  await soleRun(host, async (w) => {
+    assert.equal(schedules(host), 0);
+    w.refreshNow();
+    await advance(host, from + 6_000);
+    assert.equal(schedules(host), 1);
+    assert.ok(w.remove("0050.TW"));
+    await advance(host, from + 30_000);
+    assert.deepEqual(host.requests.filter((url) => url.startsWith(MIS_URL)), [`${MIS_URL}?ex_ch=tse_2330.tw&json=1&delay=0`]);
+  }, from);
+});
+
 test("a hidden copy asks for the schedule only once shown", async () => {
   const from = at("2026-11-10T15:59:00Z"); // 23:59
   let shown = false;

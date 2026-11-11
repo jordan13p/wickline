@@ -852,8 +852,12 @@ export class Watchlist {
           if (this.holdsTaiwan(symbols)) {
             await this.loadHolidays(io);
             // A change the loops act on during that wait (a source or its consent turned off, a pause, a removed
-            // symbol) restarted them (restart): these symbols and settings are old, so start again from the top.
-            if (state.dirty) continue;
+            // symbol) restarted them (restart): these symbols and settings are old, so start again from the top,
+            // keeping a Refresh asked for, which may be the only reason a paused list has a round.
+            if (state.dirty) {
+              state.manual ||= manual;
+              continue;
+            }
           }
           await this.round(provider, state, symbols, io);
         }
