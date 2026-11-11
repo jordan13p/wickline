@@ -597,3 +597,14 @@ test("a stock list reports each clock's newest trade, any day, real-time rows on
   assert.equal(decodeStockList(["^TWII"], rows(yesterday, { exchangeDataDelayedBy: 1200 }), now).newestTrade, undefined);
   assert.equal(decodeStockList(["^TWII"], rows(yesterday, { price: { raw: "-" } }), now).newestTrade, undefined);
 });
+
+test("a futures trade timed too far ahead is no trade: the decoder refuses it, so it never lifts a closure", () => {
+  const now = at("2026-12-25T02:00:00Z"); // 10:00 Taipei on a listed Friday
+  const ahead = (ms) => ok(FUTURES_ROWS.filter((row) => row.symbol === "WTX&")
+    .map((row) => ({ ...row, regularMarketTime: new Date(now + ms).toISOString() })));
+  const refused = decodeStockList(["WTX&"], ahead(3 * 86_400_000), now);
+  assert.deepEqual(refused.quotes, {});
+  assert.equal(refused.newestTrade, undefined);
+  // Within the decoder's 5-minute bound it is accepted, and counts.
+  assert.deepEqual(decodeStockList(["WTX&"], ahead(60_000), now).newestTrade, { future: now + 60_000 });
+});
