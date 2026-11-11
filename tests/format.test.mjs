@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { formatDate, sessionTimesParts, stateText } from "../mods/wickline/format.js";
-import { freshness, sessionTimes } from "../mods/wickline/freshness.js";
+import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { CLOSE_1224, at, day, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -238,5 +238,34 @@ test("the 休市 label and the closed day's session times", () => {
     assert.deepEqual(sessionTimesParts(sessionTimes(q, now), "en", en), ["Trading hours: Closed today"]);
     assert.deepEqual(sessionTimesParts(sessionTimes({ symbol: "WTX&", periods: null, nightClosed: true }, at("2026-12-25T18:00:00Z")), "zh-TW", zh),
       ["交易時段：日盤 08:45–13:45", "夜盤休市"]);
+  });
+});
+
+test("the 今日無成交 label, header and session times", () => {
+  withTZ("Asia/Taipei", () => {
+    const zh = (key, params) => t("zh-TW", key, params);
+    const en = (key, params) => t("en", key, params);
+    const now = at("2026-11-11T01:00:00Z");                          // 09:00 on a normal Wednesday
+    const wtx = { symbol: "WTX&", source: "yahootw", price: 42604, timestamp: at("2026-11-10T20:59:00Z"), periods: null,
+      chartSource: "yahootw", noTrades: { source: "yahootw" } };       // stuck at 04:59, the same Taipei day
+    assert.equal(sessionOf(wtx, now), "noTrades");
+    const fresh = freshness(wtx, "noTrades", now);
+    assert.deepEqual(fresh, { state: "noTrades", delayMinutes: null, stoppedAt: null });
+    assert.equal(freshnessLabel(wtx, fresh, now, "zh-TW", zh), "今日無成交 · 11/11 04:59");   // the date, though it is today
+    assert.equal(freshnessLabel(wtx, fresh, now, "en", en), "No trades today · Nov 11 04:59");
+    assert.equal(t("zh-TW", `session.${sessionName(wtx, "noTrades", now)}`), "今日無成交");
+    assert.deepEqual(detailSource(wtx, "noTrades", now, zh), [["價格：今日無成交 · Yahoo 奇摩股市"], ["走勢：今日無成交 · Yahoo 奇摩股市"]]);
+    // Yahoo Finance alone (spec "Delayed source on a closed day", review 2 I4): the header 今日無成交, never 休市, and
+    // the delayed line keeps its text.
+    const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: at("2026-11-10T05:30:00Z"), noTrades: { source: "yahoo" } };
+    assert.equal(t("zh-TW", `session.${sessionName(base, "noTrades", now)}`), "今日無成交");
+    assert.deepEqual(detailSource(base, "noTrades", now, zh), [["Yahoo Finance · 一般交易時段", "延遲 20 分鐘"]]);
+    assert.deepEqual(sessionTimesParts(sessionTimes(wtx, now), "zh-TW", zh), ["交易時段：今日尚無成交，可能休市"]);
+    assert.deepEqual(sessionTimesParts(sessionTimes(wtx, now), "en", en), ["Trading hours: No trades yet today; the market may be closed"]);
+    const night = { ...wtx, timestamp: at("2026-11-11T05:45:00Z"), noTrades: { source: "yahootw", night: true }, nightClosed: true };
+    const later = at("2026-11-11T07:10:00Z");                        // 15:10
+    assert.equal(sessionOf(night, later), "closed");
+    assert.equal(freshnessLabel(night, freshness(night, "closed", later), later, "zh-TW", zh), "已收盤 · 13:45");
+    assert.deepEqual(sessionTimesParts(sessionTimes(night, later), "zh-TW", zh), ["交易時段：日盤 08:45–13:45", "夜盤尚無成交"]);
   });
 });

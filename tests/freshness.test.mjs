@@ -7,7 +7,7 @@ import {
 } from "../mods/wickline/freshness.js";
 import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, kindOf, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
-import { closureOf, parseHolidays } from "../mods/wickline/calendar.js";
+import { closureOf, deadlineOf, parseHolidays } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -579,16 +579,32 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // nextEdge announced a step before, so a wait cut at the next edge never sleeps past a change. sessionEdges follows
 // sessionOf's branches by hand; this sweep is what keeps the two in step. A new way of reading a session adds its
 // quotes to EDGE_SWEEP_QUOTES.
-// A Taiwan quote carries the closure marks of its time (closureOf, as Watchlist#marks gives them; here from the 2026
-// schedule with no trade seen), so the sweep reads a listed day as a row does.
+// A Taiwan quote carries the closure marks of its time and its next inference deadline (closureOf and deadlineOf, as
+// Watchlist#marked gives them; here from the 2026 schedule, and the answers its `answers` gives at that time, else
+// none), so the sweep reads a listed day, and a day or night without trades, as a row does.
 const LISTED_2026 = parseHolidays(JSON.stringify(HOLIDAYS_2026));
-const marked = (quote, time) => (resolvedMarket(quote.symbol, quote.exchange) !== "tw" ? quote : {
-  ...quote, ...closureOf(kindOf(quote.symbol) === "future" ? "future" : "stock", time, (d) => LISTED_2026[d] ?? null, () => undefined),
-});
+const marked = (quote, time) => {
+  if (resolvedMarket(quote.symbol, quote.exchange) !== "tw") return quote;
+  const market = kindOf(quote.symbol) === "future" ? "future" : "stock";
+  const seen = quote.answers?.(time) ?? (() => undefined);
+  const deadline = deadlineOf(market, time, seen);
+  return { ...quote, ...closureOf(market, time, (d) => LISTED_2026[d] ?? null, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
+};
+// What a row reads: its session, a Taiwan row's day, and its no-trades reading, which the detail's session times and
+// the status line's note read apart from sessionOf.
 const reading = (quote, time) => {
   const row = marked(quote, time);
-  return `${sessionOf(row, time)} ${resolvedMarket(row.symbol, row.exchange) === "tw" ? dayFor(row)(time) : ""}`;
+  return `${sessionOf(row, time)} ${resolvedMarket(row.symbol, row.exchange) === "tw" ? dayFor(row)(time) : ""} ${JSON.stringify(row.noTrades ?? null)}`;
 };
+// Answers that carry no trade, one a minute (the latest at `time`) from every session: Yahoo 奇摩股市's for
+// `quietRealtime`, Yahoo Finance's for `quietDelayed`. `quietNight`: only the nights are observed, each answer carrying
+// the day's last trade (newest, just before its 15:00 open), so the night reads closed with its note. A trade is never
+// observed: one comes with an answer, which redraws the row itself.
+const answeredAt = (time, kind, source) => ({ traded: false, newest: null, realtime: [], delayed: [], [kind]: [{ at: time, source }] });
+const quietRealtime = (time) => () => answeredAt(time, "realtime", "yahootw");
+const quietDelayed = (time) => () => answeredAt(time, "delayed", "yahoo");
+const isNightOpen = (open) => new Date(open + 8 * 3_600_000).getUTCHours() === 15;
+const quietNight = (time) => (market, open) => (isNightOpen(open) ? { ...answeredAt(time, "realtime", "yahootw"), newest: open - 1 } : undefined);
 
 // The instants in [from, to), stepped by `step`, where what `quote` reads changes without an edge at or before it.
 function unannounced(quote, [from, to], step = MINUTE_MS) {
@@ -641,20 +657,36 @@ const EDGE_SWEEP_QUOTES = [
   { symbol: "WTX&", periods: null },
   { symbol: "WTX&", periods: LINE_PERIODS },
   { symbol: "BTC/USDT", periods: null },
+  // Inferred closures: a stock or a future without trades, by a real-time or a delayed source, and a night without trades.
+  { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), answers: quietRealtime },
+  { symbol: "2330.TW", periods: null, answers: quietDelayed },
+  { symbol: "^TWII", exchange: "TAI", periods: null, answers: quietRealtime },
+  { symbol: "WTX&", periods: null, answers: quietRealtime },
+  { symbol: "WTX&", periods: LINE_PERIODS, answers: quietRealtime },
+  { symbol: "WTX&", periods: null, answers: quietNight },
+  { symbol: "WTX&", periods: LINE_PERIODS, answers: quietNight },
 ];
+const sweepName = (quote) => `${quote.symbol} ${quote.periods ? "with" : "without"} periods${quote.answers ? `, ${quote.answers.name}` : ""}`;
 
 test("every change in what a row reads comes at or after an edge announced for it", () => {
   for (const quote of EDGE_SWEEP_QUOTES) {
     for (const week of [...EDGE_SWEEP_WEEKS, ...HOLIDAY_WEEKS]) {
-      assert.deepEqual(unannounced(quote, week), [], `${quote.symbol} ${quote.periods ? "with" : "without"} periods`);
+      assert.deepEqual(unannounced(quote, week), [], sweepName(quote));
     }
   }
+  // The inferred quotes turn at their deadlines (Tue 11/10: 09:10, 09:30, and the night's 15:10).
+  const [realtime, delayed, , , , night] = EDGE_SWEEP_QUOTES.filter((quote) => quote.answers);
+  const reads = (quote, iso) => reading(quote, at(iso)).replace(/ \d+ /, " ");
+  assert.deepEqual([reads(realtime, "2026-11-10T01:09:59Z"), reads(realtime, "2026-11-10T01:10:00Z"), reads(delayed, "2026-11-10T01:29:59Z"),
+    reads(delayed, "2026-11-10T01:30:00Z"), reads(night, "2026-11-10T07:09:59Z"), reads(night, "2026-11-10T07:10:00Z")],
+  ["open null", 'noTrades {"source":"yahootw"}', "open null", 'noTrades {"source":"yahoo"}', "open null",
+    'closed {"source":"yahootw","night":true}']);
 });
 
 test("a row reading a closure is told of no opening inside a closure", () => {
   for (const quote of EDGE_SWEEP_QUOTES) {
     for (const week of HOLIDAY_WEEKS) {
-      assert.deepEqual(closedOpenings(quote, week), [], `${quote.symbol} ${quote.periods ? "with" : "without"} periods`);
+      assert.deepEqual(closedOpenings(quote, week), [], sweepName(quote));
     }
   }
   // The weeks hold both closures, for stocks and futures alike.
@@ -746,4 +778,12 @@ test("an unconfirmed price or line names its source alone", () => {
   const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: now - 10_000, periods,
     chartSource: "yahoo", chartTimestamp: open - 60_000, chartFetchedAt: now - 5_000 };
   assert.deepEqual(detailSource(finnhub, "open", now, say("en")), [["Price: Live · Finnhub"], ["Line: Yahoo Finance"]]);
+});
+
+test("no trades today: lit as closed, never while stalled", () => {
+  const now = at("2026-11-11T01:10:00Z");
+  const q = { symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: at("2026-11-10T05:30:00Z"),
+    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") };
+  assert.equal(shownLimit({ ...q, periods: day("2026-11-11T01:00:00Z", "2026-11-11T05:30:00Z") }, "open", now), null);   // stalled
+  assert.equal(shownLimit({ ...q, noTrades: { source: "mis" } }, "noTrades", now), "up");
 });

@@ -1,7 +1,7 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { HOLIDAYS_URL, closureOf, currentOpen, parseHolidays, taipeiDay, tradingDay } from "./calendar.js";
+import { HOLIDAYS_URL, closureOf, currentOpen, deadlineOf, parseHolidays, taipeiDay, tradingDay } from "./calendar.js";
 import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
@@ -45,9 +45,9 @@ const SWITCHES = {
   },
 };
 // A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open, and a lunch break
-// ranks below a session not yet known but above pre/post. A listed closed day paces as closed (sessionFor then
-// reads "closed": its line is not asked again, and no source says it prices nothing live).
-const SESSION_RANK = { open: 4, "24h": 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0, holiday: 0 };
+// ranks below a session not yet known but above pre/post. A listed closed day and a day without trades pace as closed
+// (sessionFor then reads "closed": its line is not asked again, and no source says it prices nothing live).
+const SESSION_RANK = { open: 4, "24h": 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0, holiday: 0, noTrades: 0 };
 // Errors about the source itself, not one symbol: shown as the source's problem.
 const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadable)$/;
 // The source is down or hung: the rest of the round would only wait out more timeouts.
@@ -204,8 +204,11 @@ export class Watchlist {
     // date of the last success, `tried` that of the last attempt, `retryAt` when a failed one may be tried again, and
     // `pending` the fetch in flight (one per copy, shared by its loops). See loadHolidays.
     this.holidays = { days: {}, day: null, tried: null, retryAt: 0, pending: null };
-    // Per Taiwan market, by the open (ms) of a session: what this copy saw of it, `{ traded }` (a trade at or after
-    // that open). Only in memory; older than SEEN_KEEP_MS is dropped on write. See noteTrade.
+    // Per Taiwan market, by the open (ms) of a session: what this copy saw of it since that open, `{ traded, newest,
+    // answers }`: whether an answer carried a trade at or after the open, the newest trade time any answer carried
+    // (whatever its day), and by source id that source's latest answer, `{ at, realtime }` (when it arrived, and
+    // whether the source is real time). Only in memory; older than SEEN_KEEP_MS is dropped on write. Written by
+    // noteTrade, read only through observed.
     this.seen = { stock: {}, future: {} };
     this.revision = 0;
     this.stopped = false;
@@ -340,22 +343,67 @@ export class Watchlist {
   }
 
   /**
-   * `quote` (none: none) with the symbol's closed-day marks at `now` (marks): the one place a quote gets them, so
-   * whatever reads a row (its session, label, cadence and edges) reads the same closure.
+   * `quote` (none: none) with the symbol's closed-day marks at `now` (marks) and, for a Taiwan symbol, its market's
+   * next inference deadline as `noTradesDeadline` (calendar.js deadlineOf; freshness.js nextEdge wakes the row there):
+   * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
+   * closure.
    */
   marked(symbol, quote, now) {
-    if (!quote) return quote;
-    const marks = this.marks(symbol, now);
-    return Object.keys(marks).length ? { ...quote, ...marks } : quote;
+    if (!quote || this.marketFor(symbol) !== "tw") return quote;
+    const { listed, seen } = this.closureInputs();
+    const market = twMarket(symbol);
+    const deadline = deadlineOf(market, now, seen);
+    return { ...quote, ...closureOf(market, now, listed, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
   }
 
   /**
    * A Taiwan symbol's closed-day marks at `now` (calendar.js closureOf, in its market: futures, else stocks), from
-   * the holiday schedule held and the trades seen; {} for any other symbol.
+   * the holiday schedule held and the answers seen; {} for any other symbol.
    */
   marks(symbol, now) {
     if (this.marketFor(symbol) !== "tw") return {};
-    return closureOf(twMarket(symbol), now, (day) => this.holidays.days[day] ?? null, (market, open) => this.seen[market][open]);
+    const { listed, seen } = this.closureInputs();
+    return closureOf(twMarket(symbol), now, listed, seen);
+  }
+
+  /** closureOf's and deadlineOf's `listed` and `seen`: the schedule held, and observed with the sources on read once. */
+  closureInputs() {
+    const { on } = this.config();
+    return { listed: (day) => this.holidays.days[day] ?? null, seen: (market, open) => this.observed(market, open, on) };
+  }
+
+  /**
+   * The observation of `market`'s session opened at `open` as closureOf and deadlineOf read it, or undefined without
+   * one: `{ traded, newest, realtime, delayed }`, the latter two each source's latest answer of that kind as
+   * `{ at, source }`, in PROVIDERS order (the order that names a closure), leaving out an overlay source that is off
+   * now (`on`: config().on), so its answers stop counting the moment it is turned off.
+   */
+  observed(market, open, on = this.config().on) {
+    const entry = this.seen[market][open];
+    if (!entry) return undefined;
+    const answers = PROVIDERS.filter(({ id }) => entry.answers[id] && (!OVERLAY_ORDER.includes(id) || on[id]))
+      .map(({ id }) => ({ source: id, ...entry.answers[id] }));
+    const ofKind = (realtime) => answers.filter((answer) => answer.realtime === realtime).map(({ at, source }) => ({ at, source }));
+    return { traded: entry.traded, newest: entry.newest, realtime: ofKind(true), delayed: ofKind(false) };
+  }
+
+  /**
+   * The status line's no-trades notes at `now`: for each Taiwan market the list holds, its closure's `noTrades`
+   * (closureOf) as `{ code, params: { source } }`, closure.noTradesNight for a night without trades and
+   * closure.noTradesToday otherwise; one per code and source. Kept apart from problems(): the settings' health
+   * shows only those, since a source that answers is working.
+   */
+  notes(now = this.host.now()) {
+    const markets = new Set(this.preferences.symbols.filter((symbol) => this.marketFor(symbol) === "tw").map(twMarket));
+    const { listed, seen } = this.closureInputs();
+    const lines = new Map();
+    for (const market of markets) {
+      const { noTrades } = closureOf(market, now, listed, seen);
+      if (!noTrades) continue;
+      const code = noTrades.night ? "closure.noTradesNight" : "closure.noTradesToday";
+      lines.set(`${code} ${noTrades.source}`, notice(code, { source: noTrades.source }));
+    }
+    return [...lines.values()];
   }
 
   /** Whether `symbols` hold a Taiwan symbol, a ^TW… index still waiting for its first quote included. */
@@ -364,14 +412,19 @@ export class Watchlist {
   }
 
   /**
-   * Notes a trade in a Taiwan `market` at `tradeTime` when it is at or after the open of the session `now` belongs
-   * to (currentOpen), so closureOf lets that session trade.
+   * Notes an answer arriving at `now` in a Taiwan `market` that carries a trade at `tradeTime`, on the session `now`
+   * belongs to (currentOpen): the session has traded once a trade is at or after its open, its newest trade is kept,
+   * and so is the answer's arrival for its source (`answer`: `{ source: providerId, realtime }`), which closureOf
+   * reads to tell a session without trades (see calendar.js INFER_RECENT_MS).
    */
-  noteTrade(market, tradeTime, now) {
+  noteTrade(market, tradeTime, answer, now) {
     const open = currentOpen(market, now);
-    if (open === null || !(tradeTime >= open)) return;
+    if (open === null) return;
     const seen = this.seen[market];
-    seen[open] = { traded: true };
+    const entry = (seen[open] ??= { traded: false, newest: null, answers: {} });
+    entry.traded ||= tradeTime >= open;
+    entry.newest = Math.max(entry.newest ?? tradeTime, tradeTime);
+    entry.answers[answer.source] = { at: now, realtime: answer.realtime };
     for (const key of Object.keys(seen)) if (Number(key) < now - SEEN_KEEP_MS) delete seen[key];
   }
 
@@ -994,7 +1047,14 @@ export class Watchlist {
   }
 
   apply(provider, request, result) {
+    const now = this.host.now();
     if (provider.overlay) {
+      // An overlay source is real time. Yahoo 奇摩股市 gives each Taiwan market's newest trade among its rows, whatever
+      // their day, so an answer of yesterday's prices still counts as one (noteTrade); any other, each priced row's.
+      const answer = { source: provider.id, realtime: true };
+      if (provider === yahootw) {
+        for (const [market, time] of Object.entries(result.newestTrade ?? {})) this.noteTrade(market, time, answer, now);
+      }
       // A name can come without a price (before the open): remember it all the same.
       for (const symbol of request.symbols) if (result.names?.[symbol]) this.localNames[symbol] = result.names[symbol];
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
@@ -1003,7 +1063,9 @@ export class Watchlist {
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         const had = this.overlays[symbol]?.[provider.id];
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
-        if (overlay && this.marketFor(symbol) === "tw") this.noteTrade(twMarket(symbol), overlay.tradeTime ?? overlay.timestamp, this.host.now());
+        if (overlay && provider !== yahootw && this.marketFor(symbol) === "tw") {
+          this.noteTrade(twMarket(symbol), overlay.tradeTime ?? overlay.timestamp, answer, now);
+        }
         if (this.soleSource(symbol) === provider) {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
           // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
@@ -1027,7 +1089,9 @@ export class Watchlist {
       if (provider.linesMs) quote.series = this.quotes[symbol]?.series ?? [];
       this.quotes[symbol] = quote;
       delete this.errors[symbol];
-      if (this.marketFor(symbol) === "tw") this.noteTrade("stock", quote.timestamp, this.host.now());
+      if (this.marketFor(symbol) === "tw") {
+        this.noteTrade("stock", quote.timestamp, { source: provider.id, realtime: isRealtime(quote) }, now);
+      }
     }
     const config = this.config();
     for (const [symbol, error] of Object.entries(result.errors)) {

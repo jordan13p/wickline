@@ -82,7 +82,9 @@ function checkStatus(response) {
  * reads closed with its date. The own last trade is `tradeTime`, and `day` its trading day, which a line must
  * share to be drawn with it. An answer with prices but none accepted for today (all delayed, or none from
  * today) carries `noLive`, so the source can say why it shows nothing live; one with no price at all (before
- * the open, every stock halted) does not.
+ * the open, every stock halted) does not. `newestTrade`, only when it has an entry: per market clock ("stock",
+ * "future"), the newest trade time among the requested rows with a positive price, a trade time and no delay, whatever
+ * their day, so a session that has not traded yet can be told apart (Watchlist#noteTrade).
  */
 export function decodeStockList(symbols, response, now, anyDay = []) {
   checkStatus(response);
@@ -98,6 +100,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   // A placeholder row still names its stock.
   const names = {};
   let anyPrice = false;
+  const newestTrade = {};
   for (const row of body) {
     const symbol = typeof row?.symbol === "string" && wanted.has(row.symbol) ? row.symbol : null;
     if (!symbol) continue;
@@ -117,6 +120,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const soleHere = anyDaySymbols.has(symbol);
     const dayOk = day !== null && aheadOk && (isToday || (day < today && soleHere));
     const delayed = row.exchangeDataDelayedBy !== 0;
+    if (price && tradeTime !== null && !delayed) newestTrade[clock] = Math.max(newestTrade[clock] ?? tradeTime, tradeTime);
     // A symbol only this source prices has no other row to fall back on: a price refused as not real time says so,
     // so the kept price reads cached rather than taken for a name-only answer. A price with no trade time is refused
     // the same way: there is no trade to date it by.
@@ -151,7 +155,11 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   const quotes = Object.fromEntries(priced.map(([clock, quote]) =>
     [quote.symbol, { ...quote, timestamp: clock ? feedTime[clock] : quote.tradeTime }]));
   const anyToday = priced.some(([clock]) => clock);
-  return { quotes, errors, names, ...(anyPrice && !anyToday && { noLive: new QuoteError("yahootw.noLiveRows") }) };
+  return {
+    quotes, errors, names,
+    ...(anyPrice && !anyToday && { noLive: new QuoteError("yahootw.noLiveRows") }),
+    ...(Object.keys(newestTrade).length && { newestTrade }),
+  };
 }
 
 // `sourceTradingPeriods`' periods, at any depth, as sorted `[start, end]` pairs; none when it is not an array.

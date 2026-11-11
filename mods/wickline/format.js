@@ -156,7 +156,8 @@ export function stateText(fresh, tx) {
 /**
  * A row's freshness label: the state for a real-time price ("Live"), its source only while unconfirmed,
  * the stop time, the delay, or the session when it is not trading. Closed, and a listed closed day ("holiday"),
- * carry the last trade's time, with its date when not today.
+ * carry the last trade's time, with its date when not today; a day without trades ("noTrades") always with its date,
+ * so an inference never hides how old its price is.
  * `tx(key, params)` translates.
  */
 export function freshnessLabel(quote, fresh, now, lang, tx) {
@@ -171,6 +172,8 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
       const date = formatStaleDate(quote.timestamp, now, lang, dayFor(quote));
       return `${tx(`session.${fresh.state}`)} · ${date ? `${date} ` : ""}${formatTime(quote.timestamp)}`;
     }
+    case "noTrades":
+      return `${tx("session.noTrades")} · ${formatDate(quote.timestamp, lang)} ${formatTime(quote.timestamp)}`;
     default:
       return stateText(fresh, tx);
   }
@@ -198,15 +201,17 @@ const REASON_LANG = "zh-TW";
  * The 交易時段 line's parts (see sessionTimes), for segments() (joined with " · "): the first part carries
  * tx("detail.sessionTimes", { times }); each range is `${formatTime(start)}–${formatTime(end)}`; [] for null. A
  * listed closed day reads 今日休市 (translated), then the schedule's reason in `lang` zh-TW only; a removed night
- * reads 夜盤休市.
+ * reads 夜盤休市. A day without trades reads 今日尚無成交，可能休市, and a night without trades 夜盤尚無成交.
  */
 export function sessionTimesParts(times, lang, tx) {
   if (!times) return [];
-  const night = (range) => (range ? tx("detail.nightSession", { times: timeRange(range) }) : tx("detail.nightNotHeld"));
+  const night = (range) => (range ? tx("detail.nightSession", { times: timeRange(range) })
+    : tx(times.nightNoTrades ? "detail.nightNoTrades" : "detail.nightNotHeld"));
   const parts = times.allDay ? [tx("detail.allDay")]
     : times.closedToday ? [tx("detail.closedToday"), ...(lang === REASON_LANG ? [times.reason] : [])]
-      : times.day ? [tx("detail.daySession", { times: timeRange(times.day) }), night(times.night)]
-        : times.spans.map(timeRange);
+        : times.noTradesToday ? [tx("detail.noTradesToday")]
+          : times.day ? [tx("detail.daySession", { times: timeRange(times.day) }), night(times.night)]
+            : times.spans.map(timeRange);
   const [first, ...rest] = parts;
   return [tx("detail.sessionTimes", { times: first }), ...rest];
 }

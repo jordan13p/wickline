@@ -8,8 +8,8 @@ import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
-import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf } from "../mods/wickline/freshness.js";
-import { collapsedRow, dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
+import { collapsedRow, dayFor, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
   chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq,
@@ -1136,10 +1136,23 @@ test("a TW-only row's failure is its error alone, not also an overlay error", as
 // During the session, a TW-only row still from the day before is no real-time price.
 test("a lone earlier-day row does not hide that nothing is real time", async () => {
   const yesterday = { "^TWOII": { regularMarketTime: "2026-11-08T05:31:00Z" } };
-  await soleRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(TW_NOW - 5_000, yesterday) }), (w) => {
+  const from = at("2026-11-09T01:05:00Z");
+  await soleRun(twOnlyHost(["^TWOII"], { yahootw: () => stockList(from - 5_000, yesterday) }), (w) => {
     assert.equal(w.shown("^TWOII").timestamp, Date.parse("2026-11-08T05:31:00Z"));
     assert.deepEqual(w.problems().map(({ provider, code }) => [provider, code]), [["yahootw", "yahootw.noLiveRows"]]);
-  });
+  }, from);
+});
+
+test("from 09:10 the same answer reads 今日無成交 and only the no-trades note shows", async () => {
+  const yesterday = { "^TWOII": { regularMarketTime: "2026-11-08T05:31:00Z" } };
+  const from = at("2026-11-09T01:09:55Z");
+  const host = twOnlyHost(["^TWOII"], { yahootw: () => stockList(from - 5_000, yesterday) });
+  await soleRun(host, async (w) => {
+    await advance(host, from + 20_000);
+    assert.deepEqual(w.marks("^TWOII", host.clock), { noTrades: { source: "yahootw" } });
+    assert.deepEqual(w.problems(), []);
+    assert.deepEqual(w.notes(), [{ code: "closure.noTradesToday", params: { source: "yahootw" } }]);
+  }, from);
 });
 
 test("the move to TW-only does not restart Yahoo's round", async () => {
@@ -1979,25 +1992,40 @@ test("at 15:00 a priced future is asked every 10 s until the night's first trade
   }, from);
 });
 
-// With no night trade (a holiday, or a feed that stopped at the day close), the day close is not the night's: from 15:00
-// the row reads stalled, never closed, and is asked every 10 s as in any open session.
-test("without a night trade, the day close reads stalled from 15:00 and is asked every 10 s", async () => {
+// With no night trade after a traded day (TAIFEX holding no night session, or a feed that stopped at the day close), the
+// day close is not the night's: from 15:00 the row reads stalled, asked every 10 s as in any open session, until the
+// night's deadline; then closed, with the night's no-trades note.
+test("TAIFEX holds no night session: 已收盤 · 13:45 from 15:10, polled every 60 s, 日盤 08:45–13:45 · 夜盤尚無成交, with its note", async () => {
   const from = at("2026-11-10T06:59:50Z");          // 14:59:50
-  const last = at("2026-11-10T05:44:59Z");          // 13:44:59
+  const last = at("2026-11-10T05:45:00Z");          // 13:45
   const host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-10T05:44:00Z"), SEGMENTS),
   });
   await soleRun(host, async (w) => {
-    const ten = at("2026-11-10T07:10:00Z");         // 15:10
-    await advance(host, ten);
+    const open = at("2026-11-10T07:00:00Z");        // 15:00
+    await advance(host, open);
     const asked = stockLists(host).length;
-    await advance(host, ten + 60_000);
+    const before = at("2026-11-10T07:09:59Z");      // 15:09:59
+    await advance(host, before);
     assert.ok(stockLists(host).length - asked >= 5, String(stockLists(host).length - asked));
-    const now = host.clock;
-    const quote = w.shown("WTX&", now);
-    assert.equal(sessionOf(quote, now), "open");
-    const fresh = freshness(quote, "open", now);
-    assert.deepEqual([fresh.state, fresh.stoppedAt], ["stalled", last]);
+    let quote = w.shown("WTX&", before);
+    assert.equal(freshness(quote, sessionOf(quote, before), before).state, "stalled");
+    const after = at("2026-11-10T07:10:01Z");       // 15:10:01
+    await advance(host, after);
+    assert.deepEqual(w.marks("WTX&", after), { nightClosed: true, noTrades: { source: "yahootw", night: true } });
+    quote = w.shown("WTX&", after);
+    const session = sessionOf(quote, after);
+    assert.equal(freshness(quote, session, after).state, "closed");
+    assert.equal(withTZ("Asia/Taipei", () => freshnessLabel(quote, freshness(quote, session, after), after, "zh-TW", (k, p) => t("zh-TW", k, p))),
+      "已收盤 · 13:45");
+    assert.equal(t("zh-TW", `session.${sessionName(quote, session, after)}`), t("zh-TW", "session.closed"));
+    assert.deepEqual(withTZ("Asia/Taipei", () => sessionTimesParts(sessionTimes(quote, after), "zh-TW", (k, p) => t("zh-TW", k, p))),
+      ["交易時段：日盤 08:45–13:45", "夜盤尚無成交"]);
+    assert.deepEqual(w.notes(), [{ code: "closure.noTradesNight", params: { source: "yahootw" } }]);
+    await advance(host, at("2026-11-10T07:10:05Z"));
+    const settled = stockLists(host).length;
+    await advance(host, at("2026-11-10T07:11:05Z"));
+    assert.equal(stockLists(host).length - settled, 1);
   }, from);
 });
 
@@ -2267,4 +2295,266 @@ test("a hidden copy asks for the schedule only once shown", async () => {
     await advance(host, at("2026-11-11T01:00:01Z"));
     assert.equal(schedules(host), 1);
   }, from);
+});
+
+// Taiwan days without trades that TWSE does not list (a typhoon): Wednesday 2026-11-11 stands in for one. The answers
+// carry 11/10's close (stocks) or the night's 04:59 trade (futures).
+const CLOSE_1110 = at("2026-11-10T05:30:00Z");   // 13:30 Taipei
+const NIGHT_0459 = at("2026-11-10T20:59:00Z");   // 04:59 on 11/11
+const quietLabel = (quote, now) => withTZ("Asia/Taipei", () =>
+  freshnessLabel(quote, freshness(quote, sessionOf(quote, now), now), now, "zh-TW", (k, p) => t("zh-TW", k, p)));
+const noTradesToday = (source) => [{ code: "closure.noTradesToday", params: { source } }];
+
+test("a typhoon day with Yahoo 奇摩股市: the existing rules at 09:05, 今日無成交 · 11/10 13:30 from 09:10, polled every 60 s, with its note", async () => {
+  const from = at("2026-11-11T01:04:30Z");     // 09:04:30
+  const deadline = at("2026-11-11T01:10:00Z");
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1110), yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  await soleRun(host, async (w) => {
+    assert.equal(freshness(w.shown("2330.TW", host.clock), sessionOf(w.shown("2330.TW", host.clock), host.clock), host.clock).state, "delayed");
+    // The first yahootw round ends before Yahoo Finance's base arrives (PROVIDERS order), so noLiveRows shows only after
+    // the second round, 09:04:40. The deadline wake is tested where no round lands (Yahoo Finance alone).
+    await advance(host, from + 15_000);
+    assert.equal(w.problems()[0]?.code, "yahootw.noLiveRows");
+    assert.deepEqual(w.notes(), []);
+    await advance(host, deadline + 15_000); // the round after 09:10 clears noLive
+    const quote = w.shown("2330.TW", host.clock);
+    assert.deepEqual([quote.noTrades, quote.closedDay], [{ source: "yahootw" }, undefined]);
+    assert.equal(quietLabel(quote, host.clock), "今日無成交 · 11/10 13:30");
+    assert.deepEqual(w.problems(), []);
+    assert.deepEqual(w.notes(), noTradesToday("yahootw"));
+    const asked = stockLists(host).length;
+    await advance(host, deadline + 75_000);
+    assert.equal(stockLists(host).length - asked, 1);
+  }, from);
+});
+
+// The MIS half of the typhoon scenario: MIS is shown, stalled, at 09:04:30.
+test("a typhoon day with MIS: stopped at 09:05, 今日無成交 from 09:10", async () => {
+  const host = taiwanHost(BOTH, { mis: () => misAt(CLOSE_1110), yahootw: () => stockList(CLOSE_1110), yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  await soleRun(host, async (w) => {
+    const quote = w.shown("2330.TW", host.clock);
+    assert.equal(quote.source, "mis");
+    assert.equal(freshness(quote, sessionOf(quote, host.clock), host.clock).state, "stalled");
+    await advance(host, at("2026-11-11T01:10:05Z"));
+    assert.equal(sessionOf(w.shown("2330.TW", host.clock), host.clock), "noTrades");
+    // MIS is shown, but the fixed order names Yahoo 奇摩股市, round after round.
+    for (const step of [at("2026-11-11T01:10:05Z"), at("2026-11-11T01:11:10Z"), at("2026-11-11T01:12:15Z")]) {
+      await advance(host, step);
+      assert.deepEqual(w.notes(), noTradesToday("yahootw"), String(step));
+    }
+  }, at("2026-11-11T01:04:30Z"));
+});
+
+// An inference deadline wakes the rows: Yahoo Finance's rounds land at hh:mm:30, so only the deadline wake can redraw
+// in [09:30:00, 09:30:01].
+test("a typhoon day with Yahoo Finance alone: delayed until 09:25, stopped from 09:25, 今日無成交 from 09:30", async () => {
+  const from = at("2026-11-11T01:24:30Z");
+  const deadline = at("2026-11-11T01:30:00Z");
+  const host = taiwanHost(undefined, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  const redraws = [];
+  await soleRun(host, async (w) => {
+    const state = (now) => freshness(w.shown("2330.TW", now), sessionOf(w.shown("2330.TW", now), now), now).state;
+    assert.equal(state(host.clock), "delayed");
+    await advance(host, at("2026-11-11T01:25:31Z"));   // the first fetch after 09:25
+    assert.equal(state(host.clock), "stalled");
+    await advance(host, deadline + 1_000);
+    assert.ok(redraws.some((time) => time >= deadline && time <= deadline + 1_000), redraws.join());
+    assert.equal(state(host.clock), "noTrades");
+    assert.deepEqual(w.notes(), noTradesToday("yahoo"));
+  }, from, redraws);
+});
+
+// Night trades do not count for the day session. The line answers, on the quote's own trading day (11/10 15:00 →
+// 11/11 13:45), so no line problem shows.
+test("a stuck futures feed on a normal day reads stopped, then 今日無成交 · 11/11 04:59 with a note, never 休市", async () => {
+  const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(NIGHT_0459),   // every answer: the night's 04:59 trade
+    line: (symbol) => futuresLine(symbol, NEXT_SEGMENTS[0][0], NIGHT_0459, NEXT_SEGMENTS) });
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-11-11T00:50:00Z"));                            // 08:50
+    let quote = w.shown("WTX&", host.clock);
+    assert.equal(freshness(quote, sessionOf(quote, host.clock), host.clock).state, "stalled");
+    await advance(host, at("2026-11-11T00:55:01Z"));
+    quote = w.shown("WTX&", host.clock);
+    assert.deepEqual([quote.noTrades, quote.closedDay], [{ source: "yahootw" }, undefined]);
+    assert.equal(sessionOf(quote, host.clock), "noTrades");
+    assert.equal(quietLabel(quote, host.clock), "今日無成交 · 11/11 04:59");
+    assert.deepEqual(w.notes(), noTradesToday("yahootw"));
+    assert.deepEqual(w.problems(), []);
+  }, at("2026-11-11T00:44:30Z"));
+});
+
+test("a normal open at 09:00:01 never reads 今日無成交", async () => {
+  const first = at("2026-11-11T01:00:01Z");
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(host.clock < first ? CLOSE_1110 : Math.max(first, host.clock - 5_000)),
+    yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  await soleRun(host, async (w) => {
+    for (let step = at("2026-11-11T01:00:05Z"); step <= at("2026-11-11T01:15:00Z"); step += 10_000) {
+      await advance(host, step);
+      assert.deepEqual(w.marks("2330.TW", step), {}, String(step));
+    }
+    const quote = w.shown("2330.TW", host.clock);
+    assert.equal(freshness(quote, sessionOf(quote, host.clock), host.clock).state, "live");
+  }, at("2026-11-11T00:59:30Z"));
+});
+
+test("a thin WTF&-only list reads 今日無成交 from 08:55, and Live from the answer carrying its 09:02 trade, the note gone", async () => {
+  const trade = at("2026-11-11T01:02:00Z");
+  const host = futuresHost(["WTF&"], { yahootw: () => futuresAt(host.clock >= trade ? trade : NIGHT_0459) });
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-11-11T00:54:59Z"));
+    assert.deepEqual(w.marks("WTF&", host.clock), {});
+    await advance(host, at("2026-11-11T00:55:01Z"));
+    assert.deepEqual(w.marks("WTF&", host.clock), { noTrades: { source: "yahootw" } });
+    assert.deepEqual(w.notes(), noTradesToday("yahootw"));
+    const asked = stockLists(host).length;
+    await advance(host, at("2026-11-11T00:56:05Z"));
+    assert.equal(stockLists(host).length - asked, 1);                // 60 s
+    await advance(host, at("2026-11-11T01:03:30Z"));
+    const quote = w.shown("WTF&", host.clock);
+    assert.equal(freshness(quote, sessionOf(quote, host.clock), host.clock).state, "live");
+    assert.equal(t("zh-TW", `session.${sessionName(quote, "open", host.clock)}`), "日盤交易中");
+    assert.deepEqual(w.notes(), []);
+    const live = stockLists(host).length;
+    await advance(host, host.clock + 21_000);
+    assert.ok(stockLists(host).length - live >= 2);                  // 10 s again
+  }, at("2026-11-11T00:44:30Z"));
+});
+
+// Never since the open, or once at the 08:45 opening and then down.
+test("a source that times out from before the open, or after one answer at 08:45, never reads 今日無成交", async () => {
+  for (const hang of [at("2026-11-11T00:40:05Z"), at("2026-11-11T00:45:05Z")]) {
+    const host = futuresHost(["WTX&"], { yahootw: () => (host.clock < hang ? futuresAt(NIGHT_0459) : new Promise(() => {})) });
+    await soleRun(host, async (w) => {
+      for (let step = hang; step <= at("2026-11-11T01:30:00Z"); step += 600_000) await advance(host, step);
+      assert.equal(w.errors["WTX&"].code, "request.timeout");
+      assert.deepEqual(w.marks("WTX&", host.clock), {});
+      assert.deepEqual(w.notes(), []);
+      assert.equal(freshness(w.shown("WTX&", host.clock), "open", host.clock).state, "stalled");
+    }, at("2026-11-11T00:40:00Z"));
+  }
+});
+
+test("Saturdays are never inferred", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(at("2026-11-13T05:30:00Z")), yahoo: (s) => twYahooAt(s, at("2026-11-13T05:30:00Z"), "2026-11-13") });
+  await soleRun(host, (w) => assert.deepEqual(w.marks("2330.TW", host.clock), {}), at("2026-11-14T01:30:00Z"));
+});
+
+test("a copy shown after its deadline infers on its first answer", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1110), yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  await soleRun(host, (w) => assert.deepEqual(w.marks("2330.TW", host.clock), { noTrades: { source: "yahootw" } }), at("2026-11-11T02:30:00Z"));
+});
+
+test("the whole day without a session keeps 今日無成交 from 15:00 to 05:00, and from 15:10 for a copy shown at 15:05", async () => {
+  const quiet = { noTrades: { source: "yahootw" } };
+  const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(NIGHT_0459) });   // nothing since 04:59
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-11-11T00:55:01Z"));
+    assert.deepEqual(w.marks("WTX&", host.clock), quiet);
+    for (let step = host.clock; step <= at("2026-11-11T07:00:30Z"); step += 1_800_000) await advance(host, step);
+    await advance(host, at("2026-11-11T07:00:30Z"));
+    assert.deepEqual(w.marks("WTX&", host.clock), quiet);                  // carried from the day session (row 8b)
+    await advance(host, at("2026-11-11T07:10:01Z"));
+    assert.deepEqual(w.marks("WTX&", host.clock), quiet);                  // the night's own answers (row 8)
+    for (let step = host.clock; step <= at("2026-11-11T18:00:00Z"); step += 1_800_000) await advance(host, step);
+    await advance(host, at("2026-11-11T18:00:00Z"));                       // Thu 11/12 02:00
+    assert.deepEqual(w.marks("WTX&", host.clock), quiet);                  // kept past midnight (row 4)
+    assert.equal(quietLabel(w.shown("WTX&", host.clock), host.clock), "今日無成交 · 11/11 04:59");
+    assert.deepEqual(w.notes(), noTradesToday("yahootw"));
+    await advance(host, at("2026-11-11T21:00:30Z"));                       // 05:00:30
+    assert.deepEqual([w.marks("WTX&", host.clock), sessionOf(w.shown("WTX&", host.clock), host.clock), w.notes()], [{}, "closed", []]);
+  }, at("2026-11-11T00:44:30Z"));
+  // No day observation: the answers' newest trade (04:59) says the day never traded.
+  const late = futuresHost(["WTX&"], { yahootw: () => futuresAt(NIGHT_0459) });
+  await soleRun(late, async (w) => {
+    await advance(late, at("2026-11-11T07:10:01Z"));
+    assert.deepEqual(w.marks("WTX&", late.clock), quiet);
+  }, at("2026-11-11T07:05:00Z"));
+});
+
+// The real-time source answers once at 09:00, then times out.
+test("with Yahoo 奇摩股市 down after one answer at 09:00, Yahoo Finance's answers wait until 09:30, and a normal morning never reads 今日無成交", async () => {
+  const opened = at("2026-11-11T01:00:30Z");
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => (host.clock < at("2026-11-11T01:00:05Z") ? stockList(CLOSE_1110) : new Promise(() => {})),
+    yahoo: (s) => twYahooAt(s, host.clock < at("2026-11-11T01:20:30Z") ? CLOSE_1110 : opened, "2026-11-11") }); // 20 min late
+  await soleRun(host, async (w) => {
+    for (const step of [at("2026-11-11T01:10:05Z"), at("2026-11-11T01:12:00Z"), at("2026-11-11T01:29:59Z"), at("2026-11-11T01:31:00Z")]) {
+      await advance(host, step);
+      assert.deepEqual(w.marks("2330.TW", step), {}, String(step));
+    }
+  }, at("2026-11-11T01:00:00Z"));
+});
+
+test("delayed Yahoo 奇摩股市 rows are no answer for a closure", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1110, { "2330.TW": { exchangeDataDelayedBy: 1200 } }),
+    yahoo: (s) => twYahooAt(s, host.clock < at("2026-11-11T01:20:30Z") ? CLOSE_1110 : at("2026-11-11T01:00:30Z"), "2026-11-11") });
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-11-11T01:10:05Z"));
+    assert.deepEqual(w.marks("2330.TW", host.clock), {});
+  }, at("2026-11-11T01:00:00Z"));
+});
+
+// The veto: stock rows stuck at yesterday; WTX& trading since 08:45.
+test("futures trades since 08:45 veto a stock inference", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahootw: () => ok([...JSON.parse(stockList(CLOSE_1110).text), ...JSON.parse(futuresAt(host.clock - 5_000).text)]),
+    yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  host.store = { version: 1, symbols: ["2330.TW", "WTX&"], paused: false };
+  await soleRun(host, async (w) => {
+    for (const step of [at("2026-11-11T01:10:05Z"), at("2026-11-11T01:31:00Z")]) {
+      await advance(host, step);
+      assert.deepEqual(w.marks("2330.TW", step), {}, String(step));
+    }
+    assert.deepEqual(w.notes(), []);
+  }, at("2026-11-11T01:04:30Z"));
+});
+
+// The schedule fails on a day that is in fact listed.
+test("with the schedule unreachable on a listed day, the rows read 今日無成交 by inference, never 休市", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, { holidays: () => new Promise(() => {}), yahootw: () => stockList(CLOSE_1224),
+    yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-25") });
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-12-25T01:10:15Z"));
+    const quote = w.shown("2330.TW", host.clock);
+    assert.deepEqual([quote.closedDay, quote.noTrades], [undefined, { source: "yahootw" }]);
+    assert.deepEqual(w.problems(), []);
+  }, at("2026-12-25T01:04:30Z"));
+});
+
+test("the no-trades note is one line per source and stays out of the settings' health; a listed day has none", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahootw: () => ok([...JSON.parse(stockList(CLOSE_1110).text), ...JSON.parse(futuresAt(NIGHT_0459).text)]),
+    yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  host.store = { version: 1, symbols: ["2330.TW", "WTX&"], paused: false };
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-11-11T01:10:15Z"));
+    assert.deepEqual([w.marks("2330.TW", host.clock), w.marks("WTX&", host.clock)], [{ noTrades: { source: "yahootw" } }, { noTrades: { source: "yahootw" } }]);
+    assert.deepEqual(w.notes(), noTradesToday("yahootw"));
+    assert.deepEqual(w.problems(), []);
+  }, at("2026-11-11T01:04:30Z"));
+  const listed = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1224), yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-25") });
+  await soleRun(listed, (w) => assert.deepEqual(w.notes(), []), at("2026-12-25T02:00:00Z"));
+});
+
+// An answer counts only while its source is on. Stocks fall back to Yahoo Finance's own deadline (it answers every
+// 60 s, so its latest answer before 09:30 is under 2 min old); futures have no other source.
+test("turning Yahoo 奇摩股市 off drops its no-trades note at once", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1110), yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  await soleRun(host, async (w) => {
+    await advance(host, at("2026-11-11T01:10:15Z"));
+    assert.deepEqual(w.notes(), noTradesToday("yahootw"));
+    host.prefs = undefined;
+    assert.equal(w.sync(), true);
+    assert.deepEqual([w.marks("2330.TW", host.clock), w.notes()], [{}, []]);
+    await advance(host, at("2026-11-11T01:30:01Z"));
+    assert.deepEqual(w.notes(), noTradesToday("yahoo"));
+  }, at("2026-11-11T01:04:30Z"));
+  const futures = futuresHost(["WTX&"], { yahootw: () => futuresAt(NIGHT_0459) });
+  await soleRun(futures, async (w) => {
+    await advance(futures, at("2026-11-11T00:55:01Z"));
+    assert.deepEqual(w.notes(), noTradesToday("yahootw"));
+    futures.prefs = undefined;
+    assert.equal(w.sync(), true);
+    assert.deepEqual(w.notes(), []);
+    assert.equal(w.errors["WTX&"].code, "yahootw.futuresNeedSource");
+  }, at("2026-11-11T00:44:30Z"));
 });

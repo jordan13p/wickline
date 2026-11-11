@@ -585,3 +585,14 @@ test("a future's line periods belong to its trading day, which began at 15:00 th
   const periods = { pre: null, regular: LINE_PERIODS.regular, post: null };
   assert.equal(ownPeriods(quote, periods, nine), periods);
 });
+
+test("a stock list reports each clock's newest trade, any day, real-time rows only", () => {
+  const rows = (time, fields = {}) => ok([...EARLIER_ROWS, ...FUTURES_ROWS].map((row) => ({ ...row,
+    ...(row.regularMarketTime && { regularMarketTime: new Date(time).toISOString() }), ...fields })));
+  const now = at("2026-11-11T01:10:00Z");
+  const yesterday = at("2026-11-10T05:30:00Z");
+  const { newestTrade } = decodeStockList(["^TWII", "^TWOII", "WTX&"], rows(yesterday), now);
+  assert.deepEqual(newestTrade, { stock: yesterday, future: yesterday });
+  assert.equal(decodeStockList(["^TWII"], rows(yesterday, { exchangeDataDelayedBy: 1200 }), now).newestTrade, undefined);
+  assert.equal(decodeStockList(["^TWII"], rows(yesterday, { price: { raw: "-" } }), now).newestTrade, undefined);
+});

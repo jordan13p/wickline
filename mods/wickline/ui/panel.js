@@ -138,9 +138,10 @@ function messages(view, t) {
     .child(link(t, "bw-undo", view.tx("notice.undo"), (cx) => view.undoRemove(cx)))];
 }
 
-// One line per source with a problem: rate limited, unreachable, timed out, refused.
+// One line per source with a problem (rate limited, unreachable, timed out, refused), then one per source whose Taiwan
+// answers carry no trade today (the rows read 今日無成交: the market may be closed, or the source may be stuck).
 function problemLines(view, t) {
-  return view.watch.problems().map((problem) => div().text_size(11).text_color(t.blocked).child(view.say(problem)));
+  return [...view.watch.problems(), ...view.watch.notes()].map((line) => div().text_size(11).text_color(t.blocked).child(view.say(line)));
 }
 
 // What a row shows, whichever layout draws it: `name` as rowName leaves it (none for a pair, or for a
@@ -148,8 +149,9 @@ function problemLines(view, t) {
 function rowData(view, t, now, symbol, source) {
   const { quote } = source;
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
-  // A closed or 休市 label carries its own date; any other quote from an earlier day gets one.
-  const stale = quote && fresh.state !== "closed" && fresh.state !== "holiday" ? formatStaleDate(quote.timestamp, now, view.lang, dayFor(quote)) : "";
+  // A closed, 休市 or 今日無成交 label carries its own date; any other quote from an earlier day gets one.
+  const dated = ["closed", "holiday", "noTrades"].includes(fresh?.state);
+  const stale = quote && !dated ? formatStaleDate(quote.timestamp, now, view.lang, dayFor(quote)) : "";
   const label = quote ? freshnessLabel(quote, fresh, now, view.lang, (key, params) => view.tx(key, params)) : "";
   const shown = rowName(symbol, label, quote ? displayName(quote, view.lang) : null);
   return {

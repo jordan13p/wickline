@@ -315,3 +315,14 @@ test("a listed closed day, its detail and the holiday schedule's credit in every
   ]);
   for (const lang of LANGUAGES) assert.ok(t(lang, "privacy.hosts").includes("openapi.twse.com.tw"), lang);
 });
+
+test("the no-trades wording, in every language", () => {
+  const keys = ["session.noTrades", "detail.noTradesToday", "detail.nightNoTrades", "closure.noTradesToday", "closure.noTradesNight"];
+  assert.deepEqual(LANGUAGES.map((lang) => keys.map((key) => t(lang, key))), [
+    ["No trades today", "No trades yet today; the market may be closed", "Night: no trades yet", "{source} has no trades today yet.", "{source} has no night-session trades yet."],
+    ["今日無成交", "今日尚無成交，可能休市", "夜盤尚無成交", "{source} 今天尚無成交。", "{source} 夜盤尚無成交。"],
+    ["今日无成交", "今日尚无成交，可能休市", "夜盘尚无成交", "{source} 今天尚无成交。", "{source} 夜盘尚无成交。"],
+    ["本日約定なし", "本日はまだ約定がなく、休場の可能性があります", "夜間はまだ約定なし", "{source} では本日の約定がまだありません。", "{source} では夜間取引の約定がまだありません。"],
+    ["오늘 체결 없음", "오늘 아직 체결이 없어 휴장일 수 있습니다", "야간 체결 아직 없음", "{source}에 오늘 체결이 아직 없습니다.", "{source}에 야간 거래 체결이 아직 없습니다."],
+  ]);
+});
