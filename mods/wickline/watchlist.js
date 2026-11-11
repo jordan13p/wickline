@@ -849,7 +849,12 @@ export class Watchlist {
         state.missed = hidden && Boolean(due);
         if (due && !hidden) {
           state.refreshing = manual;
-          if (this.holdsTaiwan(symbols)) await this.loadHolidays(io);
+          if (this.holdsTaiwan(symbols)) {
+            await this.loadHolidays(io);
+            // A change the loops act on during that wait (a source or its consent turned off, a pause, a removed
+            // symbol) restarted them (restart): these symbols and settings are old, so start again from the top.
+            if (state.dirty) continue;
+          }
           await this.round(provider, state, symbols, io);
         }
       } catch {

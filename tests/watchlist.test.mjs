@@ -2299,6 +2299,21 @@ test("an empty or next year's schedule keeps the held one and is retried after a
   }
 });
 
+// The first schedule fetch of a day holds a Taiwan round for up to the timeout: a change made meanwhile counts before
+// anything is sent.
+test("a source turned off or a pause during the schedule wait sends nothing", async () => {
+  const from = at("2026-11-11T01:30:00Z");                 // 09:30
+  for (const change of [(w, host) => { host.prefs = undefined; return w.sync(); }, (w) => w.pause(true)]) {
+    const host = taiwanHost(ONLY_MIS, { holidays: () => new Promise(() => {}) });
+    await soleRun(host, async (w) => {
+      assert.equal(schedules(host), 1);
+      assert.ok(change(w, host));
+      await advance(host, from + 30_000);
+      assert.deepEqual(host.requests.filter((url) => url.startsWith(MIS_URL)), []);
+    }, from);
+  }
+});
+
 test("a hidden copy asks for the schedule only once shown", async () => {
   const from = at("2026-11-10T15:59:00Z"); // 23:59
   let shown = false;
