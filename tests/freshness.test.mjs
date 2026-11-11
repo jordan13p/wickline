@@ -814,3 +814,14 @@ test("a price read by the hours that stopped well before the close keeps reading
   assert.equal(state(at("2026-11-11T05:29:30Z"), at("2026-11-11T05:31:00Z")), "closed");
   assert.equal(state(eleven, at("2026-11-11T16:01:00Z")), "closed");
 });
+
+// The same for a US stock priced by Finnhub alone (no Yahoo Finance quote, so no periods): last traded at 15:50 New
+// York, it reads stalled at 20:00, never closed; one last traded at 15:59:40 reads closed.
+test("a Finnhub-only US stock that stopped before the close reads stalled all evening", () => {
+  const aapl = (timestamp) => ({ symbol: "AAPL", source: "finnhub", price: 230, timestamp, periods: null });
+  const state = (timestamp, now) => freshness(aapl(timestamp), sessionOf(aapl(timestamp), now), now).state;
+  const evening = at("2026-11-12T01:00:00Z");                        // 20:00 New York on 11/11
+  assert.equal(sessionOf(aapl(at("2026-11-11T20:50:00Z")), evening), "closed");
+  assert.equal(state(at("2026-11-11T20:50:00Z"), evening), "stalled");         // 15:50
+  assert.equal(state(at("2026-11-11T20:59:40Z"), evening), "closed");          // 15:59:40
+});
