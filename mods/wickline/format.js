@@ -161,7 +161,8 @@ export function stateText(fresh, tx) {
  * the stop time, the delay, or the session when it is not trading. Closed, and a listed closed day ("holiday"),
  * carry the last trade's time, with its date when not today; a day without trades ("noTrades") always with its date,
  * so an inference never hides how old its price is. A price not timed by a trade (timedByTrade) gives any of the three
- * its word alone: its time is no trade.
+ * no time, since its time is no trade, but still its date when it is from an earlier day (formatStaleDate), so a feed
+ * stuck since then never hides its age.
  * `tx(key, params)` translates.
  */
 export function freshnessLabel(quote, fresh, now, lang, tx) {
@@ -175,8 +176,9 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
     case "holiday":
     case "noTrades": {
       const word = tx(`session.${fresh.state}`);
-      if (!timedByTrade(quote)) return word;
-      const date = fresh.state === "noTrades" ? formatDate(quote.timestamp, lang) : formatStaleDate(quote, now, lang);
+      const traded = timedByTrade(quote);
+      const date = traded && fresh.state === "noTrades" ? formatDate(quote.timestamp, lang) : formatStaleDate(quote, now, lang);
+      if (!traded) return date ? `${word} · ${date}` : word;
       return `${word} · ${stamp(date, quote.timestamp)}`;
     }
     default:

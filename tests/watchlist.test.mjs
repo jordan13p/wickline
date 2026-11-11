@@ -2425,6 +2425,26 @@ test("休市 over a MIS book price prints no time", async () => {
   }, at("2026-12-25T02:00:00Z"));                          // 10:00 on the listed 12/25
 });
 
+// A book snapshot stuck since an earlier day keeps that day's date, the only sign of the feed's age, with no time.
+const misBookAt = (time) => () => ok({ msgArray: [{ ...MIS_ROW, z: "-", b: "2245.0000_", a: "2250.0000_", tlong: String(time) }] });
+test("a MIS book price stuck since an earlier day keeps its date and no time", async () => {
+  // [the book's snapshot, Yahoo Finance's last trade and its day, now, the label]
+  const cases = [
+    [CLOSE_1110, at("2026-11-11T05:30:00Z"), "2026-11-11", at("2026-11-11T06:00:00Z"), "已收盤 · 11/10"],     // 14:00, a normal day
+    [CLOSE_1224, CLOSE_1224, "2026-12-24", at("2026-12-25T02:00:00Z"), "休市 · 12/24"],                       // 10:00, listed 12/25
+    [CLOSE_1110, CLOSE_1110, "2026-11-11", at("2026-11-11T01:10:05Z"), "今日無成交 · 11/10"],                 // a typhoon day
+  ];
+  for (const [book, close, date, now, label] of cases) {
+    const host = taiwanHost(ONLY_MIS, { mis: misBookAt(book), yahoo: (s) => twYahooAt(s, close, date) });
+    await soleRun(host, async (w) => {
+      await advance(host, now);
+      const quote = w.shown("2330.TW", host.clock);
+      assert.equal(quote.source, "mis", label);
+      assert.equal(quietLabel(quote, host.clock), label);
+    }, now - 330_000);
+  }
+});
+
 // An inference deadline wakes the rows: Yahoo Finance's rounds land at hh:mm:30, so only the deadline wake can redraw
 // in [09:30:00, 09:30:01].
 test("a typhoon day with Yahoo Finance alone: delayed until 09:25, stopped from 09:25, 今日無成交 from 09:30", async () => {
