@@ -6,7 +6,7 @@ import {
   shownLimit,
 } from "../mods/wickline/freshness.js";
 import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
-import { usOffsetMin } from "../mods/wickline/markets.js";
+import { MINUTE_MS, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -572,6 +572,56 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
   assert.equal(nextEdge(wtx, at("2026-11-10T06:59:50Z"), openings), at("2026-11-10T07:00:00Z"));
   assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z"));           // 15:00 → midnight
   assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z"), openings), null);
+});
+
+// The edge invariant: what a row reads (its session, and a Taiwan row's day by dayFor) changes only at a moment that
+// nextEdge announced a step before, so a wait cut at the next edge never sleeps past a change. sessionEdges follows
+// sessionOf's branches by hand; this sweep is what keeps the two in step. A new way of reading a session adds its
+// quotes to EDGE_SWEEP_QUOTES.
+const reading = (quote, time) =>
+  `${sessionOf(quote, time)} ${resolvedMarket(quote.symbol, quote.exchange) === "tw" ? dayFor(quote)(time) : ""}`;
+
+// The instants in [from, to), stepped by `step`, where what `quote` reads changes without an edge at or before it.
+function unannounced(quote, [from, to], step = MINUTE_MS) {
+  const misses = [];
+  let before = reading(quote, from);
+  for (let time = from + step; time < to; time += step) {
+    const after = reading(quote, time);
+    const edge = after === before ? null : nextEdge(quote, time - step);
+    if (after !== before && (edge === null || edge > time)) misses.push(new Date(time).toISOString());
+    before = after;
+  }
+  return misses;
+}
+
+const EDGE_SWEEP_WEEKS = [
+  [at("2026-03-05T00:00:00Z"), at("2026-03-12T00:00:00Z")], // New York to daylight time (Sunday 03-08)
+  [at("2026-10-29T00:00:00Z"), at("2026-11-05T00:00:00Z")], // and back (Sunday 11-01)
+  [at("2026-11-08T00:00:00Z"), at("2026-11-16T00:00:00Z")], // the periods below, and an FX weekend (Friday 11-13)
+];
+const EDGE_SWEEP_QUOTES = [
+  { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") },
+  { symbol: "2330.TW", periods: null },
+  { symbol: "^TWII", exchange: "TAI", periods: null },
+  { symbol: "AAPL", exchange: "NMS", periods: { pre: [at("2026-03-09T08:00:00Z"), at("2026-03-09T13:30:00Z")], // EDT
+    regular: [at("2026-03-09T13:30:00Z"), at("2026-03-09T20:00:00Z")], post: [at("2026-03-09T20:00:00Z"), at("2026-03-10T00:00:00Z")] } },
+  { symbol: "AAPL", exchange: "NMS", periods: { pre: [at("2026-11-10T09:00:00Z"), at("2026-11-10T14:30:00Z")], // EST
+    regular: [at("2026-11-10T14:30:00Z"), at("2026-11-10T21:00:00Z")], post: [at("2026-11-10T21:00:00Z"), at("2026-11-11T01:00:00Z")] } },
+  { symbol: "AAPL", periods: null },
+  { symbol: "0700.HK", exchange: "HKG", periods: day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z") },
+  { symbol: "7203.T", exchange: "JPX", periods: day("2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z") },
+  { symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-13T00:00:00Z", "2026-11-13T23:59:00Z") },
+  { symbol: "WTX&", periods: null },
+  { symbol: "WTX&", periods: LINE_PERIODS },
+  { symbol: "BTC/USDT", periods: null },
+];
+
+test("every change in what a row reads comes at or after an edge announced for it", () => {
+  for (const quote of EDGE_SWEEP_QUOTES) {
+    for (const week of EDGE_SWEEP_WEEKS) {
+      assert.deepEqual(unannounced(quote, week), [], `${quote.symbol} ${quote.periods ? "with" : "without"} periods`);
+    }
+  }
 });
 
 test("a Taiwan or US quote without periods reads its exchange's hours; any other has no session", () => {
