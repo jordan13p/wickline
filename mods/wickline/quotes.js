@@ -1,7 +1,7 @@
 // Symbols, coded errors and what the quote sources share.
 // No Herdr imports, so tests run it under Node. The hosts live in providers/.
 
-export const VERSION = "0.4.0";
+export const VERSION = "0.5.0";
 export const USER_AGENT = `Wickline-Herdr/${VERSION}`;
 // Sent with every request.
 export const HEADERS = { "User-Agent": USER_AGENT, Accept: "application/json" };
