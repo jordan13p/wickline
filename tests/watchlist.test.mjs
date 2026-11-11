@@ -2029,6 +2029,38 @@ test("TAIFEX holds no night session: 已收盤 · 13:45 from 15:10, polled every
   }, from);
 });
 
+// The skipped night after midnight, on unlisted weekdays (Mon 11/10 → Tue 11/11): still 已收盤 with the day's close,
+// now dated, the same session times and note until 05:00, then 已收盤 with no note.
+test("a skipped night after midnight: 已收盤 · 11/10 13:45, 夜盤尚無成交 and its note until 05:00", async () => {
+  const from = at("2026-11-10T07:10:30Z");          // 15:10:30 on Mon 11/10
+  const last = at("2026-11-10T05:45:00Z");          // 13:45
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(last), line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-10T05:44:00Z"), SEGMENTS),
+  });
+  const zh = (k, p) => t("zh-TW", k, p);
+  const night = [{ code: "closure.noTradesNight", params: { source: "yahootw" } }];
+  await soleRun(host, async (w) => {
+    for (let step = from; step <= at("2026-11-10T18:00:00Z"); step += 3_600_000) await advance(host, step);
+    for (const now of [at("2026-11-10T18:00:00Z"), at("2026-11-10T20:59:00Z")]) {   // 02:00 and 04:59 on Tue 11/11
+      await advance(host, now);
+      const quote = w.shown("WTX&", now);
+      const session = sessionOf(quote, now);
+      assert.deepEqual(quote.closure, { kind: "nightNoTrades", source: "yahootw" });
+      assert.equal(freshness(quote, session, now).state, "closed");
+      assert.equal(withTZ("Asia/Taipei", () => zhLabel(quote, now, session)), "已收盤 · 11/10 13:45");
+      assert.deepEqual(withTZ("Asia/Taipei", () => sessionTimesParts(sessionTimes(quote, now), "zh-TW", zh)),
+        ["交易時段：日盤 08:45–13:45", "夜盤尚無成交"]);
+      assert.deepEqual(w.notes(), night);
+    }
+    const five = at("2026-11-10T21:00:05Z");        // 05:00:05
+    await advance(host, five);
+    const quote = w.shown("WTX&", five);
+    assert.equal(quote.closure, null);
+    assert.equal(withTZ("Asia/Taipei", () => zhLabel(quote, five)), "已收盤 · 11/10 13:45");
+    assert.deepEqual(w.notes(), []);
+  }, from);
+});
+
 test("at 08:45 a priced future from the night is asked again and reads Live", async () => {
   const from = at("2026-11-10T00:44:30Z"); // 08:44:30
   const open = at("2026-11-10T00:45:00Z");
