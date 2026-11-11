@@ -58,8 +58,16 @@ test("every statement has four paragraphs and every summary three key points", (
 });
 
 // A lone 。 at the dialog's width wrapped onto a line of its own, as with the key points.
-test("the zh-TW precedence notes end without a full stop, which would wrap onto its own line", () => {
-  for (const key of ["mis.prevails", "yahootw.prevails"]) assert.ok(!STRINGS["zh-TW"][key].endsWith("。"), key);
+test("the precedence notes end without a full stop in every language, which would wrap onto its own line", () => {
+  for (const lang of LANGUAGES) {
+    for (const key of ["mis.prevails", "yahootw.prevails"]) assert.doesNotMatch(STRINGS[lang][key], /[。.]$/, `${lang} ${key}`);
+  }
+  // A two-sentence note keeps its inner stop.
+  assert.ok(STRINGS.ja["mis.prevails"].includes("。"));
+  assert.ok(STRINGS.ko["yahootw.prevails"].includes(". "));
+  assert.ok(STRINGS["zh-CN"]["mis.prevails"].endsWith("以繁体中文版本为准"));
+  // The general disclaimer's note is another text, unchanged.
+  assert.equal(STRINGS.en["disclaimer.prevails"], "The English text prevails over its translations.");
 });
 
 test("the statement names what is queried by exchange, in the person's words", () => {

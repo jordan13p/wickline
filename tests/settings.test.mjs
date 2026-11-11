@@ -551,3 +551,9 @@ test("firstDraftError", () => {
   assert.equal(firstDraftError(errors, ["crypto"]), "url.notHttps");
   assert.equal(firstDraftError(errors, ["tw"]), null);
 });
+
+test("the precedence notes change no consent version", () => {
+  assert.deepEqual([MIS_CONSENT_VERSION, YAHOOTW_CONSENT_VERSION], [2, 2]);
+  const both = tw({ yahootw: true, yahootwAck: { version: 2 }, mis: true, misAck: { version: 2 } });
+  assert.deepEqual([yahootwEnabled(both), misEnabled(both), yahootwReconfirm(both), misReconfirm(both)], [true, true, false, false]);
+});
