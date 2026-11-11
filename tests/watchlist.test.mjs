@@ -15,7 +15,8 @@ import {
   chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq,
 } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL, mis } from "../mods/wickline/providers/mis.js";
-import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, taipeiDay, yahootw } from "../mods/wickline/providers/yahootw.js";
+import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, yahootw } from "../mods/wickline/providers/yahootw.js";
+import { taipeiDay } from "../mods/wickline/calendar.js";
 
 const BASE = "https://data-api.binance.vision";
 

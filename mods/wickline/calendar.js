@@ -1,11 +1,13 @@
 // Days in Taipei: the calendar day, a future's trading day, and the days TWSE lists as closed, for every module that
 // needs one. No Herdr imports.
-import { DAY_MS, MINUTE_MS, TAIFEX_HOURS, TWSE_HOURS, kindOf, localDay, weekdayOf } from "./markets.js";
+import {
+  DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, dayStart, kindOf, localDay, tradesOn,
+} from "./markets.js";
 import { cleanText } from "./quotes.js";
 
 // The open of the TAIFEX session that runs past midnight (the night's, 15:00) is the next day's 00:00 once this is
 // added.
-const NIGHT_TO_NEXT_DAY_MS = (24 * 60 - TAIFEX_HOURS.sessions.find(({ to }) => to > 24 * 60).from) * MINUTE_MS;
+const NIGHT_TO_NEXT_DAY_MS = (24 * 60 - NIGHT_SESSION.from) * MINUTE_MS;
 
 /** The day number in Taipei (UTC+8, no daylight saving; Taipei's clock is TAIFEX's) of a time in ms. */
 export const taipeiDay = (ms) => localDay(TAIFEX_HOURS.offsetMin, ms);
@@ -23,7 +25,7 @@ export function tradingDay(symbol, ms) {
 /** A future's trading day (see tradingDay). */
 export function futuresDay(ms) {
   let day = taipeiDay(ms + NIGHT_TO_NEXT_DAY_MS);
-  while (!TAIFEX_HOURS.weekdays.includes(weekdayOf(day))) day++;
+  while (!tradesOn(TAIFEX_HOURS, day)) day++;
   return day;
 }
 
@@ -37,15 +39,14 @@ const ROC_YEAR_OFFSET = 1911;
 // A schedule row whose name ends so is a notice of a trading day (國曆新年開始交易日, 農曆春節前最後交易日), not a closure.
 const TRADING_DAY_NOTICE = "交易日";
 
-const [DAY_SESSION, NIGHT_SESSION] = TAIFEX_HOURS.sessions;
 // When the night session running past midnight ends, in Taipei minutes since midnight (05:00).
 const NIGHT_END_MIN = NIGHT_SESSION.to - 24 * 60;
 
-const isWeekday = (day) => TAIFEX_HOURS.weekdays.includes(weekdayOf(day));
-// Minutes since Taipei midnight of a time in ms.
-const taipeiMinute = (ms) => Math.floor((ms - taipeiDay(ms) * DAY_MS + TAIFEX_HOURS.offsetMin * MINUTE_MS) / MINUTE_MS);
-// `minute` (Taipei, since midnight) of Taipei day `day`, in ms.
-const taipeiAt = (day, minute) => day * DAY_MS + (minute - TAIFEX_HOURS.offsetMin) * MINUTE_MS;
+const isWeekday = (day) => tradesOn(TAIFEX_HOURS, day);
+/** Minutes since Taipei midnight of a time in ms. */
+export const taipeiMinute = (ms) => Math.floor((ms - taipeiDay(ms) * DAY_MS + TAIFEX_HOURS.offsetMin * MINUTE_MS) / MINUTE_MS);
+/** `minute` (Taipei, since midnight) of Taipei day `day`, in ms. */
+export const taipeiAt = (day, minute) => dayStart(TAIFEX_HOURS.offsetMin, day) + minute * MINUTE_MS;
 
 /** A ROC date ("1151225": year 115 + 1911, month, day) as a Taipei day number; null when malformed. */
 export function rocDay(value) {
@@ -87,8 +88,8 @@ export function parseHolidays(text) {
 export function currentOpen(market, now) {
   const today = taipeiDay(now);
   const minute = taipeiMinute(now);
-  const open = (day, from) => (isWeekday(day) ? taipeiAt(day, from) : null);
-  if (market === "stock") return minute >= TWSE_HOURS.from ? open(today, TWSE_HOURS.from) : null;
+  const open = (day, from, hours = TAIFEX_HOURS) => (tradesOn(hours, day) ? taipeiAt(day, from) : null);
+  if (market === "stock") return minute >= TWSE_HOURS.from ? open(today, TWSE_HOURS.from, TWSE_HOURS) : null;
   if (minute >= NIGHT_SESSION.from) return open(today, NIGHT_SESSION.from);
   if (minute >= DAY_SESSION.from) return open(today, DAY_SESSION.from);
   return minute < NIGHT_END_MIN ? open(today - 1, NIGHT_SESSION.from) : null;

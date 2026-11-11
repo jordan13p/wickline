@@ -3,8 +3,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { USER_AGENT, priceLimit } from "../mods/wickline/quotes.js";
 import {
-  YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, ownPeriods, taipeiDay, tradingDay, yahootw,
+  YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, ownPeriods, yahootw,
 } from "../mods/wickline/providers/yahootw.js";
+import { taipeiDay, tradingDay } from "../mods/wickline/calendar.js";
 import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import {

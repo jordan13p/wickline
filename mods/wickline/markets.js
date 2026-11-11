@@ -67,6 +67,8 @@ export const TAIFEX_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 
   { from: 525, to: 825 },   // day, 08:45–13:45
   { from: 900, to: 1740 },  // night, 15:00–05:00 the next day
 ] });
+export const DAY_SESSION = TAIFEX_HOURS.sessions[0];
+export const NIGHT_SESSION = TAIFEX_HOURS.sessions[1];
 
 // Regular hours used only for a Taiwan or US quote with no trading periods yet; exchange-local minutes.
 export const TWSE_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], from: 540, to: 810 }); // 09:00–13:30 Taipei, TWSE and TPEx
@@ -96,6 +98,21 @@ export const localDay = (offsetMin, ms) => Math.floor((ms + offsetMin * MINUTE_M
 
 /** The weekday of a day number (days since 1970-01-01 on any fixed-offset clock), Sunday 0: day 0 was a Thursday. */
 export const weekdayOf = (day) => (day + 4) % 7;
+
+/** Whether an exchange's `hours` (with `weekdays`) trade on day number `day` of its clock, by weekday alone. */
+export const tradesOn = (hours, day) => hours.weekdays.includes(weekdayOf(day));
+
+/** The start of day number `day` on a clock at a fixed UTC offset of `offsetMin`, in ms. */
+export const dayStart = (offsetMin, day) => day * DAY_MS - offsetMin * MINUTE_MS;
+
+/**
+ * A window of the local day around `now` (its from and to in local minutes since midnight), as [start, end) in ms, by
+ * the clock's fixed UTC offset: a lunch break, a TAIFEX session, or an exchange's regular hours.
+ */
+export function localWindow({ offsetMin, from, to }, now) {
+  const start = dayStart(offsetMin, localDay(offsetMin, now));
+  return [start + from * MINUTE_MS, start + to * MINUTE_MS];
+}
 
 const LIVE = { realtime: true, delayS: null };
 const late = (delayS, lunch = null) => ({ delayS, lunch });

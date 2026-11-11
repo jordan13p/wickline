@@ -23,9 +23,6 @@ const FUTURE_AHEAD_MS = 5 * MINUTE_MS;
 
 /** @typedef {import("./provider.js").Provider} Provider */
 
-// Tests read these here, where they were first defined.
-export { taipeiDay, tradingDay } from "../calendar.js";
-
 /**
  * The trading periods a quote of a symbol this source prices alone is read by (Watchlist#baseQuote):
  * - `periods` (its last line's) while their regular session starts on the quote's own trading day or later (a

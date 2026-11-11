@@ -1,9 +1,10 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
-import { taipeiDay } from "./calendar.js";
+import { taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
 import { stateText } from "./format.js";
 import {
-  DAY_MS, MINUTE_MS, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, exchangeRule, kindOf, localDay, resolvedMarket, usOffsetMin, weekdayOf,
+  DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, dayStart, exchangeRule, kindOf, localDay,
+  localWindow, resolvedMarket, tradesOn, usOffsetMin, weekdayOf,
 } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
@@ -26,16 +27,6 @@ function staleAfterMs(quote) {
   if (isRealtime(quote)) return LIVE_MAX_AGE_MS;
   const { delayS, futures } = exchangeRule(quote.exchange, quote.symbol);
   return futures || delayS === null ? null : (delayS + DELAYED_GRACE_S) * 1000;
-}
-
-// The start of day number `day` on a clock at a fixed UTC offset of `offsetMin`, in ms.
-const dayStart = (offsetMin, day) => day * DAY_MS - offsetMin * MINUTE_MS;
-
-// A window of the local day around `now` (its from and to in local minutes since midnight), as [start, end) in
-// ms, by the clock's fixed UTC offset: a lunch break, a TAIFEX session, or an exchange's regular hours.
-function localWindow({ offsetMin, from, to }, now) {
-  const start = dayStart(offsetMin, localDay(offsetMin, now));
-  return [start + from * MINUTE_MS, start + to * MINUTE_MS];
 }
 
 // When a Yahoo Finance quote's age is taken: at its fetch, but now for a `cached` one (its last fetch failed,
@@ -100,17 +91,20 @@ function fxWeekend(now) {
 // TAIFEX's sessions as [start, end) in ms that open on the Taipei day of `now` or the day before (a night session
 // still running past midnight), on the weekdays it trades.
 function taifexSegments(now) {
-  const { offsetMin, weekdays, sessions } = TAIFEX_HOURS;
+  const { offsetMin, sessions } = TAIFEX_HOURS;
   const segments = [];
   for (const at of [now - DAY_MS, now]) {
-    if (!weekdays.includes(weekdayOf(localDay(offsetMin, at)))) continue;
+    if (!tradesOn(TAIFEX_HOURS, localDay(offsetMin, at))) continue;
     for (const { from, to } of sessions) segments.push(localWindow({ offsetMin, from, to }, at));
   }
   return segments;
 }
 
+// Taipei minutes since midnight from which a TAIFEX segment starting then is the night session's (12:00).
+const NIGHT_FROM_MIN = 720;
+
 // A night session's segment: it starts at or after 12:00 Taipei.
-const isNight = ([start]) => ((start + TAIFEX_HOURS.offsetMin * MINUTE_MS) % DAY_MS) / MINUTE_MS >= 720;
+const isNight = ([start]) => taipeiMinute(start) >= NIGHT_FROM_MIN;
 
 // A quote whose night session is closed (see calendar.js closureOf): removed by a listed day, or without trades.
 const nightClosed = (quote) => quote.closure?.kind === "nightRemoved" || quote.closure?.kind === "nightNoTrades";
@@ -169,7 +163,7 @@ function sessionEdges(quote, now) {
 // The next Taipei midnight for a Taiwan quote, where its row's day (dayFor: taipeiDay) turns; none for any other.
 function dayEdges(quote, now) {
   if (resolvedMarket(quote.symbol, quote.exchange) !== "tw") return [];
-  return [edge(dayStart(TAIFEX_HOURS.offsetMin, taipeiDay(now) + 1))];
+  return [edge(taipeiAt(taipeiDay(now) + 1, 0))];
 }
 
 // A Taiwan row's next inference deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js closureOf), where
@@ -209,7 +203,7 @@ export function hoursWindow(quote, now) {
   const market = resolvedMarket(quote.symbol, quote.exchange);
   const hours = market === "tw" ? TWSE_HOURS : market === "us" ? { ...US_HOURS, offsetMin: usOffsetMin(now) } : null;
   if (!hours) return null;
-  return { regular: localWindow(hours, now), weekday: hours.weekdays.includes(weekdayOf(localDay(hours.offsetMin, now))) };
+  return { regular: localWindow(hours, now), weekday: tradesOn(hours, localDay(hours.offsetMin, now)) };
 }
 
 /**
@@ -235,10 +229,10 @@ export function sessionTimes(quote, now) {
   if (closure === "listed") return { kind: "closedToday", reason: quote.closure.reason };
   if (closure === "noTrades") return { kind: "noTradesToday" };
   if (kindOf(quote.symbol) === "future") {
-    const { offsetMin, sessions: [day, night] } = TAIFEX_HOURS;
+    const { offsetMin } = TAIFEX_HOURS;
     return {
-      kind: "futures", day: localWindow({ offsetMin, ...day }, now),
-      night: nightClosed(quote) ? null : localWindow({ offsetMin, ...night }, now), nightNoTrades: closure === "nightNoTrades",
+      kind: "futures", day: localWindow({ offsetMin, ...DAY_SESSION }, now),
+      night: nightClosed(quote) ? null : localWindow({ offsetMin, ...NIGHT_SESSION }, now), nightNoTrades: closure === "nightNoTrades",
     };
   }
   const spans = (list) => ({ kind: "spans", spans: list });
