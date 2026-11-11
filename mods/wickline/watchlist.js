@@ -60,9 +60,9 @@ const LINE_TRADES = 4;
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
-// A quote-less sole-source symbol's session by its form alone (see Watchlist#sessionFor), "closed" when it gives none.
-const soleSession = (symbol, now) => {
-  const session = sessionOf({ symbol, periods: null }, now);
+// A quote-less sole-source symbol's session, read from its stand-in (see Watchlist#sessionFor), "closed" when it gives none.
+const soleSession = (standIn, now) => {
+  const session = sessionOf(standIn, now);
   return session === "unknown" ? "closed" : session;
 };
 
@@ -322,6 +322,14 @@ export class Watchlist {
     const quote = !sole ? this.quotes[symbol]
       : own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
     return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
+  }
+
+  /**
+   * What a symbol without a quote is read by, for its session and its edges alike: its form alone, with no periods
+   * (sessionOf and nextEdge read a Taiwan or US one by its exchange's hours, a future by TAIFEX's).
+   */
+  standIn(symbol) {
+    return { symbol, periods: null };
   }
 
   pick(symbol, now) {
@@ -611,7 +619,7 @@ export class Watchlist {
     for (const symbol of symbols) {
       const quote = this.baseQuote(symbol, now);
       const session = quote ? sessionOf(quote, now)
-        : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(symbol, now))
+        : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(this.standIn(symbol), now))
         : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
@@ -635,13 +643,13 @@ export class Watchlist {
   }
 
   /**
-   * The earliest nextEdge among `symbols`' shown quotes (a symbol without one as { symbol, periods: null }), or null;
+   * The earliest nextEdge among `symbols`' shown quotes (a symbol without one by its standIn), or null;
    * `mode` is nextEdge's (`{ openings: true }`: openings only).
    */
   edgeAt(symbols, now, mode) {
     let earliest = null;
     for (const symbol of symbols) {
-      const edge = nextEdge(this.shown(symbol, now) ?? { symbol, periods: null }, now, mode);
+      const edge = nextEdge(this.shown(symbol, now) ?? this.standIn(symbol), now, mode);
       if (edge !== null && (earliest === null || edge < earliest)) earliest = edge;
     }
     return earliest;
