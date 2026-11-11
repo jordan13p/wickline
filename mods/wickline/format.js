@@ -141,6 +141,9 @@ export function formatTime(timestamp, seconds = false) {
   return seconds ? `${time}:${two(date.getSeconds())}` : time;
 }
 
+// A time (formatTime) after its `date` when there is one: "Oct 31 15:04", or "15:04" with "" for the date.
+const stamp = (date, timestamp, seconds = false) => `${date ? `${date} ` : ""}${formatTime(timestamp, seconds)}`;
+
 /**
  * A real-time price's state in words, for the row and the detail dialog alike: "Live", the stop time,
  * else the session; null for an unconfirmed one, which has no word (its source names it alone).
@@ -170,10 +173,10 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
     case "closed":
     case "holiday": {
       const date = formatStaleDate(quote, now, lang);
-      return `${tx(`session.${fresh.state}`)} · ${date ? `${date} ` : ""}${formatTime(quote.timestamp)}`;
+      return `${tx(`session.${fresh.state}`)} · ${stamp(date, quote.timestamp)}`;
     }
     case "noTrades":
-      return `${tx("session.noTrades")} · ${formatDate(quote.timestamp, lang)} ${formatTime(quote.timestamp)}`;
+      return `${tx("session.noTrades")} · ${stamp(formatDate(quote.timestamp, lang), quote.timestamp)}`;
     default:
       return stateText(fresh, tx);
   }
@@ -187,7 +190,7 @@ export function detailTimes(quote, now, lang, tx) {
   const date = formatStaleDate(quote, now, lang);
   const lastTrade = quote.tradeTime && quote.tradeTime !== quote.timestamp
     ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })] : [];
-  return [tx("detail.quoted", { time: `${date ? `${date} ` : ""}${formatTime(quote.timestamp, true)}` }), ...lastTrade,
+  return [tx("detail.quoted", { time: stamp(date, quote.timestamp, true) }), ...lastTrade,
     tx("detail.fetched", { time: formatTime(quote.fetchedAt, true) })];
 }
 
