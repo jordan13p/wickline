@@ -2281,6 +2281,24 @@ test("a hung schedule holds the first Taiwan round by the timeout at most, says 
   }, from);
 });
 
+// An empty list, or one without a closed weekday of this Taipei year, is no schedule: the held one stays, and it is
+// asked again after an hour.
+test("an empty or next year's schedule keeps the held one and is retried after an hour", async () => {
+  for (const answer of [[], [{ Name: "中華民國開國紀念日", Date: "1160101" }]]) {
+    const from = at("2026-12-24T15:59:00Z");                 // 23:59 on 12/24
+    const host = taiwanHost(undefined, { yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
+    await soleRun(host, async (w) => {
+      assert.equal(schedules(host), 1);
+      host.holidays = () => ok(answer);
+      await advance(host, at("2026-12-24T16:01:00Z"));       // 00:01 on the listed 12/25
+      assert.equal(schedules(host), 2);
+      assert.deepEqual(w.shown("2330.TW", host.clock).closure, { kind: "listed", reason: "行憲紀念日" }, JSON.stringify(answer));
+      await advance(host, at("2026-12-24T17:01:30Z"));
+      assert.equal(schedules(host), 3);
+    }, from);
+  }
+});
+
 test("a hidden copy asks for the schedule only once shown", async () => {
   const from = at("2026-11-10T15:59:00Z"); // 23:59
   let shown = false;

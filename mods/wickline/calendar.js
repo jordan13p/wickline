@@ -83,6 +83,18 @@ export function parseHolidays(text) {
   return days;
 }
 
+// The calendar year of a Taipei day number.
+const yearOf = (day) => new Date(day * DAY_MS).getUTCFullYear();
+
+/**
+ * Whether `days` (parseHolidays) list a closed weekday of the Taipei year of `now`. A list without one (empty, or only
+ * another year's) is no schedule for this year: TWSE closes some weekdays every year.
+ */
+export function listsYearOf(days, now) {
+  const year = yearOf(taipeiDay(now));
+  return Object.keys(days).some((day) => yearOf(Number(day)) === year);
+}
+
 /**
  * The open (ms) of the session of `market` that `now` belongs to, or null: "stock" 09:00 Taipei on a weekday
  * from 09:00 to midnight; "future" 08:45 from 08:45 to 15:00, 15:00 from 15:00 to midnight, and the day before's

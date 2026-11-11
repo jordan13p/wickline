@@ -2,7 +2,7 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
 import {
-  HOLIDAYS_URL, closureOf, currentOpen, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
+  HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
 import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
@@ -442,9 +442,9 @@ export class Watchlist {
    * Fetches TWSE's holiday schedule when due: not yet fetched this Taipei date, and past `retryAt`. One GET of
    * HOLIDAYS_URL at a time per copy (`pending`, shared by every loop), raced against REQUEST_TIMEOUT_MS. Only the
    * first attempt of a Taipei date is waited for, so it holds a Taiwan round by the timeout at most; a retry runs
-   * beside the rounds. A failure (no answer, an error, an unreadable list) keeps the schedule held and tries again
-   * HOLIDAY_RETRY_MS after the failed attempt started. Never throws, and never shows a problem: without the schedule,
-   * rows read as before.
+   * beside the rounds. A failure (no answer, an error, an unreadable list, a list without a closed weekday of this
+   * Taipei year: listsYearOf) keeps the schedule held and tries again HOLIDAY_RETRY_MS after the failed attempt
+   * started. Never throws, and never shows a problem: without the schedule, rows read as before.
    */
   async loadHolidays(io) {
     const holidays = this.holidays;
@@ -462,6 +462,7 @@ export class Watchlist {
     try {
       const response = await this.getWithin({ url: HOLIDAYS_URL, headers: HEADERS }, io);
       if (response !== TIMED_OUT && response.ok) days = parseHolidays(response.text);
+      if (days && !listsYearOf(days, now)) days = null;
     } catch { /* No schedule: tried again after HOLIDAY_RETRY_MS. */ }
     holidays.tried = taipeiDay(now);
     holidays.pending = null;
