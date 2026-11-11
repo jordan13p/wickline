@@ -368,14 +368,6 @@ export class Watchlist {
   }
 
   /**
-   * A Taiwan symbol's closure at `now` (calendar.js closureOf, in its market: futures, else stocks), from the holiday
-   * schedule held and the answers seen; null for any other symbol.
-   */
-  marks(symbol, now) {
-    return this.marketFor(symbol) === "tw" ? this.closureAt(twMarket(symbol), now).closure : null;
-  }
-
-  /**
    * A Taiwan `market`'s reading at `now`, `{ closure, deadline }` (calendar.js closureOf), from the schedule held and
    * the answers seen, with the sources on read once. Every row of a market reads the same, so it is worked out once
    * per market and `now`, until closureRev moves.

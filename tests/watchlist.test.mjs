@@ -1149,7 +1149,7 @@ test("from 09:10 the same answer reads 今日無成交 and only the no-trades no
   const host = twOnlyHost(["^TWOII"], { yahootw: () => stockList(from - 5_000, yesterday) });
   await soleRun(host, async (w) => {
     await advance(host, from + 20_000);
-    assert.deepEqual(w.marks("^TWOII", host.clock), { kind: "noTrades", source: "yahootw" });
+    assert.deepEqual(w.standIn("^TWOII", host.clock).closure, { kind: "noTrades", source: "yahootw" });
     assert.deepEqual(w.problems(), []);
     assert.deepEqual(w.notes(), [{ code: "closure.noTradesToday", params: { source: "yahootw" } }]);
   }, from);
@@ -2012,7 +2012,7 @@ test("TAIFEX holds no night session: 已收盤 · 13:45 from 15:10, polled every
     assert.equal(freshness(quote, sessionOf(quote, before), before).state, "stalled");
     const after = at("2026-11-10T07:10:01Z");       // 15:10:01
     await advance(host, after);
-    assert.deepEqual(w.marks("WTX&", after), { kind: "nightNoTrades", source: "yahootw" });
+    assert.deepEqual(w.standIn("WTX&", after).closure, { kind: "nightNoTrades", source: "yahootw" });
     quote = w.shown("WTX&", after);
     const session = sessionOf(quote, after);
     assert.equal(freshness(quote, session, after).state, "closed");
@@ -2169,7 +2169,7 @@ test("Saturday 11/14 and the listed Saturday 10/10 read 已收盤", async () => 
       assert.notEqual(quote.closure?.kind, "listed");
       assert.equal(freshness(quote, sessionOf(quote, host.clock), host.clock).state, "closed");
       if (date === "2026-11-13") withTZ("Asia/Taipei", () => assert.equal(freshnessLabel(quote, freshness(quote, "closed", host.clock), host.clock, "zh-TW", (k, p) => t("zh-TW", k, p)), "已收盤 · 11/13 13:30"));
-      assert.deepEqual(w.marks("WTX&", host.clock), null);
+      assert.deepEqual(w.standIn("WTX&", host.clock).closure, null);
     }, from);
   }
 });
@@ -2390,7 +2390,7 @@ test("a normal open at 09:00:01 never reads 今日無成交", async () => {
   await soleRun(host, async (w) => {
     for (let step = at("2026-11-11T01:00:05Z"); step <= at("2026-11-11T01:15:00Z"); step += 10_000) {
       await advance(host, step);
-      assert.deepEqual(w.marks("2330.TW", step), null, String(step));
+      assert.deepEqual(w.standIn("2330.TW", step).closure, null, String(step));
     }
     const quote = w.shown("2330.TW", host.clock);
     assert.equal(freshness(quote, sessionOf(quote, host.clock), host.clock).state, "live");
@@ -2402,9 +2402,9 @@ test("a thin WTF&-only list reads 今日無成交 from 08:55, and Live from the 
   const host = futuresHost(["WTF&"], { yahootw: () => futuresAt(host.clock >= trade ? trade : NIGHT_0459) });
   await soleRun(host, async (w) => {
     await advance(host, at("2026-11-11T00:54:59Z"));
-    assert.deepEqual(w.marks("WTF&", host.clock), null);
+    assert.deepEqual(w.standIn("WTF&", host.clock).closure, null);
     await advance(host, at("2026-11-11T00:55:01Z"));
-    assert.deepEqual(w.marks("WTF&", host.clock), { kind: "noTrades", source: "yahootw" });
+    assert.deepEqual(w.standIn("WTF&", host.clock).closure, { kind: "noTrades", source: "yahootw" });
     assert.deepEqual(w.notes(), noTradesToday("yahootw"));
     const asked = stockLists(host).length;
     await advance(host, at("2026-11-11T00:56:05Z"));
@@ -2427,7 +2427,7 @@ test("a source that times out from before the open, or after one answer at 08:45
     await soleRun(host, async (w) => {
       for (let step = hang; step <= at("2026-11-11T01:30:00Z"); step += 600_000) await advance(host, step);
       assert.equal(w.errors["WTX&"].code, "request.timeout");
-      assert.deepEqual(w.marks("WTX&", host.clock), null);
+      assert.deepEqual(w.standIn("WTX&", host.clock).closure, null);
       assert.deepEqual(w.notes(), []);
       assert.equal(freshness(w.shown("WTX&", host.clock), "open", host.clock).state, "stalled");
     }, at("2026-11-11T00:40:00Z"));
@@ -2436,12 +2436,12 @@ test("a source that times out from before the open, or after one answer at 08:45
 
 test("Saturdays are never inferred", async () => {
   const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(at("2026-11-13T05:30:00Z")), yahoo: (s) => twYahooAt(s, at("2026-11-13T05:30:00Z"), "2026-11-13") });
-  await soleRun(host, (w) => assert.deepEqual(w.marks("2330.TW", host.clock), null), at("2026-11-14T01:30:00Z"));
+  await soleRun(host, (w) => assert.deepEqual(w.standIn("2330.TW", host.clock).closure, null), at("2026-11-14T01:30:00Z"));
 });
 
 test("a copy shown after its deadline infers on its first answer", async () => {
   const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1110), yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
-  await soleRun(host, (w) => assert.deepEqual(w.marks("2330.TW", host.clock), { kind: "noTrades", source: "yahootw" }), at("2026-11-11T02:30:00Z"));
+  await soleRun(host, (w) => assert.deepEqual(w.standIn("2330.TW", host.clock).closure, { kind: "noTrades", source: "yahootw" }), at("2026-11-11T02:30:00Z"));
 });
 
 test("the whole day without a session keeps 今日無成交 from 15:00 to 05:00, and from 15:10 for a copy shown at 15:05", async () => {
@@ -2449,25 +2449,25 @@ test("the whole day without a session keeps 今日無成交 from 15:00 to 05:00,
   const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(NIGHT_0459) });   // nothing since 04:59
   await soleRun(host, async (w) => {
     await advance(host, at("2026-11-11T00:55:01Z"));
-    assert.deepEqual(w.marks("WTX&", host.clock), quiet);
+    assert.deepEqual(w.standIn("WTX&", host.clock).closure, quiet);
     for (let step = host.clock; step <= at("2026-11-11T07:00:30Z"); step += 1_800_000) await advance(host, step);
     await advance(host, at("2026-11-11T07:00:30Z"));
-    assert.deepEqual(w.marks("WTX&", host.clock), quiet);                  // carried from the day session (row 8b)
+    assert.deepEqual(w.standIn("WTX&", host.clock).closure, quiet);        // carried from the day session (row 8b)
     await advance(host, at("2026-11-11T07:10:01Z"));
-    assert.deepEqual(w.marks("WTX&", host.clock), quiet);                  // the night's own answers (row 8)
+    assert.deepEqual(w.standIn("WTX&", host.clock).closure, quiet);        // the night's own answers (row 8)
     for (let step = host.clock; step <= at("2026-11-11T18:00:00Z"); step += 1_800_000) await advance(host, step);
     await advance(host, at("2026-11-11T18:00:00Z"));                       // Thu 11/12 02:00
-    assert.deepEqual(w.marks("WTX&", host.clock), quiet);                  // kept past midnight (row 4)
+    assert.deepEqual(w.standIn("WTX&", host.clock).closure, quiet);        // kept past midnight (row 4)
     assert.equal(quietLabel(w.shown("WTX&", host.clock), host.clock), "今日無成交 · 11/11 04:59");
     assert.deepEqual(w.notes(), noTradesToday("yahootw"));
     await advance(host, at("2026-11-11T21:00:30Z"));                       // 05:00:30
-    assert.deepEqual([w.marks("WTX&", host.clock), sessionOf(w.shown("WTX&", host.clock), host.clock), w.notes()], [null, "closed", []]);
+    assert.deepEqual([w.standIn("WTX&", host.clock).closure, sessionOf(w.shown("WTX&", host.clock), host.clock), w.notes()], [null, "closed", []]);
   }, at("2026-11-11T00:44:30Z"));
   // No day observation: the answers' newest trade (04:59) says the day never traded.
   const late = futuresHost(["WTX&"], { yahootw: () => futuresAt(NIGHT_0459) });
   await soleRun(late, async (w) => {
     await advance(late, at("2026-11-11T07:10:01Z"));
-    assert.deepEqual(w.marks("WTX&", late.clock), quiet);
+    assert.deepEqual(w.standIn("WTX&", late.clock).closure, quiet);
   }, at("2026-11-11T07:05:00Z"));
 });
 
@@ -2479,7 +2479,7 @@ test("with Yahoo 奇摩股市 down after one answer at 09:00, Yahoo Finance's an
   await soleRun(host, async (w) => {
     for (const step of [at("2026-11-11T01:10:05Z"), at("2026-11-11T01:12:00Z"), at("2026-11-11T01:29:59Z"), at("2026-11-11T01:31:00Z")]) {
       await advance(host, step);
-      assert.deepEqual(w.marks("2330.TW", step), null, String(step));
+      assert.deepEqual(w.standIn("2330.TW", step).closure, null, String(step));
     }
   }, at("2026-11-11T01:00:00Z"));
 });
@@ -2489,7 +2489,7 @@ test("delayed Yahoo 奇摩股市 rows are no answer for a closure", async () => 
     yahoo: (s) => twYahooAt(s, host.clock < at("2026-11-11T01:20:30Z") ? CLOSE_1110 : at("2026-11-11T01:00:30Z"), "2026-11-11") });
   await soleRun(host, async (w) => {
     await advance(host, at("2026-11-11T01:10:05Z"));
-    assert.deepEqual(w.marks("2330.TW", host.clock), null);
+    assert.deepEqual(w.standIn("2330.TW", host.clock).closure, null);
   }, at("2026-11-11T01:00:00Z"));
 });
 
@@ -2502,7 +2502,7 @@ test("futures trades since 08:45 veto a stock inference", async () => {
   await soleRun(host, async (w) => {
     for (const step of [at("2026-11-11T01:10:05Z"), at("2026-11-11T01:31:00Z")]) {
       await advance(host, step);
-      assert.deepEqual(w.marks("2330.TW", step), null, String(step));
+      assert.deepEqual(w.standIn("2330.TW", step).closure, null, String(step));
     }
     assert.deepEqual(w.notes(), []);
   }, at("2026-11-11T01:04:30Z"));
@@ -2527,7 +2527,7 @@ test("the no-trades note is one line per source and stays out of the settings' h
   host.store = { version: 1, symbols: ["2330.TW", "WTX&"], paused: false };
   await soleRun(host, async (w) => {
     await advance(host, at("2026-11-11T01:10:15Z"));
-    assert.deepEqual([w.marks("2330.TW", host.clock), w.marks("WTX&", host.clock)], [{ kind: "noTrades", source: "yahootw" }, { kind: "noTrades", source: "yahootw" }]);
+    assert.deepEqual([w.standIn("2330.TW", host.clock).closure, w.standIn("WTX&", host.clock).closure], [{ kind: "noTrades", source: "yahootw" }, { kind: "noTrades", source: "yahootw" }]);
     assert.deepEqual(w.notes(), noTradesToday("yahootw"));
     assert.deepEqual(w.problems(), []);
   }, at("2026-11-11T01:04:30Z"));
@@ -2544,7 +2544,7 @@ test("turning Yahoo 奇摩股市 off drops its no-trades note at once", async ()
     assert.deepEqual(w.notes(), noTradesToday("yahootw"));
     host.prefs = undefined;
     assert.equal(w.sync(), true);
-    assert.deepEqual([w.marks("2330.TW", host.clock), w.notes()], [null, []]);
+    assert.deepEqual([w.standIn("2330.TW", host.clock).closure, w.notes()], [null, []]);
     await advance(host, at("2026-11-11T01:30:01Z"));
     assert.deepEqual(w.notes(), noTradesToday("yahoo"));
   }, at("2026-11-11T01:04:30Z"));
