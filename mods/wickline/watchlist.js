@@ -51,7 +51,8 @@ const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadabl
 // The source is down or hung: the rest of the round would only wait out more timeouts.
 const SOURCE_DOWN = /\.(unreachable|timeout)$/;
 const TIMED_OUT = {};
-// How far a line's last minute may end before its price's own last trade.
+// How long a traded minute may take to show in a line after it ends, and how far a line's last traded minute may
+// end before a trade it must hold.
 const LINE_LAG_MS = 120_000;
 
 const notice = (code, params = {}) => ({ code, params });
@@ -172,6 +173,9 @@ export class Watchlist {
     // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its trading
     // day), kept only while that source's price for the symbol is.
     this.lines = {};
+    // By provider id, then symbol: `{ settled, pending }`, the trade times an overlay line is judged against
+    // (see lineFrozen), dropped with the line's price. Only in memory, per copy.
+    this.lineTrades = {};
     // By symbol: the last name an overlay gave (its Chinese name), kept while that source fails.
     this.localNames = {};
     // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart (by
@@ -556,7 +560,8 @@ export class Watchlist {
     for (const provider of OVERLAYS) {
       const symbols = new Set(this.symbolsFor(provider, config));
       for (const symbol of symbols) covered.add(symbol);
-      for (const symbol of [this.overlays, this.overlayErrors, this.lines[provider.id] ?? {}].flatMap(Object.keys)) {
+      const held = [this.overlays, this.overlayErrors, this.lines[provider.id] ?? {}, this.lineTrades[provider.id] ?? {}];
+      for (const symbol of held.flatMap(Object.keys)) {
         if (symbols.has(symbol)) continue;
         this.dropOverlay(provider, symbol);
         this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
@@ -973,6 +978,7 @@ export class Watchlist {
   dropOverlay(provider, symbol) {
     this.setEntry(this.overlays, symbol, provider.id, undefined);
     if (this.lines[provider.id]) delete this.lines[provider.id][symbol];
+    if (this.lineTrades[provider.id]) delete this.lineTrades[provider.id][symbol];
   }
 
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */
@@ -994,10 +1000,9 @@ export class Watchlist {
    * A symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. A
    * base provider writes the base quote's line and a failure leaves it as it was; an overlay provider
    * keeps its own line beside its price, and an answer without one (a failure, or no point from today)
-   * drops it. So does a line whose last minute ends well before its price's own last trade: a frozen
-   * answer (such as a cached one from earlier in the day) would be drawn as live with only its tail
-   * moving. A quiet stock's line ends at its last trade, so it stays. Checked as the line arrives, not
-   * at each price: a busy stock trades on while its line waits up to `linesMs` for the next request.
+   * drops it. So does a frozen line (lineFrozen): a frozen answer (such as a cached one from earlier in the
+   * day) would be drawn as live with only its tail moving. Checked as the line arrives, not at each price: a
+   * busy stock trades on while its line waits up to `linesMs` for the next request.
    * A symbol this source prices alone keeps the answer's trading periods, line or not; known ones are never
    * dropped. Returns the request's error for the symbol, if any (endsRound says what it does to the round).
    */
@@ -1011,11 +1016,30 @@ export class Watchlist {
     if (periods) this.linePeriods[symbol] = periods;
     const line = result?.lines?.[symbol];
     const kept = result && current() && this.priced(provider, symbol);
-    const frozen = kept && provider.overlay && line && line.lastAt + MINUTE_MS < kept.tradeTime - LINE_LAG_MS;
+    const frozen = kept && provider.overlay && line && this.lineFrozen(provider, symbol, line, kept.tradeTime, now);
     if (kept && provider.overlay && line && !frozen) (this.lines[provider.id] ??= {})[symbol] = line;
     else if (kept && provider.overlay) delete this.lines[provider.id]?.[symbol];
     else if (kept && line) this.quotes[symbol].series = line;
     return result?.errors?.[symbol] ?? null;
+  }
+
+  /**
+   * Whether an overlay line arriving at `now` has stopped: its last traded minute ends over LINE_LAG_MS before a
+   * trade it must already hold. A minute shows in a line only once it has ended, so the trade just seen
+   * (`tradeTime`) may not be in it yet: after a quiet spell a thin future's or quiet stock's line would read
+   * frozen. A line is judged only against a trade seen at an earlier arrival whose minute has ended and whose
+   * lag has passed (`settled`); until there is one, the line stays. The next trade to judge by (`pending`) is
+   * kept until it settles, so a busy symbol's ever newer trades never put the check off: a frozen line is
+   * dropped by its third arrival (two line intervals) and from then on.
+   */
+  lineFrozen(provider, symbol, line, tradeTime, now) {
+    const trades = ((this.lineTrades[provider.id] ??= {})[symbol] ??= { settled: null, pending: null });
+    if (trades.pending !== null && trades.pending + MINUTE_MS + LINE_LAG_MS <= now) {
+      trades.settled = trades.pending;
+      trades.pending = null;
+    }
+    if (trades.pending === null && Number.isFinite(tradeTime)) trades.pending = tradeTime;
+    return trades.settled !== null && line.lastAt + MINUTE_MS < trades.settled - LINE_LAG_MS;
   }
 
   async get(request) {

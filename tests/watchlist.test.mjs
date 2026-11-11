@@ -587,19 +587,38 @@ test("the Yahoo 奇摩股市 line ends at the shown price, and is used only whil
 });
 
 test("a frozen line is not drawn as live; a quiet stock's line is", async () => {
-  // 2330 traded at 09:41:15 but its line stops at 09:10; 0050 last traded at 09:17:12 and its line
-  // stops at 09:18, its last trade's minute.
+  // 2330 trades 5 s before each round but its line stops at 09:10; 0050 last traded at 09:17:12 and its
+  // line stops at 09:18, its last trade's minute. Judged at the third arrival (09:45:20), against the trades the
+  // first one saw.
   const host = taiwanHost(ONLY_YAHOOTW, {
-    yahootw: () => stockList(TW_NOW - 5_000, { "0050.TW": { regularMarketTime: "2026-11-09T01:17:12Z" } }),
+    yahootw: () => stockList(host.clock - 5_000, { "0050.TW": { regularMarketTime: "2026-11-09T01:17:12Z" } }),
     line: (symbol) => symbol === "0050.TW" ? ok(jsonFixture("yahootw-tick-quiet")) : tickAt(symbol, Date.parse("2026-11-09T01:10:00Z"), [2200, 2205]),
   });
   host.store.symbols = ["2330.TW", "0050.TW"];
-  await firstRound(host, (w) => {
+  await firstRound(host, async (w) => {
+    await advance(host, TW_NOW + 241_000);
     assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
     const frozen = w.shown("2330.TW");
     assert.deepEqual([frozen.source, frozen.chartSource, frozen.series], ["yahootw", "yahoo", BASE_SERIES]);
     const quiet = w.shown("0050.TW");
     assert.deepEqual([quiet.chartSource, quiet.series], ["yahootw", [10.05, 10.05]]);
+  });
+});
+
+test("a stock line listing empty minutes up to now, its closes stopped long before its trades, is dropped", async () => {
+  // 2330 trades 5 s before each round; its answer lists every minute from 09:01 to now, with closes only to 09:10.
+  const first = Date.parse("2026-11-09T01:01:00Z");
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahootw: () => stockList(host.clock - 5_000),
+    line: (symbol) => {
+      const minute = Math.floor(host.clock / 60_000) * 60_000;
+      return tickAt(symbol, minute, Array.from({ length: (minute - first) / 60_000 + 1 }, (_, i) => (i < 10 ? 2200 + i : null)));
+    },
+  });
+  await walk(host, TW_NOW, TW_NOW + 6 * 60_000, (w, now) => {
+    const frozen = now > TW_NOW + 240_000;
+    assert.equal(w.lines.yahootw?.["2330.TW"] === undefined, frozen, iso(now));
+    assert.equal(w.shown("2330.TW", now).chartSource, frozen ? "yahoo" : "yahootw", iso(now));
   });
 });
 
@@ -615,11 +634,14 @@ test("removing a symbol, or turning its source off, drops its Yahoo 奇摩股市
   host.store.symbols = ["2330.TW", "0050.TW"];
   await firstRound(host, (w) => {
     assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["0050.TW", "2330.TW"]);
+    assert.deepEqual(Object.keys(w.lineTrades.yahootw).sort(), ["0050.TW", "2330.TW"]);
     w.remove("0050.TW");
     assert.deepEqual(Object.keys(w.lines.yahootw), ["2330.TW"]);
+    assert.deepEqual(Object.keys(w.lineTrades.yahootw), ["2330.TW"]);
     host.prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootw: false } } };
     w.sync();
     assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
+    assert.equal(w.lineTrades.yahootw?.["2330.TW"], undefined);
   });
 });
 
@@ -1261,19 +1283,63 @@ test("WTX& is priced by Yahoo 奇摩股市 alone: name, price, change, line and 
   }, FUT_NOW);
 });
 
-// The recorded night line's last close is at 22:20 (14:20Z); its answer lists every minute of the trading day.
-test("a future's night line that stopped while the price trades on is not drawn as live; one that agrees is", async () => {
-  const lastClose = at("2026-11-10T14:20:00Z");
-  for (const [now, frozen] of [[lastClose + 30_000, false], [lastClose + 30 * 60_000 + 30_000, true]]) {
-    const label = new Date(now).toISOString();
-    const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(host.clock - 10_000), line: () => ok(FUTURES_NIGHT_TICK) });
-    await soleRun(host, (w) => {
-      const quote = w.shown("WTX&", now + 5_000);
-      assert.equal(quote.source, "yahootw", label);
-      assert.equal(w.lines.yahootw?.["WTX&"] === undefined, frozen, label);
-      assert.equal(quote.chartSource === "yahootw", !frozen, label);
-    }, now);
+// A line is judged frozen only against a trade seen at an earlier line arrival whose minute has ended and whose lag has
+// passed (a minute shows in the line once it ends), so it takes up to the third arrival, two line intervals, to drop one.
+const iso = (time) => new Date(time).toISOString();
+// Every source from `from`, then `check(w, now)` every 10 s up to `until`. Lines arrive at `from` and every 2 min.
+async function walk(host, from, until, check) {
+  host.clock = from;
+  const w = new Watchlist(host);
+  host.changed = () => w.sync();
+  const runs = start(w, host);
+  for (let now = from + 5_000; now <= until; now += 10_000) {
+    await advance(host, now);
+    await check(w, now);
   }
+  await stop(w, host, runs);
+}
+const NIGHT_CHART = FUTURES_NIGHT_TICK[0].chart;
+// The recorded night line (every minute of the trading day listed), with a close only on the minutes `traded` picks
+// (by their time in ms).
+const nightLine = (traded) => ok([{ ...FUTURES_NIGHT_TICK[0], chart: { ...NIGHT_CHART, indicators: { quote: [{
+  close: NIGHT_CHART.timestamp.map((seconds) => (traded(seconds * 1000) ? 42255 : null)) }] } } }]);
+
+test("a future's night line that stopped while the price trades on is dropped once a settled trade shows it", async () => {
+  // Half an hour after the recorded line's last close (22:20), the price traded 10 s before each round.
+  const from = at("2026-11-10T14:50:30Z");
+  const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(host.clock - 10_000), line: () => ok(FUTURES_NIGHT_TICK) });
+  await walk(host, from, from + 7 * 60_000, (w, now) => {
+    // Arrivals at 22:50:30 and 22:52:30 have no settled trade; 22:50:20's settles at 22:53:20, so 22:54:30's drops it.
+    const frozen = now > from + 240_000;
+    const quote = w.shown("WTX&", now);
+    assert.equal(quote.source, "yahootw", iso(now));
+    assert.equal(w.lines.yahootw?.["WTX&"] === undefined, frozen, iso(now));
+    assert.equal(quote.chartSource === "yahootw", !frozen, iso(now));
+  });
+});
+
+test("a busy future's line that keeps up is kept at every arrival", async () => {
+  const from = at("2026-11-10T14:50:30Z");
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(host.clock - 10_000), line: () => nightLine((time) => time <= host.clock),
+  });
+  await walk(host, from, from + 9 * 60_000, (w, now) => assert.ok(w.lines.yahootw?.["WTX&"], iso(now)));
+});
+
+test("a thin future keeps its line after a fresh trade its line cannot hold yet, and at every later arrival", async () => {
+  // Trades at 21:40:20, 21:59:30 and 22:09:09: minutes 21:41, 22:00 and 22:10, each in the line once it has ended. The
+  // line arriving at 22:09:15 lacks 22:09:09's minute, and the one before had 21:59:30 as its newest trade.
+  const trades = [at("2026-11-10T13:40:20Z"), at("2026-11-10T13:59:30Z"), at("2026-11-10T14:09:09Z")];
+  const minuteOf = (time) => Math.ceil(time / 60_000) * 60_000;
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(Math.max(...trades.filter((time) => time <= host.clock))),
+    line: () => nightLine((time) => time <= host.clock && trades.some((trade) => minuteOf(trade) === time)),
+  });
+  const from = at("2026-11-10T14:01:15Z");
+  await walk(host, from, from + 16 * 60_000, (w, now) => {
+    assert.ok(w.lines.yahootw?.["WTX&"], iso(now));
+    assert.equal(w.shown("WTX&", now).chartSource, "yahootw", iso(now));
+  });
 });
 
 test("a future answered from another exchange reads not found", async () => {
