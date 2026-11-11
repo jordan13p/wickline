@@ -327,6 +327,16 @@ test("a TW-only row with a price but no trade time gives no quote", () => {
   assert.equal(twOnly(["^TWOII"], changed({ "^TWOII": { regularMarketTime: "-" } }), NOW).quotes["^TWOII"], undefined);
 });
 
+test("a TW-only row with a price but no trade time says it is not real time; a stock others price stays silent", () => {
+  const noTime = changed({ "^TWOII": { regularMarketTime: "-" }, "2330.TW": { regularMarketTime: "-" } });
+  const sole = twOnly(["^TWOII", "2330.TW"], noTime, NOW);
+  assert.equal(sole.errors["^TWOII"].code, "yahootw.noLiveRows");
+  assert.equal(sole.errors["2330.TW"], undefined);
+  assert.equal(sole.quotes["2330.TW"], undefined);
+  // A row with no price at all is a name-only answer: no error.
+  assert.equal(twOnly(["^TWOII"], changed({ "^TWOII": { price: "-", regularMarketTime: "-" } }), NOW).errors["^TWOII"], undefined);
+});
+
 test("earlier-day rows keep their own time and leave feed time and noLive alone", () => {
   const yesterday = "2026-11-08T05:31:00Z";
   const { quotes, noLive } = twOnly(["2330.TW", "^TWOII"], changed({ "^TWOII": { regularMarketTime: yesterday } }), NOW);

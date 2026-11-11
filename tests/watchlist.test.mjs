@@ -1367,6 +1367,22 @@ test("after a price, a delayed or far-ahead row keeps a future's price cached as
   }, FUT_NOW);
 });
 
+// A row with a price but no trade time is refused too: the kept price reads cached, with why.
+test("after a price, a row with a price but no trade time keeps a future's price cached as not real time", async () => {
+  let noTime = false;
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(host.clock - 5_000, noTime ? { "WTX&": { regularMarketTime: "-" } } : {}),
+  });
+  await soleRun(host, async (w) => {
+    assert.equal(w.shown("WTX&").cached, undefined);
+    noTime = true;
+    await advance(host, FUT_NOW + 75_000);
+    const kept = w.shown("WTX&");
+    assert.deepEqual([kept.price, kept.cached], [42604, true]);
+    assert.equal(w.errors["WTX&"].code, "yahootw.noLiveRows");
+  }, FUT_NOW);
+});
+
 test("a futures code Yahoo 奇摩股市 does not answer reads not found on Yahoo 奇摩股市", async () => {
   await soleRun(futuresHost(["WTXP&"]), (w, host) => {
     assert.equal(w.errors["WTXP&"].code, "yahootw.notFound");

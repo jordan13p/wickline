@@ -140,8 +140,9 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const dayOk = day !== null && aheadOk && (isToday || (day < today && soleHere));
     const delayed = row.exchangeDataDelayedBy !== 0;
     // A symbol only this source prices has no other row to fall back on: a price refused as not real time says so,
-    // so the kept price reads cached rather than taken for a name-only answer.
-    if (price && soleHere && (delayed || !aheadOk)) errors[symbol] = new QuoteError("yahootw.noLiveRows");
+    // so the kept price reads cached rather than taken for a name-only answer. A price with no trade time is refused
+    // the same way: there is no trade to date it by.
+    if (price && soleHere && (delayed || !aheadOk || tradeTime === null)) errors[symbol] = new QuoteError("yahootw.noLiveRows");
     if (!price || !dayOk || delayed) continue;
     const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
     if (!future && !withinLimits(price, limits.limitUp, limits.limitDown)) {
