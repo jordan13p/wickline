@@ -1,6 +1,6 @@
 # Wickline — internals
 
-Build details behind [RECIPE.md](RECIPE.md)'s Built from, needed only when rebuilding Wickline: each request and the fields it reads, the stored layouts, per-module notes beyond the module map, the logos and the icon drawing. Behavior, hosts, programs and storage locations are in RECIPE.md; nothing here changes them.
+Build details behind [RECIPE.md](RECIPE.md)'s Built from, needed only when rebuilding Wickline: each request and the fields it reads, the stored layouts, per-module notes beyond the module map, the logos and the icon drawing, and each source's detailed rules (Yahoo TW Stock's acceptance, clock, line and TW-only rules, two MIS field notes, Yahoo's exchange codes). Hosts, programs and storage locations are named in RECIPE.md; nothing here changes them.
 
 ## Network requests
 

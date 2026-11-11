@@ -113,7 +113,7 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
 
 ## Built from
 
-Field-level details are in [RECIPE-internals.md](RECIPE-internals.md): each request and the fields it reads, the stored layouts, per-module notes, the logos and the icon drawing.
+Field-level details are in [RECIPE-internals.md](RECIPE-internals.md): each request and the fields it reads, the stored layouts, per-module notes, the logos, the icon drawing and each source's detailed rules.
 
 - **One mod**, `mods/wickline/`, no layout. `mod.json`: `{ "place": "none", "title": "Wickline" }`, so Herdr never docks it on its own. As a pane in any tab: `pane.split {direction: "right", mod: "wickline"}`.
 - **`keys.json`** at the repo root, merged into the person's by the install flow: `{ "global": { "ctrl-alt-b": { "command": "pane.split", "args": { "direction": "right", "mod": "wickline" } } } }`. Nothing else is bound.
