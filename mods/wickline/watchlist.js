@@ -1,7 +1,9 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { HOLIDAYS_URL, closureOf, currentOpen, deadlineOf, parseHolidays, taipeiDay, tradingDay } from "./calendar.js";
+import {
+  HOLIDAYS_URL, closureOf, currentOpen, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
+} from "./calendar.js";
 import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
@@ -68,9 +70,6 @@ const NOTE_CODES = { noTrades: "closure.noTradesToday", nightNoTrades: "closure.
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
-// The Taiwan market a symbol trades in, as calendar.js closureOf names it: TAIFEX's futures, else TWSE/TPEx's
-// stocks and indices together.
-const twMarket = (symbol) => (kindOf(symbol) === "future" ? "future" : "stock");
 // A quote-less sole-source symbol's session, read from its stand-in (see Watchlist#sessionFor), "closed" when it gives none.
 const soleSession = (standIn, now) => {
   const session = sessionOf(standIn, now);
@@ -213,6 +212,11 @@ export class Watchlist {
     // whether the source is real time). Only in memory; older than SEEN_KEEP_MS is dropped on write. Written by
     // noteTrade, read only through observed.
     this.seen = { stock: {}, future: {} };
+    // Each Taiwan market's reading at one `now` (closureAt), `{ now, rev, byMarket }`, and the revision of its inputs:
+    // bumped by noteTrade, a new schedule and a change of config() (which sources are on), so a read in the same ms
+    // as such a change never gets the reading from before it.
+    this.closures = { now: null, rev: 0, byMarket: {} };
+    this.closureRev = 0;
     this.revision = 0;
     this.stopped = false;
     // Per provider: its backoff, its current problem, its round and its own wake-up. `lineFailures`, by
@@ -346,17 +350,14 @@ export class Watchlist {
   }
 
   /**
-   * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure` (marks) and its next
-   * inference deadline as `noTradesDeadline` (calendar.js deadlineOf; freshness.js nextEdge wakes the row there): the
-   * one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
+   * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure` and its next inference
+   * deadline as `noTradesDeadline` (closureAt, by calendar.js withClosure; freshness.js nextEdge wakes the row there):
+   * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
    * closure.
    */
   marked(symbol, quote, now) {
     if (!quote || this.marketFor(symbol) !== "tw") return quote;
-    const { listed, seen } = this.closureInputs();
-    const market = twMarket(symbol);
-    const deadline = deadlineOf(market, now, seen);
-    return { ...quote, closure: closureOf(market, now, listed, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
+    return withClosure(quote, this.closureAt(twMarket(symbol), now));
   }
 
   /**
@@ -364,19 +365,28 @@ export class Watchlist {
    * schedule held and the answers seen; null for any other symbol.
    */
   marks(symbol, now) {
-    if (this.marketFor(symbol) !== "tw") return null;
-    const { listed, seen } = this.closureInputs();
-    return closureOf(twMarket(symbol), now, listed, seen);
-  }
-
-  /** closureOf's and deadlineOf's `listed` and `seen`: the schedule held, and observed with the sources on read once. */
-  closureInputs() {
-    const { on } = this.config();
-    return { listed: (day) => this.holidays.days[day] ?? null, seen: (market, open) => this.observed(market, open, on) };
+    return this.marketFor(symbol) === "tw" ? this.closureAt(twMarket(symbol), now).closure : null;
   }
 
   /**
-   * The observation of `market`'s session opened at `open` as closureOf and deadlineOf read it, or undefined without
+   * A Taiwan `market`'s reading at `now`, `{ closure, deadline }` (calendar.js closureOf), from the schedule held and
+   * the answers seen, with the sources on read once. Every row of a market reads the same, so it is worked out once
+   * per market and `now`, until closureRev moves.
+   */
+  closureAt(market, now) {
+    if (this.closures.now !== now || this.closures.rev !== this.closureRev) {
+      this.closures = { now, rev: this.closureRev, byMarket: {} };
+    }
+    const { byMarket } = this.closures;
+    if (!byMarket[market]) {
+      const { on } = this.config();
+      byMarket[market] = closureOf(market, now, (day) => this.holidays.days[day] ?? null, (m, open) => this.observed(m, open, on));
+    }
+    return byMarket[market];
+  }
+
+  /**
+   * The observation of `market`'s session opened at `open` as closureOf reads it, or undefined without
    * one: `{ traded, newest, realtime, delayed }`, the latter two each source's latest answer of that kind as
    * `{ at, source }`, in PROVIDERS order (the order that names a closure), leaving out an overlay source that is off
    * now (`on`: config().on), so its answers stop counting the moment it is turned off.
@@ -397,10 +407,9 @@ export class Watchlist {
    */
   notes(now = this.host.now()) {
     const markets = new Set(this.preferences.symbols.filter((symbol) => this.marketFor(symbol) === "tw").map(twMarket));
-    const { listed, seen } = this.closureInputs();
     const lines = new Map();
     for (const market of markets) {
-      const closure = closureOf(market, now, listed, seen);
+      const { closure } = this.closureAt(market, now);
       const code = NOTE_CODES[closure?.kind];
       if (!code) continue;
       lines.set(`${code} ${closure.source}`, notice(code, { source: closure.source }));
@@ -424,6 +433,7 @@ export class Watchlist {
     if (open === null) return;
     const seen = this.seen[market];
     const entry = (seen[open] ??= { traded: false, newest: null, answers: {} });
+    this.closureRev++;
     entry.traded ||= tradeTime >= open;
     entry.newest = Math.max(entry.newest ?? tradeTime, tradeTime);
     entry.answers[answer.source] = { at: now, realtime: answer.realtime };
@@ -460,6 +470,7 @@ export class Watchlist {
     holidays.pending = null;
     if (days) {
       holidays.days = days;
+      this.closureRev++;
       holidays.day = taipeiDay(now);
     } else {
       holidays.retryAt = now + HOLIDAY_RETRY_MS;
@@ -655,6 +666,7 @@ export class Watchlist {
     const configKey = JSON.stringify(this.config());
     if (JSON.stringify(preferences) === JSON.stringify(this.preferences) && configKey === this.configKey) return false;
     const configChanged = configKey !== this.configKey;
+    if (configChanged) this.closureRev++;
     this.configKey = configKey;
     this.adoptAndRestart(preferences, configChanged);
     return true;
@@ -822,7 +834,9 @@ export class Watchlist {
         }
         // Another copy may have edited the shared list.
         this.adopt(readPreferences(this.host.load()));
-        this.configKey = JSON.stringify(this.config());
+        const configKey = JSON.stringify(this.config());
+        if (configKey !== this.configKey) this.closureRev++;
+        this.configKey = configKey;
         symbols = this.symbolsFor(provider);
         if (!symbols.length) {
           state.problem = null;

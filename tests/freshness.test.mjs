@@ -6,8 +6,8 @@ import {
   shownLimit,
 } from "../mods/wickline/freshness.js";
 import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
-import { MINUTE_MS, kindOf, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
-import { closureOf, deadlineOf, parseHolidays } from "../mods/wickline/calendar.js";
+import { MINUTE_MS, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
+import { closureOf, parseHolidays, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -579,17 +579,12 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // nextEdge announced a step before, so a wait cut at the next edge never sleeps past a change. sessionEdges follows
 // sessionOf's branches by hand; this sweep is what keeps the two in step. A new way of reading a session adds its
 // quotes to EDGE_SWEEP_QUOTES.
-// A Taiwan quote carries the closure of its time and its next inference deadline (closureOf and deadlineOf, as
-// Watchlist#marked gives them; here from the 2026 schedule, and the answers its `answers` gives at that time, else
-// none), so the sweep reads a listed day, and a day or night without trades, as a row does.
+// A Taiwan quote carries the closure of its time and its next inference deadline, by the composition Watchlist#marked
+// uses (closureOf in its twMarket, through withClosure; here from the 2026 schedule, and the answers its `answers`
+// gives at that time, else none), so the sweep reads a listed day, and a day or night without trades, as a row does.
 const LISTED_2026 = parseHolidays(JSON.stringify(HOLIDAYS_2026));
-const marked = (quote, time) => {
-  if (resolvedMarket(quote.symbol, quote.exchange) !== "tw") return quote;
-  const market = kindOf(quote.symbol) === "future" ? "future" : "stock";
-  const seen = quote.answers?.(time) ?? (() => undefined);
-  const deadline = deadlineOf(market, time, seen);
-  return { ...quote, closure: closureOf(market, time, (d) => LISTED_2026[d] ?? null, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
-};
+const marked = (quote, time) => (resolvedMarket(quote.symbol, quote.exchange) !== "tw" ? quote
+  : withClosure(quote, closureOf(twMarket(quote.symbol), time, (d) => LISTED_2026[d] ?? null, quote.answers?.(time) ?? (() => undefined))));
 // What a row reads: its session, a Taiwan row's day, and its no-trades reading, which the detail's session times and
 // the status line's note read apart from sessionOf.
 const INFERRED = ["noTrades", "nightNoTrades"];

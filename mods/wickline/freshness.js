@@ -172,7 +172,7 @@ function dayEdges(quote, now) {
   return [edge(dayStart(TAIFEX_HOURS.offsetMin, taipeiDay(now) + 1))];
 }
 
-// A Taiwan row's next inference deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js deadlineOf), where
+// A Taiwan row's next inference deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js closureOf), where
 // its closure may turn to "noTrades" or, for a future's night, to "nightNoTrades".
 const deadlineEdges = (quote) => (quote.noTradesDeadline ? [edge(quote.noTradesDeadline)] : []);
 

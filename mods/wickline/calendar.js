@@ -120,22 +120,42 @@ function quietAnswer(observation, open, now) {
   return null;
 }
 
-/**
- * The next inference deadline after `now` of `market`'s current session (currentOpen), or null: the open plus a
- * kind's delay, for each kind with an answer (`seen`, as closureOf reads it), while the session has no trade.
- */
-export function deadlineOf(market, now, seen) {
-  const open = currentOpen(market, now);
-  const observation = open === null ? undefined : seen(market, open);
+// The next inference deadline after `now` of the session opened at `open`, from its observation, or null: the open
+// plus a kind's delay, for each kind with an answer, while the session has no trade.
+function nextDeadline(observation, open, now) {
   if (!observation || observation.traded) return null;
   const ahead = INFER_DEADLINES.filter(([kind, after]) => observation[kind].length && open + after > now)
     .map(([, after]) => open + after);
   return ahead.length ? Math.min(...ahead) : null;
 }
 
+/** The Taiwan market a symbol trades in, as closureOf names it: TAIFEX's futures, else TWSE/TPEx's stocks and indices. */
+export const twMarket = (symbol) => (kindOf(symbol) === "future" ? "future" : "stock");
+
 /**
- * The closure of a Taiwan `market` ("stock" | "future") at `now`: the one place a quote's closure is decided, as one
- * value, null or `{ kind, reason?, source? }`:
+ * What a Taiwan `market` ("stock" | "future") reads at `now`, from one observation of its current session (currentOpen):
+ * `{ closure, deadline }`, its closure (closureRule; null once a trade came since that session's open, which clears
+ * every closure, the removed night's included) and that session's next inference deadline (nextDeadline). `listed`
+ * and `seen` as closureRule reads them.
+ */
+export function closureOf(market, now, listed, seen) {
+  const open = currentOpen(market, now);
+  const observation = open === null ? undefined : seen(market, open);
+  const closure = observation?.traded ? null : closureRule(market, now, open, listed, seen);
+  return { closure, deadline: nextDeadline(observation, open, now) };
+}
+
+/**
+ * `quote` with its Taiwan market's reading (closureOf): `closure`, and the deadline as `noTradesDeadline` when there is
+ * one (freshness.js nextEdge wakes the row there).
+ */
+export const withClosure = (quote, { closure, deadline }) => ({
+  ...quote, closure, ...(deadline !== null && { noTradesDeadline: deadline }),
+});
+
+/**
+ * The closure of a Taiwan `market` at `now` while its current session (opened at `open`, or null) has not traded: the
+ * one place a quote's closure is decided, as one value, null or `{ kind, reason?, source? }`:
  * - "listed": a day the schedule lists (`reason`, its name);
  * - "noTrades": a day without trades, inferred (`source`, the source of the answer that counts);
  * - "nightRemoved": a night a listed day removed;
@@ -143,8 +163,7 @@ export function deadlineOf(market, now, seen) {
  * `listed(day)` gives the schedule's reason or null; `seen(market, open)` the observation of that market's session that
  * opened at `open`, or undefined: `{ traded, newest, realtime, delayed }`, whether a trade came at or after the open,
  * the newest trade time the answers carried, and each source's latest answer since the open by kind
- * (`[{ at, source }]`, in the order that names a closure). A trade seen since the current session's open comes first
- * and clears every closure, the removed night's included. Then the first matching row, T being today in Taipei:
+ * (`[{ at, source }]`, in the order that names a closure). The first matching row, T being today in Taipei:
  * 1. a stock on a listed T: listed;
  * 2. a stock from 09:00 on a weekday T, its session quiet (quietAnswer) and no future traded since 08:45 T (the veto):
  *    noTrades;
@@ -160,9 +179,7 @@ export function deadlineOf(market, now, seen) {
  * stock since 09:00 D), the night is closed and says it has no trades yet (nightNoTrades); after a day without trades,
  * the whole day has none (noTrades).
  */
-export function closureOf(market, now, listed, seen) {
-  const open = currentOpen(market, now);
-  if (open !== null && seen(market, open)?.traded) return null;
+function closureRule(market, now, open, listed, seen) {
   const today = taipeiDay(now);
   const minute = taipeiMinute(now);
   const reason = listed(today);

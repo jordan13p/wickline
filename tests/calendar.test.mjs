@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  INFER_DELAYED_MS, INFER_REALTIME_MS, INFER_RECENT_MS, closureOf, currentOpen, deadlineOf, parseHolidays, rocDay, taipeiDay,
+  INFER_DELAYED_MS, INFER_REALTIME_MS, INFER_RECENT_MS, closureOf, currentOpen, parseHolidays, rocDay, taipeiDay,
 } from "../mods/wickline/calendar.js";
 import { HOLIDAYS_2026, at } from "./helpers.mjs";
 
@@ -46,9 +46,9 @@ const listed = (day) => L[day] ?? null;
 const none = () => undefined;
 
 test("a list for another year matches no date of this one", () => {
-  assert.deepEqual(closureOf("stock", at("2027-01-01T02:00:00Z"), listed, none), null);
+  assert.deepEqual(closureOf("stock", at("2027-01-01T02:00:00Z"), listed, none).closure, null);
   const next = parseHolidays(JSON.stringify([{ Name: "中華民國開國紀念日", Date: "1160101" }]));
-  assert.deepEqual(closureOf("stock", at("2026-12-25T02:00:00Z"), (day) => next[day] ?? null, none), null);
+  assert.deepEqual(closureOf("stock", at("2026-12-25T02:00:00Z"), (day) => next[day] ?? null, none).closure, null);
 });
 
 test("closureOf: listed weekdays, per market, with the trade override and the removed night", () => {
@@ -77,7 +77,7 @@ test("closureOf: listed weekdays, per market, with the trade override and the re
     // A stock trade does not override a futures closure (the override is per market).
     ["future", "2026-12-25T02:00:00Z", (market) => (market === "stock" ? { traded: true } : undefined), xmas],
   ];
-  for (const [market, iso, seen, closure] of cases) assert.deepEqual(closureOf(market, at(iso), listed, seen), closure, `${market} ${iso}`);
+  for (const [market, iso, seen, closure] of cases) assert.deepEqual(closureOf(market, at(iso), listed, seen).closure, closure, `${market} ${iso}`);
   assert.deepEqual([at("2026-11-11T00:44:59Z"), at("2026-11-11T00:45:00Z"), at("2026-11-11T07:00:00Z"), at("2026-11-10T20:00:00Z"), at("2026-11-14T02:00:00Z")]
     .map((now) => currentOpen("future", now)), [null, at("2026-11-11T00:45:00Z"), at("2026-11-11T07:00:00Z"), at("2026-11-10T07:00:00Z"), null]);
 });
@@ -133,9 +133,10 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
     ["future", at("2026-02-11T16:30:00Z"), by({ [`future ${at("2026-02-11T07:00:00Z")}`]: obs({ newest: at("2026-02-11T05:45:00Z"), realtime: rt(at("2026-02-11T16:29:00Z")) }) }),
       { kind: "listed", reason: "市場無交易，僅辦理結算交割作業" }],
   ];
-  for (const [market, now, seen, closure] of cases) assert.deepEqual(closureOf(market, now, listed, seen), closure, `${market} ${new Date(now).toISOString()}`);
+  for (const [market, now, seen, closure] of cases) assert.deepEqual(closureOf(market, now, listed, seen).closure, closure, `${market} ${new Date(now).toISOString()}`);
   const both = stock(obs({ realtime: rt(T.open + 300_000), delayed: yf(T.open + 300_000) }));
-  assert.deepEqual([deadlineOf("stock", T.open + 300_000, both), deadlineOf("stock", T.open + 700_000, both),
-    deadlineOf("stock", T.open + 300_000, stock(obs({ traded: true, realtime: rt(T.open) }))), deadlineOf("stock", T.open + 300_000, () => undefined)],
+  const deadline = (now, seen) => closureOf("stock", now, listed, seen).deadline;
+  assert.deepEqual([deadline(T.open + 300_000, both), deadline(T.open + 700_000, both),
+    deadline(T.open + 300_000, stock(obs({ traded: true, realtime: rt(T.open) }))), deadline(T.open + 300_000, () => undefined)],
     [T.open + 600_000, T.open + 1_800_000, null, null]);
 });
