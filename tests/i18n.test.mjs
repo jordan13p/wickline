@@ -70,6 +70,10 @@ test("the precedence notes end without a full stop in every language, which woul
   assert.equal(STRINGS.en["disclaimer.prevails"], "The English text prevails over its translations.");
 });
 
+test("the Japanese consent boxes end without a full stop, which would wrap onto its own line", () => {
+  for (const key of ["yahootw.consent", "mis.consent"]) assert.ok(!STRINGS.ja[key].endsWith("。"), key);
+});
+
 test("the statement names what is queried by exchange, in the person's words", () => {
   // Sentence 3 names stock prices in every language: futures prices are never discarded (Q8).
   const stockPrices = {
