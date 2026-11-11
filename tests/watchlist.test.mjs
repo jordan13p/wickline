@@ -622,6 +622,56 @@ test("a stock line listing empty minutes up to now, its closes stopped long befo
   });
 });
 
+test("a frozen stock line stays off when its price drops and comes back every few minutes", async () => {
+  // 2330 trades 5 s before each round, its line stopped at 09:10; every `every` ms one round fails, dropping the price.
+  const first = Date.parse("2026-11-09T01:01:00Z");
+  for (const every of [180_000, 300_000]) {
+    const from = Date.parse("2026-11-09T01:30:00Z");
+    const host = taiwanHost(ONLY_YAHOOTW, {
+      yahootw: () => {
+        if (host.clock > from && (host.clock - from) % every < 10_000) throw new Error("offline");
+        return stockList(host.clock - 5_000);
+      },
+      line: (symbol) => {
+        const minute = Math.floor(host.clock / 60_000) * 60_000;
+        return tickAt(symbol, minute, Array.from({ length: (minute - first) / 60_000 + 1 }, (_, i) => (i < 10 ? 2200 + i : null)));
+      },
+    });
+    let drawn = 0;
+    await walk(host, from, from + 40 * 60_000, (w, now) => {
+      if (!w.lines.yahootw?.["2330.TW"]) return;
+      drawn += 10_000;
+      assert.ok(now <= from + 245_000, `${every}: ${iso(now)}`);
+    });
+    assert.ok(drawn > 0, String(every));
+  }
+});
+
+test("a quiet stock's line is never dropped, at any arrival phase", async () => {
+  // 0050 trades at 09:17:12, 09:41:10 and 09:52:03; its answer lists every minute to now, each traded minute's
+  // close in it once that minute has ended. 2330 trades on beside it.
+  const first = Date.parse("2026-11-09T01:01:00Z");
+  const trades = ["01:17:12", "01:41:10", "01:52:03"].map((time) => Date.parse(`2026-11-09T${time}Z`));
+  const minuteOf = (time) => Math.ceil(time / 60_000) * 60_000;
+  const grid = (symbol, traded, close) => {
+    const minute = Math.floor(host.clock / 60_000) * 60_000;
+    return tickAt(symbol, minute, Array.from({ length: (minute - first) / 60_000 + 1 }, (_, i) => (traded(first + i * 60_000) ? close : null)));
+  };
+  let host;
+  for (let phase = 0; phase < 120_000; phase += 15_000) {
+    host = taiwanHost(ONLY_YAHOOTW, {
+      yahootw: () => stockList(host.clock - 5_000, { "0050.TW": {
+        regularMarketTime: new Date(Math.max(...trades.filter((time) => time <= host.clock))).toISOString() } }),
+      line: (symbol) => symbol === "0050.TW"
+        ? grid(symbol, (minute) => minute <= host.clock && trades.some((time) => minuteOf(time) === minute), 10.05)
+        : grid(symbol, (minute) => minute <= host.clock, 2200),
+    });
+    host.store.symbols = ["2330.TW", "0050.TW"];
+    const from = Date.parse("2026-11-09T01:30:00Z") + phase;
+    await walk(host, from, Date.parse("2026-11-09T02:05:00Z"), (w, now) => assert.ok(w.lines.yahootw?.["0050.TW"], `${phase} ${iso(now)}`));
+  }
+});
+
 test("the base line is never overwritten", async () => {
   await firstRound(taiwanHost(ONLY_YAHOOTW), (w) => {
     assert.deepEqual(w.shown("2330.TW").series, [2200, 2205, 2240]);
@@ -634,14 +684,11 @@ test("removing a symbol, or turning its source off, drops its Yahoo 奇摩股市
   host.store.symbols = ["2330.TW", "0050.TW"];
   await firstRound(host, (w) => {
     assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["0050.TW", "2330.TW"]);
-    assert.deepEqual(Object.keys(w.lineTrades.yahootw).sort(), ["0050.TW", "2330.TW"]);
     w.remove("0050.TW");
     assert.deepEqual(Object.keys(w.lines.yahootw), ["2330.TW"]);
-    assert.deepEqual(Object.keys(w.lineTrades.yahootw), ["2330.TW"]);
     host.prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootw: false } } };
     w.sync();
     assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
-    assert.equal(w.lineTrades.yahootw?.["2330.TW"], undefined);
   });
 });
 
@@ -1331,7 +1378,7 @@ test("a thin future keeps its line after a fresh trade its line cannot hold yet,
   // line arriving at 22:09:15 lacks 22:09:09's minute, and the one before had 21:59:30 as its newest trade.
   const trades = [at("2026-11-10T13:40:20Z"), at("2026-11-10T13:59:30Z"), at("2026-11-10T14:09:09Z")];
   const minuteOf = (time) => Math.ceil(time / 60_000) * 60_000;
-  const host = futuresHost(["WTX&"], {
+  let host = futuresHost(["WTX&"], {
     yahootw: () => futuresAt(Math.max(...trades.filter((time) => time <= host.clock))),
     line: () => nightLine((time) => time <= host.clock && trades.some((trade) => minuteOf(trade) === time)),
   });
@@ -1339,6 +1386,86 @@ test("a thin future keeps its line after a fresh trade its line cannot hold yet,
   await walk(host, from, from + 16 * 60_000, (w, now) => {
     assert.ok(w.lines.yahootw?.["WTX&"], iso(now));
     assert.equal(w.shown("WTX&", now).chartSource, "yahootw", iso(now));
+  });
+  // And at other arrival phases, over an hour with more isolated trades.
+  trades.push(at("2026-11-10T14:30:40Z"), at("2026-11-10T14:31:20Z"), at("2026-11-10T14:47:55Z"));
+  for (let phase = 0; phase < 120_000; phase += 15_000) {
+    host = futuresHost(["WTX&"], {
+      yahootw: () => futuresAt(Math.max(...trades.filter((time) => time <= host.clock))),
+      line: () => nightLine((time) => time <= host.clock && trades.some((trade) => minuteOf(trade) === time)),
+    });
+    const start = at("2026-11-10T13:58:00Z") + phase;
+    await walk(host, start, at("2026-11-10T14:58:00Z"), (w, now) => assert.ok(w.lines.yahootw?.["WTX&"], `${phase} ${iso(now)}`));
+  }
+});
+
+// The time from `freeze`, when a line stops, to its first arrival judged frozen (null if never), and whether it came
+// back after that.
+async function dropAfter(host, from, until, symbol, freeze) {
+  let dropped = null;
+  let back = false;
+  await walk(host, from, until, (w, now) => {
+    const kept = Boolean(w.lines.yahootw?.[symbol]);
+    if (!kept && now > freeze && dropped === null) dropped = now - freeze;
+    else if (kept && dropped !== null) back = true;
+  });
+  return { dropped, back };
+}
+// The worst time from a line stopping to its drop, over every arrival phase, while open with lines 2 min apart
+// (measured 485-595 s).
+const FROZEN_WITHIN_MS = 600_000;
+
+test("a busy future's line that stops mid-session is dropped within the bound, and stays dropped", async () => {
+  const from = at("2026-11-10T14:00:00Z");
+  for (let offset = 0; offset < 240_000; offset += 30_000) {
+    const freeze = at("2026-11-10T14:10:00Z") + offset;
+    const host = futuresHost(["WTX&"], {
+      yahootw: () => futuresAt(host.clock - 10_000),
+      line: () => nightLine((time) => time <= host.clock && time <= Math.ceil(freeze / 60_000) * 60_000),
+    });
+    const { dropped, back } = await dropAfter(host, from, from + 30 * 60_000, "WTX&", freeze);
+    assert.ok(dropped !== null && dropped <= FROZEN_WITHIN_MS, `${iso(freeze)}: ${dropped}`);
+    assert.equal(back, false, iso(freeze));
+  }
+});
+
+test("a future first lined while closed is judged at once, and its frozen line stays off", async () => {
+  // 05:30 in Taipei, after the night's last trade at 04:59:58; the line's closes stop at 01:00.
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(at("2026-11-10T20:59:58Z")), line: () => nightLine((time) => time <= at("2026-11-10T17:00:00Z")),
+  });
+  const from = at("2026-11-10T21:30:00Z");
+  await walk(host, from, from + 30 * 60_000, (w, now) => {
+    assert.equal(w.sessionFor(["WTX&"], now), "closed", iso(now));
+    assert.equal(w.lines.yahootw?.["WTX&"], undefined, iso(now));
+  });
+});
+
+test("a future's line that agrees with its last trade is kept while closed", async () => {
+  // The recorded night line (last close 22:20) read after a 22:20:20 last trade, as if the session had ended there.
+  const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(at("2026-11-10T14:20:20Z")), line: () => ok(FUTURES_NIGHT_TICK) });
+  const from = at("2026-11-10T14:50:30Z");
+  await walk(host, from, from + 10 * 60_000, (w, now) => assert.ok(w.lines.yahootw?.["WTX&"], iso(now)));
+});
+
+test("removed and added again, a future's line is judged only by its new trades", async () => {
+  // Priced 10 s before each round, its line stopped at 22:20: dropped. Removed, then added again with a price that
+  // last traded at 22:20:20, its line agreeing: kept.
+  const from = at("2026-11-10T14:50:30Z");
+  let lastTrade = null;
+  const host = futuresHost(["WTX&"], {
+    yahootw: () => futuresAt(lastTrade ?? host.clock - 10_000), line: () => ok(FUTURES_NIGHT_TICK),
+  });
+  await walk(host, from, from + 12 * 60_000, (w, now) => {
+    if (now === from + 6 * 60_000 + 5_000) {
+      assert.equal(w.lines.yahootw?.["WTX&"], undefined);
+      w.remove("WTX&");
+      lastTrade = at("2026-11-10T14:20:20Z");
+      w.add("WTX&");
+    } else if (now > from + 8 * 60_000) {
+      // From its next line, 2 min after the last one asked.
+      assert.ok(w.lines.yahootw?.["WTX&"], iso(now));
+    }
   });
 });
 

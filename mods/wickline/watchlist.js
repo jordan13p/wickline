@@ -54,6 +54,8 @@ const TIMED_OUT = {};
 // How long a traded minute may take to show in a line after it ends, and how far a line's last traded minute may
 // end before a trade it must hold.
 const LINE_LAG_MS = 120_000;
+// How many trade times a line is judged by: the newest settled one and the ones still settling (see lineFrozen).
+const LINE_TRADES = 4;
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
@@ -173,8 +175,9 @@ export class Watchlist {
     // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its trading
     // day), kept only while that source's price for the symbol is.
     this.lines = {};
-    // By provider id, then symbol: `{ settled, pending }`, the trade times an overlay line is judged against
-    // (see lineFrozen), dropped with the line's price. Only in memory, per copy.
+    // By provider id, then symbol: the trade times seen at an overlay line's recent arrivals, oldest first, that
+    // the line is judged against (see lineFrozen). Kept through a dropped price (each is a past trade of the
+    // symbol), dropped when the symbol leaves the source. Only in memory, per copy.
     this.lineTrades = {};
     // By symbol: the last name an overlay gave (its Chinese name), kept while that source fails.
     this.localNames = {};
@@ -564,6 +567,7 @@ export class Watchlist {
       for (const symbol of held.flatMap(Object.keys)) {
         if (symbols.has(symbol)) continue;
         this.dropOverlay(provider, symbol);
+        if (this.lineTrades[provider.id]) delete this.lineTrades[provider.id][symbol];
         this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
       }
     }
@@ -978,7 +982,6 @@ export class Watchlist {
   dropOverlay(provider, symbol) {
     this.setEntry(this.overlays, symbol, provider.id, undefined);
     if (this.lines[provider.id]) delete this.lines[provider.id][symbol];
-    if (this.lineTrades[provider.id]) delete this.lineTrades[provider.id][symbol];
   }
 
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */
@@ -1025,21 +1028,26 @@ export class Watchlist {
 
   /**
    * Whether an overlay line arriving at `now` has stopped: its last traded minute ends over LINE_LAG_MS before a
-   * trade it must already hold. A minute shows in a line only once it has ended, so the trade just seen
-   * (`tradeTime`) may not be in it yet: after a quiet spell a thin future's or quiet stock's line would read
-   * frozen. A line is judged only against a trade seen at an earlier arrival whose minute has ended and whose
-   * lag has passed (`settled`); until there is one, the line stays. The next trade to judge by (`pending`) is
-   * kept until it settles, so a busy symbol's ever newer trades never put the check off: a frozen line is
-   * dropped by its third arrival (two line intervals) and from then on.
+   * trade it must already hold. A minute shows in a line only once it has ended, so a trade is judged by only once
+   * it has settled: its minute has ended and LINE_LAG_MS has passed. The trades seen at this and earlier arrivals
+   * are kept (LINE_TRADES at most) and the line is judged against the newest settled one; the trade just seen
+   * counts once it has settled itself (a line first asked after the close is judged at once). Until one has
+   * settled, the line stays, so a thin future's or quiet stock's line is never dropped for a trade it cannot
+   * hold yet. Measured while open, with lines 2 min apart (longer when more lines wait than a round sends, and
+   * every bound grows with it): a line frozen from its first arrival is dropped at its third, 4 min later; a line
+   * that stops mid-session, 485-595 s after it stops; one first asked after the close at once, when its last trade is
+   * 3 min old by then. A frozen line stays dropped, also through a dropped price.
    */
   lineFrozen(provider, symbol, line, tradeTime, now) {
-    const trades = ((this.lineTrades[provider.id] ??= {})[symbol] ??= { settled: null, pending: null });
-    if (trades.pending !== null && trades.pending + MINUTE_MS + LINE_LAG_MS <= now) {
-      trades.settled = trades.pending;
-      trades.pending = null;
-    }
-    if (trades.pending === null && Number.isFinite(tradeTime)) trades.pending = tradeTime;
-    return trades.settled !== null && line.lastAt + MINUTE_MS < trades.settled - LINE_LAG_MS;
+    const trades = ((this.lineTrades[provider.id] ??= {})[symbol] ??= []);
+    if (Number.isFinite(tradeTime) && !(trades[trades.length - 1] >= tradeTime)) trades.push(tradeTime);
+    let settled = trades.length - 1;
+    while (settled >= 0 && trades[settled] + MINUTE_MS + LINE_LAG_MS > now) settled--;
+    // The newest settled trade goes first; older ones never count again.
+    if (settled > 0) trades.splice(0, settled);
+    // Lines asked closer together than usual: the oldest unsettled trades go, never the settled one.
+    if (trades.length > LINE_TRADES) trades.splice(settled < 0 ? 0 : 1, trades.length - LINE_TRADES);
+    return settled >= 0 && line.lastAt + MINUTE_MS < trades[0] - LINE_LAG_MS;
   }
 
   async get(request) {
