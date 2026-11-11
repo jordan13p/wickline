@@ -170,7 +170,9 @@ export const withClosure = (quote, { closure, deadline }) => ({
  * 6. a future from 05:00 on a listed T: listed;
  * 7. a future from 08:45 to 15:00 on a weekday T, its day session quiet and no stock traded since 09:00 T: noTrades;
  * 8. a future from 15:00 on a weekday T, its night session quiet: the night's reading of T;
- * 8b. else, while T has not traded, its day session's reading carries on: noTrades;
+ * 8b. else, until the night's deadline (its open + INFER_REALTIME_MS: only real-time sources price futures) and while
+ *    T has not traded, its day session's reading carries on: noTrades (after it, a night source that went quiet
+ *    leaves the existing reading);
  * 9. otherwise none.
  * A night's reading of day D: after a day that traded (its day session, the night's newest trade since 08:45 D, or a
  * stock since 09:00 D), the night is closed and says it has no trades yet (nightNoTrades); after a day without trades,
@@ -215,6 +217,6 @@ function closureRule(market, now, open, listed, seen) {
   }
   const night = quietSince(open);
   if (night) return nightReading(today, night);                                              // 8
-  const day = !dayTraded(today) && quietSince(dayOpen(today));
+  const day = now < open + INFER_REALTIME_MS && !dayTraded(today) && quietSince(dayOpen(today));
   return day ? noTrades(day) : null;                                                         // 8b, else 9
 }

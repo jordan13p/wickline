@@ -135,6 +135,11 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
     // traded, kept after midnight, gone at 05:00.
     ["future", T.night + 30_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.night - 10_000) }) }), quiet()],
     ["future", T.night + 30_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.night - 10_000) }), [`stock ${T.open}`]: observation({ traded: true }) }), null],
+    // The night's source answers once at 15:00:05 and then goes quiet: the day's reading is carried only until the
+    // night's deadline (15:10), then the existing reading stands, as for any source that does not answer.
+    ...[[T.night + 300_000, quiet()], [T.night + 600_001, null], [at("2026-11-11T12:00:00Z"), null]].map(([now, closure]) => ["future", now,
+      by({ [`future ${T.day}`]: observation({ realtime: rt(T.night - 10_000) }),
+        [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 5_000) }) }), closure]),
     ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), quiet()],
     ["future", at("2026-11-11T21:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T20:59:00Z")) }) }), null],
     // The fixed source order names the closure (review 2, M3): both real-time sources recent, Yahoo 奇摩股市; only
