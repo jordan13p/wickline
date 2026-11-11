@@ -302,3 +302,16 @@ test("the session times are worded in every language", () => {
     ["거래 시간: {times}", "주간 {times}", "야간 {times}", "24시간"],
   ]);
 });
+
+test("a listed closed day, its detail and the holiday schedule's credit in every language", () => {
+  const keys = ["session.holiday", "detail.closedToday", "detail.nightNotHeld", "disclaimer.sourcesHolidays"];
+  assert.deepEqual(LANGUAGES.map((lang) => keys.map((key) => t(lang, key))), [
+    ["No trading", "Closed today", "Night: no trading",
+      "Holiday data: Taiwan Stock Exchange OpenAPI (Open Government Data License, version 1.0)"],
+    ["休市", "今日休市", "夜盤休市", "休市日資料來源：臺灣證券交易所 OpenAPI（政府資料開放授權條款－第1版）"],
+    ["休市", "今日休市", "夜盘休市", "休市日数据来源：台湾证券交易所 OpenAPI（政府资料开放授权条款－第1版）"],
+    ["休場", "本日休場", "夜間休場", "休場日データ：台湾証券取引所 OpenAPI（政府資料開放授權條款 第1版）"],
+    ["휴장", "오늘 휴장", "야간 휴장", "휴장일 데이터: 대만증권거래소 OpenAPI(정부 자료 개방 이용 허락 조건 제1판)"],
+  ]);
+  for (const lang of LANGUAGES) assert.ok(t(lang, "privacy.hosts").includes("openapi.twse.com.tw"), lang);
+});

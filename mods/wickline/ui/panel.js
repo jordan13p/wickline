@@ -148,8 +148,8 @@ function problemLines(view, t) {
 function rowData(view, t, now, symbol, source) {
   const { quote } = source;
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
-  // A closed label carries its own date; any other quote from an earlier day gets one.
-  const stale = quote && fresh.state !== "closed" ? formatStaleDate(quote.timestamp, now, view.lang, dayFor(quote)) : "";
+  // A closed or 休市 label carries its own date; any other quote from an earlier day gets one.
+  const stale = quote && fresh.state !== "closed" && fresh.state !== "holiday" ? formatStaleDate(quote.timestamp, now, view.lang, dayFor(quote)) : "";
   const label = quote ? freshnessLabel(quote, fresh, now, view.lang, (key, params) => view.tx(key, params)) : "";
   const shown = rowName(symbol, label, quote ? displayName(quote, view.lang) : null);
   return {

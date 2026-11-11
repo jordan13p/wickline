@@ -33,7 +33,7 @@
 | Market | Default | Optional source | Notes |
 |---|---|---|---|
 | United States | Yahoo Finance (real time for US stocks and the S&P, Dow Jones and Nasdaq indexes, updates every minute; Cboe, NYSE and Russell indexes and OTC stocks are delayed 15–20 min) | Finnhub (updates about every 15–30 s), with your own API key | For stocks both are real time; Finnhub only updates more often. It prices the first 15 US stocks at its default budget of 60 requests per minute; the rest, and indexes, stay on Yahoo Finance. When Finnhub falls behind, for example while it waits out a rate limit, a Yahoo Finance price at least as recent shows instead. |
-| Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. A `^TW…` index Yahoo Finance lacks, such as 櫃檯指數 (`^TWOII`), needs Yahoo TW Stock on and consented; otherwise it reads not found. Futures such as `WTX&` (TAIEX futures, near month) and `WTX@` (next month) come from Yahoo TW Stock alone; with it off, or awaiting your re-confirmation, the row is one unavailable line that says why. A future reads Live in the day (08:45–13:45) and night (15:00–05:00) sessions, stalled in a session without a recent trade, and closed with its last trade time in the breaks. Once priced, such a row keeps its last price when a round fails, the answer lacks it, or its price there is not real time (shown as cached, with the reason), and when the answer gives only its name. |
+| Taiwan | Yahoo Finance (delayed 20 min) | Yahoo TW Stock (Yahoo 奇摩股市) and TWSE MIS, each off until you consent to it | Neither is a public interface. A live Yahoo TW Stock price comes first, then MIS; a price outside the stock's daily limits is discarded and the row shows the next source. Yahoo TW Stock also prices Taiwan indexes such as 加權指數 (`^TWII`) live. A `^TW…` index Yahoo Finance lacks, such as 櫃檯指數 (`^TWOII`), needs Yahoo TW Stock on and consented; otherwise it reads not found. Futures such as `WTX&` (TAIEX futures, near month) and `WTX@` (next month) come from Yahoo TW Stock alone; with it off, or awaiting your re-confirmation, the row is one unavailable line that says why. A future reads Live in the day (08:45–13:45) and night (15:00–05:00) sessions, stalled in a session without a recent trade, and closed with its last trade time in the breaks; on a weekday TWSE lists as closed it reads `No trading` (休市) from 05:00, or from midnight when no night session runs into that day. Once priced, such a row keeps its last price when a round fails, the answer lacks it, or its price there is not real time (shown as cached, with the reason), and when the answer gives only its name. |
 | Hong Kong, China, Japan, Korea | Yahoo Finance (delayed 15 or 20 min) | — | Hong Kong, China and Japan 15 min, Korea 20 min (Taiwan 20 min). During the lunch break (Tokyo 11:30–12:30, Hong Kong 12:00–13:00, Shanghai and Shenzhen 11:30–13:00 local time) a row reads `Lunch`. An exchange Wickline does not know reads `Yahoo · delayed`, its delay not provided. |
 | Currencies | Yahoo Finance (real time, updates every minute) | — | Quotes such as `EURUSD=X` are indicative, not traded prices. The currency market reads closed from Friday 22:00 to Sunday 22:00 UTC. |
 | Futures | Yahoo Finance (delayed 10 min) | — | Futures such as `ES=F` are never shown stopped, and CME's daily trading halt is not marked. |
@@ -43,7 +43,7 @@ Each row has a dot and a label:
 
 - **Filled dot**: live. A real-time source (Yahoo Finance too, for US stocks, the S&P, Dow Jones and Nasdaq indexes and currencies), the market trading, the quote at most 120 seconds old; the label says `Live`, and the source's name is in the detail view.
 - **Ring**: delayed or stalled. Yahoo's prices from a delayed exchange (`delayed 20 min`, `Yahoo · delayed`), a real-time quote older than 120 seconds or a delayed one older than its delay plus 5 minutes (`quote stopped at 13:05`; a Yahoo Finance quote's age is taken when it was fetched, from today's open at the earliest, and one not fetched for 5 minutes also reads stopped), or a real-time Yahoo Finance quote still at the previous close after the open, until today's first trade arrives.
-- **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`, `Lunch`).
+- **No dot**: the market is closed or outside its regular session (`Market closed · Oct 31 16:00`, `Pre-market`, `After hours`, `Lunch`), or a Taiwan weekday without trading that TWSE's holiday schedule lists (`No trading · Dec 24 13:30`; a trade seen since the open overrides it).
 
 **Lit price.** A Taiwan stock exactly at its limit-up or limit-down, as its real-time source (TWSE MIS or Yahoo TW Stock) reports it, shows its price on a solid block in the gain or loss color, the way Taiwan's quote boards light a stock at its limit; hover it for `Limit up 563.00`. A future such as `WTX&` exactly at its reported limit lights the same way; a futures price past its limits is shown, not discarded. Limits are never computed, so other markets, and Taiwan on Yahoo Finance alone, never light; nor does a stalled quote, or the trial match before the open.
 
@@ -138,6 +138,7 @@ Hosts, and when Wickline contacts them:
 | `data-api.binance.vision`, or the Binance address you set | always, for crypto pairs |
 | `tw.stock.yahoo.com` (fixed) | only after you turn on Yahoo TW Stock for Taiwan and tick its consent box, for Taiwan stocks, indices and futures (not a public interface) |
 | `mis.twse.com.tw`, or the MIS address you set | only after you turn on TWSE MIS for Taiwan and tick its consent box (unofficial) |
+| `openapi.twse.com.tw` (fixed) | while your list holds a Taiwan symbol: TWSE's published market holiday list, once a day by GET, with no key; nothing from it is stored |
 | `finnhub.io` (only the path of the Finnhub URL can change) | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address, and only to `https://finnhub.io`: a saved address on any other host, or an answer redirected elsewhere, stops Finnhub and says so |
 
 - **Programs**: only `chmod 600` on `data/wickline/secrets.json` right after you save a Finnhub key, on macOS and Linux, so other accounts on this computer cannot read it. If it fails, the dialog says so and the key stays saved. Nothing else is run.
@@ -169,6 +170,10 @@ Quotes come from third parties and are not guaranteed to be accurate, timely or 
 Wickline is a modified version of the Herdr mod in [fatwang2/Pulse](https://github.com/fatwang2/Pulse) (MIT). It is not affiliated with or endorsed by Pulse.
 
 Released under the [MIT License](LICENSE), copyright (c) 2026 fatwang2 and (c) 2026 jordan13p.
+
+Holiday data: Taiwan Stock Exchange OpenAPI (Open Government Data License, version 1.0); licence: https://data.gov.tw/license. Its attribution statement:
+
+> 臺灣證券交易所 有價證券集中交易市場開（休）市日期（每年最新版）；此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，使用者於遵守本條款各項規定之前提下，得利用之。https://data.gov.tw/license
 
 ## Development
 

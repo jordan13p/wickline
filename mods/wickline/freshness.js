@@ -109,18 +109,20 @@ function taifexSegments(now) {
   return segments;
 }
 
+// A night session's segment: it starts at or after 12:00 Taipei.
+const isNight = ([start]) => ((start + TAIFEX_HOURS.offsetMin * MINUTE_MS) % DAY_MS) / MINUTE_MS >= 720;
+
 /**
  * The session a future trades in at `now`: "day" or "night", or null between sessions. Its segments are
- * quote.periods.segments when given, else TAIFEX_HOURS around `now`. A segment starting at or after 12:00 Taipei is
- * the night session. A segment holds [start, end).
+ * quote.periods.segments when given, else TAIFEX_HOURS around `now`; a night a listed closure removed
+ * (`nightClosed`) is none of them. A segment starting at or after 12:00 Taipei is the night session. A segment holds
+ * [start, end).
  */
 export function futuresSegment(quote, now) {
   const segments = quote.periods?.segments ?? taifexSegments(now);
-  const segment = segments.find(([start, end]) => now >= start && now < end);
+  const segment = segments.find((span) => now >= span[0] && now < span[1] && !(quote.nightClosed && isNight(span)));
   if (!segment) return null;
-  // Its start in Taipei minutes since midnight.
-  const startMin = ((segment[0] + TAIFEX_HOURS.offsetMin * MINUTE_MS) % DAY_MS) / MINUTE_MS;
-  return startMin >= 720 ? "night" : "day";
+  return isNight(segment) ? "night" : "day";
 }
 
 const edge = (at) => ({ at, opening: false });
@@ -173,13 +175,15 @@ const EDGE_SOURCES = [sessionEdges, dayEdges];
 
 /**
  * The next moment after `now` at which `quote`'s row reads differently (EDGE_SOURCES), in ms, or null; with
- * `{ openings: true }`, only a moment its market starts trading again. Always later than `now`, so a wait cut at
- * it is never zero.
+ * `{ openings: true }`, only a moment its market starts trading again. A quote on a listed closed day (`closedDay`)
+ * has no opening from any source: its sessions that day never open. Always later than `now`, so a wait cut at it is
+ * never zero.
  */
 export function nextEdge(quote, now, { openings = false } = {}) {
   let next = null;
   for (const source of EDGE_SOURCES) {
     for (const { at, opening: opens } of source(quote, now)) {
+      if (opens && quote.closedDay) continue;
       if (at > now && (opens || !openings) && (next === null || at < next)) next = at;
     }
   }
@@ -205,7 +209,9 @@ export function hoursWindow(quote, now) {
 /**
  * The detail's 交易時段 for `quote` at `now`, as data (format.js writes it); times in ms, regular session only:
  * - { allDay: true } for a pair or FX (exchangeRule(...).fx; its regular period, the UTC day, is not shown);
+ * - { closedToday: true, reason } on a listed closed day (`closedDay`), with the schedule's name for it;
  * - { day: [start, end], night: [start, end] } for a TAIFEX future, from TAIFEX_HOURS on the Taipei date of `now`;
+ *   night null while a listed closure removed it (`nightClosed`);
  * - { spans: [[start, end]] } from TWSE_HOURS (hoursWindow) for a Taiwan stock or index, whatever periods it carries
  *   (a TW-only index priced from an earlier day carries a zero-length period);
  * - { spans: [[start, end], …] } from periods.regular (a `=F` future's as Yahoo gives it), else hoursWindow's,
@@ -216,9 +222,10 @@ export function hoursWindow(quote, now) {
 export function sessionTimes(quote, now) {
   const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
   if (isCryptoPair(quote.symbol) || fx) return { allDay: true };
+  if (quote.closedDay) return { closedToday: true, reason: quote.closedDay.reason };
   if (kindOf(quote.symbol) === "future") {
     const { offsetMin, sessions: [day, night] } = TAIFEX_HOURS;
-    return { day: localWindow({ offsetMin, ...day }, now), night: localWindow({ offsetMin, ...night }, now) };
+    return { day: localWindow({ offsetMin, ...day }, now), night: quote.nightClosed ? null : localWindow({ offsetMin, ...night }, now) };
   }
   if (resolvedMarket(quote.symbol, quote.exchange) === "tw") return { spans: [hoursWindow(quote, now).regular] };
   const regular = quote.periods?.regular ?? hoursWindow(quote, now)?.regular;
@@ -230,7 +237,8 @@ export function sessionTimes(quote, now) {
 }
 
 /**
- * "open", "pre", "post" or "closed" from the quote's trading periods, and "lunch" while open inside its
+ * "holiday" on a Taiwan quote's listed closed day (`closedDay`, see calendar.js closureOf), whatever its periods say.
+ * Else "open", "pre", "post" or "closed" from the quote's trading periods, and "lunch" while open inside its
  * exchange's lunch break (Yahoo's regular period runs through it); FX reads its week only, "closed" over the weekend
  * and "open" otherwise, whatever its period says (the UTC day, not a session: its last minute is no close). A
  * pair trades "24h"; a future (WTX&) is "open" inside a segment (futuresSegment), else "closed", also with no
@@ -239,6 +247,7 @@ export function sessionTimes(quote, now) {
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";
+  if (quote.closedDay) return "holiday";
   if (kindOf(quote.symbol) === "future") return futuresSegment(quote, now) ? "open" : "closed";
   if (!quote.periods?.regular) {
     const hours = hoursWindow(quote, now);
@@ -257,7 +266,7 @@ export function sessionOf(quote, now) {
 const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delayMinutes, stoppedAt });
 
 // Sessions a quote reads as, never stale: the market is not trading (regular-session prices only).
-const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
+const PAUSED = new Set(["closed", "holiday", "pre", "post", "lunch"]);
 
 /**
  * How long until a quote turns stale in `session`, in ms: at least 1 while it has not yet, 0 or less once it
@@ -287,7 +296,7 @@ export function msUntilStale(quote, session, now) {
  * real-time Yahoo quote still at the previous close after today's open (beforeOpen), until today's first trade
  * or the fetch guard. stalled: past its msUntilStale, real time or delayed. delayed: any other quote, with its
  * exchange's minutes when the table holds them; a Yahoo future (`=F`) or an exchange without a delay never
- * stalls. closed / pre / post / lunch: the session.
+ * stalls. closed / holiday / pre / post / lunch: the session.
  */
 export function freshness(quote, session, now) {
   if (PAUSED.has(session)) return result(session);
@@ -309,14 +318,15 @@ const AFTER_CLOSE_MS = 90 * MINUTE_MS;
  * pre-market period, so MIS's trial match at 08:45 reads "closed", and only its time, outside the session,
  * tells it apart, also while a copy that slept still holds yesterday's periods. The time may be the feed's
  * (Yahoo 奇摩股市), which is never earlier than the stock's own trade today. TWSE's after-close window is a stock's:
- * a future's price belongs to its periods only up to their end.
+ * a future's price belongs to its periods only up to their end. A listed closed day ("holiday") counts as closed.
  */
 export function shownLimit(quote, session, now) {
   const { state } = freshness(quote, session, now);
   const regular = quote.periods?.regular;
   const end = regular && regular[1] + (kindOf(quote.symbol) === "future" ? 0 : AFTER_CLOSE_MS);
   const traded = Boolean(regular) && quote.timestamp >= regular[0] && quote.timestamp <= end;
-  return state === "live" || ((state === "closed" || state === "post") && traded) ? priceLimit(quote) : null;
+  const closed = state === "closed" || state === "holiday" || state === "post";
+  return state === "live" || (closed && traded) ? priceLimit(quote) : null;
 }
 
 // A delayed quote's lateness in words: its exchange's minutes, else that the delay is not provided.

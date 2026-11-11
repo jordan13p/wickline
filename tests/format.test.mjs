@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { formatDate, sessionTimesParts, stateText } from "../mods/wickline/format.js";
 import { freshness, sessionTimes } from "../mods/wickline/freshness.js";
-import { at, day, withTZ } from "./helpers.mjs";
+import { CLOSE_1224, at, day, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
 
 test("formats without Intl", () => {
@@ -170,7 +170,7 @@ test("an unconfirmed state has no word of its own", () => {
 test("the session times line, per market kind, in local time", () => {
   const zh = (key, params) => t("zh-TW", key, params);
   const en = (key, params) => t("en", key, params);
-  const line = (quote, now, tx = zh) => sessionTimesParts(sessionTimes(quote, now), tx);
+  const line = (quote, now, tx = zh) => sessionTimesParts(sessionTimes(quote, now), tx === en ? "en" : "zh-TW", tx);
   const nov = at("2026-11-10T02:00:00Z");
   const tw = { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") };
   const wtx = { symbol: "WTX&", periods: null };
@@ -221,5 +221,22 @@ test("a Taiwan row's \"today\" is the Taipei date, printed in local time", () =>
     assert.equal(detailTimes(tw, now, "zh-TW", zh)[0], "報價 11/13 00:30:00");
     assert.equal(formatStaleDate(us.timestamp, now, "zh-TW", dayFor(us)), "");
     assert.equal(dayFor({ symbol: "WTX&" })(friday), dayFor(tw)(friday));
+  });
+});
+
+test("the 休市 label and the closed day's session times", () => {
+  withTZ("Asia/Taipei", () => {
+    const zh = (key, params) => t("zh-TW", key, params);
+    const en = (key, params) => t("en", key, params);
+    const holiday = { state: "holiday", delayMinutes: null, stoppedAt: null };
+    const q = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: CLOSE_1224, closedDay: { reason: "行憲紀念日" } };
+    const now = at("2026-12-25T02:00:00Z");
+    assert.equal(freshnessLabel(q, holiday, now, "zh-TW", zh), "休市 · 12/24 13:30");
+    assert.equal(freshnessLabel(q, holiday, now, "en", en), "No trading · Dec 24 13:30");
+    assert.equal(freshnessLabel({ ...q, timestamp: at("2026-12-24T20:59:00Z") }, holiday, now, "zh-TW", zh), "休市 · 04:59");
+    assert.deepEqual(sessionTimesParts(sessionTimes(q, now), "zh-TW", zh), ["交易時段：今日休市", "行憲紀念日"]);
+    assert.deepEqual(sessionTimesParts(sessionTimes(q, now), "en", en), ["Trading hours: Closed today"]);
+    assert.deepEqual(sessionTimesParts(sessionTimes({ symbol: "WTX&", periods: null, nightClosed: true }, at("2026-12-25T18:00:00Z")), "zh-TW", zh),
+      ["交易時段：日盤 08:45–13:45", "夜盤休市"]);
   });
 });

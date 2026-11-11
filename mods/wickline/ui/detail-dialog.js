@@ -16,7 +16,7 @@ export function detailView(view, t) {
   const tx = (key, params) => view.tx(key, params);
   const source = detailSource(q, session, now, tx);
   const times = detailTimes(q, now, view.lang, tx);
-  const hours = sessionTimesParts(sessionTimes(q, now), tx);
+  const hours = sessionTimesParts(sessionTimes(q, now), view.lang, tx);
   const stat = (label, price) => v_flex().flex_1().gap(2)
     .child(div().text_size(10.5).text_color(t.dim).child(view.tx(label)))
     .child(div().font_semibold().child(number(q, price)));

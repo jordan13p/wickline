@@ -329,7 +329,7 @@ function disclaimerTab(view, t) {
     .children(["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"].map(paragraph))
     .child(note(t, view.tx("disclaimer.prevails")))
     .child(div().mt(8).font_semibold().child(view.tx("disclaimer.sourcesTitle")))
-    .children(["disclaimer.sourcesStocks", "disclaimer.sourcesCrypto"].map(paragraph))
+    .children(["disclaimer.sourcesStocks", "disclaimer.sourcesCrypto", "disclaimer.sourcesHolidays"].map(paragraph))
     .child(div().mt(8).font_semibold().child(view.tx("privacy.title")))
     .children(["privacy.hosts", "privacy.programs", "privacy.storage", "privacy.finnhub"].map(paragraph));
 }

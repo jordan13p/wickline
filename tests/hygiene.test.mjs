@@ -12,7 +12,9 @@ const MOD = new URL("../mods/wickline/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
 // mis.twse.com.tw only once the person turns TWSE MIS on and consents; finnhub.io only with Finnhub
 // chosen and a key saved.
-const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw", "tw.stock.yahoo.com", "finnhub.io"];
+// openapi.twse.com.tw: TWSE's holiday schedule, while the list holds a Taiwan symbol.
+const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw", "tw.stock.yahoo.com", "finnhub.io",
+  "openapi.twse.com.tw"];
 // Herdr writes these into the mod folder; they are git-ignored.
 const GENERATED = ["jsconfig.json", "gpui-kit.d.ts"];
 
@@ -399,6 +401,40 @@ test("the disclosure says Yahoo 奇摩股市 is asked for futures too", () => {
   }
 });
 
+// What the host is asked, per the spec's "Holiday schedule host named": once a day, while the list holds a Taiwan
+// symbol, by GET, with no key, nothing stored.
+const SCHEDULE_WORDS = {
+  en: [/once a day/, /Taiwan symbol/, /no key/, /nothing (from it )?(is )?stored/],
+  "zh-TW": [/每天/, /台灣商品/, /不需金鑰/, /不儲存/],
+  "zh-CN": [/每天/, /台湾商品/, /无需密钥/, /不保存/],
+  ja: [/1 日 1 回/, /台湾の銘柄/, /キーは不要/, /何も保存しません/],
+  ko: [/하루 한 번/, /대만 종목/, /키는 필요 없/, /저장하지 않습니다/],
+};
+test("the schedule's host is named with what is asked", () => {
+  const places = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]]
+    .map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n")]);
+  for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.hosts`, lang, STRINGS[lang]["privacy.hosts"].split(/(?<=。)|(?<=\.)\s+/)]);
+  for (const [name, lang, parts] of places) {
+    const naming = parts.filter((part) => part.includes("openapi.twse.com.tw"));
+    assert.ok(naming.some((part) => /GET/.test(part) && SCHEDULE_WORDS[lang].every((word) => word.test(part))), name);
+  }
+});
+
+const ATTRIBUTION = "臺灣證券交易所 有價證券集中交易市場開（休）市日期（每年最新版）；此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，使用者於遵守本條款各項規定之前提下，得利用之。https://data.gov.tw/license";
+test("the holiday schedule is credited with its licence in both READMEs, RECIPE and the tab", () => {
+  for (const [name, lang] of [["README.md", "en"], ["README.zh-TW.md", "zh-TW"]]) {
+    const text = read(new URL(name, ROOT));
+    assert.ok(text.includes(STRINGS[lang]["disclaimer.sourcesHolidays"]), name);
+    assert.ok(text.includes(ATTRIBUTION), name);
+  }
+  assert.ok(STRINGS["zh-TW"]["disclaimer.sourcesHolidays"].startsWith("休市日資料來源：臺灣證券交易所 OpenAPI"));
+  assert.ok(STRINGS["zh-TW"]["disclaimer.sourcesHolidays"].includes("政府資料開放授權條款－第1版"));
+  const recipe = read(new URL("RECIPE.md", ROOT));
+  assert.ok(recipe.includes("Holiday data: Taiwan Stock Exchange OpenAPI"), "credit in RECIPE.md");
+  assert.match(recipe, /Open Government Data License/);
+  assert.ok(read(new URL("ui/settings-dialog.js", MOD)).includes('"disclaimer.sourcesHolidays"'));
+});
+
 // The one program, the owner-only key file, the fixed Finnhub host and the real revoke, in all four places.
 // README and RECIPE name `chmod 600` for technical readers; the app says the same fact in plain words.
 const OWNER_ONLY = {
@@ -543,7 +579,7 @@ test("the detail names a future's day or night session", () => {
 test("the detail's session times sit between the source lines and the times", () => {
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
   assert.match(detail, /\[\.\.\.source, \.\.\.\(hours\.length \? \[hours\] : \[\]\), times\]/);
-  assert.match(detail, /sessionTimesParts\(sessionTimes\(q, now\), tx\)/);
+  assert.match(detail, /sessionTimesParts\(sessionTimes\(q, now\), view\.lang, tx\)/);
 });
 
 test("no module names session.unknown, and the detail's header shows no word for an unknown session", () => {

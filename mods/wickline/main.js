@@ -125,7 +125,8 @@ export default class Wickline extends View {
       settings: () => shared(SETTINGS_KEY),
       // Read-only GETs to Yahoo Finance and Binance (or the Binance address the person set), and to
       // TWSE MIS (or the MIS address the person set) only once the person turned it on and consented,
-      // and finnhub.io (the Finnhub path the person set) only once chosen with a key saved.
+      // and finnhub.io (the Finnhub path the person set) only once chosen with a key saved; and to
+      // openapi.twse.com.tw (TWSE's holiday list), once a Taipei day while the list holds a Taiwan symbol.
       fetch: (url, headers) => fetch(url, { headers }),
       // Read again by each copy when keyRev changes in the shared settings.
       loadSecret,

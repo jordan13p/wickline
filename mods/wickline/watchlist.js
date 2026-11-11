@@ -1,9 +1,9 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
-import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { tradingDay } from "./calendar.js";
+import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
+import { HOLIDAYS_URL, closureOf, currentOpen, parseHolidays, taipeiDay, tradingDay } from "./calendar.js";
 import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
-import { MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -45,8 +45,9 @@ const SWITCHES = {
   },
 };
 // A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open, and a lunch break
-// ranks below a session not yet known but above pre/post.
-const SESSION_RANK = { open: 4, "24h": 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0 };
+// ranks below a session not yet known but above pre/post. A listed closed day paces as closed (sessionFor then
+// reads "closed": its line is not asked again, and no source says it prices nothing live).
+const SESSION_RANK = { open: 4, "24h": 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0, holiday: 0 };
 // Errors about the source itself, not one symbol: shown as the source's problem.
 const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadable)$/;
 // The source is down or hung: the rest of the round would only wait out more timeouts.
@@ -57,9 +58,16 @@ const TIMED_OUT = {};
 const LINE_LAG_MS = 120_000;
 // How many trade times a line is judged by: the newest settled one and the ones still settling (see lineFrozen).
 const LINE_TRADES = 4;
+// After a failed holiday schedule fetch, how long until it is asked again.
+const HOLIDAY_RETRY_MS = 3_600_000;
+// How long a session's trade observation is kept (Watchlist#seen): a session is never open longer.
+const SEEN_KEEP_MS = 2 * DAY_MS;
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
+// The Taiwan market a symbol trades in, as calendar.js closureOf names it: TAIFEX's futures, else TWSE/TPEx's
+// stocks and indices together.
+const twMarket = (symbol) => (kindOf(symbol) === "future" ? "future" : "stock");
 // A quote-less sole-source symbol's session, read from its stand-in (see Watchlist#sessionFor), "closed" when it gives none.
 const soleSession = (standIn, now) => {
   const session = sessionOf(standIn, now);
@@ -192,6 +200,13 @@ export class Watchlist {
     // By symbol: the trading periods the last line answer gave a symbol priced by its sole source alone, which
     // has no base quote to give them (see ownPeriods).
     this.linePeriods = {};
+    // TWSE's holiday schedule, only in memory: `days` its closed weekdays (Taipei day number → name), `day` the Taipei
+    // date of the last success, `tried` that of the last attempt, `retryAt` when a failed one may be tried again, and
+    // `pending` the fetch in flight (one per copy, shared by its loops). See loadHolidays.
+    this.holidays = { days: {}, day: null, tried: null, retryAt: 0, pending: null };
+    // Per Taiwan market, by the open (ms) of a session: what this copy saw of it, `{ traded }` (a trade at or after
+    // that open). Only in memory; older than SEEN_KEEP_MS is dropped on write. See noteTrade.
+    this.seen = { stock: {}, future: {} };
     this.revision = 0;
     this.stopped = false;
     // Per provider: its backoff, its current problem, its round and its own wake-up. `lineFailures`, by
@@ -289,7 +304,7 @@ export class Watchlist {
     const pick = this.pick(symbol, now);
     const quote = mergeOverlay(this.baseQuote(symbol, now), pick?.overlay, pick && this.lines[pick.id]?.[symbol]);
     const localName = this.localNames[symbol];
-    return quote && localName && !quote.localName ? { ...quote, localName } : quote;
+    return this.marked(symbol, quote && localName && !quote.localName ? { ...quote, localName } : quote, now);
   }
 
   /**
@@ -321,15 +336,88 @@ export class Watchlist {
     const own = sole && this.overlays[symbol]?.[sole.id];
     const quote = !sole ? this.quotes[symbol]
       : own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
-    return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
+    return this.marked(symbol, quote && this.errors[symbol] ? { ...quote, cached: true } : quote, now);
   }
 
   /**
-   * What a symbol without a quote is read by, for its session and its edges alike: its form alone, with no periods
-   * (sessionOf and nextEdge read a Taiwan or US one by its exchange's hours, a future by TAIFEX's).
+   * `quote` (none: none) with the symbol's closed-day marks at `now` (marks): the one place a quote gets them, so
+   * whatever reads a row (its session, label, cadence and edges) reads the same closure.
    */
-  standIn(symbol) {
-    return { symbol, periods: null };
+  marked(symbol, quote, now) {
+    if (!quote) return quote;
+    const marks = this.marks(symbol, now);
+    return Object.keys(marks).length ? { ...quote, ...marks } : quote;
+  }
+
+  /**
+   * A Taiwan symbol's closed-day marks at `now` (calendar.js closureOf, in its market: futures, else stocks), from
+   * the holiday schedule held and the trades seen; {} for any other symbol.
+   */
+  marks(symbol, now) {
+    if (this.marketFor(symbol) !== "tw") return {};
+    return closureOf(twMarket(symbol), now, (day) => this.holidays.days[day] ?? null, (market, open) => this.seen[market][open]);
+  }
+
+  /** Whether `symbols` hold a Taiwan symbol, a ^TW… index still waiting for its first quote included. */
+  holdsTaiwan(symbols) {
+    return symbols.some((symbol) => this.marketFor(symbol) === "tw" || (isTaiwanForm(symbol) && this.pendingIndex(symbol)));
+  }
+
+  /**
+   * Notes a trade in a Taiwan `market` at `tradeTime` when it is at or after the open of the session `now` belongs
+   * to (currentOpen), so closureOf lets that session trade.
+   */
+  noteTrade(market, tradeTime, now) {
+    const open = currentOpen(market, now);
+    if (open === null || !(tradeTime >= open)) return;
+    const seen = this.seen[market];
+    seen[open] = { traded: true };
+    for (const key of Object.keys(seen)) if (Number(key) < now - SEEN_KEEP_MS) delete seen[key];
+  }
+
+  /**
+   * Fetches TWSE's holiday schedule when due: not yet fetched this Taipei date, and past `retryAt`. One GET of
+   * HOLIDAYS_URL at a time per copy (`pending`, shared by every loop), raced against REQUEST_TIMEOUT_MS. Only the
+   * first attempt of a Taipei date is waited for, so it holds a Taiwan round by the timeout at most; a retry runs
+   * beside the rounds. A failure (no answer, an error, an unreadable list) keeps the schedule held and tries again
+   * HOLIDAY_RETRY_MS after the failed attempt started. Never throws, and never shows a problem: without the schedule,
+   * rows read as before.
+   */
+  async loadHolidays(io) {
+    const holidays = this.holidays;
+    const now = this.host.now();
+    const today = taipeiDay(now);
+    if (holidays.day === today || now < holidays.retryAt) return;
+    holidays.pending ??= this.fetchHolidays(io, now);
+    if (holidays.tried !== today) await holidays.pending;
+  }
+
+  // One schedule fetch, started at `now` (see loadHolidays).
+  async fetchHolidays(io, now) {
+    const holidays = this.holidays;
+    let days = null;
+    try {
+      const timeout = io.sleep(REQUEST_TIMEOUT_MS).then(() => TIMED_OUT);
+      const response = await Promise.race([this.get({ url: HOLIDAYS_URL, headers: HEADERS }), timeout]);
+      if (response !== TIMED_OUT && response.ok) days = parseHolidays(response.text);
+    } catch { /* No schedule: tried again after HOLIDAY_RETRY_MS. */ }
+    holidays.tried = taipeiDay(now);
+    holidays.pending = null;
+    if (days) {
+      holidays.days = days;
+      holidays.day = taipeiDay(now);
+    } else {
+      holidays.retryAt = now + HOLIDAY_RETRY_MS;
+    }
+  }
+
+  /**
+   * What a symbol without a quote is read by at `now`, for its session and its edges alike: its form alone, with no
+   * periods (sessionOf and nextEdge read a Taiwan or US one by its exchange's hours, a future by TAIFEX's), and its
+   * closed-day marks (marked).
+   */
+  standIn(symbol, now) {
+    return this.marked(symbol, { symbol, periods: null }, now);
   }
 
   pick(symbol, now) {
@@ -619,7 +707,7 @@ export class Watchlist {
     for (const symbol of symbols) {
       const quote = this.baseQuote(symbol, now);
       const session = quote ? sessionOf(quote, now)
-        : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(this.standIn(symbol), now))
+        : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(this.standIn(symbol, now), now))
         : "unknown";
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
@@ -649,7 +737,7 @@ export class Watchlist {
   edgeAt(symbols, now, mode) {
     let earliest = null;
     for (const symbol of symbols) {
-      const edge = nextEdge(this.shown(symbol, now) ?? this.standIn(symbol), now, mode);
+      const edge = nextEdge(this.shown(symbol, now) ?? this.standIn(symbol, now), now, mode);
       if (edge !== null && (earliest === null || edge < earliest)) earliest = edge;
     }
     return earliest;
@@ -694,6 +782,7 @@ export class Watchlist {
         state.missed = hidden && Boolean(due);
         if (due && !hidden) {
           state.refreshing = manual;
+          if (this.holdsTaiwan(symbols)) await this.loadHolidays(io);
           await this.round(provider, state, symbols, io);
         }
       } catch {
@@ -914,6 +1003,7 @@ export class Watchlist {
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         const had = this.overlays[symbol]?.[provider.id];
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
+        if (overlay && this.marketFor(symbol) === "tw") this.noteTrade(twMarket(symbol), overlay.tradeTime ?? overlay.timestamp, this.host.now());
         if (this.soleSource(symbol) === provider) {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
           // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
@@ -937,6 +1027,7 @@ export class Watchlist {
       if (provider.linesMs) quote.series = this.quotes[symbol]?.series ?? [];
       this.quotes[symbol] = quote;
       delete this.errors[symbol];
+      if (this.marketFor(symbol) === "tw") this.noteTrade("stock", quote.timestamp, this.host.now());
     }
     const config = this.config();
     for (const [symbol, error] of Object.entries(result.errors)) {

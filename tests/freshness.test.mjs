@@ -6,12 +6,13 @@ import {
   shownLimit,
 } from "../mods/wickline/freshness.js";
 import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
-import { MINUTE_MS, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
+import { MINUTE_MS, kindOf, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
+import { closureOf, parseHolidays } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
-import { LINE_PERIODS, SEGMENTS, at, day, yq } from "./helpers.mjs";
+import { CLOSE_1224, HOLIDAYS_2026, LINE_PERIODS, SEGMENTS, at, day, yq } from "./helpers.mjs";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
@@ -578,8 +579,16 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // nextEdge announced a step before, so a wait cut at the next edge never sleeps past a change. sessionEdges follows
 // sessionOf's branches by hand; this sweep is what keeps the two in step. A new way of reading a session adds its
 // quotes to EDGE_SWEEP_QUOTES.
-const reading = (quote, time) =>
-  `${sessionOf(quote, time)} ${resolvedMarket(quote.symbol, quote.exchange) === "tw" ? dayFor(quote)(time) : ""}`;
+// A Taiwan quote carries the closure marks of its time (closureOf, as Watchlist#marks gives them; here from the 2026
+// schedule with no trade seen), so the sweep reads a listed day as a row does.
+const LISTED_2026 = parseHolidays(JSON.stringify(HOLIDAYS_2026));
+const marked = (quote, time) => (resolvedMarket(quote.symbol, quote.exchange) !== "tw" ? quote : {
+  ...quote, ...closureOf(kindOf(quote.symbol) === "future" ? "future" : "stock", time, (d) => LISTED_2026[d] ?? null, () => undefined),
+});
+const reading = (quote, time) => {
+  const row = marked(quote, time);
+  return `${sessionOf(row, time)} ${resolvedMarket(row.symbol, row.exchange) === "tw" ? dayFor(row)(time) : ""}`;
+};
 
 // The instants in [from, to), stepped by `step`, where what `quote` reads changes without an edge at or before it.
 function unannounced(quote, [from, to], step = MINUTE_MS) {
@@ -587,9 +596,22 @@ function unannounced(quote, [from, to], step = MINUTE_MS) {
   let before = reading(quote, from);
   for (let time = from + step; time < to; time += step) {
     const after = reading(quote, time);
-    const edge = after === before ? null : nextEdge(quote, time - step);
+    const edge = after === before ? null : nextEdge(marked(quote, time - step), time - step);
     if (after !== before && (edge === null || edge > time)) misses.push(new Date(time).toISOString());
     before = after;
+  }
+  return misses;
+}
+
+// The instants in [from, to) where a row reading a closure (closedDay, or a removed night) is told of an opening that
+// falls inside a closure too.
+function closedOpenings(quote, [from, to], step = MINUTE_MS) {
+  const misses = [];
+  const closed = (row) => Boolean(row.closedDay || row.nightClosed);
+  for (let time = from; time < to; time += step) {
+    const row = marked(quote, time);
+    const opens = closed(row) ? nextEdge(row, time, { openings: true }) : null;
+    if (opens !== null && closed(marked(quote, opens))) misses.push(new Date(time).toISOString());
   }
   return misses;
 }
@@ -598,6 +620,11 @@ const EDGE_SWEEP_WEEKS = [
   [at("2026-03-05T00:00:00Z"), at("2026-03-12T00:00:00Z")], // New York to daylight time (Sunday 03-08)
   [at("2026-10-29T00:00:00Z"), at("2026-11-05T00:00:00Z")], // and back (Sunday 11-01)
   [at("2026-11-08T00:00:00Z"), at("2026-11-16T00:00:00Z")], // the periods below, and an FX weekend (Friday 11-13)
+];
+// Weeks with TWSE/TAIFEX closures: Monday 10/26 after a weekend, and Friday 12/25 with the night it removes.
+const HOLIDAY_WEEKS = [
+  [at("2026-10-22T00:00:00Z"), at("2026-10-29T00:00:00Z")],
+  [at("2026-12-21T00:00:00Z"), at("2026-12-29T00:00:00Z")],
 ];
 const EDGE_SWEEP_QUOTES = [
   { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") },
@@ -618,10 +645,39 @@ const EDGE_SWEEP_QUOTES = [
 
 test("every change in what a row reads comes at or after an edge announced for it", () => {
   for (const quote of EDGE_SWEEP_QUOTES) {
-    for (const week of EDGE_SWEEP_WEEKS) {
+    for (const week of [...EDGE_SWEEP_WEEKS, ...HOLIDAY_WEEKS]) {
       assert.deepEqual(unannounced(quote, week), [], `${quote.symbol} ${quote.periods ? "with" : "without"} periods`);
     }
   }
+});
+
+test("a row reading a closure is told of no opening inside a closure", () => {
+  for (const quote of EDGE_SWEEP_QUOTES) {
+    for (const week of HOLIDAY_WEEKS) {
+      assert.deepEqual(closedOpenings(quote, week), [], `${quote.symbol} ${quote.periods ? "with" : "without"} periods`);
+    }
+  }
+  // The weeks hold both closures, for stocks and futures alike.
+  const reads = (quote, iso) => sessionOf(marked(quote, at(iso)), at(iso));
+  assert.deepEqual([reads({ symbol: "2330.TW", periods: null }, "2026-12-25T02:00:00Z"), reads({ symbol: "WTX&", periods: null }, "2026-12-25T18:00:00Z")],
+    ["holiday", "closed"]);
+});
+
+test("a closed day: no dot, never stale, lit as closed, 休市 in the detail", () => {
+  const now = at("2026-12-25T02:00:00Z");
+  const q = { symbol: "2330.TW", source: "yahootw", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: CLOSE_1224,
+    periods: day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z"), closedDay: { reason: "行憲紀念日" }, chartSource: "yahootw" };
+  assert.equal(sessionOf(q, now), "holiday");
+  assert.deepEqual(freshness(q, "holiday", now), { state: "holiday", delayMinutes: null, stoppedAt: null });
+  assert.equal(shownLimit(q, "holiday", now), "up");
+  assert.deepEqual(detailSource(q, "holiday", now, say("zh-TW")), [["價格：休市 · Yahoo 奇摩股市"], ["走勢：休市 · Yahoo 奇摩股市"]]);
+  const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: CLOSE_1224, closedDay: { reason: "行憲紀念日" } };
+  assert.deepEqual(detailSource(base, "holiday", now, say("zh-TW")), [["Yahoo Finance · 一般交易時段", "延遲 20 分鐘"]]);
+  assert.equal(t("zh-TW", `session.${sessionName(q, "holiday", now)}`), "休市");
+  const wtx = { symbol: "WTX&", periods: null, closedDay: { reason: "行憲紀念日" } };
+  assert.equal(nextEdge(wtx, at("2026-12-24T22:00:00Z"), { openings: true }), null);   // 12/25 06:00: no opening
+  // A removed night: no night segment, so closed, not open.
+  assert.equal(sessionOf({ symbol: "WTX&", periods: null, nightClosed: true }, at("2026-12-25T18:00:00Z")), "closed");
 });
 
 test("a Taiwan or US quote without periods reads its exchange's hours; any other has no session", () => {

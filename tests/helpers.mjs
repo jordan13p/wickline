@@ -2,6 +2,7 @@
 // fixtures, and a fake host with a virtual clock, a scripted network and a shared store.
 import { readFileSync } from "node:fs";
 import { YAHOOTW_BASE } from "../mods/wickline/providers/yahootw.js";
+import { HOLIDAYS_URL } from "../mods/wickline/calendar.js";
 
 export const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
 // A recorded answer under tests/fixtures/, parsed.
@@ -66,6 +67,11 @@ export const LINE_PERIODS = { pre: null, regular: [1794207600000, 1794289500000]
 // 42 456 (15:19:52), their limits reset to the new trading day (46 910 / 38 382, previous close 42 646), and 2330.TW at
 // its 14:30 after-hours trade. marketStatus still reads close.
 export const FUTURES_NIGHT_ROWS = jsonFixture("yahootw-stocklist-futures-night");
+// TWSE's 2026 holiday schedule as served 2026-11-11 (27 rows), and the request for it.
+export const HOLIDAYS_2026 = jsonFixture("twse-holiday-2026");
+export const isHolidays = (url) => url === HOLIDAYS_URL;
+// 13:30 Taipei on Thursday 2026-12-24, TWSE's close the day before 行憲紀念日 (Friday 12/25, a listed closure).
+export const CLOSE_1224 = at("2026-12-24T05:30:00Z");
 
 export function fakeHost(respond) {
   const host = {
