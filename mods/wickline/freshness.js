@@ -1,5 +1,6 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
+import { taipeiDay } from "./calendar.js";
 import { stateText } from "./format.js";
 import {
   DAY_MS, MINUTE_MS, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, exchangeRule, kindOf, localDay, resolvedMarket, usOffsetMin, weekdayOf,
@@ -27,11 +28,14 @@ function staleAfterMs(quote) {
   return futures || delayS === null ? null : (delayS + DELAYED_GRACE_S) * 1000;
 }
 
+// The start of day number `day` on a clock at a fixed UTC offset of `offsetMin`, in ms.
+const dayStart = (offsetMin, day) => day * DAY_MS - offsetMin * MINUTE_MS;
+
 // A window of the local day around `now` (its from and to in local minutes since midnight), as [start, end) in
 // ms, by the clock's fixed UTC offset: a lunch break, a TAIFEX session, or an exchange's regular hours.
 function localWindow({ offsetMin, from, to }, now) {
-  const dayStart = localDay(offsetMin, now) * DAY_MS - offsetMin * MINUTE_MS;
-  return [dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS];
+  const start = dayStart(offsetMin, localDay(offsetMin, now));
+  return [start + from * MINUTE_MS, start + to * MINUTE_MS];
 }
 
 // When a Yahoo Finance quote's age is taken: at its fetch, but now for a `cached` one (its last fetch failed,
@@ -83,10 +87,13 @@ export function marketSession(quote, now) {
   return "closed";
 }
 
+// The clock on which the FX weekend is whole days: UTC+2.
+const FX_WEEK_OFFSET_MIN = 120;
+
 // From Friday 22:00 to Sunday 22:00 UTC, when the FX week is over: two hours later (on a UTC+2 clock) it is
 // Saturday or Sunday.
 function fxWeekend(now) {
-  const weekday = weekdayOf(localDay(120, now));
+  const weekday = weekdayOf(localDay(FX_WEEK_OFFSET_MIN, now));
   return weekday === 6 || weekday === 0;
 }
 
@@ -116,14 +123,67 @@ export function futuresSegment(quote, now) {
   return startMin >= 720 ? "night" : "day";
 }
 
+const edge = (at) => ({ at, opening: false });
+const opening = (at) => ({ at, opening: true });
+
+// The next start after `now` of `weekday` (Sunday 0) on a clock at `offsetMin`: a week on when today is that weekday.
+function nextDayStart(offsetMin, weekday, now) {
+  const today = localDay(offsetMin, now);
+  return dayStart(offsetMin, today + ((weekday - weekdayOf(today) + 7) % 7 || 7));
+}
+
 /**
- * The next moment after `now` at which `quote`'s session changes, in ms, or null; with `{ openings: true }`, only a
- * moment a session opens. For now only a future's: a TAIFEX session opening later on the Taipei day of `now`.
+ * The moments around `now` at which sessionOf can change for `quote`, along its own branches; an opening is a
+ * moment the market starts trading again. A pair has none. A future: each segment's start (an opening) and end,
+ * its line's and TAIFEX's table's both, since the row turns from the first to the second at its trading day's 15:00
+ * (ownPeriods), a moment only the table holds.
+ * Without a regular period: a Taiwan or US quote's hoursWindow on a trading weekday, its start an opening. FX: the
+ * weekend's start and end (fxWeekend's Friday and Sunday 22:00 UTC; its periods, the UTC day, are not read), the
+ * end an opening. Any other: its periods' pre, regular and post bounds, the regular start an opening, and its
+ * exchange's lunch inside the regular period, the lunch's end an opening.
+ */
+function sessionEdges(quote, now) {
+  if (isCryptoPair(quote.symbol)) return [];
+  if (kindOf(quote.symbol) === "future") {
+    const segments = [...(quote.periods?.segments ?? []), ...taifexSegments(now)];
+    return segments.flatMap(([start, end]) => [opening(start), edge(end)]);
+  }
+  const regular = quote.periods?.regular;
+  if (!regular) {
+    const hours = hoursWindow(quote, now);
+    return hours?.weekday ? [opening(hours.regular[0]), edge(hours.regular[1])] : [];
+  }
+  const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
+  if (fx) return [edge(nextDayStart(FX_WEEK_OFFSET_MIN, 6, now)), opening(nextDayStart(FX_WEEK_OFFSET_MIN, 1, now))];
+  const { pre, post } = quote.periods;
+  const edges = [...(pre ?? []).map(edge), opening(regular[0]), edge(regular[1]), ...(post ?? []).map(edge)];
+  if (!lunch) return edges;
+  const [lunchStart, lunchEnd] = localWindow(lunch, now);
+  return lunchStart > regular[0] && lunchEnd < regular[1] ? [...edges, edge(lunchStart), opening(lunchEnd)] : edges;
+}
+
+// The next Taipei midnight for a Taiwan quote, where its row's day (dayFor: taipeiDay) turns; none for any other.
+function dayEdges(quote, now) {
+  if (resolvedMarket(quote.symbol, quote.exchange) !== "tw") return [];
+  return [edge(dayStart(TAIFEX_HOURS.offsetMin, taipeiDay(now) + 1))];
+}
+
+// Every source of a row's edges: what it reads (sessionOf, its day) changes only at one of them.
+const EDGE_SOURCES = [sessionEdges, dayEdges];
+
+/**
+ * The next moment after `now` at which `quote`'s row reads differently (EDGE_SOURCES), in ms, or null; with
+ * `{ openings: true }`, only a moment its market starts trading again. Always later than `now`, so a wait cut at
+ * it is never zero.
  */
 export function nextEdge(quote, now, { openings = false } = {}) {
-  if (kindOf(quote.symbol) !== "future") return null;
-  const starts = taifexSegments(now).map(([start]) => start).filter((start) => start > now);
-  return starts.length ? Math.min(...starts) : null;
+  let next = null;
+  for (const source of EDGE_SOURCES) {
+    for (const { at, opening: opens } of source(quote, now)) {
+      if (at > now && (opens || !openings) && (next === null || at < next)) next = at;
+    }
+  }
+  return next;
 }
 
 /** The detail's session key suffix: a trading future's "day" or "night", else `session` itself. */

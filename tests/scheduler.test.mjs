@@ -2,8 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/wickline/watchlist.js";
-import { LIVE_MAX_AGE_MS, freshness } from "../mods/wickline/freshness.js";
-import { advance, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
+import { LIVE_MAX_AGE_MS, freshness, sessionOf } from "../mods/wickline/freshness.js";
+import { advance, at, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { yahoo } from "../mods/wickline/providers/yahoo.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
@@ -866,5 +866,46 @@ test("a failing line's problem goes with its symbol", async () => {
   w.remove("2330.TW");
   await advance(host, TW_START + 10_000);
   assert.deepEqual(w.problems(), []);
+  await stop(w, host, runs);
+});
+
+const NOON_HK = at("2026-11-10T04:00:00Z");
+function hkHost() {
+  const host = fakeHost((url) => chart({ symbol: chartSymbol(url), regularMarketPrice: 400, regularMarketTime: Math.floor(host.clock / 1000) - 900,
+    previousClose: 398, currency: "HKD", exchangeName: "HKG",
+    currentTradingPeriod: { regular: { start: at("2026-11-10T01:30:00Z") / 1000, end: at("2026-11-10T08:00:00Z") / 1000 } } }));
+  host.clock = NOON_HK - 30_000;
+  host.store = { version: 1, symbols: ["0700.HK"], paused: false };
+  host.redraws = [];
+  host.changed = () => host.redraws.push(host.clock);
+  return host;
+}
+
+test("0700.HK on Yahoo reads 午休 within a second of 12:00", async () => {
+  const host = hkHost();
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, NOON_HK + 5_000);
+  assert.ok(host.redraws.some((time) => time >= NOON_HK && time <= NOON_HK + 1_000), host.redraws.join());
+  assert.equal(sessionOf(w.shown("0700.HK", NOON_HK + 1), NOON_HK + 1), "lunch");
+  await stop(w, host, runs);
+});
+
+// A copy hidden from the start never fetches, so it has no periods and no 12:00 edge to skip (review 1, I3): it
+// shows one round first. 11:58:30 keeps the quote's own stale wake (its time + 17 min = 12:00:30) and the next
+// round (11:59:30) out of [12:00, 12:00:01].
+test("a docked copy hidden after a round does not wake for a boundary", async () => {
+  const host = hkHost();
+  host.clock = NOON_HK - 90_000;                 // 11:58:30
+  let shown = true;
+  host.shown = () => shown;
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, NOON_HK - 85_000);
+  assert.ok(w.shown("0700.HK", host.clock).periods.regular);
+  shown = false;
+  await advance(host, NOON_HK + 5_000);
+  assert.equal(host.requests.length, 1);
+  assert.ok(!host.redraws.some((time) => time >= NOON_HK && time <= NOON_HK + 1_000), host.redraws.join());
   await stop(w, host, runs);
 });

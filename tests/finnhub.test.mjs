@@ -585,6 +585,23 @@ test("the detail's line under a live Finnhub price takes its state from the Yaho
   assert.deepEqual(detailSource(fresh, "open", now, say), [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
 });
 
+test("a Finnhub round starts at 09:30 New York", async () => {
+  const open = at("2026-11-10T14:30:00Z");
+  const meta = { exchangeName: "NMS", currentTradingPeriod: { pre: { start: at("2026-11-10T09:00:00Z") / 1000, end: open / 1000 },
+    regular: { start: open / 1000, end: at("2026-11-10T21:00:00Z") / 1000 } } };
+  const host = usHost({}, { yahoo: (symbol) => yahooUs(symbol, { ...meta, regularMarketTime: Math.floor(host.clock / 1000) }) });
+  host.clock = open - 40_000; // 09:29:20, pre-market: Finnhub at 60 s
+  const asked = [];
+  const finnhub = host.finnhub;
+  host.finnhub = (url) => { asked.push(host.clock); return finnhub(url); };
+  const w = new Watchlist(host);
+  w.add("AAPL");
+  const runs = start(w, host);
+  await advance(host, open + 5_000);
+  assert.ok(asked.some((time) => time >= open && time <= open + 1_000), asked.join());
+  await stop(w, host, runs);
+});
+
 // ---- helpers ----
 
 function finnhubOn(us = {}, keyRev = 0) {

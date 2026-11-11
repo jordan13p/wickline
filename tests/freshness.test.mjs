@@ -512,13 +512,58 @@ test("a future's limit holds after its session only for a trade inside it, with 
   assert.equal(shownLimit(shown, sessionOf(shown, night), night), null);
 });
 
-test("nextEdge: a future's next TAIFEX opening on its Taipei day; nothing yet for a stock", () => {
+test("nextEdge: a future's next TAIFEX opening on its Taipei day; a stock without periods at its exchange's opening", () => {
   const wtx = { symbol: "WTX&", periods: null };
   assert.equal(nextEdge(wtx, at("2026-11-09T22:30:00Z"), { openings: true }), at("2026-11-10T00:45:00Z")); // 06:30 → 08:45
   assert.equal(nextEdge(wtx, at("2026-11-10T01:00:00Z"), { openings: true }), at("2026-11-10T07:00:00Z")); // 09:00 → 15:00
   assert.equal(nextEdge(wtx, at("2026-11-10T08:00:00Z"), { openings: true }), null);                       // 16:00
   assert.equal(nextEdge(wtx, at("2026-11-14T02:00:00Z"), { openings: true }), null);                       // Saturday
-  assert.equal(nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), { openings: true }), null);
+  assert.equal(nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), { openings: true }), at("2026-11-10T01:00:00Z"));
+});
+
+test("nextEdge: each market's next edge, and its next opening", () => {
+  const hk = { symbol: "0700.HK", exchange: "HKG", periods: day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z") };
+  const us = { symbol: "AAPL", exchange: "NMS", periods: { pre: [at("2026-11-10T09:00:00Z"), at("2026-11-10T14:30:00Z")],
+    regular: [at("2026-11-10T14:30:00Z"), at("2026-11-10T21:00:00Z")], post: [at("2026-11-10T21:00:00Z"), at("2026-11-11T01:00:00Z")] } };
+  const cases = [
+    // [quote, UTC now, next edge, next opening]
+    [hk, "2026-11-10T03:59:30Z", "2026-11-10T04:00:00Z", "2026-11-10T05:00:00Z"], // 11:59:30 HK: lunch, then its end
+    [us, "2026-11-10T14:29:20Z", "2026-11-10T14:30:00Z", "2026-11-10T14:30:00Z"], // 09:29:20 New York
+    [{ symbol: "AAPL", periods: null }, "2026-11-10T14:00:00Z", "2026-11-10T14:30:00Z", "2026-11-10T14:30:00Z"],
+    [{ symbol: "WTX&", periods: null }, "2026-11-10T05:00:00Z", "2026-11-10T05:45:00Z", "2026-11-10T07:00:00Z"], // 13:00 Taipei
+    [{ symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-13T00:00:00Z", "2026-11-14T00:00:00Z") },
+      "2026-11-13T21:00:00Z", "2026-11-13T22:00:00Z", "2026-11-15T22:00:00Z"],
+    [{ symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") },
+      "2026-11-10T06:00:00Z", "2026-11-10T16:00:00Z", null],                                      // 14:00: Taipei midnight
+    [us, "2026-11-11T01:30:00Z", null, null],                                                   // after post; no Taiwan midnight
+    [{ symbol: "BTC/USDT", periods: null }, "2026-11-10T06:00:00Z", null, null],
+  ];
+  for (const [quote, iso, edge, opening] of cases) {
+    assert.equal(nextEdge(quote, at(iso)), edge && at(edge), `${quote.symbol} ${iso}`);
+    assert.equal(nextEdge(quote, at(iso), { openings: true }), opening && at(opening), `${quote.symbol} ${iso} opening`);
+  }
+});
+
+// A wait cut at the next edge is never zero: standing on an edge gives the one after it.
+test("nextEdge on an edge gives the next one", () => {
+  const hk = { symbol: "0700.HK", exchange: "HKG", periods: day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z") };
+  const wtx = { symbol: "WTX&", periods: null };
+  const fx = { symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-13T00:00:00Z", "2026-11-14T00:00:00Z") };
+  assert.equal(nextEdge(hk, at("2026-11-10T04:00:00Z")), at("2026-11-10T05:00:00Z"));  // 12:00 HK → 13:00
+  assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z")); // 15:00 Taipei → midnight
+  assert.equal(nextEdge(fx, at("2026-11-13T22:00:00Z")), at("2026-11-15T22:00:00Z"));  // Friday 22:00 → Sunday's
+});
+
+// A future's line holds its trading day's segments (Monday's night, Tuesday's day); Tuesday's 15:00 night opening is
+// only in TAIFEX's table. The two lists together give it once, never a past or repeated edge.
+test("nextEdge: a future with its line's segments still opens at 15:00, and past 15:00 goes on", () => {
+  const wtx = { symbol: "WTX&", periods: LINE_PERIODS };
+  const openings = { openings: true };
+  assert.equal(nextEdge(wtx, at("2026-11-10T05:00:00Z")), at("2026-11-10T05:45:00Z"));           // 13:00: day close, in both
+  assert.equal(nextEdge(wtx, at("2026-11-10T06:59:50Z")), at("2026-11-10T07:00:00Z"));           // 14:59:50
+  assert.equal(nextEdge(wtx, at("2026-11-10T06:59:50Z"), openings), at("2026-11-10T07:00:00Z"));
+  assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z"));           // 15:00 → midnight
+  assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z"), openings), null);
 });
 
 test("a Taiwan or US quote without periods reads its exchange's hours; any other has no session", () => {

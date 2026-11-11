@@ -702,25 +702,30 @@ export class Watchlist {
       const now = this.host.now();
       let due = now;
       if (!idle) {
-        // A break's interval ends at TAIFEX's next opening, so a future's first price of a session is not up to an
-        // interval late; from then on the row reads that session (ownPeriods), and its cadence with it.
+        // A break's interval ends at the next opening (a session's start, a lunch's end, the FX week's start), so
+        // the first price of a session is not up to an interval late; from then on the row reads that session, and
+        // its cadence with it.
         const opens = this.edgeAt(symbols, now, { openings: true });
         due += Math.max(Math.min(provider.intervalMs(this.sessionFor(symbols, now)), opens === null ? Infinity : opens - now),
           state.retryAt - now);
       }
-      await this.rest(state, symbols, due, io);
+      await this.rest(state, symbols, due, io, hidden);
     }
   }
 
   /**
    * Sleeps until `due` (an idle loop: until a shown price turns stale), or until poked. A long wait,
-   * such as a rate-limit cooldown, is cut where a shown price turns stale: that wake only redraws.
+   * such as a rate-limit cooldown, is cut where a shown price turns stale or a row reaches its next edge
+   * (edgeAt): those wakes only redraw. A hidden copy never renders, so it skips the edges and waits for
+   * wakeMissed().
    */
-  async rest(state, symbols, due, io) {
+  async rest(state, symbols, due, io, hidden) {
     for (;;) {
       const now = this.host.now();
+      const edge = hidden ? null : this.edgeAt(symbols, now);
       const stale = this.staleInMs(symbols, now);
-      const wait = due > now ? Math.min(due - now, stale) : stale;
+      const redraw = edge === null ? stale : Math.min(stale, edge - now);
+      const wait = due > now ? Math.min(due - now, redraw) : redraw;
       const poked = await new Promise((resolve) => {
         state.wake = () => resolve(true);
         io.sleep(wait).then(() => resolve(false));
