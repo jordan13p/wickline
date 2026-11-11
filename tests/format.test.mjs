@@ -2,8 +2,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
-import { formatDate, stateText } from "../mods/wickline/format.js";
-import { freshness } from "../mods/wickline/freshness.js";
+import { formatDate, sessionTimesParts, stateText } from "../mods/wickline/format.js";
+import { freshness, sessionTimes } from "../mods/wickline/freshness.js";
+import { at, day, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
 
 test("formats without Intl", () => {
@@ -164,4 +165,41 @@ test("formatStaleDate and detailTimes compare by the day function they are given
 test("an unconfirmed state has no word of its own", () => {
   assert.equal(stateText({ state: "unconfirmed" }, (key) => key), null);
   assert.equal(stateText({ state: "closed" }, (key) => key), "session.closed");
+});
+
+test("the session times line, per market kind, in local time", () => {
+  const zh = (key, params) => t("zh-TW", key, params);
+  const en = (key, params) => t("en", key, params);
+  const line = (quote, now, tx = zh) => sessionTimesParts(sessionTimes(quote, now), tx);
+  const nov = at("2026-11-10T02:00:00Z");
+  const tw = { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") };
+  const wtx = { symbol: "WTX&", periods: null };
+  const hk = { symbol: "0700.HK", exchange: "HKG", periods: day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z") };
+  const aapl = { symbol: "AAPL", exchange: "NMS", periods: day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z") };
+  withTZ("Asia/Taipei", () => {
+    assert.deepEqual(line(tw, nov), ["交易時段：09:00–13:30"]);
+    assert.deepEqual(line(wtx, nov), ["交易時段：日盤 08:45–13:45", "夜盤 15:00–05:00"]);
+    assert.deepEqual(line(hk, nov), ["交易時段：09:30–12:00", "13:00–16:00"]);
+    assert.deepEqual(line(aapl, nov), ["交易時段：22:30–05:00"]);
+    // Before its Yahoo quote: the US hours.
+    assert.deepEqual(line({ symbol: "AAPL", source: "finnhub", periods: null }, at("2026-11-10T15:00:00Z")), ["交易時段：22:30–05:00"]);
+    assert.deepEqual(line({ symbol: "AAPL", source: "finnhub", periods: null }, at("2026-07-15T15:00:00Z")), ["交易時段：21:30–04:00"]);
+    assert.deepEqual(line({ ...aapl, periods: day("2026-07-15T13:30:00Z", "2026-07-15T20:00:00Z") }, at("2026-07-15T15:00:00Z")), ["交易時段：21:30–04:00"]);
+    assert.deepEqual(line({ symbol: "BTC/USDT", periods: null }, nov), ["交易時段：24 小時"]);
+    assert.deepEqual(line({ symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-10T00:00:00Z", "2026-11-11T00:00:00Z") }, nov), ["交易時段：24 小時"]);
+    assert.deepEqual(line({ symbol: "ES=F", exchange: "CME", periods: day("2026-11-09T23:00:00Z", "2026-11-10T22:00:00Z") }, nov), ["交易時段：07:00–06:00"]);
+    assert.deepEqual(line({ symbol: "^N225", exchange: "OSA", periods: null }, nov), []);
+    // Taiwan reads TWSE's hours whatever its periods say (a TW-only index from Friday's close, on Saturday).
+    const friday = at("2026-11-13T05:30:00Z");
+    const saturday = at("2026-11-14T02:00:00Z");
+    assert.deepEqual(line({ symbol: "^TWOII", exchange: "TWO", periods: { pre: null, regular: [friday, friday], post: null } }, saturday), ["交易時段：09:00–13:30"]);
+    // A lunch split on the session's own day: a Saturday detail with Friday's periods.
+    assert.deepEqual(line({ ...hk, periods: day("2026-11-13T01:30:00Z", "2026-11-13T08:00:00Z") }, saturday), ["交易時段：09:30–12:00", "13:00–16:00"]);
+    assert.deepEqual(line(wtx, nov, en), ["Trading hours: Day 08:45–13:45", "Night 15:00–05:00"]);
+    assert.deepEqual(line({ symbol: "BTC/USDT", periods: null }, nov, en), ["Trading hours: 24 hours"]);
+  });
+  withTZ("Europe/London", () => {
+    assert.deepEqual(line(tw, nov), ["交易時段：01:00–05:30"]);
+    assert.deepEqual(line(wtx, nov), ["交易時段：日盤 00:45–05:45", "夜盤 07:00–21:00"]);
+  });
 });

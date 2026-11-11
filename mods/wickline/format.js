@@ -177,6 +177,21 @@ export function detailTimes(quote, now, lang, tx, day = localDate) {
     tx("detail.fetched", { time: formatTime(quote.fetchedAt, true) })];
 }
 
+const timeRange = ([start, end]) => `${formatTime(start)}–${formatTime(end)}`;
+
+/**
+ * The 交易時段 line's parts (see sessionTimes), for segments() (joined with " · "): the first part carries
+ * tx("detail.sessionTimes", { times }); each range is `${formatTime(start)}–${formatTime(end)}`; [] for null.
+ */
+export function sessionTimesParts(times, tx) {
+  if (!times) return [];
+  const parts = times.allDay ? [tx("detail.allDay")]
+    : times.day ? [tx("detail.daySession", { times: timeRange(times.day) }), tx("detail.nightSession", { times: timeRange(times.night) })]
+      : times.spans.map(timeRange);
+  const [first, ...rest] = parts;
+  return [tx("detail.sessionTimes", { times: first }), ...rest];
+}
+
 /** A row with no price whose fetch failed: it will not price soon, so it gives up its empty lines. */
 export function collapsedRow(row) {
   return !row.quote && Boolean(row.failed);

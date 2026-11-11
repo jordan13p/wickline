@@ -292,3 +292,13 @@ test("no language says the session is unknown, and an unconfirmed line names its
     ["価格: {source}", "チャート: {source}"], ["가격: {source}", "차트: {source}"],
   ]);
 });
+
+test("the session times are worded in every language", () => {
+  assert.deepEqual(LANGUAGES.map((lang) => ["detail.sessionTimes", "detail.daySession", "detail.nightSession", "detail.allDay"].map((key) => t(lang, key))), [
+    ["Trading hours: {times}", "Day {times}", "Night {times}", "24 hours"],
+    ["交易時段：{times}", "日盤 {times}", "夜盤 {times}", "24 小時"],
+    ["交易时段：{times}", "日盘 {times}", "夜盘 {times}", "24 小时"],
+    ["取引時間：{times}", "日中 {times}", "夜間 {times}", "24時間"],
+    ["거래 시간: {times}", "주간 {times}", "야간 {times}", "24시간"],
+  ]);
+});

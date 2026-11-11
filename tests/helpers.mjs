@@ -17,6 +17,27 @@ export const at = (iso) => Date.parse(iso);
 export const day = (open, close) => ({ pre: null, regular: [at(open), at(close)], post: null });
 export const yq = (symbol, exchange, timestamp, periods = null) => ({ symbol, source: "yahoo", exchange, timestamp, periods });
 
+/**
+ * Runs `run` with process.env.TZ set to `zone` (Node honours a change at run time) and restores the old value after,
+ * also on a throw; when `run` returns a promise, the old value comes back once it settles. Returns run's result.
+ */
+export function withTZ(zone, run) {
+  const before = process.env.TZ;
+  // Assigning undefined would store the string "undefined": an unset zone is deleted instead.
+  const restore = () => { if (before === undefined) delete process.env.TZ; else process.env.TZ = before; };
+  process.env.TZ = zone;
+  let result;
+  try {
+    result = run();
+  } catch (error) {
+    restore();
+    throw error;
+  }
+  if (typeof result?.then === "function") return result.finally(restore);
+  restore();
+  return result;
+}
+
 // Yahoo 奇摩股市 recorded at 08:14 in Taipei on 2026-11-10, trimmed to the fields Wickline reads: ^TWOII and ^TWII
 // still carry the day before's 13:31 close (delay 0), and ^TWOII's line still carries that day's periods and minutes.
 export const EARLIER_ROWS = jsonFixture("yahootw-stocklist-earlier-day");

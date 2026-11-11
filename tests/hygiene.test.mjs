@@ -540,6 +540,12 @@ test("the detail names a future's day or night session", () => {
   assert.match(detail, /view\.tx\(`session\.\$\{sessionName\(q, session, now\)\}`\)/);
 });
 
+test("the detail's session times sit between the source lines and the times", () => {
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /\[\.\.\.source, \.\.\.\(hours\.length \? \[hours\] : \[\]\), times\]/);
+  assert.match(detail, /sessionTimesParts\(sessionTimes\(q, now\), tx\)/);
+});
+
 test("no module names session.unknown, and the detail's header shows no word for an unknown session", () => {
   for (const file of jsFiles()) assert.ok(!code(read(file)).includes("session.unknown"), relativeName(file));
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));

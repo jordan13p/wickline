@@ -143,6 +143,33 @@ export function hoursWindow(quote, now) {
 }
 
 /**
+ * The detail's 交易時段 for `quote` at `now`, as data (format.js writes it); times in ms, regular session only:
+ * - { allDay: true } for a pair or FX (exchangeRule(...).fx; its regular period, the UTC day, is not shown);
+ * - { day: [start, end], night: [start, end] } for a TAIFEX future, from TAIFEX_HOURS on the Taipei date of `now`;
+ * - { spans: [[start, end]] } from TWSE_HOURS (hoursWindow) for a Taiwan stock or index, whatever periods it carries
+ *   (a TW-only index priced from an earlier day carries a zero-length period);
+ * - { spans: [[start, end], …] } from periods.regular (a `=F` future's as Yahoo gives it), else hoursWindow's,
+ *   split around the exchange's lunch (exchangeRule(...).lunch, via localWindow taken at regular[0], so a Saturday
+ *   detail with Friday's periods still splits) when it has one;
+ * - null with nothing to show.
+ */
+export function sessionTimes(quote, now) {
+  const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
+  if (isCryptoPair(quote.symbol) || fx) return { allDay: true };
+  if (kindOf(quote.symbol) === "future") {
+    const { offsetMin, sessions: [day, night] } = TAIFEX_HOURS;
+    return { day: localWindow({ offsetMin, ...day }, now), night: localWindow({ offsetMin, ...night }, now) };
+  }
+  if (resolvedMarket(quote.symbol, quote.exchange) === "tw") return { spans: [hoursWindow(quote, now).regular] };
+  const regular = quote.periods?.regular ?? hoursWindow(quote, now)?.regular;
+  if (!regular) return null;
+  const [start, end] = regular;
+  if (!lunch) return { spans: [[start, end]] };
+  const [lunchStart, lunchEnd] = localWindow(lunch, start);
+  return lunchStart > start && lunchEnd < end ? { spans: [[start, lunchStart], [lunchEnd, end]] } : { spans: [[start, end]] };
+}
+
+/**
  * "open", "pre", "post" or "closed" from the quote's trading periods, and "lunch" while open inside its
  * exchange's lunch break (Yahoo's regular period runs through it); FX is "closed" over the weekend whatever
  * its period says. A pair trades "24h"; a future (WTX&) is "open" inside a segment (futuresSegment), else
