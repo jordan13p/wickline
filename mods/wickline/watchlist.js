@@ -460,8 +460,7 @@ export class Watchlist {
     const holidays = this.holidays;
     let days = null;
     try {
-      const timeout = io.sleep(REQUEST_TIMEOUT_MS).then(() => TIMED_OUT);
-      const response = await Promise.race([this.get({ url: HOLIDAYS_URL, headers: HEADERS }), timeout]);
+      const response = await this.getWithin({ url: HOLIDAYS_URL, headers: HEADERS }, io);
       if (response !== TIMED_OUT && response.ok) days = parseHolidays(response.text);
     } catch { /* No schedule: tried again after HOLIDAY_RETRY_MS. */ }
     holidays.tried = taipeiDay(now);
@@ -1268,15 +1267,20 @@ export class Watchlist {
     return { status: response.status, ok: response.ok, url: response.url, text: await response.text() };
   }
 
+  // The answer to `request` (get), or TIMED_OUT when REQUEST_TIMEOUT_MS passes first: Herdr's fetch has no timeout.
+  getWithin(request, io) {
+    const timeout = io.sleep(REQUEST_TIMEOUT_MS).then(() => TIMED_OUT);
+    return Promise.race([this.get(request), timeout]);
+  }
+
   /**
    * One request, decoded; null once the round is stale. A request that does not answer within
    * REQUEST_TIMEOUT_MS gets `request.timeout` and its late answer is dropped; a network failure
    * (or a decoder bug) becomes the provider's `unreachable` error, for each of its symbols.
    */
   async ask(provider, request, io, current) {
-    const timeout = io.sleep(REQUEST_TIMEOUT_MS).then(() => TIMED_OUT);
     try {
-      const response = await Promise.race([this.get(request), timeout]);
+      const response = await this.getWithin(request, io);
       if (!current()) return null;
       if (response === TIMED_OUT) {
         throw new QuoteError("request.timeout", { source: provider.id, seconds: REQUEST_TIMEOUT_MS / 1000 });
