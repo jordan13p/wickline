@@ -279,3 +279,16 @@ test("the futures sessions are named in every language", () => {
   assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.day")), ["Day session open", "日盤交易中", "日盘交易中", "日中取引中", "주간 거래 중"]);
   assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.night")), ["Night session open", "夜盤交易中", "夜盘交易中", "夜間取引中", "야간 거래 중"]);
 });
+
+test("no language says the session is unknown, and an unconfirmed line names its source alone", () => {
+  for (const lang of LANGUAGES) {
+    assert.ok(!("session.unknown" in STRINGS[lang]), lang);
+    for (const [key, text] of Object.entries(STRINGS[lang])) {
+      assert.doesNotMatch(text, /Session unknown|交易時段未知|交易时段未知|取引時間不明|거래 시간 알 수 없음/, `${lang} ${key}`);
+    }
+  }
+  assert.deepEqual(LANGUAGES.map((lang) => [t(lang, "detail.priceSource"), t(lang, "detail.lineSource")]), [
+    ["Price: {source}", "Line: {source}"], ["價格：{source}", "走勢：{source}"], ["价格：{source}", "走势：{source}"],
+    ["価格: {source}", "チャート: {source}"], ["가격: {source}", "차트: {source}"],
+  ]);
+});

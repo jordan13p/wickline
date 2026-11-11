@@ -150,8 +150,8 @@ test("each loop asks its provider for the interval of its busiest session", asyn
   try {
     const runs = start(w, host);
     await advance(host, 1);
-    // The Yahoo fixture has no trading periods, so its session is not known yet.
-    assert.ok(asked.yahoo.length > 0 && asked.yahoo.every((session) => session === "unknown"), asked.yahoo.join());
+    // Before its first quote AAPL's session is not known; then the US hours read 19:00 New York as closed.
+    assert.deepEqual(asked.yahoo, ["unknown", "closed"]);
     // Before its first quote a pair is not known either; once quoted it trades around the clock.
     assert.deepEqual([asked.binance[0], asked.binance.at(-1)], ["unknown", "open"]);
     await stop(w, host, runs);

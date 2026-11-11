@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
-import { formatDate } from "../mods/wickline/format.js";
+import { formatDate, stateText } from "../mods/wickline/format.js";
 import { freshness } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -159,4 +159,9 @@ test("formatStaleDate and detailTimes compare by the day function they are given
   assert.equal(formatStaleDate(now - 1_000, now, "en", (ms) => ms), "Nov 2");
   assert.deepEqual(detailTimes({ timestamp: earlier, fetchedAt: now }, now, "en", tx, () => 0)[0], `Quote at ${formatTime(earlier, true)}`);
   assert.deepEqual([formatDate(earlier, "en"), formatDate(earlier, "zh-TW")], ["Oct 31", "10/31"]);
+});
+
+test("an unconfirmed state has no word of its own", () => {
+  assert.equal(stateText({ state: "unconfirmed" }, (key) => key), null);
+  assert.equal(stateText({ state: "closed" }, (key) => key), "session.closed");
 });

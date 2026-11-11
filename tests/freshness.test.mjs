@@ -5,7 +5,9 @@ import {
   LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
   shownLimit,
 } from "../mods/wickline/freshness.js";
-import { nextEdge } from "../mods/wickline/freshness.js";
+import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
+import { usOffsetMin } from "../mods/wickline/markets.js";
+import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
@@ -54,8 +56,9 @@ test("freshness states", () => {
 test("the session of a quote", () => {
   const day = { pre: [100, 200], regular: [200, 300], post: [300, 400] };
   assert.equal(sessionOf({ symbol: "BTC/USDT", periods: null }, 1), "24h");
-  assert.equal(sessionOf({ symbol: "AAPL", periods: null }, 1), "unknown");
-  assert.equal(sessionOf({ symbol: "AAPL", periods: { pre: null, regular: null, post: null } }, 1), "unknown");
+  assert.equal(sessionOf({ symbol: "AAPL", periods: null }, 1), "closed");
+  assert.equal(sessionOf({ symbol: "AAPL", periods: { pre: null, regular: null, post: null } }, 1), "closed");
+  assert.equal(sessionOf({ symbol: "0700.HK", exchange: "HKG", periods: null }, 1), "unknown");
   assert.equal(sessionOf({ symbol: "AAPL", periods: day }, 150), "pre");
   assert.equal(sessionOf({ symbol: "AAPL", periods: day }, 250), "open");
   assert.equal(sessionOf({ symbol: "AAPL", periods: day }, 350), "post");
@@ -77,9 +80,9 @@ test("the detail source line reads state · source", () => {
   assert.deepEqual(detailSource(mis, "open", NOW, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
   assert.deepEqual(detailSource({ ...mis, symbol: "AAPL", source: "finnhub", exchange: "NMS", chartTimestamp: NOW - 40_000, chartFetchedAt: NOW - 30_000 }, "open", NOW, say("en")),
     [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
-  // Not trading: the session, not "Live"; a session not known yet reads unknown.
+  // Not trading: the session, not "Live"; a session not known yet names the source alone.
   assert.deepEqual(detailSource(own, "closed", NOW, say("en")), [["Price: Market closed · Yahoo TW Stock"], ["Line: Market closed · Yahoo TW Stock"]]);
-  assert.deepEqual(detailSource({ ...mis, chartSource: null }, "unknown", NOW, say("en")), [["Price: Session unknown · TWSE MIS"]]);
+  assert.deepEqual(detailSource({ ...mis, chartSource: null }, "unknown", NOW, say("en")), [["Price: TWSE MIS"]]);
   // Base only: unchanged.
   const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: NOW };
   assert.deepEqual(detailSource(base, "open", NOW, say("en")), [["Yahoo Finance · regular session", "delayed 20 min"]]);
@@ -516,4 +519,72 @@ test("nextEdge: a future's next TAIFEX opening on its Taipei day; nothing yet fo
   assert.equal(nextEdge(wtx, at("2026-11-10T08:00:00Z"), true), null);                       // 16:00
   assert.equal(nextEdge(wtx, at("2026-11-14T02:00:00Z"), true), null);                       // Saturday
   assert.equal(nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), true), null);
+});
+
+test("a Taiwan or US quote without periods reads its exchange's hours; any other has no session", () => {
+  const cases = [
+    // [symbol, exchange, UTC, session] (local time in the comment)
+    ["AAPL", undefined, "2026-11-10T14:31:00Z", "open"],     // Tue 09:31 New York (EST)
+    ["AAPL", undefined, "2026-11-11T01:00:00Z", "closed"],   // 20:00
+    ["AAPL", undefined, "2026-11-14T15:00:00Z", "closed"],   // Saturday
+    ["AAPL", undefined, "2026-03-06T14:29:59Z", "closed"],   // Fri 09:29:59 EST
+    ["AAPL", undefined, "2026-03-06T14:30:00Z", "open"],     // Fri 09:30 EST
+    ["AAPL", undefined, "2026-03-09T13:29:59Z", "closed"],   // Mon 09:29:59 EDT
+    ["AAPL", undefined, "2026-03-09T13:30:00Z", "open"],     // Mon 09:30 EDT
+    ["AAPL", undefined, "2026-10-30T13:30:00Z", "open"],     // Fri 09:30 EDT
+    ["AAPL", undefined, "2026-11-02T13:30:00Z", "closed"],   // Mon 08:30 EST
+    ["AAPL", undefined, "2026-11-02T14:30:00Z", "open"],     // Mon 09:30 EST
+    ["2330.TW", undefined, "2026-11-10T00:59:59Z", "closed"], // 08:59:59 Taipei
+    ["2330.TW", undefined, "2026-11-10T01:00:00Z", "open"],   // 09:00
+    ["2330.TW", undefined, "2026-11-10T05:29:59Z", "open"],   // 13:29:59
+    ["2330.TW", undefined, "2026-11-10T05:30:00Z", "closed"], // 13:30
+    ["2330.TW", undefined, "2026-11-14T02:00:00Z", "closed"], // Saturday 10:00
+    ["6488.TWO", undefined, "2026-11-10T02:00:00Z", "open"],
+    ["^TWOII", "TWO", "2026-11-10T02:00:00Z", "open"],
+    ["0700.HK", "HKG", "2026-11-10T02:00:00Z", "unknown"],
+    ["^N225", "OSA", "2026-11-10T02:00:00Z", "unknown"],
+  ];
+  for (const [symbol, exchange, iso, session] of cases) {
+    assert.equal(sessionOf({ symbol, exchange, source: "finnhub", periods: null }, at(iso)), session, `${symbol} ${iso}`);
+  }
+  // The DST edges, on both Sundays.
+  assert.deepEqual(["2026-03-08T06:59:59Z", "2026-03-08T07:00:00Z", "2026-11-01T05:59:59Z", "2026-11-01T06:00:00Z"]
+    .map((iso) => usOffsetMin(at(iso))), [-300, -240, -240, -300]);
+  assert.deepEqual(hoursWindow({ symbol: "AAPL", periods: null }, at("2026-07-15T15:00:00Z")),
+    { regular: [at("2026-07-15T13:30:00Z"), at("2026-07-15T20:00:00Z")], weekday: true });
+  assert.equal(hoursWindow({ symbol: "0700.HK", exchange: "HKG", periods: null }, at("2026-11-10T02:00:00Z")), null);
+});
+
+test("a Finnhub-first AAPL reads Live and 開盤中 at 09:31 New York, closed with its time at 20:00", () => {
+  const open = at("2026-11-10T14:31:00Z");
+  const live = mergeOverlay(undefined, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: open - 5_000, fetchedAt: open });
+  assert.equal(freshness(live, sessionOf(live, open), open).state, "live");
+  assert.equal(t("zh-TW", `session.${sessionName(live, sessionOf(live, open), open)}`), "開盤中");
+  const last = at("2026-11-10T20:59:55Z");
+  const evening = at("2026-11-11T01:00:00Z");
+  const closed = { ...live, timestamp: last };
+  const fresh = freshness(closed, sessionOf(closed, evening), evening);
+  assert.equal(fresh.state, "closed");
+  const tx = say("en");
+  assert.equal(freshnessLabel(closed, fresh, evening, "en", tx),
+    `${tx("session.closed")} · ${[formatStaleDate(last, evening, "en"), formatTime(last)].filter(Boolean).join(" ")}`);
+});
+
+test("a MIS-first 2330.TW at 10:00 Taipei reads Live and 開盤中", () => {
+  const now = at("2026-11-10T02:00:00Z");
+  const quote = mergeOverlay(undefined, { symbol: "2330.TW", source: "mis", price: 2250, timestamp: now - 5_000, fetchedAt: now });
+  assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
+  assert.equal(t("zh-TW", `session.${sessionName(quote, sessionOf(quote, now), now)}`), "開盤中");
+});
+
+test("an unconfirmed price or line names its source alone", () => {
+  const open = at("2026-11-10T14:30:00Z");
+  const now = open + 20_000; // 09:30:20 New York
+  const periods = day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z");
+  const yesterday = { ...yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), periods), fetchedAt: now - 5_000 };
+  assert.deepEqual(detailSource(yesterday, sessionOf(yesterday, now), now, say("zh-TW")), [["價格：Yahoo Finance"]]);
+  assert.deepEqual(detailSource(yesterday, sessionOf(yesterday, now), now, say("en")), [["Price: Yahoo Finance"]]);
+  const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: now - 10_000, periods,
+    chartSource: "yahoo", chartTimestamp: open - 60_000, chartFetchedAt: now - 5_000 };
+  assert.deepEqual(detailSource(finnhub, "open", now, say("en")), [["Price: Live · Finnhub"], ["Line: Yahoo Finance"]]);
 });

@@ -25,8 +25,9 @@ export function detailView(view, t) {
       .child(v_flex().flex_1().min_w(0).gap(2)
         .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
         .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, view.lang) ?? "")))
-      // The session as plain text: a filled dot means a live quote, everywhere.
-      .child(div().flex_none().text_size(11).text_color(t.muted).child(view.tx(`session.${sessionName(q, session, now)}`)))
+      // The session as plain text: a filled dot means a live quote, everywhere. No word while it is not known.
+      .when(sessionName(q, session, now) !== "unknown", (el) => el
+        .child(div().flex_none().text_size(11).text_color(t.muted).child(view.tx(`session.${sessionName(q, session, now)}`))))
       .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
         .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×")))
     .child(h_flex().gap(10).items_end()

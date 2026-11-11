@@ -540,6 +540,12 @@ test("the detail names a future's day or night session", () => {
   assert.match(detail, /view\.tx\(`session\.\$\{sessionName\(q, session, now\)\}`\)/);
 });
 
+test("no module names session.unknown, and the detail's header shows no word for an unknown session", () => {
+  for (const file of jsFiles()) assert.ok(!code(read(file)).includes("session.unknown"), relativeName(file));
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /!== "unknown"/);
+});
+
 test("the pause key acts as the button does", () => {
   const main = code(read(new URL("main.js", MOD)));
   assert.match(main, /command === "pause"\)\s*this\.act\(cx, \(\) => this\.togglePause\(\)\)/);

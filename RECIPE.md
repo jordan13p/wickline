@@ -33,7 +33,7 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
 
 **Detail dialog**, 440px wide, 18px padding, 14px between parts:
 
-- the ticker (16px semibold) over its name (11.5px `dim`); on the right the session as 11px `muted` text, no dot or pill: `Market open`, `Pre-market`, `After hours`, `Market closed`, `Trades 24h` for a pair, `Day session open` / `Night session open` (`日盤交易中` / `夜盤交易中`) for a trading future, `Session unknown` for a stock Yahoo gave no trading hours for; then a `dim` `×` closing it.
+- the ticker (16px semibold) over its name (11.5px `dim`); on the right the session as 11px `muted` text, no dot or pill: `Market open`, `Pre-market`, `After hours`, `Market closed`, `Trades 24h` for a pair, `Day session open` / `Night session open` (`日盤交易中` / `夜盤交易中`) for a trading future; a Taiwan or US quote without Yahoo's hours yet reads by the exchange's own (09:00–13:30 Taipei, 09:30–16:00 New York), any other shows no word; then a `dim` `×` closing it.
 - the price at 26px semibold, its currency in 13px `dim`, and the change at 13px in its color; at a limit the price is lit and followed by `Limit up` / `漲停` in the limit's color.
 - a 140px chart across the width: the same line, 2px, over a fill of the change color at 16% opacity, with the dashed previous close.
 - four columns, 10.5px `dim` labels over semibold numbers (the currency only beside the price): Open, High, Low, Prev close (a pair: 24h open, 24h high, 24h low); when the source sent both limits, a second row on the same grid: Limit up, Limit down (`漲停價`, `跌停價`).
@@ -86,7 +86,7 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
   | State | When | Dot | Label |
   |---|---|---|---|
   | live | real-time source (Binance, Yahoo 奇摩股市, MIS, Finnhub; Yahoo Finance for a real-time exchange, FX indicative), trading, quote at most 120 s old | filled | `Live` (`即時`, `实时`, `リアルタイム`, `실시간`; never a source name, no wider than `Binance Spot`) |
-  | unconfirmed | real-time source, session not known yet | ring | the source name (`TWSE MIS`) |
+  | unconfirmed | real-time price still at the previous close after the open | ring | the source name (`TWSE MIS`); the detail: `Price: Yahoo Finance` |
   | stalled | trading: real time over 120 s old, delayed over its delay + 5 min (Yahoo: below) | ring | `quote stopped at 13:05` |
   | delayed | Yahoo, delayed exchange | ring | the table's minutes (`delayed 20 min`), else `Yahoo · delayed`; Yahoo futures (`=F`) and unknown exchanges never stall |
   | closed | market closed; FX from Friday 22:00 to Sunday 22:00 UTC | none | `Market closed · Oct 31 16:00` (the date only when not today) |

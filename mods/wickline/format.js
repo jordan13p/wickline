@@ -133,17 +133,19 @@ export function formatTime(timestamp, seconds = false) {
 
 /**
  * A real-time price's state in words, for the row and the detail dialog alike: "Live", the stop time,
- * else the session (an unconfirmed one reads as unknown). `tx(key, params)` translates.
+ * else the session; null for an unconfirmed one, which has no word (its source names it alone).
+ * `tx(key, params)` translates.
  */
 export function stateText(fresh, tx) {
   if (fresh.state === "live") return tx("freshness.live");
   if (fresh.state === "stalled") return tx("freshness.stalled", { time: formatTime(fresh.stoppedAt) });
-  return tx(`session.${fresh.state === "unconfirmed" ? "unknown" : fresh.state}`);
+  if (fresh.state === "unconfirmed") return null;
+  return tx(`session.${fresh.state}`);
 }
 
 /**
- * A row's freshness label: the state for a real-time price ("Live"), its source only while the session
- * is not known, the stop time, the delay, or the session when it is not trading.
+ * A row's freshness label: the state for a real-time price ("Live"), its source only while unconfirmed,
+ * the stop time, the delay, or the session when it is not trading.
  * `tx(key, params)` translates.
  */
 export function freshnessLabel(quote, fresh, now, lang, tx) {

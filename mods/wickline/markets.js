@@ -68,6 +68,26 @@ export const TAIFEX_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 
   { from: 900, to: 1740 },  // night, 15:00–05:00 the next day
 ] });
 
+// Regular hours used only for a Taiwan or US quote with no trading periods yet; exchange-local minutes.
+export const TWSE_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], from: 540, to: 810 }); // 09:00–13:30 Taipei, TWSE and TPEx
+export const US_HOURS = Object.freeze({ weekdays: [1, 2, 3, 4, 5], from: 570, to: 960 });                  // 09:30–16:00 New York
+
+// The UTC instant of the `nth` Sunday (1-based) of `month` (0-based, as Date.UTC) at `hourUtc`.
+function nthSundayUtc(year, month, nth, hourUtc) {
+  const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
+  const date = 1 + ((7 - firstWeekday) % 7) + (nth - 1) * 7;
+  return Date.UTC(year, month, date) + hourUtc * 60 * MINUTE_MS;
+}
+
+/**
+ * New York's UTC offset at `ms`: -240 from the second Sunday in March 07:00 UTC to the first Sunday in November
+ * 06:00 UTC (02:00 local both times), else -300. By hand: QuickJS has no Intl.
+ */
+export function usOffsetMin(ms) {
+  const year = new Date(ms).getUTCFullYear();
+  return ms >= nthSundayUtc(year, 2, 2, 7) && ms < nthSundayUtc(year, 10, 1, 6) ? -240 : -300;
+}
+
 export const MINUTE_MS = 60_000;
 export const DAY_MS = 86_400_000;
 

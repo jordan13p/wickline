@@ -593,7 +593,8 @@ function finnhubOn(us = {}, keyRev = 0) {
 
 // Yahoo Finance's answer for `symbol`, with `fields` added to its meta.
 const yahooUs = (symbol, fields = {}) => chart({
-  symbol, regularMarketPrice: 230.1, regularMarketTime: 1, previousClose: 228, currency: "USD", ...fields,
+  symbol, regularMarketPrice: 230.1, regularMarketTime: 1, previousClose: 228, currency: "USD",
+  currentTradingPeriod: { regular: { start: 0, end: 100_000 } }, ...fields,
 });
 
 // `yahoo` answers Yahoo Finance per symbol.

@@ -1,7 +1,9 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { stateText } from "./format.js";
-import { DAY_MS, MINUTE_MS, TAIFEX_HOURS, exchangeRule, kindOf, localDay, weekdayOf } from "./markets.js";
+import {
+  DAY_MS, MINUTE_MS, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, exchangeRule, kindOf, localDay, resolvedMarket, usOffsetMin, weekdayOf,
+} from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
@@ -26,7 +28,7 @@ function staleAfterMs(quote) {
 }
 
 // A window of the local day around `now` (its from and to in local minutes since midnight), as [start, end) in
-// ms, by the clock's fixed UTC offset: a lunch break, or a TAIFEX session.
+// ms, by the clock's fixed UTC offset: a lunch break, a TAIFEX session, or an exchange's regular hours.
 function localWindow({ offsetMin, from, to }, now) {
   const dayStart = localDay(offsetMin, now) * DAY_MS - offsetMin * MINUTE_MS;
   return [dayStart + from * MINUTE_MS, dayStart + to * MINUTE_MS];
@@ -130,15 +132,32 @@ export function sessionName(quote, session, now) {
 }
 
 /**
+ * A Taiwan or US quote's (resolvedMarket "tw" / "us") regular window from its exchange's hours, on the exchange's
+ * date of `now` whatever the weekday, and whether that date is a trading weekday; null for any other quote.
+ */
+export function hoursWindow(quote, now) {
+  const market = resolvedMarket(quote.symbol, quote.exchange);
+  const hours = market === "tw" ? TWSE_HOURS : market === "us" ? { ...US_HOURS, offsetMin: usOffsetMin(now) } : null;
+  if (!hours) return null;
+  return { regular: localWindow(hours, now), weekday: hours.weekdays.includes(weekdayOf(localDay(hours.offsetMin, now))) };
+}
+
+/**
  * "open", "pre", "post" or "closed" from the quote's trading periods, and "lunch" while open inside its
  * exchange's lunch break (Yahoo's regular period runs through it); FX is "closed" over the weekend whatever
  * its period says. A pair trades "24h"; a future (WTX&) is "open" inside a segment (futuresSegment), else
- * "closed", also with no periods yet; a stock without a regular session (no Yahoo quote yet) is "unknown".
+ * "closed", also with no periods yet. A quote without a regular session (no Yahoo quote yet) reads its
+ * exchange's hours (hoursWindow) when it is a Taiwan or US one, "open" or "closed"; any other is "unknown".
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";
   if (kindOf(quote.symbol) === "future") return futuresSegment(quote, now) ? "open" : "closed";
-  if (!quote.periods?.regular) return "unknown";
+  if (!quote.periods?.regular) {
+    const hours = hoursWindow(quote, now);
+    if (!hours) return "unknown";
+    const [start, end] = hours.regular;
+    return hours.weekday && now >= start && now < end ? "open" : "closed";
+  }
   const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
   if (fx && fxWeekend(now)) return "closed";
   const session = marketSession(quote, now);
@@ -157,7 +176,7 @@ const PAUSED = new Set(["closed", "pre", "post", "lunch"]);
  * has (older than staleAfterMs by quoteAgeMs, or a Yahoo Finance quote not fetched for FETCH_MAX_AGE_MS).
  * null when it never will this session: a delayed quote's or a future's (WTX&) session is not open, or it is a
  * Yahoo future (`=F`) or from an exchange without a delay. A real-time quote counts in every session, also while
- * closed or not known yet: freshness reads it by its session then, but its moment is when pickOverlay (by the same
+ * closed or "unknown": freshness reads it by its session then, but its moment is when pickOverlay (by the same
  * LIVE_MAX_AGE_MS) hands the row to another source, so the idle wake must still land on it. A delayed quote is a
  * Yahoo base, never handed over, and a future has one source: outside the open session neither reads stalled,
  * nothing to wake for.
@@ -176,11 +195,11 @@ export function msUntilStale(quote, session, now) {
 
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
- * as new). unconfirmed: real time while the session is not known, or a real-time Yahoo quote still at the
- * previous close after today's open (beforeOpen), until today's first trade or the fetch guard. stalled:
- * past its msUntilStale, real time or delayed. delayed: any other quote, with its exchange's minutes when the
- * table holds them; a Yahoo future (`=F`) or an exchange without a delay never stalls. closed / pre / post /
- * lunch: the session.
+ * as new). unconfirmed: real time in an "unknown" session (no periods, and no exchange hours to read), or a
+ * real-time Yahoo quote still at the previous close after today's open (beforeOpen), until today's first trade
+ * or the fetch guard. stalled: past its msUntilStale, real time or delayed. delayed: any other quote, with its
+ * exchange's minutes when the table holds them; a Yahoo future (`=F`) or an exchange without a delay never
+ * stalls. closed / pre / post / lunch: the session.
  */
 export function freshness(quote, session, now) {
   if (PAUSED.has(session)) return result(session);
@@ -218,27 +237,32 @@ function delayWords(quote, tx) {
   return late === null ? tx("freshness.delayUnknown") : tx("freshness.delayedMinutes", { minutes: late });
 }
 
+// A detail line's keys: with a state, and for the source alone when the state has no word (unconfirmed).
+const PRICE_KEYS = { from: "detail.priceFrom", alone: "detail.priceSource" };
+const LINE_KEYS = { from: "detail.lineFrom", alone: "detail.lineSource" };
+const sourceText = (keys, state, source, tx) => (state === null ? tx(keys.alone, { source }) : tx(keys.from, { state, source }));
+
 /**
  * The detail dialog's sources as lines, each a list of parts (joined with ` · `). A real-time price
- * names its state and source on one line: `Price: Live · TWSE MIS`; its line follows on its own, as the
- * same state when the line is the price's own source (Yahoo 奇摩股市), else as the line's own quote
- * reads (`chartTimestamp`, `chartFetchedAt`; see mergeOverlay): its state when that source is real time
- * (stalled once that quote is), else its exchange's delay: `Line: delayed 20 min · Yahoo Finance`. A
- * delayed stock keeps its plain wording as one line of two parts, with its exchange's delay in every
- * session; a pair is one part.
+ * names its state and source on one line: `Price: Live · TWSE MIS`, or its source alone while unconfirmed
+ * (`Price: Yahoo Finance`); its line follows on its own, as the same state when the line is the price's own
+ * source (Yahoo 奇摩股市), else as the line's own quote reads (`chartTimestamp`, `chartFetchedAt`; see
+ * mergeOverlay): its state when that source is real time (stalled once that quote is, its source alone while
+ * unconfirmed), else its exchange's delay: `Line: delayed 20 min · Yahoo Finance`. A delayed stock keeps its
+ * plain wording as one line of two parts, with its exchange's delay in every session; a pair is one part.
  * `tx(key, params)` translates; a `src.<id>` key names a provider.
  */
 export function detailSource(quote, session, now, tx) {
   if (isRealtime(quote) && !isCryptoPair(quote.symbol)) {
     const own = stateText(freshness(quote, session, now), tx);
-    const price = tx("detail.priceFrom", { state: own, source: tx(`src.${quote.source}`) });
+    const price = sourceText(PRICE_KEYS, own, tx(`src.${quote.source}`), tx);
     if (!quote.chartSource) return [[price]];
-    if (quote.chartSource === quote.source) return [[price], [tx("detail.lineFrom", { state: own, source: tx(`src.${quote.source}`) })]];
+    if (quote.chartSource === quote.source) return [[price], [sourceText(LINE_KEYS, own, tx(`src.${quote.source}`), tx)]];
     const chart = {
       ...quote, source: quote.chartSource, timestamp: quote.chartTimestamp, fetchedAt: quote.chartFetchedAt,
     };
     const state = isRealtime(chart) ? stateText(freshness(chart, session, now), tx) : delayWords(chart, tx);
-    return [[price], [tx("detail.lineFrom", { state, source: tx(`src.${quote.chartSource}`) })]];
+    return [[price], [sourceText(LINE_KEYS, state, tx(`src.${quote.chartSource}`), tx)]];
   }
   if (isCryptoPair(quote.symbol)) return [[tx("detail.sourceCrypto")]];
   return [[tx("detail.sourceStock"), delayWords(quote, tx)]];

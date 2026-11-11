@@ -1206,7 +1206,8 @@ test("after the open, a TW-only row is not read closed by the day before's perio
     const quote = w.shown("^TWOII", now);
     assert.equal(quote.day, taipeiDay(now));
     assert.notEqual(sessionOf(quote, now), "closed");
-    assert.equal(freshness(quote, sessionOf(quote, now), now).state, "unconfirmed");
+    // The TWSE hours read 09:00:30 as open.
+    assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
     assert.equal(lines(), 2);
     // At 09:05 it still is not closed, and it polls every 10 s.
     const asked = stockLists(host).length;

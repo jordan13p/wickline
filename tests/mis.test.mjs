@@ -221,7 +221,7 @@ test("an overlay's own line is drawn only on its price's Taipei day", () => {
 const CONSENTED = { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
 const yahooTw = (url) => chart({
   symbol: chartSymbol(url), regularMarketPrice: 2200,
-  regularMarketTime: 1, previousClose: 2260, currency: "TWD",
+  regularMarketTime: 1, previousClose: 2260, currency: "TWD", currentTradingPeriod: { regular: { start: 0, end: 100_000 } },
 });
 const misCount = (host) => host.requests.filter((url) => url.startsWith(MIS_URL)).length;
 
@@ -478,7 +478,7 @@ test("the detail line puts the chart's delay on the chart", () => {
   assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: Live · Yahoo Finance"]]);
   assert.deepEqual(detailSource(mergeOverlay({ ...us, exchange: null }, over), "open", 5_000, say("en"))[1], ["Line: delay not provided · Yahoo Finance"]);
   // A real-time price before Yahoo's first quote; a plain Yahoo row keeps its wording.
-  assert.deepEqual(detailSource(mergeOverlay(undefined, MIS_2330), "unknown", 5_000, say("en")), [["Price: Session unknown · TWSE MIS"]]);
+  assert.deepEqual(detailSource(mergeOverlay(undefined, MIS_2330), "unknown", 5_000, say("en")), [["Price: TWSE MIS"]]);
   assert.deepEqual(detailSource(YAHOO_2330, "open", 5_000, say("en")), [["Yahoo Finance · regular session", "delayed 20 min"]]);
   assert.deepEqual(detailSource({ ...YAHOO_2330, symbol: "BTC/USDT", source: "binance", periods: null }, "24h", 5_000, say("en")), [["Binance Spot · 24h"]]);
 });
