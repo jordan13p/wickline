@@ -63,6 +63,9 @@ const HOLIDAY_RETRY_MS = 3_600_000;
 // How long a session's trade observation is kept (Watchlist#seen): a session is never open longer.
 const SEEN_KEEP_MS = 2 * DAY_MS;
 
+// The status line's note for each inferred closure (calendar.js closureOf); a listed one has none.
+const NOTE_CODES = { noTrades: "closure.noTradesToday", nightNoTrades: "closure.noTradesNight" };
+
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
 // The Taiwan market a symbol trades in, as calendar.js closureOf names it: TAIFEX's futures, else TWSE/TPEx's
@@ -343,9 +346,9 @@ export class Watchlist {
   }
 
   /**
-   * `quote` (none: none) with the symbol's closed-day marks at `now` (marks) and, for a Taiwan symbol, its market's
-   * next inference deadline as `noTradesDeadline` (calendar.js deadlineOf; freshness.js nextEdge wakes the row there):
-   * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
+   * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure` (marks) and its next
+   * inference deadline as `noTradesDeadline` (calendar.js deadlineOf; freshness.js nextEdge wakes the row there): the
+   * one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
    * closure.
    */
   marked(symbol, quote, now) {
@@ -353,15 +356,15 @@ export class Watchlist {
     const { listed, seen } = this.closureInputs();
     const market = twMarket(symbol);
     const deadline = deadlineOf(market, now, seen);
-    return { ...quote, ...closureOf(market, now, listed, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
+    return { ...quote, closure: closureOf(market, now, listed, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
   }
 
   /**
-   * A Taiwan symbol's closed-day marks at `now` (calendar.js closureOf, in its market: futures, else stocks), from
-   * the holiday schedule held and the answers seen; {} for any other symbol.
+   * A Taiwan symbol's closure at `now` (calendar.js closureOf, in its market: futures, else stocks), from the holiday
+   * schedule held and the answers seen; null for any other symbol.
    */
   marks(symbol, now) {
-    if (this.marketFor(symbol) !== "tw") return {};
+    if (this.marketFor(symbol) !== "tw") return null;
     const { listed, seen } = this.closureInputs();
     return closureOf(twMarket(symbol), now, listed, seen);
   }
@@ -388,20 +391,19 @@ export class Watchlist {
   }
 
   /**
-   * The status line's no-trades notes at `now`: for each Taiwan market the list holds, its closure's `noTrades`
-   * (closureOf) as `{ code, params: { source } }`, closure.noTradesNight for a night without trades and
-   * closure.noTradesToday otherwise; one per code and source. Kept apart from problems(): the settings' health
-   * shows only those, since a source that answers is working.
+   * The status line's no-trades notes at `now`: for each Taiwan market the list holds whose closure (closureOf) is an
+   * inferred one, `{ code, params: { source } }` by NOTE_CODES; one per code and source. Kept apart from problems():
+   * the settings' health shows only those, since a source that answers is working.
    */
   notes(now = this.host.now()) {
     const markets = new Set(this.preferences.symbols.filter((symbol) => this.marketFor(symbol) === "tw").map(twMarket));
     const { listed, seen } = this.closureInputs();
     const lines = new Map();
     for (const market of markets) {
-      const { noTrades } = closureOf(market, now, listed, seen);
-      if (!noTrades) continue;
-      const code = noTrades.night ? "closure.noTradesNight" : "closure.noTradesToday";
-      lines.set(`${code} ${noTrades.source}`, notice(code, { source: noTrades.source }));
+      const closure = closureOf(market, now, listed, seen);
+      const code = NOTE_CODES[closure?.kind];
+      if (!code) continue;
+      lines.set(`${code} ${closure.source}`, notice(code, { source: closure.source }));
     }
     return [...lines.values()];
   }
@@ -467,7 +469,7 @@ export class Watchlist {
   /**
    * What a symbol without a quote is read by at `now`, for its session and its edges alike: its form alone, with no
    * periods (sessionOf and nextEdge read a Taiwan or US one by its exchange's hours, a future by TAIFEX's), and its
-   * closed-day marks (marked).
+   * closure (marked).
    */
   standIn(symbol, now) {
     return this.marked(symbol, { symbol, periods: null }, now);

@@ -197,6 +197,25 @@ const timeRange = ([start, end]) => `${formatTime(start)}–${formatTime(end)}`;
 // The language that names a listed closure's reason: the schedule gives it in Traditional Chinese only.
 const REASON_LANG = "zh-TW";
 
+// The 交易時段 line's parts for one sessionTimes value, by its kind (see sessionTimesParts).
+function hoursParts(times, lang, tx) {
+  switch (times.kind) {
+    case "allDay":
+      return [tx("detail.allDay")];
+    case "closedToday":
+      return [tx("detail.closedToday"), ...(lang === REASON_LANG ? [times.reason] : [])];
+    case "noTradesToday":
+      return [tx("detail.noTradesToday")];
+    case "futures": {
+      const night = times.night ? tx("detail.nightSession", { times: timeRange(times.night) })
+        : tx(times.nightNoTrades ? "detail.nightNoTrades" : "detail.nightNotHeld");
+      return [tx("detail.daySession", { times: timeRange(times.day) }), night];
+    }
+    default: // "spans"
+      return times.spans.map(timeRange);
+  }
+}
+
 /**
  * The 交易時段 line's parts (see sessionTimes), for segments() (joined with " · "): the first part carries
  * tx("detail.sessionTimes", { times }); each range is `${formatTime(start)}–${formatTime(end)}`; [] for null. A
@@ -205,14 +224,7 @@ const REASON_LANG = "zh-TW";
  */
 export function sessionTimesParts(times, lang, tx) {
   if (!times) return [];
-  const night = (range) => (range ? tx("detail.nightSession", { times: timeRange(range) })
-    : tx(times.nightNoTrades ? "detail.nightNoTrades" : "detail.nightNotHeld"));
-  const parts = times.allDay ? [tx("detail.allDay")]
-    : times.closedToday ? [tx("detail.closedToday"), ...(lang === REASON_LANG ? [times.reason] : [])]
-        : times.noTradesToday ? [tx("detail.noTradesToday")]
-          : times.day ? [tx("detail.daySession", { times: timeRange(times.day) }), night(times.night)]
-            : times.spans.map(timeRange);
-  const [first, ...rest] = parts;
+  const [first, ...rest] = hoursParts(times, lang, tx);
   return [tx("detail.sessionTimes", { times: first }), ...rest];
 }
 

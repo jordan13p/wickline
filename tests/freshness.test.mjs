@@ -579,7 +579,7 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // nextEdge announced a step before, so a wait cut at the next edge never sleeps past a change. sessionEdges follows
 // sessionOf's branches by hand; this sweep is what keeps the two in step. A new way of reading a session adds its
 // quotes to EDGE_SWEEP_QUOTES.
-// A Taiwan quote carries the closure marks of its time and its next inference deadline (closureOf and deadlineOf, as
+// A Taiwan quote carries the closure of its time and its next inference deadline (closureOf and deadlineOf, as
 // Watchlist#marked gives them; here from the 2026 schedule, and the answers its `answers` gives at that time, else
 // none), so the sweep reads a listed day, and a day or night without trades, as a row does.
 const LISTED_2026 = parseHolidays(JSON.stringify(HOLIDAYS_2026));
@@ -588,13 +588,15 @@ const marked = (quote, time) => {
   const market = kindOf(quote.symbol) === "future" ? "future" : "stock";
   const seen = quote.answers?.(time) ?? (() => undefined);
   const deadline = deadlineOf(market, time, seen);
-  return { ...quote, ...closureOf(market, time, (d) => LISTED_2026[d] ?? null, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
+  return { ...quote, closure: closureOf(market, time, (d) => LISTED_2026[d] ?? null, seen), ...(deadline !== null && { noTradesDeadline: deadline }) };
 };
 // What a row reads: its session, a Taiwan row's day, and its no-trades reading, which the detail's session times and
 // the status line's note read apart from sessionOf.
+const INFERRED = ["noTrades", "nightNoTrades"];
 const reading = (quote, time) => {
   const row = marked(quote, time);
-  return `${sessionOf(row, time)} ${resolvedMarket(row.symbol, row.exchange) === "tw" ? dayFor(row)(time) : ""} ${JSON.stringify(row.noTrades ?? null)}`;
+  const noTrades = INFERRED.includes(row.closure?.kind) ? row.closure : null;
+  return `${sessionOf(row, time)} ${resolvedMarket(row.symbol, row.exchange) === "tw" ? dayFor(row)(time) : ""} ${JSON.stringify(noTrades)}`;
 };
 // Answers that carry no trade, one a minute (the latest at `time`) from every session: Yahoo 奇摩股市's for
 // `quietRealtime`, Yahoo Finance's for `quietDelayed`. `quietNight`: only the nights are observed, each answer carrying
@@ -619,11 +621,11 @@ function unannounced(quote, [from, to], step = MINUTE_MS) {
   return misses;
 }
 
-// The instants in [from, to) where a row reading a closure (closedDay, or a removed night) is told of an opening that
+// The instants in [from, to) where a row reading a closure (a listed day, or a closed night) is told of an opening that
 // falls inside a closure too.
 function closedOpenings(quote, [from, to], step = MINUTE_MS) {
   const misses = [];
-  const closed = (row) => Boolean(row.closedDay || row.nightClosed);
+  const closed = (row) => ["listed", "nightRemoved", "nightNoTrades"].includes(row.closure?.kind);
   for (let time = from; time < to; time += step) {
     const row = marked(quote, time);
     const opens = closed(row) ? nextEdge(row, time, { openings: true }) : null;
@@ -679,8 +681,8 @@ test("every change in what a row reads comes at or after an edge announced for i
   const reads = (quote, iso) => reading(quote, at(iso)).replace(/ \d+ /, " ");
   assert.deepEqual([reads(realtime, "2026-11-10T01:09:59Z"), reads(realtime, "2026-11-10T01:10:00Z"), reads(delayed, "2026-11-10T01:29:59Z"),
     reads(delayed, "2026-11-10T01:30:00Z"), reads(night, "2026-11-10T07:09:59Z"), reads(night, "2026-11-10T07:10:00Z")],
-  ["open null", 'noTrades {"source":"yahootw"}', "open null", 'noTrades {"source":"yahoo"}', "open null",
-    'closed {"source":"yahootw","night":true}']);
+  ["open null", 'noTrades {"kind":"noTrades","source":"yahootw"}', "open null", 'noTrades {"kind":"noTrades","source":"yahoo"}', "open null",
+    'closed {"kind":"nightNoTrades","source":"yahootw"}']);
 });
 
 test("a row reading a closure is told of no opening inside a closure", () => {
@@ -698,18 +700,18 @@ test("a row reading a closure is told of no opening inside a closure", () => {
 test("a closed day: no dot, never stale, lit as closed, 休市 in the detail", () => {
   const now = at("2026-12-25T02:00:00Z");
   const q = { symbol: "2330.TW", source: "yahootw", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: CLOSE_1224,
-    periods: day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z"), closedDay: { reason: "行憲紀念日" }, chartSource: "yahootw" };
+    periods: day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z"), closure: { kind: "listed", reason: "行憲紀念日" }, chartSource: "yahootw" };
   assert.equal(sessionOf(q, now), "holiday");
   assert.deepEqual(freshness(q, "holiday", now), { state: "holiday", delayMinutes: null, stoppedAt: null });
   assert.equal(shownLimit(q, "holiday", now), "up");
   assert.deepEqual(detailSource(q, "holiday", now, say("zh-TW")), [["價格：休市 · Yahoo 奇摩股市"], ["走勢：休市 · Yahoo 奇摩股市"]]);
-  const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: CLOSE_1224, closedDay: { reason: "行憲紀念日" } };
+  const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: CLOSE_1224, closure: { kind: "listed", reason: "行憲紀念日" } };
   assert.deepEqual(detailSource(base, "holiday", now, say("zh-TW")), [["Yahoo Finance · 一般交易時段", "延遲 20 分鐘"]]);
   assert.equal(t("zh-TW", `session.${sessionName(q, "holiday", now)}`), "休市");
-  const wtx = { symbol: "WTX&", periods: null, closedDay: { reason: "行憲紀念日" } };
+  const wtx = { symbol: "WTX&", periods: null, closure: { kind: "listed", reason: "行憲紀念日" } };
   assert.equal(nextEdge(wtx, at("2026-12-24T22:00:00Z"), { openings: true }), null);   // 12/25 06:00: no opening
   // A removed night: no night segment, so closed, not open.
-  assert.equal(sessionOf({ symbol: "WTX&", periods: null, nightClosed: true }, at("2026-12-25T18:00:00Z")), "closed");
+  assert.equal(sessionOf({ symbol: "WTX&", periods: null, closure: { kind: "nightRemoved" } }, at("2026-12-25T18:00:00Z")), "closed");
 });
 
 test("a Taiwan or US quote without periods reads its exchange's hours; any other has no session", () => {
@@ -785,5 +787,5 @@ test("no trades today: lit as closed, never while stalled", () => {
   const q = { symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: at("2026-11-10T05:30:00Z"),
     periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") };
   assert.equal(shownLimit({ ...q, periods: day("2026-11-11T01:00:00Z", "2026-11-11T05:30:00Z") }, "open", now), null);   // stalled
-  assert.equal(shownLimit({ ...q, noTrades: { source: "mis" } }, "noTrades", now), "up");
+  assert.equal(shownLimit({ ...q, closure: { kind: "noTrades", source: "mis" } }, "noTrades", now), "up");
 });

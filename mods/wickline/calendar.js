@@ -134,34 +134,39 @@ export function deadlineOf(market, now, seen) {
 }
 
 /**
- * The closed-day marks of a Taiwan `market` ("stock" | "future") at `now`: the one place a quote's closure is decided.
+ * The closure of a Taiwan `market` ("stock" | "future") at `now`: the one place a quote's closure is decided, as one
+ * value, null or `{ kind, reason?, source? }`:
+ * - "listed": a day the schedule lists (`reason`, its name);
+ * - "noTrades": a day without trades, inferred (`source`, the source of the answer that counts);
+ * - "nightRemoved": a night a listed day removed;
+ * - "nightNoTrades": a night without trades after a day that traded, inferred (`source` as above).
  * `listed(day)` gives the schedule's reason or null; `seen(market, open)` the observation of that market's session that
  * opened at `open`, or undefined: `{ traded, newest, realtime, delayed }`, whether a trade came at or after the open,
  * the newest trade time the answers carried, and each source's latest answer since the open by kind
  * (`[{ at, source }]`, in the order that names a closure). A trade seen since the current session's open comes first
- * and clears every mark, the removed night's included. Then the first matching row, T being today in Taipei:
- * 1. a stock on a listed T: closedDay;
+ * and clears every closure, the removed night's included. Then the first matching row, T being today in Taipei:
+ * 1. a stock on a listed T: listed;
  * 2. a stock from 09:00 on a weekday T, its session quiet (quietAnswer) and no future traded since 08:45 T (the veto):
  *    noTrades;
- * 3–5. a future from 00:00 to 05:00: after a T-1 that is not a weekday, closedDay on a listed T, else nothing; after a
- *    listed T-1 (its night removed), closedDay on a listed T, else nightClosed; after an unlisted weekday, only with
- *    the night of T-1 quiet: closedDay on a listed T, else the night's reading of T-1 (below);
- * 6. a future from 05:00 on a listed T: closedDay;
+ * 3–5. a future from 00:00 to 05:00: after a T-1 that is not a weekday, listed on a listed T, else none; after a
+ *    listed T-1 (its night removed), listed on a listed T, else nightRemoved; after an unlisted weekday, only with
+ *    the night of T-1 quiet: listed on a listed T, else the night's reading of T-1 (below);
+ * 6. a future from 05:00 on a listed T: listed;
  * 7. a future from 08:45 to 15:00 on a weekday T, its day session quiet and no stock traded since 09:00 T: noTrades;
  * 8. a future from 15:00 on a weekday T, its night session quiet: the night's reading of T;
  * 8b. else, while T has not traded, its day session's reading carries on: noTrades;
- * 9. otherwise nothing.
+ * 9. otherwise none.
  * A night's reading of day D: after a day that traded (its day session, the night's newest trade since 08:45 D, or a
- * stock since 09:00 D), the night is closed and says it has no trades yet (nightClosed, noTrades.night); after a day
- * without trades, the whole day has none (noTrades). `noTrades.source` names the source of the answer that counts.
+ * stock since 09:00 D), the night is closed and says it has no trades yet (nightNoTrades); after a day without trades,
+ * the whole day has none (noTrades).
  */
 export function closureOf(market, now, listed, seen) {
   const open = currentOpen(market, now);
-  if (open !== null && seen(market, open)?.traded) return {};
+  if (open !== null && seen(market, open)?.traded) return null;
   const today = taipeiDay(now);
   const minute = taipeiMinute(now);
   const reason = listed(today);
-  const closedToday = reason ? { closedDay: { reason } } : null;
+  const closedToday = reason ? { kind: "listed", reason } : null;
   // The source that says the session of `market` that opened at `start` has no trade, or null.
   const quietSince = (start) => quietAnswer(seen(market, start), start, now)?.source ?? null;
   const tradedSince = (other, start) => Boolean(seen(other, start)?.traded);
@@ -169,29 +174,28 @@ export function closureOf(market, now, listed, seen) {
   const dayTraded = (day) => tradedSince("future", dayOpen(day))
     || seen("future", taipeiAt(day, NIGHT_SESSION.from))?.newest >= dayOpen(day)
     || tradedSince("stock", taipeiAt(day, TWSE_HOURS.from));
-  const noTrades = (source) => ({ noTrades: { source } });
-  const nightReading = (day, source) => (dayTraded(day) ? { nightClosed: true, noTrades: { source, night: true } }
-    : noTrades(source));
+  const noTrades = (source) => ({ kind: "noTrades", source });
+  const nightReading = (day, source) => (dayTraded(day) ? { kind: "nightNoTrades", source } : noTrades(source));
   if (market === "stock") {
     if (closedToday) return closedToday;                                                     // 1
     const source = open !== null && !tradedSince("future", dayOpen(today)) && quietSince(open);
-    return source ? noTrades(source) : {};                                                   // 2, else 9
+    return source ? noTrades(source) : null;                                                 // 2, else 9
   }
   if (minute < NIGHT_END_MIN) {
     const before = today - 1;
-    if (!isWeekday(before)) return closedToday ?? {};                                        // 5
-    if (listed(before)) return closedToday ?? { nightClosed: true };                         // 3
+    if (!isWeekday(before)) return closedToday ?? null;                                      // 5
+    if (listed(before)) return closedToday ?? { kind: "nightRemoved" };                      // 3
     const source = quietSince(open);
-    return source ? closedToday ?? nightReading(before, source) : {};                        // 4, else 9
+    return source ? closedToday ?? nightReading(before, source) : null;                      // 4, else 9
   }
   if (closedToday) return closedToday;                                                       // 6
-  if (open === null) return {};                                                              // 9
+  if (open === null) return null;                                                            // 9
   if (minute < NIGHT_SESSION.from) {
     const source = !tradedSince("stock", taipeiAt(today, TWSE_HOURS.from)) && quietSince(open);
-    return source ? noTrades(source) : {};                                                   // 7, else 9
+    return source ? noTrades(source) : null;                                                 // 7, else 9
   }
   const night = quietSince(open);
   if (night) return nightReading(today, night);                                              // 8
   const day = !dayTraded(today) && quietSince(dayOpen(today));
-  return day ? noTrades(day) : {};                                                           // 8b, else 9
+  return day ? noTrades(day) : null;                                                         // 8b, else 9
 }

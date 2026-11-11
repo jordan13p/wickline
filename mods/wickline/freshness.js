@@ -112,15 +112,17 @@ function taifexSegments(now) {
 // A night session's segment: it starts at or after 12:00 Taipei.
 const isNight = ([start]) => ((start + TAIFEX_HOURS.offsetMin * MINUTE_MS) % DAY_MS) / MINUTE_MS >= 720;
 
+// A quote whose night session is closed (see calendar.js closureOf): removed by a listed day, or without trades.
+const nightClosed = (quote) => quote.closure?.kind === "nightRemoved" || quote.closure?.kind === "nightNoTrades";
+
 /**
  * The session a future trades in at `now`: "day" or "night", or null between sessions. Its segments are
- * quote.periods.segments when given, else TAIFEX_HOURS around `now`; a night a listed closure removed
- * (`nightClosed`) is none of them. A segment starting at or after 12:00 Taipei is the night session. A segment holds
- * [start, end).
+ * quote.periods.segments when given, else TAIFEX_HOURS around `now`; a closed night (nightClosed) is none of them. A
+ * segment starting at or after 12:00 Taipei is the night session. A segment holds [start, end).
  */
 export function futuresSegment(quote, now) {
   const segments = quote.periods?.segments ?? taifexSegments(now);
-  const segment = segments.find((span) => now >= span[0] && now < span[1] && !(quote.nightClosed && isNight(span)));
+  const segment = segments.find((span) => now >= span[0] && now < span[1] && !(nightClosed(quote) && isNight(span)));
   if (!segment) return null;
   return isNight(segment) ? "night" : "day";
 }
@@ -171,7 +173,7 @@ function dayEdges(quote, now) {
 }
 
 // A Taiwan row's next inference deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js deadlineOf), where
-// its session may turn to "noTrades" or, for a future's night, to closed with the night's note.
+// its closure may turn to "noTrades" or, for a future's night, to "nightNoTrades".
 const deadlineEdges = (quote) => (quote.noTradesDeadline ? [edge(quote.noTradesDeadline)] : []);
 
 // Every source of a row's edges: what it reads (sessionOf, its day) changes only at one of them.
@@ -179,7 +181,7 @@ const EDGE_SOURCES = [sessionEdges, dayEdges, deadlineEdges];
 
 /**
  * The next moment after `now` at which `quote`'s row reads differently (EDGE_SOURCES), in ms, or null; with
- * `{ openings: true }`, only a moment its market starts trading again. A quote on a listed closed day (`closedDay`)
+ * `{ openings: true }`, only a moment its market starts trading again. A quote on a listed closed day (closure "listed")
  * has no opening from any source: its sessions that day never open. Always later than `now`, so a wait cut at it is
  * never zero.
  */
@@ -187,7 +189,7 @@ export function nextEdge(quote, now, { openings = false } = {}) {
   let next = null;
   for (const source of EDGE_SOURCES) {
     for (const { at, opening: opens } of source(quote, now)) {
-      if (opens && quote.closedDay) continue;
+      if (opens && quote.closure?.kind === "listed") continue;
       if (at > now && (opens || !openings) && (next === null || at < next)) next = at;
     }
   }
@@ -211,45 +213,48 @@ export function hoursWindow(quote, now) {
 }
 
 /**
- * The detail's 交易時段 for `quote` at `now`, as data (format.js writes it); times in ms, regular session only:
- * - { allDay: true } for a pair or FX (exchangeRule(...).fx; its regular period, the UTC day, is not shown);
- * - { closedToday: true, reason } on a listed closed day (`closedDay`), with the schedule's name for it;
- * - { noTradesToday: true } while a Taiwan quote reads as having no trades today (`noTrades` without `night`);
- * - { day: [start, end], night: [start, end] } for a TAIFEX future, from TAIFEX_HOURS on the Taipei date of `now`;
- *   night null while a listed closure removed it, or the night reads as having no trades (`nightClosed`), then
- *   `nightNoTrades: true` in the second case (`noTrades.night`);
- * - { spans: [[start, end]] } from TWSE_HOURS (hoursWindow) for a Taiwan stock or index, whatever periods it carries
- *   (a TW-only index priced from an earlier day carries a zero-length period);
- * - { spans: [[start, end], …] } from periods.regular (a `=F` future's as Yahoo gives it), else hoursWindow's,
- *   split around the exchange's lunch (exchangeRule(...).lunch, via localWindow taken at regular[0], so a Saturday
- *   detail with Friday's periods still splits) when it has one;
+ * The detail's 交易時段 for `quote` at `now`, as data (format.js writes it) tagged by `kind`; times in ms, regular
+ * session only:
+ * - "allDay" for a pair or FX (exchangeRule(...).fx; its regular period, the UTC day, is not shown);
+ * - "closedToday" with the schedule's `reason` on a listed closed day (closure "listed");
+ * - "noTradesToday" while a Taiwan quote reads as having no trades today (closure "noTrades");
+ * - "futures" with `day` and `night` as [start, end] for a TAIFEX future, from TAIFEX_HOURS on the Taipei date of
+ *   `now`; night null while it is closed (nightClosed), then `nightNoTrades` says whether it is for want of trades
+ *   (closure "nightNoTrades") rather than removed;
+ * - "spans" with `spans: [[start, end]]` from TWSE_HOURS (hoursWindow) for a Taiwan stock or index, whatever periods
+ *   it carries (a TW-only index priced from an earlier day carries a zero-length period);
+ * - "spans" with `spans: [[start, end], …]` from periods.regular (a `=F` future's as Yahoo gives it), else
+ *   hoursWindow's, split around the exchange's lunch (exchangeRule(...).lunch, via localWindow taken at regular[0], so
+ *   a Saturday detail with Friday's periods still splits) when it has one;
  * - null with nothing to show.
  */
 export function sessionTimes(quote, now) {
   const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
-  if (isCryptoPair(quote.symbol) || fx) return { allDay: true };
-  if (quote.closedDay) return { closedToday: true, reason: quote.closedDay.reason };
-  if (quote.noTrades && !quote.noTrades.night) return { noTradesToday: true };
+  if (isCryptoPair(quote.symbol) || fx) return { kind: "allDay" };
+  const closure = quote.closure?.kind;
+  if (closure === "listed") return { kind: "closedToday", reason: quote.closure.reason };
+  if (closure === "noTrades") return { kind: "noTradesToday" };
   if (kindOf(quote.symbol) === "future") {
     const { offsetMin, sessions: [day, night] } = TAIFEX_HOURS;
-    const hours = {
-      day: localWindow({ offsetMin, ...day }, now), night: quote.nightClosed ? null : localWindow({ offsetMin, ...night }, now),
+    return {
+      kind: "futures", day: localWindow({ offsetMin, ...day }, now),
+      night: nightClosed(quote) ? null : localWindow({ offsetMin, ...night }, now), nightNoTrades: closure === "nightNoTrades",
     };
-    return quote.nightClosed && quote.noTrades?.night ? { ...hours, nightNoTrades: true } : hours;
   }
-  if (resolvedMarket(quote.symbol, quote.exchange) === "tw") return { spans: [hoursWindow(quote, now).regular] };
+  const spans = (list) => ({ kind: "spans", spans: list });
+  if (resolvedMarket(quote.symbol, quote.exchange) === "tw") return spans([hoursWindow(quote, now).regular]);
   const regular = quote.periods?.regular ?? hoursWindow(quote, now)?.regular;
   if (!regular) return null;
   const [start, end] = regular;
-  if (!lunch) return { spans: [[start, end]] };
+  if (!lunch) return spans([[start, end]]);
   const [lunchStart, lunchEnd] = localWindow(lunch, start);
-  return lunchStart > start && lunchEnd < end ? { spans: [[start, lunchStart], [lunchEnd, end]] } : { spans: [[start, end]] };
+  return lunchStart > start && lunchEnd < end ? spans([[start, lunchStart], [lunchEnd, end]]) : spans([[start, end]]);
 }
 
 /**
- * "holiday" on a Taiwan quote's listed closed day (`closedDay`, see calendar.js closureOf), whatever its periods say;
- * "noTrades" while it reads as having no trades today (`noTrades`, an inference; a night without trades after a traded
- * day is `nightClosed` instead, so a future reads "closed" then). Else "open", "pre", "post" or "closed" from the
+ * "holiday" on a Taiwan quote's listed closed day (closure "listed", see calendar.js closureOf), whatever its periods
+ * say; "noTrades" while it reads as having no trades today (closure "noTrades", an inference; a night without trades
+ * after a traded day is "nightNoTrades" instead, so a future reads "closed" then). Else "open", "pre", "post" or "closed" from the
  * quote's trading periods, and "lunch" while open inside its
  * exchange's lunch break (Yahoo's regular period runs through it); FX reads its week only, "closed" over the weekend
  * and "open" otherwise, whatever its period says (the UTC day, not a session: its last minute is no close). A
@@ -259,8 +264,9 @@ export function sessionTimes(quote, now) {
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";
-  if (quote.closedDay) return "holiday";
-  if (quote.noTrades && !quote.noTrades.night) return "noTrades";
+  const closure = quote.closure?.kind;
+  if (closure === "listed") return "holiday";
+  if (closure === "noTrades") return "noTrades";
   if (kindOf(quote.symbol) === "future") return futuresSegment(quote, now) ? "open" : "closed";
   if (!quote.periods?.regular) {
     const hours = hoursWindow(quote, now);
