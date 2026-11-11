@@ -34,6 +34,16 @@ test("a closure by any other name is a closure, as in 2024", () => {
   assert.deepEqual(Object.values(days), ["市場無交易，僅辦理結算交割作業", "農曆除夕前一日"]);
 });
 
+// A notice read as a closure hides a trading morning; a closure read as a notice falls back to inference, which shows.
+test("a notice with spaces around it or a new wording is still a notice; a closure's name is trimmed", () => {
+  const days = parseHolidays(JSON.stringify([
+    { Name: "國曆新年開始交易日 ", Date: "1150102" }, { Name: "\u3000農曆春節前最後交易日", Date: "1150211" },
+    { Name: "農曆春節後開始交易", Date: "1150223" }, { Name: "農曆春節前最後交易", Date: "1150210" },
+    { Name: " 行憲紀念日 ", Date: "1151225" },
+  ]));
+  assert.deepEqual(days, { [rocDay("1151225")]: "行憲紀念日" });
+});
+
 test("an unreadable schedule is none; a bad row is skipped", () => {
   assert.equal(parseHolidays("<html>blocked</html>"), null);
   assert.equal(parseHolidays("{}"), null);

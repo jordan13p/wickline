@@ -36,8 +36,10 @@ export const dayOf = (symbol) => (kindOf(symbol) === "future" ? futuresDay : tai
 export const HOLIDAYS_URL = "https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule";
 // The Republic of China's year 1 is 1912.
 const ROC_YEAR_OFFSET = 1911;
-// A schedule row whose name ends so is a notice of a trading day (國曆新年開始交易日, 農曆春節前最後交易日), not a closure.
-const TRADING_DAY_NOTICE = "交易日";
+// A schedule row whose name says so is a notice of a trading day (國曆新年開始交易日, 農曆春節前最後交易日, 農曆春節後開始交易日
+// in 2024 and 2026), not a closure. Loose on purpose: a closure taken for a notice falls back to inference, which
+// shows, while a notice taken for a closure hides a trading morning.
+const TRADING_DAY_NOTICE = /交易日|開始交易|最後交易/;
 
 // When the night session running past midnight ends, in Taipei minutes since midnight (05:00).
 const NIGHT_END_MIN = NIGHT_SESSION.to - 24 * 60;
@@ -59,9 +61,10 @@ export function rocDay(value) {
 }
 
 /**
- * The schedule's closed weekdays, Taipei day number → its name (cleanText, as given). A row whose name ends in 交易日
- * is a notice and is left out; so is a Saturday or Sunday date, and a row without a valid date or name. Any other
- * name is a closure (市場無交易，僅辦理結算交割作業 included). null when `text` is not a JSON array.
+ * The schedule's closed weekdays, Taipei day number → its name (cleanText, trimmed). A row whose name holds 交易日,
+ * 開始交易 or 最後交易 (TRADING_DAY_NOTICE) is a notice and is left out; so is a Saturday or Sunday date, and a row
+ * without a valid date or name. Any other name is a closure (市場無交易，僅辦理結算交割作業 included). null when `text` is
+ * not a JSON array.
  */
 export function parseHolidays(text) {
   let rows;
@@ -73,9 +76,9 @@ export function parseHolidays(text) {
   if (!Array.isArray(rows)) return null;
   const days = {};
   for (const row of rows) {
-    const name = cleanText(row?.Name);
+    const name = cleanText(row?.Name)?.trim();
     const day = rocDay(row?.Date);
-    if (name && day !== null && !name.endsWith(TRADING_DAY_NOTICE) && isWeekday(day)) days[day] = name;
+    if (name && day !== null && !TRADING_DAY_NOTICE.test(name) && isWeekday(day)) days[day] = name;
   }
   return days;
 }
