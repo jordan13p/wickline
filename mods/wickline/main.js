@@ -209,7 +209,7 @@ export default class Wickline extends View {
     // Taken before the remove, which drops the row's quote at once: the fading row draws from this copy.
     const symbols = this.watch.preferences.symbols;
     const ghost = {
-      symbol, before: nextOf(symbols, symbol), row: this.rowSource(symbol), height: this.rowHeights[symbol], gone: false,
+      symbol, before: nextOf(symbols, symbol), row: this.rowSource(symbol, Date.now()), height: this.rowHeights[symbol], gone: false,
     };
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
@@ -537,10 +537,10 @@ export default class Wickline extends View {
     return form === "table" ? table(this, root, t) : sidebar(this, root, t);
   }
 
-  // What a row reads from the watchlist. A row being removed draws from the copy taken before its quote went.
-  rowSource(symbol) {
+  // What a row reads from the watchlist at `now` (one per render, so every row reads the same closure). A row being
+  // removed draws from the copy taken before its quote went.
+  rowSource(symbol, now) {
     const w = this.watch;
-    const now = Date.now();
     return {
       quote: w.shown(symbol, now),
       failed: w.errors[symbol],

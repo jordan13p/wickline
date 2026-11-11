@@ -41,7 +41,7 @@ export function band(view, root, t) {
     .when(w.preferences.paused, (el) => el.child(div().flex_none().text_color(t.blocked).child(view.tx("band.paused"))))
     .when(!symbols.length, (el) => el.child(div().text_color(t.dim).truncate().child(view.tx("band.empty"))))
     .children(symbols.map((symbol) => {
-      const quote = w.shown(symbol);
+      const quote = w.shown(symbol, now);
       const failed = Boolean(w.errors[symbol]);
       const code = quote && bandCurrency(quote);
       const mark = quote && dot(t, bandState(quote, now));
@@ -78,12 +78,12 @@ function countText(view) {
 }
 
 // `Auto-refresh on · Updated 14:05` (the newest fetch among the rows), or `… · Refreshing quotes…` during a Refresh.
-function statusText(view) {
+function statusText(view, now) {
   const w = view.watch;
   const state = view.tx(w.preferences.paused ? "status.paused" : "status.on");
   // Only for a refresh the person asked for: automatic rounds would flip the line every few seconds.
   if (w.refreshing) return `${state} · ${view.tx("status.refreshing")}`;
-  const fetched = Math.max(0, ...w.preferences.symbols.map((symbol) => w.shown(symbol)?.fetchedAt ?? 0));
+  const fetched = Math.max(0, ...w.preferences.symbols.map((symbol) => w.shown(symbol, now)?.fetchedAt ?? 0));
   return fetched ? `${state} · ${view.tx("status.updated", { time: formatTime(fetched) })}` : state;
 }
 
@@ -337,7 +337,7 @@ export function sidebar(view, root, t) {
       .child(brand(view, t))
       .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(countText(view)))
       .child(headerIcons(view, t)))
-    .child(div().truncate().text_size(11).text_color(t.dim).child(statusText(view)))
+    .child(div().truncate().text_size(11).text_color(t.dim).child(statusText(view, now)))
     .children(problemLines(view, t));
   const field = v_flex().flex_none().map(inset).pt(12).gap(6)
     .when(!view.settings.languagePromptDismissed, (el) => el.child(languagePrompt(view, t)))
@@ -354,7 +354,7 @@ export function sidebar(view, root, t) {
 // fetch failed): the ticker and its state on one line, the reason under it, its state ending where a price's
 // digits end. One body and one frame call serve a live row and a fading one alike.
 function sidebarRow(view, t, symbol, place, now, ghost) {
-  const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
+  const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol, now));
   const grid = () => {
     const lineW = sparkWidth(view.size?.width);
     return h_flex().gap(COLUMN_GAP).items_start()
@@ -398,7 +398,7 @@ export function table(view, root, t) {
   ];
   const header = h_flex().flex_none().map(inset).pt(10).gap(12).items_center()
     .child(brand(view, t))
-    .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(`${countText(view)} · ${statusText(view)}`))
+    .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(`${countText(view)} · ${statusText(view, now)}`))
     .child(div().flex_none().w(320).child(addField(view, t)))
     .child(headerIcons(view, t));
   const rows = drawRows(view, filter, (symbol, place, ghost) => tableRow(view, t, symbol, place, columns, nameW, now, ghost));
@@ -429,7 +429,7 @@ function tableHead(view, t, columns, nameW) {
 }
 
 function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
-  const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol));
+  const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol, now));
   const { quote, color } = row;
   const cell = (id) => tableCell(id, nameW);
   const figure = (id, value) => cell(id).text_right().whitespace_nowrap().text_color(t.muted).child(quote ? number(quote, value) : "");

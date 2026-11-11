@@ -640,3 +640,15 @@ test("the row's stale date is judged by the quote's own day", () => {
 test("the status line shows the no-trades notes after the problems", () => {
   assert.match(code(read(new URL("ui/panel.js", MOD))), /\[\.\.\.view\.watch\.problems\(\), \.\.\.view\.watch\.notes\(\)\]/);
 });
+
+// One render reads every row's quote at its one `now`, so each Taiwan market's closure is worked out once
+// (Watchlist#closureAt) and every row reads the same one.
+test("a render reads every row's quote at its one now", () => {
+  const main = code(read(new URL("main.js", MOD)));
+  const start = main.indexOf("  rowSource(");
+  const rowSource = main.slice(start, main.indexOf("\n  }\n", start));
+  assert.match(rowSource, /^  rowSource\(symbol, now\) \{/);
+  assert.doesNotMatch(rowSource, /Date\.now\(\)/);
+  const panel = code(read(new URL("ui/panel.js", MOD)));
+  assert.doesNotMatch(panel, /\.shown\(symbol\)|rowSource\(symbol\)/);
+});
