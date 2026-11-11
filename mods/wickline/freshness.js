@@ -121,6 +121,15 @@ export function futuresSegment(quote, now) {
   return isNight(segment) ? "night" : "day";
 }
 
+// The exchange's lunch break (exchangeRule(...).lunch) on the local day of `at`, as [start, end] in ms, when it falls
+// strictly inside `regular` ([start, end]; null: wherever it falls); else null, also for an exchange without one.
+function lunchWithin(quote, regular, at) {
+  const { lunch } = exchangeRule(quote.exchange, quote.symbol);
+  if (!lunch) return null;
+  const [start, end] = localWindow(lunch, at);
+  return !regular || (start > regular[0] && end < regular[1]) ? [start, end] : null;
+}
+
 const edge = (at) => ({ at, opening: false });
 const opening = (at) => ({ at, opening: true });
 
@@ -151,13 +160,13 @@ function sessionEdges(quote, now) {
     const hours = hoursWindow(quote, now);
     return hours?.weekday ? [opening(hours.regular[0]), edge(hours.regular[1])] : [];
   }
-  const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
-  if (fx) return [edge(nextDayStart(FX_WEEK_OFFSET_MIN, 6, now)), opening(nextDayStart(FX_WEEK_OFFSET_MIN, 1, now))];
+  if (exchangeRule(quote.exchange, quote.symbol).fx) {
+    return [edge(nextDayStart(FX_WEEK_OFFSET_MIN, 6, now)), opening(nextDayStart(FX_WEEK_OFFSET_MIN, 1, now))];
+  }
   const { pre, post } = quote.periods;
   const edges = [...(pre ?? []).map(edge), opening(regular[0]), edge(regular[1]), ...(post ?? []).map(edge)];
-  if (!lunch) return edges;
-  const [lunchStart, lunchEnd] = localWindow(lunch, now);
-  return lunchStart > regular[0] && lunchEnd < regular[1] ? [...edges, edge(lunchStart), opening(lunchEnd)] : edges;
+  const lunch = lunchWithin(quote, regular, now);
+  return lunch ? [...edges, edge(lunch[0]), opening(lunch[1])] : edges;
 }
 
 // The next Taipei midnight for a Taiwan quote, where its row's day (dayFor: taipeiDay) turns; none for any other.
@@ -223,8 +232,7 @@ export function hoursWindow(quote, now) {
  * - null with nothing to show.
  */
 export function sessionTimes(quote, now) {
-  const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
-  if (isCryptoPair(quote.symbol) || fx) return { kind: "allDay" };
+  if (isCryptoPair(quote.symbol) || exchangeRule(quote.exchange, quote.symbol).fx) return { kind: "allDay" };
   const closure = quote.closure?.kind;
   if (closure === "listed") return { kind: "closedToday", reason: quote.closure.reason };
   if (closure === "noTrades") return { kind: "noTradesToday" };
@@ -240,9 +248,8 @@ export function sessionTimes(quote, now) {
   const regular = quote.periods?.regular ?? hoursWindow(quote, now)?.regular;
   if (!regular) return null;
   const [start, end] = regular;
-  if (!lunch) return spans([[start, end]]);
-  const [lunchStart, lunchEnd] = localWindow(lunch, start);
-  return lunchStart > start && lunchEnd < end ? spans([[start, lunchStart], [lunchEnd, end]]) : spans([[start, end]]);
+  const lunch = lunchWithin(quote, regular, start);
+  return spans(lunch ? [[start, lunch[0]], [lunch[1], end]] : [[start, end]]);
 }
 
 /**
@@ -268,12 +275,12 @@ export function sessionOf(quote, now) {
     const [start, end] = hours.regular;
     return hours.weekday && now >= start && now < end ? "open" : "closed";
   }
-  const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
-  if (fx) return fxWeekend(now) ? "closed" : "open";
+  if (exchangeRule(quote.exchange, quote.symbol).fx) return fxWeekend(now) ? "closed" : "open";
   const session = marketSession(quote, now);
-  if (session !== "open" || !lunch) return session;
-  const [lunchStart, lunchEnd] = localWindow(lunch, now);
-  return now >= lunchStart && now < lunchEnd ? "lunch" : "open";
+  if (session !== "open") return session;
+  // marketSession read the regular period already: inside the lunch break is "lunch", wherever the break falls.
+  const lunch = lunchWithin(quote, null, now);
+  return lunch && now >= lunch[0] && now < lunch[1] ? "lunch" : "open";
 }
 
 const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delayMinutes, stoppedAt });
