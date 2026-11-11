@@ -37,8 +37,9 @@ function bookPrice(bid, ask, up, down) {
 
 /**
  * Overlays by requested symbol. The price is the last trade (`z`); when the last 5-second snapshot
- * had none (`-`), the order book's (bookPrice). A row with neither, or without a time, has
- * no overlay and no error. A row MIS sent for a symbol that was not asked for is ignored.
+ * had none (`-`), the order book's (bookPrice), marked `fromBook`: its time is the snapshot's, not a trade's.
+ * A row with neither, or without a time, has no overlay and no error. A row MIS sent for a symbol that was
+ * not asked for is ignored.
  */
 export function decodeMis(symbols, response, now) {
   // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
@@ -59,7 +60,8 @@ export function decodeMis(symbols, response, now) {
     const bid = best(row.b);
     const ask = best(row.a);
     const limits = limitPair(positiveOrNull(row.u), positiveOrNull(row.w));
-    const price = positiveOrNull(row.z) ?? bookPrice(bid, ask, limits.limitUp, limits.limitDown);
+    const traded = positiveOrNull(row.z);
+    const price = traded ?? bookPrice(bid, ask, limits.limitUp, limits.limitDown);
     const time = Number(row.tlong);
     if (!price || !positive(time)) continue;
     if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
@@ -78,6 +80,7 @@ export function decodeMis(symbols, response, now) {
       ...limits,
       timestamp: time,
       fetchedAt: now,
+      ...(!traded && { fromBook: true }),
     };
   }
   return { quotes, errors, names };

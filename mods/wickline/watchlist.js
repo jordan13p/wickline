@@ -1120,8 +1120,9 @@ export class Watchlist {
    * Notes what one answer saw of each Taiwan market, once per market (noteTrade): the decoder's `newestTrade` when it
    * gives one (Yahoo 奇摩股市: each market's newest trade among its real-time rows, whatever their day, so an answer of
    * yesterday's prices still counts as one), else the newest trade among the answer's priced Taiwan rows (a row's own
-   * trade time, else its time), real time as its rows are (isRealtime). Run once the rows are in, so an index reads
-   * its market by the exchange this answer gave.
+   * trade time, else its time; a MIS book price, `fromBook`, is timed by its snapshot and carries no trade), real time
+   * as its rows are (isRealtime). Run once the rows are in, so an index reads its market by the exchange this answer
+   * gave.
    */
   observe(provider, result, now) {
     const trades = {};
@@ -1132,7 +1133,7 @@ export class Watchlist {
       for (const [symbol, quote] of Object.entries(result.quotes)) {
         if (this.marketFor(symbol) !== "tw") continue;
         const market = twMarket(symbol);
-        const time = quote.tradeTime ?? quote.timestamp;
+        const time = quote.fromBook ? null : quote.tradeTime ?? quote.timestamp;
         const newest = trades[market]?.time ?? null;
         const later = Number.isFinite(time) && (newest === null || time > newest);
         trades[market] = { time: later ? time : newest, realtime: isRealtime(quote) };

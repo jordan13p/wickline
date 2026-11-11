@@ -2344,6 +2344,29 @@ test("a typhoon day with MIS: stopped at 09:05, 今日無成交 from 09:10", asy
   }, at("2026-11-11T01:04:30Z"));
 });
 
+// MIS times a row by its snapshot (`tlong`), fresh even when the snapshot had no trade (`z` is "-") and the price is
+// the book's midpoint: only a price from a trade counts as one.
+const ONLY_MIS = { version: 1, sources: { tw: { mis: true, misAck: { version: MIS_CONSENT_VERSION } } } };
+const misBookNow = (host) => () => ok({ msgArray: [{ ...MIS_ROW, z: "-", b: "2245.0000_", a: "2250.0000_", tlong: String(host.clock) }] });
+
+test("a fresh MIS snapshot without a trade is no trade: it keeps an inferred and a listed closure", async () => {
+  const typhoon = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  typhoon.mis = misBookNow(typhoon);
+  await soleRun(typhoon, async (w) => {
+    await advance(typhoon, at("2026-11-11T01:10:05Z"));
+    const quote = w.shown("2330.TW", typhoon.clock);
+    assert.equal(quote.source, "mis");
+    assert.deepEqual(quote.closure, { kind: "noTrades", source: "mis" });
+    assert.equal(freshness(quote, sessionOf(quote, typhoon.clock), typhoon.clock).state, "noTrades");
+    assert.deepEqual(w.notes(), noTradesToday("mis"));
+  }, at("2026-11-11T01:04:30Z"));
+  const holiday = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
+  holiday.mis = misBookNow(holiday);
+  await soleRun(holiday, (w) => {
+    assert.deepEqual(w.shown("2330.TW", holiday.clock).closure, { kind: "listed", reason: "行憲紀念日" });
+  }, at("2026-12-25T02:00:00Z"));
+});
+
 // An inference deadline wakes the rows: Yahoo Finance's rounds land at hh:mm:30, so only the deadline wake can redraw
 // in [09:30:00, 09:30:01].
 test("a typhoon day with Yahoo Finance alone: delayed until 09:25, stopped from 09:25, 今日無成交 from 09:30", async () => {
