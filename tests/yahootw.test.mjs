@@ -608,3 +608,14 @@ test("a futures trade timed too far ahead is no trade: the decoder refuses it, s
   // Within the decoder's 5-minute bound it is accepted, and counts.
   assert.deepEqual(decodeStockList(["WTX&"], ahead(60_000), now).newestTrade, { future: now + 60_000 });
 });
+
+test("a stock trade timed on a later Taipei day is no trade either", () => {
+  const now = at("2026-12-25T02:00:00Z"); // 10:00 Taipei on a listed Friday
+  const timed = (ms) => ok(ROWS.filter((row) => row.symbol === "2330.TW")
+    .map((row) => ({ ...row, regularMarketTime: new Date(ms).toISOString() })));
+  const refused = decodeStockList(["2330.TW"], timed(now + 3 * 86_400_000), now);
+  assert.deepEqual(refused.quotes, {});
+  assert.equal(refused.newestTrade, undefined);
+  // An earlier day's trade still counts (an answer of yesterday's prices tells a session without trades).
+  assert.deepEqual(decodeStockList(["2330.TW"], timed(now - 86_400_000), now).newestTrade, { stock: now - 86_400_000 });
+});

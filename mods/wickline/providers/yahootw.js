@@ -81,8 +81,9 @@ function checkStatus(response) {
  * share to be drawn with it. An answer with prices but none accepted for today (all delayed, or none from
  * today) carries `noLive`, so the source can say why it shows nothing live; one with no price at all (before
  * the open, every stock halted) does not. `newestTrade`, only when it has an entry: per market clock ("stock",
- * "future"), the newest trade time among the requested rows with a positive price, a trade time not too far ahead
- * and no delay, whatever their day, so a session that has not traded yet can be told apart (Watchlist#noteTrade).
+ * "future"), the newest trade time among the requested rows with a positive price, a trade time not further ahead
+ * than the decoder accepts (a future's 5 minutes, a stock's today) and no delay, from any earlier day too, so a
+ * session that has not traded yet can be told apart (Watchlist#noteTrade).
  */
 export function decodeStockList(symbols, response, now, anyDay = []) {
   checkStatus(response);
@@ -118,8 +119,10 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     const soleHere = anyDaySymbols.has(symbol);
     const dayOk = day !== null && aheadOk && (isToday || (day < today && soleHere));
     const delayed = row.exchangeDataDelayedBy !== 0;
-    // A trade counts only with a time the decoder accepts: one too far ahead is a bad time, never a trade.
-    if (price && tradeTime !== null && aheadOk && !delayed) newestTrade[clock] = Math.max(newestTrade[clock] ?? tradeTime, tradeTime);
+    // A trade counts only with a time the decoder accepts: a future's at most FUTURE_AHEAD_MS ahead, a stock's on today's
+    // trading day or earlier. A time further ahead is a bad time, never a trade.
+    const timeOk = future ? aheadOk : day <= today;
+    if (price && tradeTime !== null && timeOk && !delayed) newestTrade[clock] = Math.max(newestTrade[clock] ?? tradeTime, tradeTime);
     // A symbol only this source prices has no other row to fall back on: a price refused as not real time says so,
     // so the kept price reads cached rather than taken for a name-only answer. A price with no trade time is refused
     // the same way: there is no trade to date it by.
