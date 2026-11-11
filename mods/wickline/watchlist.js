@@ -10,7 +10,7 @@ import {
   SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings, yahootwEnabled, yahootwReconfirm,
 } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
-import { ownPeriods, yahootw } from "./providers/yahootw.js";
+import { ownPeriods, tradingDay, yahootw } from "./providers/yahootw.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
 export const WATCHLIST_KEY = "wickline.watchlist.v1";
@@ -1030,7 +1030,8 @@ export class Watchlist {
    * Whether an overlay line arriving at `now` has stopped: its last traded minute ends over LINE_LAG_MS before a
    * trade it must already hold. A minute shows in a line only once it has ended, so a trade is judged by only once
    * it has settled: its minute has ended and LINE_LAG_MS has passed. The trades seen at this and earlier arrivals
-   * are kept (LINE_TRADES at most) and the line is judged against the newest settled one; the trade just seen
+   * are kept (LINE_TRADES at most) and the line is judged against the newest settled one, capped at the end of the
+   * line's regular session (sessionEnd: a stock's 14:30 fixed-price trade is never in its line); the trade just seen
    * counts once it has settled itself (a line first asked after the close is judged at once). Until one has
    * settled, the line stays, so a thin future's or quiet stock's line is never dropped for a trade it cannot
    * hold yet. Measured while open, with lines 2 min apart (longer when more lines wait than a round sends, and
@@ -1047,7 +1048,21 @@ export class Watchlist {
     if (settled > 0) trades.splice(0, settled);
     // Lines asked closer together than usual: the oldest unsettled trades go, never the settled one.
     if (trades.length > LINE_TRADES) trades.splice(settled < 0 ? 0 : 1, trades.length - LINE_TRADES);
-    return settled >= 0 && line.lastAt + MINUTE_MS < trades[0] - LINE_LAG_MS;
+    if (settled < 0) return false;
+    const reference = Math.min(trades[0], this.sessionEnd(provider, symbol, line));
+    return line.lastAt + MINUTE_MS < reference - LINE_LAG_MS;
+  }
+
+  /**
+   * When the regular session of a line's trading day ends: the answer's own (`endAt`), else the periods known for
+   * the symbol (the last line answer's for a symbol this source prices alone, the base quote's otherwise) when
+   * they are of that day; with neither, never.
+   */
+  sessionEnd(provider, symbol, line) {
+    if (Number.isFinite(line.endAt)) return line.endAt;
+    const known = this.soleSource(symbol) === provider ? this.linePeriods[symbol] : this.quotes[symbol]?.periods;
+    const end = known?.regular?.[1];
+    return Number.isFinite(end) && tradingDay(symbol, end - 1) === line.day ? end : Infinity;
   }
 
   async get(request) {

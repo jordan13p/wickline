@@ -225,7 +225,8 @@ test("the liquid fixture", () => {
 
 test("the quiet fixture", () => {
   assert.deepEqual(lineOf("0050.TW", ok(jsonFixture("yahootw-tick-quiet"))).lines,
-    { "0050.TW": { day: taipeiDay(NOW), series: [10.05], lastAt: Date.parse("2026-11-09T01:18:00Z") } });
+    { "0050.TW": { day: taipeiDay(NOW), series: [10.05], lastAt: Date.parse("2026-11-09T01:18:00Z"),
+      endAt: Date.parse("2026-11-09T05:30:00Z") } }); // its regular session ends at 13:30
 });
 
 test("yesterday's points are dropped", () => {
@@ -521,8 +522,10 @@ test("a line's last trade is its last close, not the minutes filled up to now", 
   const last = closes.findLastIndex((close) => close !== null);
   const lastClose = chart.timestamp[last] * 1000;
   const now = lastClose + 30 * 60_000 + 30_000; // 22:50:30
-  const { series, lastAt } = yahootw.decode(request, ok(FUTURES_NIGHT_TICK), now).lines["WTX&"];
+  const { series, lastAt, endAt } = yahootw.decode(request, ok(FUTURES_NIGHT_TICK), now).lines["WTX&"];
   assert.equal(lastAt, lastClose);
+  // Its trading day's regular session ends at 13:45 the next day: no night trade is capped.
+  assert.equal(endAt, at("2026-11-11T05:45:00Z"));
   // The series still runs to now's minute, flat after 22:20.
   const first = closes.findIndex((close) => close !== null);
   assert.equal(series.length, last + 30 - first + 1);

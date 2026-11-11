@@ -647,6 +647,84 @@ test("a frozen stock line stays off when its price drops and comes back every fe
   }
 });
 
+// Yahoo 奇摩股市's 2330 line recorded at 08:53 in Taipei on 2026-11-11, before the open, trimmed to the fields Wickline
+// reads: every minute of the day listed in advance (09:00 to 13:28, closes all null), and currentTradingPeriod's
+// regular session 09:00 to 13:30.
+const STOCK_DAY = jsonFixture("yahootw-tick-2330-0853")[0];
+const STOCK_PERIODS = STOCK_DAY.chart.meta.currentTradingPeriod;
+const on1111 = (time) => Date.parse(`2026-11-11T${time}Z`);
+// That answer later in the day: a close on each listed minute up to `closesTo` (ms); its minutes listed on to
+// `listedTo` when given (13:30, the closing match's minute); without its meta's periods when `periods` is false.
+function stockDay({ closesTo, listedTo = null, periods = true }) {
+  const stamps = STOCK_DAY.chart.timestamp.slice();
+  while (listedTo !== null && stamps[stamps.length - 1] * 1000 < listedTo) stamps.push(stamps[stamps.length - 1] + 60);
+  return ok([{ ...STOCK_DAY, chart: { meta: { symbol: "2330.TW", ...(periods && { currentTradingPeriod: STOCK_PERIODS }) },
+    timestamp: stamps, indicators: { quote: [{ close: stamps.map((seconds) => (seconds * 1000 <= closesTo ? 2200 : null)) }] } } }]);
+}
+// Yahoo Finance's 2330 that day: its 13:30 close and the same regular session.
+const yahoo1111 = (symbol) => twYahoo(symbol, { regularMarketTime: on1111("05:30:00") / 1000, currentTradingPeriod: STOCK_PERIODS });
+
+test("after its 14:30 fixed-price trade, a Taiwan stock's line that ends with the regular session is kept all evening", async () => {
+  // Yahoo 奇摩股市 gives 2330's trade time as 14:30:00 after the close; no line minute can hold it.
+  for (const listedTo of [null, on1111("05:30:00")]) { // listed to 13:28 as recorded, or on to 13:30
+    for (const from of [on1111("06:35:00"), on1111("12:00:00")]) { // first asked at 14:35, or at 20:00
+      const host = taiwanHost(ONLY_YAHOOTW, {
+        yahootw: () => stockList(on1111("06:30:00")), yahoo: yahoo1111, line: () => stockDay({ closesTo: on1111("05:30:00"), listedTo }),
+      });
+      await walk(host, from, from + 30 * 60_000, (w, now) => assert.ok(w.lines.yahootw?.["2330.TW"], `${listedTo} ${iso(now)}`));
+    }
+  }
+});
+
+test("without periods in its answer, a stock's line is capped by its Yahoo Finance session", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahootw: () => stockList(on1111("06:30:00")), yahoo: yahoo1111,
+    line: () => stockDay({ closesTo: on1111("05:30:00"), listedTo: on1111("05:30:00"), periods: false }),
+  });
+  const from = on1111("06:40:00"); // 14:40
+  await walk(host, from, from + 30 * 60_000, (w, now) => assert.ok(w.lines.yahootw?.["2330.TW"], iso(now)));
+});
+
+test("a Taiwan stock's line first asked after the close is kept when it ends at its last trade", async () => {
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahootw: () => stockList(on1111("05:30:00")), yahoo: yahoo1111,
+    line: () => stockDay({ closesTo: on1111("05:30:00"), listedTo: on1111("05:30:00") }),
+  });
+  const from = on1111("05:40:00"); // 13:40
+  await walk(host, from, from + 20 * 60_000, (w, now) => {
+    assert.equal(w.sessionFor(["2330.TW"], now), "closed", iso(now));
+    assert.ok(w.lines.yahootw?.["2330.TW"], iso(now));
+  });
+});
+
+test("a Taiwan stock's answer listing the whole day, its closes stopped at 10:00 while it trades on, is dropped", async () => {
+  const freeze = on1111("02:00:00");
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahootw: () => stockList(host.clock - 5_000), yahoo: yahoo1111, line: () => stockDay({ closesTo: Math.min(host.clock, freeze) }),
+  });
+  const { dropped, back } = await dropAfter(host, on1111("01:50:00"), on1111("03:00:00"), "2330.TW", freeze);
+  assert.ok(dropped !== null && dropped <= FROZEN_WITHIN_MS, String(dropped));
+  assert.equal(back, false);
+});
+
+test("a TW-only index's line without periods is capped by the periods an earlier answer gave", async () => {
+  // ^TWOII, priced by Yahoo 奇摩股市 alone, with a trade time after its 13:30 regular end (as a stock's 14:30 one). Its
+  // first answer, at 14:40, gives the periods but no point of today; the next, 10 min later, points but no periods.
+  const day = (time) => Date.parse(`2026-11-09T${time}Z`);
+  const periods = { regular: { start: day("01:00:00") / 1000, end: day("05:30:00") / 1000 } };
+  const closes = Array.from({ length: 271 }, (_, i) => 320 + i / 100);
+  let asked = 0;
+  const host = twOnlyHost(["^TWOII"], {
+    yahootw: () => stockList(day("06:30:00")),
+    line: (symbol) => (asked++ === 0 ? tickAt(symbol, day("05:30:00") - 86_400_000, [320], periods) : tickAt(symbol, day("05:30:00"), closes)),
+  });
+  const from = day("06:40:00");
+  await walk(host, from, from + 30 * 60_000, (w, now) => {
+    if (now > from + 10 * 60_000 + 5_000) assert.ok(w.lines.yahootw?.["^TWOII"], iso(now));
+  });
+  assert.equal(asked, 2);
+});
+
 test("a quiet stock's line is never dropped, at any arrival phase", async () => {
   // 0050 trades at 09:17:12, 09:41:10 and 09:52:03; its answer lists every minute to now, each traded minute's
   // close in it once that minute has ended. 2330 trades on beside it.
@@ -1441,8 +1519,8 @@ test("a future first lined while closed is judged at once, and its frozen line s
   });
 });
 
-test("a future's line that agrees with its last trade is kept while closed", async () => {
-  // The recorded night line (last close 22:20) read after a 22:20:20 last trade, as if the session had ended there.
+test("a future's line that agrees with a last trade already settled at its first arrival is kept", async () => {
+  // The recorded night line (last close 22:20) read half an hour after a 22:20:20 last trade.
   const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(at("2026-11-10T14:20:20Z")), line: () => ok(FUTURES_NIGHT_TICK) });
   const from = at("2026-11-10T14:50:30Z");
   await walk(host, from, from + 10 * 60_000, (w, now) => assert.ok(w.lines.yahootw?.["WTX&"], iso(now)));
@@ -1466,6 +1544,21 @@ test("removed and added again, a future's line is judged only by its new trades"
       // From its next line, 2 min after the last one asked.
       assert.ok(w.lines.yahootw?.["WTX&"], iso(now));
     }
+  });
+});
+
+test("a futures day-session answer cached at 11:00, listing minutes only to then, is dropped by its third arrival", async () => {
+  // The 13:36 recording lists minutes only to its own time; cut at 11:00, it is an answer cached then. Its regular
+  // period still ends at 13:45, so nothing caps the trades it is judged by.
+  const chart = FUTURES_TICK[0].chart;
+  const cut = chart.timestamp.findIndex((seconds) => seconds * 1000 > at("2026-11-10T03:00:00Z"));
+  const cached = ok([{ ...FUTURES_TICK[0], chart: { ...chart, timestamp: chart.timestamp.slice(0, cut),
+    indicators: { quote: [{ close: chart.indicators.quote[0].close.slice(0, cut) }] } } }]);
+  const from = at("2026-11-10T03:30:00Z"); // 11:30
+  const host = futuresHost(["WTX&"], { yahootw: () => futuresAt(host.clock - 10_000), line: () => cached });
+  await walk(host, from, from + 10 * 60_000, (w, now) => {
+    assert.equal(w.sessionFor(["WTX&"], now), "open", iso(now));
+    assert.equal(w.lines.yahootw?.["WTX&"] === undefined, now > from + 240_000, iso(now));
   });
 });
 
