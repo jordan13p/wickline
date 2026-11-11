@@ -82,16 +82,25 @@ export function changeTone(percent) {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+// The local calendar date of a time in ms as a comparable day key (year·10000 + month·100 + date).
+function localDate(ms) {
+  const date = new Date(ms);
+  return date.getFullYear() * 10000 + date.getMonth() * 100 + date.getDate();
+}
+
 /**
- * A quote from an earlier local day gets its date, so a closed market never reads as today's:
- * "Oct 31" in English, "10/31" in the other languages.
+ * A quote from an earlier day than `now`'s gets its date, so a closed market never reads as today's:
+ * "Oct 31" in English, "10/31" in the other languages. `day(ms)` gives the comparable day key; the default is
+ * the local calendar date.
  */
-export function formatStaleDate(timestamp, now, lang = "en") {
-  const quoted = new Date(timestamp);
-  const today = new Date(now);
-  if (quoted.getFullYear() === today.getFullYear() && quoted.getMonth() === today.getMonth()
-    && quoted.getDate() === today.getDate()) return "";
-  return lang === "en" ? `${MONTHS[quoted.getMonth()]} ${quoted.getDate()}` : `${quoted.getMonth() + 1}/${quoted.getDate()}`;
+export function formatStaleDate(timestamp, now, lang = "en", day = localDate) {
+  return day(timestamp) === day(now) ? "" : formatDate(timestamp, lang);
+}
+
+/** A local date as a row prints it: "Oct 31" in English, "10/31" in the other languages. */
+export function formatDate(timestamp, lang = "en") {
+  const date = new Date(timestamp);
+  return lang === "en" ? `${MONTHS[date.getMonth()]} ${date.getDate()}` : `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 /**
@@ -154,11 +163,12 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
 }
 
 /**
- * The detail dialog's times, to the second: the quote's (with its date when not today), the last
- * trade when it is not the quote's own time (Yahoo 奇摩股市 times a quiet stock at the feed), the fetch.
+ * The detail dialog's times, to the second: the quote's (with its date when not today by `day`, as in
+ * formatStaleDate), the last trade when it is not the quote's own time (Yahoo 奇摩股市 times a quiet stock at the
+ * feed), the fetch.
  */
-export function detailTimes(quote, now, lang, tx) {
-  const date = formatStaleDate(quote.timestamp, now, lang);
+export function detailTimes(quote, now, lang, tx, day = localDate) {
+  const date = formatStaleDate(quote.timestamp, now, lang, day);
   const lastTrade = quote.tradeTime && quote.tradeTime !== quote.timestamp
     ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })] : [];
   return [tx("detail.quoted", { time: `${date ? `${date} ` : ""}${formatTime(quote.timestamp, true)}` }), ...lastTrade,

@@ -5,6 +5,7 @@ import {
   LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
   shownLimit,
 } from "../mods/wickline/freshness.js";
+import { nextEdge } from "../mods/wickline/freshness.js";
 import { formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
@@ -506,4 +507,13 @@ test("a future's limit holds after its session only for a trade inside it, with 
   const quote = atLimit(at("2026-11-10T05:44:00Z"));
   const shown = { ...quote, periods: ownPeriods({ ...quote, tradeTime: quote.timestamp }, quote.periods, night) };
   assert.equal(shownLimit(shown, sessionOf(shown, night), night), null);
+});
+
+test("nextEdge: a future's next TAIFEX opening on its Taipei day; nothing yet for a stock", () => {
+  const wtx = { symbol: "WTX&", periods: null };
+  assert.equal(nextEdge(wtx, at("2026-11-09T22:30:00Z"), true), at("2026-11-10T00:45:00Z")); // 06:30 → 08:45
+  assert.equal(nextEdge(wtx, at("2026-11-10T01:00:00Z"), true), at("2026-11-10T07:00:00Z")); // 09:00 → 15:00
+  assert.equal(nextEdge(wtx, at("2026-11-10T08:00:00Z"), true), null);                       // 16:00
+  assert.equal(nextEdge(wtx, at("2026-11-14T02:00:00Z"), true), null);                       // Saturday
+  assert.equal(nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), true), null);
 });

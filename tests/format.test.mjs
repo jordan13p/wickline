@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
+import { formatDate } from "../mods/wickline/format.js";
 import { freshness } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 
@@ -148,4 +149,14 @@ test("a row collapses only when it has no price and its fetch failed", () => {
   assert.equal(collapsedRow({ quote: null, failed: undefined, fallback: { code: "request.timeout", params: {} } }), false);
   // Cached: a price from an earlier round with an error keeps the grid and its cached note.
   assert.equal(collapsedRow({ quote: { symbol: "2330.TW", price: 1000 }, failed: notFound }), false);
+});
+
+test("formatStaleDate and detailTimes compare by the day function they are given", () => {
+  const tx = (key, params) => t("en", key, params);
+  const now = new Date(2026, 10, 2, 12).getTime();
+  const earlier = new Date(2026, 9, 31, 16).getTime();
+  assert.equal(formatStaleDate(earlier, now, "en", () => 0), "");
+  assert.equal(formatStaleDate(now - 1_000, now, "en", (ms) => ms), "Nov 2");
+  assert.deepEqual(detailTimes({ timestamp: earlier, fetchedAt: now }, now, "en", tx, () => 0)[0], `Quote at ${formatTime(earlier, true)}`);
+  assert.deepEqual([formatDate(earlier, "en"), formatDate(earlier, "zh-TW")], ["Oct 31", "10/31"]);
 });

@@ -114,10 +114,14 @@ export function futuresSegment(quote, now) {
   return startMin >= 720 ? "night" : "day";
 }
 
-/** How long until a TAIFEX session opens later on the Taipei day of `now`, in ms; null when none does. */
-export function msUntilTaifexOpens(now) {
+/**
+ * The next moment after `now` at which `quote`'s session changes, in ms, or null; with `openingsOnly`, only a
+ * moment a session opens. For now only a future's: a TAIFEX session opening later on the Taipei day of `now`.
+ */
+export function nextEdge(quote, now, openingsOnly) {
+  if (kindOf(quote.symbol) !== "future") return null;
   const starts = taifexSegments(now).map(([start]) => start).filter((start) => start > now);
-  return starts.length ? Math.min(...starts) - now : null;
+  return starts.length ? Math.min(...starts) : null;
 }
 
 /** The detail's session key suffix: a trading future's "day" or "night", else `session` itself. */

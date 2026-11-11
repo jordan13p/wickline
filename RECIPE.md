@@ -126,6 +126,7 @@ Field-level details are in [RECIPE-internals.md](RECIPE-internals.md): each requ
 - `layout.js`: the panel sizes above as constants, `layoutFor(size)`, `sparkWidth`, `tableColumns(width)` and `wantsCard`.
 - `panes.js`: where a move goes and when it has arrived (`returnPane`, `newWicklineTab`, `waitUntil`, `dockOf`, `isShown`, `blockYields`, `staleDockTab`). `moves.js` makes the moves; host: `panes`, `layout`, `run`, `shared`, `setShared`, `focused`.
 - `markets.js`: a symbol's market (`marketOf`; an index's from its exchange, `resolvedMarket`) and kind; Yahoo's exchange codes (closed): US DJI, SNP, NIM, NMS, NYQ, PCX live, CXI 20, NYS, WCB 15; Taiwan TAI, TWO 20, TFE; HKG, SHH, SHZ, JPX, OSA 15; KSC, KOE 20; rule only: NGM, NCM, ASE, BTS, CCY (FX) live, PNK 15, CME, NYM, CMX, CBT futures 10, read through `exchangeRule(exchange, symbol)`. Also the market filter (`marketFilters`, `readFilter`, `filterAfterAdd`, `dropBefore`, …).
+- `calendar.js`: Taipei days and a future's trading day (15:00 start, weekends skipped).
 - `motion.js`: the timings, whole spin turns, `rowsWithGhosts` and `settleOffset`; `playRow` in `main.js` plays a row's motion.
 - `i18n.js`: `STRINGS`, one table per language with the same keys, and `t(lang, key, params)`, falling back to English, then the key.
 - `settings.js`: `readSettings`, `validateSettings`, `mergeSettings`, the source gates and consents, `currentHealth` and what the settings pages and items show.

@@ -1,7 +1,8 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { QuoteError, STARTER_SYMBOLS, normalizeSymbol } from "./quotes.js";
-import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, msUntilTaifexOpens, sessionOf } from "./freshness.js";
+import { tradingDay } from "./calendar.js";
+import { LIVE_MAX_AGE_MS, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
 import { MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -10,7 +11,7 @@ import {
   SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings, yahootwEnabled, yahootwReconfirm,
 } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
-import { ownPeriods, tradingDay, yahootw } from "./providers/yahootw.js";
+import { ownPeriods, yahootw } from "./providers/yahootw.js";
 
 // The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
 export const WATCHLIST_KEY = "wickline.watchlist.v1";
@@ -633,6 +634,16 @@ export class Watchlist {
     return wait;
   }
 
+  /** The earliest nextEdge among `symbols`' shown quotes (a symbol without one as { symbol, periods: null }), or null. */
+  edgeAt(symbols, now, openingsOnly) {
+    let earliest = null;
+    for (const symbol of symbols) {
+      const edge = nextEdge(this.shown(symbol, now) ?? { symbol, periods: null }, now, openingsOnly);
+      if (edge !== null && (earliest === null || edge < earliest)) earliest = edge;
+    }
+    return earliest;
+  }
+
   /**
    * One provider's loop, until stop(). Each round starts the provider's interval after the
    * previous one ends (or when its cooldown ends, if later); an edit starts one at once.
@@ -690,8 +701,9 @@ export class Watchlist {
       if (!idle) {
         // A break's interval ends at TAIFEX's next opening, so a future's first price of a session is not up to an
         // interval late; from then on the row reads that session (ownPeriods), and its cadence with it.
-        const opens = symbols.some((symbol) => kindOf(symbol) === "future") ? msUntilTaifexOpens(now) : null;
-        due += Math.max(Math.min(provider.intervalMs(this.sessionFor(symbols, now)), opens ?? Infinity), state.retryAt - now);
+        const opens = this.edgeAt(symbols, now, true);
+        due += Math.max(Math.min(provider.intervalMs(this.sessionFor(symbols, now)), opens === null ? Infinity : opens - now),
+          state.retryAt - now);
       }
       await this.rest(state, symbols, due, io);
     }
