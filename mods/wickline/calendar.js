@@ -181,9 +181,9 @@ export const withClosure = (quote, { closure, deadline }) => ({
  */
 function closureRule(market, now, open, listed, seen) {
   const today = taipeiDay(now);
+  const before = today - 1;
   const minute = taipeiMinute(now);
   const reason = listed(today);
-  const closedToday = reason ? { kind: "listed", reason } : null;
   // The source that says the session of `market` that opened at `start` has no trade, or null.
   const quietSince = (start) => quietAnswer(seen(market, start), start, now)?.source ?? null;
   const tradedSince = (other, start) => Boolean(seen(other, start)?.traded);
@@ -193,22 +193,23 @@ function closureRule(market, now, open, listed, seen) {
     || tradedSince("stock", taipeiAt(day, TWSE_HOURS.from));
   const noTrades = (source) => ({ kind: "noTrades", source });
   const nightReading = (day, source) => (dayTraded(day) ? { kind: "nightNoTrades", source } : noTrades(source));
+  // From 00:00 to 05:00, the night of an unlisted weekday T-1 runs on: until it reads quiet, not even a listed T
+  // closes it.
+  const runningNight = market === "future" && minute < NIGHT_END_MIN && isWeekday(before) && !listed(before);
+  const nightSource = runningNight ? quietSince(open) : null;
+  if (runningNight && !nightSource) return null;                                             // 4, else 9
+  if (reason) return { kind: "listed", reason };                                             // 1, 3–5, 6
   if (market === "stock") {
-    if (closedToday) return closedToday;                                                     // 1
     const source = open !== null && !tradedSince("future", dayOpen(today)) && quietSince(open);
     return source ? noTrades(source) : null;                                                 // 2, else 9
   }
   if (minute < NIGHT_END_MIN) {
-    const before = today - 1;
-    if (!isWeekday(before)) return closedToday ?? null;                                      // 5
-    if (listed(before)) return closedToday ?? { kind: "nightRemoved" };                      // 3
-    const source = quietSince(open);
-    return source ? closedToday ?? nightReading(before, source) : null;                      // 4, else 9
+    if (runningNight) return nightReading(before, nightSource);                              // 4
+    return isWeekday(before) ? { kind: "nightRemoved" } : null;                              // 3, 5
   }
-  if (closedToday) return closedToday;                                                       // 6
   if (open === null) return null;                                                            // 9
   if (minute < NIGHT_SESSION.from) {
-    const source = !tradedSince("stock", taipeiAt(today, TWSE_HOURS.from)) && quietSince(open);
+    const source = !dayTraded(today) && quietSince(open);
     return source ? noTrades(source) : null;                                                 // 7, else 9
   }
   const night = quietSince(open);
