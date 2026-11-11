@@ -138,7 +138,7 @@ Hosts, and when Wickline contacts them:
 | `data-api.binance.vision`, or the Binance address you set | always, for crypto pairs |
 | `tw.stock.yahoo.com` (fixed) | only after you turn on Yahoo TW Stock for Taiwan and tick its consent box, for Taiwan stocks, indices and futures (not a public interface) |
 | `mis.twse.com.tw`, or the MIS address you set | only after you turn on TWSE MIS for Taiwan and tick its consent box (unofficial) |
-| `openapi.twse.com.tw` (fixed) | while your list holds a Taiwan symbol: TWSE's published market holiday list, once a day by GET, with no key; nothing from it is stored |
+| `openapi.twse.com.tw` (fixed) | while your list holds a Taiwan symbol: TWSE's published market holiday list, once a day per open copy by GET, retried hourly after a failure, with no key; nothing from it is stored |
 | `finnhub.io` (only the path of the Finnhub URL can change) | only after you choose Finnhub for US stocks and save a key; the key travels in a request header, never in the address, and only to `https://finnhub.io`: a saved address on any other host, or an answer redirected elsewhere, stops Finnhub and says so |
 
 - **Programs**: only `chmod 600` on `data/wickline/secrets.json` right after you save a Finnhub key, on macOS and Linux, so other accounts on this computer cannot read it. If it fails, the dialog says so and the key stays saved. Nothing else is run.

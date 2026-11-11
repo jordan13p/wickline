@@ -138,7 +138,7 @@ agent 會先告訴你 Wickline 會連線到哪些主機，再複製 mod、合併
 | `data-api.binance.vision`，或你設定的 Binance 網址 | 一律，用於加密貨幣交易對 |
 | `tw.stock.yahoo.com`（固定） | 只有在你開啟 Yahoo 奇摩股市並勾選同意後，查詢台股、指數與期貨（非公開介面） |
 | `mis.twse.com.tw`，或你設定的 MIS 網址 | 只有在你開啟證交所 MIS 並勾選同意後（非官方） |
-| `openapi.twse.com.tw`（固定） | 清單中有台灣商品時：臺灣證券交易所公布的休市日期，每天以 GET 查詢一次，不需金鑰，也不儲存任何資料 |
+| `openapi.twse.com.tw`（固定） | 清單中有台灣商品時：臺灣證券交易所公布的休市日期，每個開啟的 copy 每天以 GET 查詢一次，失敗後每小時重試，不需金鑰，也不儲存任何資料 |
 | `finnhub.io`（Finnhub 網址只能修改路徑） | 只有在你將美股改為 Finnhub 並儲存 API 金鑰後；API 金鑰放在請求標頭中，不會出現在網址裡，且只會送往 `https://finnhub.io`：已儲存的網址若指向其他主機，或回應被轉址到別處，Finnhub 會停止並顯示原因 |
 
 - **程式**：只在 macOS 與 Linux 上、你儲存 Finnhub API 金鑰之後，對 `data/wickline/secrets.json` 執行 `chmod 600`，讓這台電腦上的其他帳號無法讀取。若執行失敗，設定視窗會提示，API 金鑰仍會保存。除此之外不執行任何程式。

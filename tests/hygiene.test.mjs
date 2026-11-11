@@ -401,14 +401,14 @@ test("the disclosure says Yahoo 奇摩股市 is asked for futures too", () => {
   }
 });
 
-// What the host is asked, per the spec's "Holiday schedule host named": once a day, while the list holds a Taiwan
-// symbol, by GET, with no key, nothing stored.
+// What the host is asked, per the spec's "Holiday schedule host named": while the list holds a Taiwan symbol, by GET,
+// once a day per open copy and hourly after a failure, with no key, nothing stored.
 const SCHEDULE_WORDS = {
-  en: [/once a day/, /Taiwan symbol/, /no key/, /nothing (from it )?(is )?stored/],
-  "zh-TW": [/每天/, /台灣商品/, /不需金鑰/, /不儲存/],
-  "zh-CN": [/每天/, /台湾商品/, /无需密钥/, /不保存/],
-  ja: [/1 日 1 回/, /台湾の銘柄/, /キーは不要/, /何も保存しません/],
-  ko: [/하루 한 번/, /대만 종목/, /키는 필요 없/, /저장하지 않습니다/],
+  en: [/once a day per open copy/, /retried hourly after a failure/, /Taiwan symbol/, /no key/, /nothing (from it )?(is )?stored/],
+  "zh-TW": [/每個開啟的 copy 每天/, /失敗後每小時重試/, /台灣商品/, /不需金鑰/, /不儲存/],
+  "zh-CN": [/每个打开的副本每天/, /失败后每小时重试/, /台湾商品/, /无需密钥/, /不保存/],
+  ja: [/開いているコピーごとに 1 日 1 回/, /失敗した場合は 1 時間ごとに再試行/, /台湾の銘柄/, /キーは不要/, /何も保存しません/],
+  ko: [/열려 있는 사본마다 하루 한 번/, /실패하면 1시간마다 다시 시도/, /대만 종목/, /키는 필요 없/, /저장하지 않습니다/],
 };
 test("the schedule's host is named with what is asked", () => {
   const places = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]]
