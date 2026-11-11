@@ -206,10 +206,10 @@ export class Watchlist {
     // date of the last success, `tried` that of the last attempt, `retryAt` when a failed one may be tried again, and
     // `pending` the fetch in flight (one per copy, shared by its loops). See loadHolidays.
     this.holidays = { days: {}, day: null, tried: null, retryAt: 0, pending: null };
-    // Per Taiwan market, by the open (ms) of a session: what this copy saw of it since that open, `{ traded, newest,
-    // answers }`: whether an answer carried a trade at or after the open, the newest trade time any answer carried
-    // (whatever its day), and by source id that source's latest answer, `{ at, realtime }` (when it arrived, and
-    // whether the source is real time). Only in memory; older than SEEN_KEEP_MS is dropped on write. Written by
+    // Per Taiwan market, by the open (ms) of a session: what this copy saw of it since that open, `{ newest, answers }`:
+    // the newest trade time any answer carried (whatever its day; the session has traded once it is at or after the
+    // open), and by source id that source's latest answer, `{ at, realtime }` (when it arrived, and whether the source
+    // is real time). Only in memory; older than SEEN_KEEP_MS is dropped on write. Written by
     // noteTrade, read only through observed.
     this.seen = { stock: {}, future: {} };
     // Each Taiwan market's reading at one `now` (closureAt), `{ now, rev, byMarket }`, and the revision of its inputs:
@@ -396,7 +396,7 @@ export class Watchlist {
     const answers = PROVIDERS.filter(({ id }) => entry.answers[id] && (!OVERLAY_ORDER.includes(id) || on[id]))
       .map(({ id }) => ({ source: id, ...entry.answers[id] }));
     const ofKind = (realtime) => answers.filter((answer) => answer.realtime === realtime).map(({ at, source }) => ({ at, source }));
-    return { traded: entry.traded, newest: entry.newest, realtime: ofKind(true), delayed: ofKind(false) };
+    return { traded: entry.newest >= open, newest: entry.newest, realtime: ofKind(true), delayed: ofKind(false) };
   }
 
   /**
@@ -423,18 +423,17 @@ export class Watchlist {
 
   /**
    * Notes an answer arriving at `now` in a Taiwan `market` that carries a trade at `tradeTime`, on the session `now`
-   * belongs to (currentOpen): the session has traded once a trade is at or after its open, its newest trade is kept,
-   * and so is the answer's arrival for its source (`answer`: `{ source: providerId, realtime }`), which closureOf
-   * reads to tell a session without trades (see calendar.js INFER_RECENT_MS).
+   * belongs to (currentOpen): its newest trade is kept (a time that is not a number is none), and so is the answer's
+   * arrival for its source (`answer`: `{ source: providerId, realtime }`), which closureOf reads to tell a session
+   * without trades (see calendar.js INFER_RECENT_MS).
    */
   noteTrade(market, tradeTime, answer, now) {
     const open = currentOpen(market, now);
     if (open === null) return;
     const seen = this.seen[market];
-    const entry = (seen[open] ??= { traded: false, newest: null, answers: {} });
+    const entry = (seen[open] ??= { newest: null, answers: {} });
     this.closureRev++;
-    entry.traded ||= tradeTime >= open;
-    entry.newest = Math.max(entry.newest ?? tradeTime, tradeTime);
+    if (Number.isFinite(tradeTime)) entry.newest = Math.max(entry.newest ?? tradeTime, tradeTime);
     entry.answers[answer.source] = { at: now, realtime: answer.realtime };
     for (const key of Object.keys(seen)) if (Number(key) < now - SEEN_KEEP_MS) delete seen[key];
   }
