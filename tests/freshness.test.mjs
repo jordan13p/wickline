@@ -6,17 +6,16 @@ import {
   shownLimit,
 } from "../mods/wickline/freshness.js";
 import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
-import { MINUTE_MS, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
-import { closureOf, parseHolidays, twMarket, withClosure } from "../mods/wickline/calendar.js";
+import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
+import { closureOf, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
-import { CLOSE_1224, HOLIDAYS_2026, LINE_PERIODS, SEGMENTS, at, day, yq } from "./helpers.mjs";
+import { CLOSE_1224, LINE_PERIODS, SEGMENTS, at, day, listed2026, observation, say, yq } from "./helpers.mjs";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
-const say = (lang) => (key, params) => t(lang, key, params);
 // A Yahoo Finance quote as fetched at `fetchedAt`. Without one it counts as fetched at the instant drawn
 // (pinned below), which is what the tests that pass only a quote time mean.
 const fetched = (q, fetchedAt) => ({ ...q, fetchedAt });
@@ -582,9 +581,8 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // A Taiwan quote carries the closure of its time and its next inference deadline, by the composition Watchlist#marked
 // uses (closureOf in its twMarket, through withClosure; here from the 2026 schedule, and the answers its `answers`
 // gives at that time, else none), so the sweep reads a listed day, and a day or night without trades, as a row does.
-const LISTED_2026 = parseHolidays(JSON.stringify(HOLIDAYS_2026));
 const marked = (quote, time) => (resolvedMarket(quote.symbol, quote.exchange) !== "tw" ? quote
-  : withClosure(quote, closureOf(twMarket(quote.symbol), time, (d) => LISTED_2026[d] ?? null, quote.answers?.(time) ?? (() => undefined))));
+  : withClosure(quote, closureOf(twMarket(quote.symbol), time, listed2026, quote.answers?.(time) ?? (() => undefined))));
 // What a row reads: its session, a Taiwan row's day, and its no-trades reading, which the detail's session times and
 // the status line's note read apart from sessionOf.
 const INFERRED = ["noTrades", "nightNoTrades"];
@@ -597,10 +595,10 @@ const reading = (quote, time) => {
 // `quietRealtime`, Yahoo Finance's for `quietDelayed`. `quietNight`: only the nights are observed, each answer carrying
 // the day's last trade (newest, just before its 15:00 open), so the night reads closed with its note. A trade is never
 // observed: one comes with an answer, which redraws the row itself.
-const answeredAt = (time, kind, source) => ({ traded: false, newest: null, answers: [{ at: time, source, realtime: kind === "realtime" }] });
+const answeredAt = (time, kind, source) => observation({ [kind]: [{ at: time, source }] });
 const quietRealtime = (time) => () => answeredAt(time, "realtime", "yahootw");
 const quietDelayed = (time) => () => answeredAt(time, "delayed", "yahoo");
-const isNightOpen = (open) => new Date(open + 8 * 3_600_000).getUTCHours() === 15;
+const isNightOpen = (open) => taipeiMinute(open) === NIGHT_SESSION.from;
 const quietNight = (time) => (market, open) => (isNightOpen(open) ? { ...answeredAt(time, "realtime", "yahootw"), newest: open - 1 } : undefined);
 
 // The instants in [from, to), stepped by `step`, where what `quote` reads changes without an edge at or before it.

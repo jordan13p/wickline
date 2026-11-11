@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   INFER_DELAYED_MS, INFER_REALTIME_MS, INFER_RECENT_MS, closureOf, currentOpen, parseHolidays, rocDay, taipeiDay,
 } from "../mods/wickline/calendar.js";
-import { HOLIDAYS_2026, at } from "./helpers.mjs";
+import { HOLIDAYS_2026, at, listed2026, observation } from "./helpers.mjs";
 
 test("ROC dates become Taipei day numbers", () => {
   assert.equal(rocDay("1151225"), taipeiDay(at("2026-12-25T02:00:00Z")));
@@ -41,12 +41,10 @@ test("an unreadable schedule is none; a bad row is skipped", () => {
   assert.deepEqual(parseHolidays(JSON.stringify([{ Name: "x", Date: "bad" }, { Date: "1151225" }, { Name: "", Date: "1151225" }])), {});
 });
 
-const L = parseHolidays(JSON.stringify(HOLIDAYS_2026));
-const listed = (day) => L[day] ?? null;
 const none = () => undefined;
 
 test("a list for another year matches no date of this one", () => {
-  assert.deepEqual(closureOf("stock", at("2027-01-01T02:00:00Z"), listed, none).closure, null);
+  assert.deepEqual(closureOf("stock", at("2027-01-01T02:00:00Z"), listed2026, none).closure, null);
   const next = parseHolidays(JSON.stringify([{ Name: "中華民國開國紀念日", Date: "1160101" }]));
   assert.deepEqual(closureOf("stock", at("2026-12-25T02:00:00Z"), (day) => next[day] ?? null, none).closure, null);
 });
@@ -77,7 +75,7 @@ test("closureOf: listed weekdays, per market, with the trade override and the re
     // A stock trade does not override a futures closure (the override is per market).
     ["future", "2026-12-25T02:00:00Z", (market) => (market === "stock" ? { traded: true } : undefined), xmas],
   ];
-  for (const [market, iso, seen, closure] of cases) assert.deepEqual(closureOf(market, at(iso), listed, seen).closure, closure, `${market} ${iso}`);
+  for (const [market, iso, seen, closure] of cases) assert.deepEqual(closureOf(market, at(iso), listed2026, seen).closure, closure, `${market} ${iso}`);
   assert.deepEqual([at("2026-11-11T00:44:59Z"), at("2026-11-11T00:45:00Z"), at("2026-11-11T07:00:00Z"), at("2026-11-10T20:00:00Z"), at("2026-11-14T02:00:00Z")]
     .map((now) => currentOpen("future", now)), [null, at("2026-11-11T00:45:00Z"), at("2026-11-11T07:00:00Z"), at("2026-11-10T07:00:00Z"), null]);
 });
@@ -88,8 +86,6 @@ test("the inference's deadlines and recency", () => {
 
 test("closureOf infers per session from recent answers; a trade clears it; the other market vetoes; weekends never", () => {
   const T = { open: at("2026-11-11T01:00:00Z"), day: at("2026-11-11T00:45:00Z"), night: at("2026-11-11T07:00:00Z") }; // Wed 11/11
-  const obs = ({ realtime = [], delayed = [], ...fields }) => ({ traded: false, newest: null, ...fields,
-    answers: [...realtime.map((answer) => ({ ...answer, realtime: true })), ...delayed.map((answer) => ({ ...answer, realtime: false }))] });
   const rt = (time) => [{ at: time, source: "yahootw" }];
   const yf = (time) => [{ at: time, source: "yahoo" }];
   const by = (entries) => (market, open) => entries[`${market} ${open}`];
@@ -98,46 +94,46 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
   const night = { kind: "nightNoTrades", source: "yahootw" };
   const cases = [
     // [market, now, seen, closure]
-    ["stock", T.open + 599_999, stock(obs({ realtime: rt(T.open + 590_000) })), null],
-    ["stock", T.open + 600_000, stock(obs({ realtime: rt(T.open + 480_000) })), quiet()],           // latest answer 09:08: counts
-    ["stock", T.open + 600_000, stock(obs({ realtime: rt(T.open + 479_999) })), null],              // older than deadline − 2 min
-    ["stock", T.open + 720_000, stock(obs({ realtime: rt(T.open + 3_000) })), null],                // one answer at 09:00:03 (I1)
-    ["stock", T.open + 1_799_999, stock(obs({ delayed: yf(T.open + 1_790_000) })), null],
-    ["stock", T.open + 1_800_000, stock(obs({ delayed: yf(T.open + 1_790_000) })), quiet("yahoo")],
-    ["stock", T.open + 1_800_000, stock(obs({ traded: true, realtime: rt(T.open + 1_790_000) })), null],
-    ["stock", at("2026-11-14T01:30:00Z"), () => obs({ realtime: rt(at("2026-11-14T01:29:00Z")) }), null],  // Saturday
+    ["stock", T.open + 599_999, stock(observation({ realtime: rt(T.open + 590_000) })), null],
+    ["stock", T.open + 600_000, stock(observation({ realtime: rt(T.open + 480_000) })), quiet()],           // latest answer 09:08: counts
+    ["stock", T.open + 600_000, stock(observation({ realtime: rt(T.open + 479_999) })), null],              // older than deadline − 2 min
+    ["stock", T.open + 720_000, stock(observation({ realtime: rt(T.open + 3_000) })), null],                // one answer at 09:00:03 (I1)
+    ["stock", T.open + 1_799_999, stock(observation({ delayed: yf(T.open + 1_790_000) })), null],
+    ["stock", T.open + 1_800_000, stock(observation({ delayed: yf(T.open + 1_790_000) })), quiet("yahoo")],
+    ["stock", T.open + 1_800_000, stock(observation({ traded: true, realtime: rt(T.open + 1_790_000) })), null],
+    ["stock", at("2026-11-14T01:30:00Z"), () => observation({ realtime: rt(at("2026-11-14T01:29:00Z")) }), null],  // Saturday
     // The veto: a futures trade since 08:45 for stocks; a stock trade since 09:00 for the futures day session.
-    ["stock", T.open + 600_000, by({ [`stock ${T.open}`]: obs({ realtime: rt(T.open + 590_000) }), [`future ${T.day}`]: obs({ traded: true }) }), null],
-    ["future", T.day + 600_000, by({ [`future ${T.day}`]: obs({ realtime: rt(T.day + 590_000) }) }), quiet()],
-    ["future", T.open + 60_000, by({ [`future ${T.day}`]: obs({ realtime: rt(T.open + 50_000) }), [`stock ${T.open}`]: obs({ traded: true }) }), null],
+    ["stock", T.open + 600_000, by({ [`stock ${T.open}`]: observation({ realtime: rt(T.open + 590_000) }), [`future ${T.day}`]: observation({ traded: true }) }), null],
+    ["future", T.day + 600_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.day + 590_000) }) }), quiet()],
+    ["future", T.open + 60_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.open + 50_000) }), [`stock ${T.open}`]: observation({ traded: true }) }), null],
     // The night: skipped after a traded day; the whole day when nothing traded, read from the answers' newest trade (choice 5).
-    ["future", T.night + 600_000, by({ [`future ${T.night}`]: obs({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(T.night + 590_000) }) }), night],
-    ["future", T.night + 600_000, by({ [`future ${T.night}`]: obs({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 590_000) }) }), quiet()],
-    ["future", T.night + 600_000, by({ [`future ${T.night}`]: obs({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 590_000) }),
-      [`stock ${T.open}`]: obs({ traded: true }) }), night],
+    ["future", T.night + 600_000, by({ [`future ${T.night}`]: observation({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(T.night + 590_000) }) }), night],
+    ["future", T.night + 600_000, by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 590_000) }) }), quiet()],
+    ["future", T.night + 600_000, by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 590_000) }),
+      [`stock ${T.open}`]: observation({ traded: true }) }), night],
     // After midnight (choice 4): Thu 11/12 02:00, the night of 11/11 without trades.
-    ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: obs({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), night],
+    ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), night],
     // A futures day without trades (review 2, M4 and M5): carried from 15:00 to the night's deadline unless a stock
     // traded, kept after midnight, gone at 05:00.
-    ["future", T.night + 30_000, by({ [`future ${T.day}`]: obs({ realtime: rt(T.night - 10_000) }) }), quiet()],
-    ["future", T.night + 30_000, by({ [`future ${T.day}`]: obs({ realtime: rt(T.night - 10_000) }), [`stock ${T.open}`]: obs({ traded: true }) }), null],
-    ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: obs({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), quiet()],
-    ["future", at("2026-11-11T21:00:00Z"), by({ [`future ${T.night}`]: obs({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T20:59:00Z")) }) }), null],
+    ["future", T.night + 30_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.night - 10_000) }) }), quiet()],
+    ["future", T.night + 30_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.night - 10_000) }), [`stock ${T.open}`]: observation({ traded: true }) }), null],
+    ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), quiet()],
+    ["future", at("2026-11-11T21:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T20:59:00Z")) }) }), null],
     // The fixed source order names the closure (review 2, M3): both real-time sources recent, Yahoo 奇摩股市; only
     // MIS recent, MIS; a real-time answer before a delayed one.
-    ["stock", T.open + 600_000, stock(obs({ realtime: [{ at: T.open + 590_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet()],
-    ["stock", T.open + 600_000, stock(obs({ realtime: [{ at: T.open + 300_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet("mis")],
-    ["stock", T.open + 1_800_000, stock(obs({ realtime: rt(T.open + 1_790_000), delayed: yf(T.open + 1_790_000) })), quiet()],
+    ["stock", T.open + 600_000, stock(observation({ realtime: [{ at: T.open + 590_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet()],
+    ["stock", T.open + 600_000, stock(observation({ realtime: [{ at: T.open + 300_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet("mis")],
+    ["stock", T.open + 1_800_000, stock(observation({ realtime: rt(T.open + 1_790_000), delayed: yf(T.open + 1_790_000) })), quiet()],
     // A night TAIFEX does not hold (Wed 2/11, a notice; choice 18's cost): the night form at 15:10, then the listed
     // 2/12 from midnight.
-    ["future", at("2026-02-11T07:10:00Z"), by({ [`future ${at("2026-02-11T07:00:00Z")}`]: obs({ newest: at("2026-02-11T05:45:00Z"), realtime: rt(at("2026-02-11T07:09:00Z")) }) }), night],
-    ["future", at("2026-02-11T16:30:00Z"), by({ [`future ${at("2026-02-11T07:00:00Z")}`]: obs({ newest: at("2026-02-11T05:45:00Z"), realtime: rt(at("2026-02-11T16:29:00Z")) }) }),
+    ["future", at("2026-02-11T07:10:00Z"), by({ [`future ${at("2026-02-11T07:00:00Z")}`]: observation({ newest: at("2026-02-11T05:45:00Z"), realtime: rt(at("2026-02-11T07:09:00Z")) }) }), night],
+    ["future", at("2026-02-11T16:30:00Z"), by({ [`future ${at("2026-02-11T07:00:00Z")}`]: observation({ newest: at("2026-02-11T05:45:00Z"), realtime: rt(at("2026-02-11T16:29:00Z")) }) }),
       { kind: "listed", reason: "市場無交易，僅辦理結算交割作業" }],
   ];
-  for (const [market, now, seen, closure] of cases) assert.deepEqual(closureOf(market, now, listed, seen).closure, closure, `${market} ${new Date(now).toISOString()}`);
-  const both = stock(obs({ realtime: rt(T.open + 300_000), delayed: yf(T.open + 300_000) }));
-  const deadline = (now, seen) => closureOf("stock", now, listed, seen).deadline;
+  for (const [market, now, seen, closure] of cases) assert.deepEqual(closureOf(market, now, listed2026, seen).closure, closure, `${market} ${new Date(now).toISOString()}`);
+  const both = stock(observation({ realtime: rt(T.open + 300_000), delayed: yf(T.open + 300_000) }));
+  const deadline = (now, seen) => closureOf("stock", now, listed2026, seen).deadline;
   assert.deepEqual([deadline(T.open + 300_000, both), deadline(T.open + 700_000, both),
-    deadline(T.open + 300_000, stock(obs({ traded: true, realtime: rt(T.open) }))), deadline(T.open + 300_000, () => undefined)],
+    deadline(T.open + 300_000, stock(observation({ traded: true, realtime: rt(T.open) }))), deadline(T.open + 300_000, () => undefined)],
     [T.open + 600_000, T.open + 1_800_000, null, null]);
 });

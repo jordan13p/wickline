@@ -2,7 +2,10 @@
 // fixtures, and a fake host with a virtual clock, a scripted network and a shared store.
 import { readFileSync } from "node:fs";
 import { YAHOOTW_BASE } from "../mods/wickline/providers/yahootw.js";
-import { HOLIDAYS_URL } from "../mods/wickline/calendar.js";
+import { HOLIDAYS_URL, parseHolidays } from "../mods/wickline/calendar.js";
+import { freshness, sessionOf } from "../mods/wickline/freshness.js";
+import { freshnessLabel } from "../mods/wickline/format.js";
+import { t } from "../mods/wickline/i18n.js";
 
 export const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
 // A recorded answer under tests/fixtures/, parsed.
@@ -70,6 +73,21 @@ export const FUTURES_NIGHT_ROWS = jsonFixture("yahootw-stocklist-futures-night")
 // TWSE's 2026 holiday schedule as served 2026-11-11 (27 rows), and the request for it.
 export const HOLIDAYS_2026 = jsonFixture("twse-holiday-2026");
 export const isHolidays = (url) => url === HOLIDAYS_URL;
+// That schedule's closed weekdays (parseHolidays), and its reason for a Taipei day number, as closureOf's `listed` reads it.
+export const LISTED_2026 = parseHolidays(JSON.stringify(HOLIDAYS_2026));
+export const listed2026 = (day) => LISTED_2026[day] ?? null;
+// A session's observation as closureOf's `seen` gives it (Watchlist#observed): no trade and no answer unless `fields`
+// say, `realtime` and `delayed` each a source's latest answer of that kind as `{ at, source }`, real-time ones first.
+export const observation = ({ realtime = [], delayed = [], ...fields } = {}) => ({
+  traded: false, newest: null, ...fields,
+  answers: [...realtime.map((answer) => ({ ...answer, realtime: true })), ...delayed.map((answer) => ({ ...answer, realtime: false }))],
+});
+
+// Translates in `lang`, as the view's tx does.
+export const say = (lang) => (key, params) => t(lang, key, params);
+// A row's freshness label in Traditional Chinese at `now`, in `session` (its own sessionOf by default), in the local zone.
+export const zhLabel = (quote, now, session = sessionOf(quote, now)) =>
+  freshnessLabel(quote, freshness(quote, session, now), now, "zh-TW", say("zh-TW"));
 // 13:30 Taipei on Thursday 2026-12-24, TWSE's close the day before 行憲紀念日 (Friday 12/25, a listed closure).
 export const CLOSE_1224 = at("2026-12-24T05:30:00Z");
 

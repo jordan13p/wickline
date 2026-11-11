@@ -12,7 +12,7 @@ import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf, sessionTimes } from
 import { collapsedRow, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
-  chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq,
+  chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq, zhLabel,
 } from "./helpers.mjs";
 import { MIS_CONSENT_VERSION, MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, yahootw } from "../mods/wickline/providers/yahootw.js";
@@ -2017,8 +2017,7 @@ test("TAIFEX holds no night session: 已收盤 · 13:45 from 15:10, polled every
     quote = w.shown("WTX&", after);
     const session = sessionOf(quote, after);
     assert.equal(freshness(quote, session, after).state, "closed");
-    assert.equal(withTZ("Asia/Taipei", () => freshnessLabel(quote, freshness(quote, session, after), after, "zh-TW", (k, p) => t("zh-TW", k, p))),
-      "已收盤 · 13:45");
+    assert.equal(withTZ("Asia/Taipei", () => zhLabel(quote, after, session)), "已收盤 · 13:45");
     assert.equal(t("zh-TW", `session.${sessionName(quote, session, after)}`), t("zh-TW", "session.closed"));
     assert.deepEqual(withTZ("Asia/Taipei", () => sessionTimesParts(sessionTimes(quote, after), "zh-TW", (k, p) => t("zh-TW", k, p))),
       ["交易時段：日盤 08:45–13:45", "夜盤尚無成交"]);
@@ -2067,7 +2066,7 @@ test("12/25: 2330.TW reads 休市 · 12/24 13:30, polled every 60 s, 休市 in t
     assert.deepEqual(quote.closure, { kind: "listed", reason: "行憲紀念日" });
     const fresh = freshness(quote, sessionOf(quote, now), now);
     assert.equal(fresh.state, "holiday");
-    withTZ("Asia/Taipei", () => assert.equal(freshnessLabel(quote, fresh, now, "zh-TW", (k, p) => t("zh-TW", k, p)), "休市 · 12/24 13:30"));
+    withTZ("Asia/Taipei", () => assert.equal(zhLabel(quote, now), "休市 · 12/24 13:30"));
     assert.equal(t("zh-TW", `session.${sessionName(quote, "holiday", now)}`), "休市");
     assert.deepEqual(w.problems(), []);
     assert.equal(stockLists(host).length, 1);
@@ -2091,7 +2090,7 @@ test("the night before a holiday, held: WTX& Live at 01:00, 休市 · 04:59 from
     const now = host.clock;
     const closed = w.shown("WTX&", now);
     assert.deepEqual(closed.closure, { kind: "listed", reason: "行憲紀念日" });
-    withTZ("Asia/Taipei", () => assert.equal(freshnessLabel(closed, freshness(closed, "holiday", now), now, "zh-TW", (k, p) => t("zh-TW", k, p)), "休市 · 04:59"));
+    withTZ("Asia/Taipei", () => assert.equal(zhLabel(closed, now, "holiday"), "休市 · 04:59"));
   }, from);
 });
 
@@ -2120,7 +2119,7 @@ test("a future on a holiday after a night with no trade reads 休市 · 12/24 13
       const quote = w.shown("WTX&", now);
       assert.equal(sessionOf(quote, now), "holiday");
       assert.deepEqual(w.problems(), []);   // a closed day stays quiet, futures too
-      withTZ("Asia/Taipei", () => assert.equal(freshnessLabel(quote, freshness(quote, "holiday", now), now, "zh-TW", (k, p) => t("zh-TW", k, p)), "休市 · 12/24 13:45"));
+      withTZ("Asia/Taipei", () => assert.equal(zhLabel(quote, now, "holiday"), "休市 · 12/24 13:45"));
       await advance(host, from + 15_000);
       assert.equal(stockLists(host).length, 1);
     }, from);
@@ -2156,7 +2155,7 @@ test("a Monday holiday after a Friday night reads 休市 with Saturday's last tr
     const now = host.clock;
     const quote = w.shown("WTX&", now);
     assert.equal(freshness(quote, sessionOf(quote, now), now).state, "holiday");
-    withTZ("Asia/Taipei", () => assert.equal(freshnessLabel(quote, freshness(quote, "holiday", now), now, "zh-TW", (k, p) => t("zh-TW", k, p)), "休市 · 10/24 04:59"));
+    withTZ("Asia/Taipei", () => assert.equal(zhLabel(quote, now, "holiday"), "休市 · 10/24 04:59"));
   }, from);
 });
 
@@ -2169,7 +2168,7 @@ test("Saturday 11/14 and the listed Saturday 10/10 read 已收盤", async () => 
       const quote = w.shown("2330.TW", host.clock);
       assert.notEqual(quote.closure?.kind, "listed");
       assert.equal(freshness(quote, sessionOf(quote, host.clock), host.clock).state, "closed");
-      if (date === "2026-11-13") withTZ("Asia/Taipei", () => assert.equal(freshnessLabel(quote, freshness(quote, "closed", host.clock), host.clock, "zh-TW", (k, p) => t("zh-TW", k, p)), "已收盤 · 11/13 13:30"));
+      if (date === "2026-11-13") withTZ("Asia/Taipei", () => assert.equal(zhLabel(quote, host.clock, "closed"), "已收盤 · 11/13 13:30"));
       assert.deepEqual(w.standIn("WTX&", host.clock).closure, null);
     }, from);
   }
@@ -2224,7 +2223,7 @@ test("on a London clock a listed day begins at Taipei midnight, within a second"
       assert.ok(redraws.some((time) => time >= midnight && time <= midnight + 1_000), redraws.join());
       const quote = w.shown("2330.TW", midnight + 1);
       assert.deepEqual(quote.closure, { kind: "listed", reason: "行憲紀念日" });
-      assert.equal(freshnessLabel(quote, freshness(quote, "holiday", midnight + 1), midnight + 1, "zh-TW", (k, p) => t("zh-TW", k, p)), "休市 · 12/24 05:30");
+      assert.equal(zhLabel(quote, midnight + 1, "holiday"), "休市 · 12/24 05:30");
     }, midnight - 30_000, redraws);
   });
 });
@@ -2302,8 +2301,7 @@ test("a hidden copy asks for the schedule only once shown", async () => {
 // carry 11/10's close (stocks) or the night's 04:59 trade (futures).
 const CLOSE_1110 = at("2026-11-10T05:30:00Z");   // 13:30 Taipei
 const NIGHT_0459 = at("2026-11-10T20:59:00Z");   // 04:59 on 11/11
-const quietLabel = (quote, now) => withTZ("Asia/Taipei", () =>
-  freshnessLabel(quote, freshness(quote, sessionOf(quote, now), now), now, "zh-TW", (k, p) => t("zh-TW", k, p)));
+const quietLabel = (quote, now) => withTZ("Asia/Taipei", () => zhLabel(quote, now));
 const noTradesToday = (source) => [{ code: "closure.noTradesToday", params: { source } }];
 
 test("a typhoon day with Yahoo 奇摩股市: the existing rules at 09:05, 今日無成交 · 11/10 13:30 from 09:10, polled every 60 s, with its note", async () => {
