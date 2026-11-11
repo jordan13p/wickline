@@ -5,7 +5,7 @@ import {
   LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
   shownLimit,
 } from "../mods/wickline/freshness.js";
-import { hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
+import { bandState, hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
 import { closureOf, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
@@ -781,4 +781,15 @@ test("no trades today: lit as closed, never while stalled", () => {
     periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") };
   assert.equal(shownLimit({ ...q, periods: day("2026-11-11T01:00:00Z", "2026-11-11T05:30:00Z") }, "open", now), null);   // stalled
   assert.equal(shownLimit({ ...q, closure: { kind: "noTrades", source: "mis" } }, "noTrades", now), "up");
+});
+
+// The band draws a dot and no label: a day without trades by inference (maybe a stuck feed) must not look like a
+// closed market there, while a listed day does.
+test("the band's dot: hollow for 今日無成交, none for 休市 or closed", () => {
+  const now = at("2026-11-11T01:30:00Z");                          // 09:30 on a normal Wednesday
+  const close = at("2026-11-10T05:30:00Z");
+  const row = (closure) => ({ symbol: "2330.TW", source: "yahoo", exchange: "TAI", price: 1000, timestamp: close, closure });
+  assert.equal(bandState(row({ kind: "noTrades", source: "yahoo" }), now), "stalled");
+  assert.equal(bandState(row({ kind: "listed", reason: "颱風" }), now), "holiday");
+  assert.equal(bandState(row(null), at("2026-11-14T02:00:00Z")), "closed");   // Saturday
 });

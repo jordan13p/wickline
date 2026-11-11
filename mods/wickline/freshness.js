@@ -331,6 +331,16 @@ export function freshness(quote, session, now) {
 /** The states of a market closed for the rest of the day (a row's label carries its date): closed, 休市, 今日無成交. */
 export const CLOSED_STATES = new Set(["closed", "holiday", "noTrades"]);
 
+/**
+ * The state the band's dot is drawn for, at `now`: the row's freshness, except that a day without trades by inference
+ * ("noTrades", which may be a stuck feed) draws the hollow stalled dot. The band shows no label, so no dot there would
+ * pass for a closed market; a listed day ("holiday") draws none, as closed does.
+ */
+export function bandState(quote, now) {
+  const { state } = freshness(quote, sessionOf(quote, now), now);
+  return state === "noTrades" ? "stalled" : state;
+}
+
 // After the close, how long a price still belongs to the session: TWSE's fixed-price trades end an hour later.
 const AFTER_CLOSE_MS = 90 * MINUTE_MS;
 

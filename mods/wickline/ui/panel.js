@@ -5,7 +5,7 @@ import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import { bandCurrency, collapsedRow, displayName, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
-import { CLOSED_STATES, freshness, sessionOf } from "../freshness.js";
+import { CLOSED_STATES, bandState, freshness, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
@@ -44,7 +44,7 @@ export function band(view, root, t) {
       const quote = w.shown(symbol);
       const failed = Boolean(w.errors[symbol]);
       const code = quote && bandCurrency(quote);
-      const mark = quote && dot(t, freshness(quote, sessionOf(quote, now), now).state);
+      const mark = quote && dot(t, bandState(quote, now));
       return h_flex().flex_none().gap(5).items_center().whitespace_nowrap()
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
