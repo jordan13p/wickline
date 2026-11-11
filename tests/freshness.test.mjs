@@ -308,6 +308,14 @@ test("FX reads closed from Friday 22:00 to Sunday 22:00 UTC", () => {
   assert.equal(freshness(sunday, sessionOf(sunday, u), u).state, "live");
 });
 
+// Yahoo's FX period is the UTC day (00:00–23:59), not a session: neither its last minute nor a day-old period reads closed.
+test("FX reads open outside its weekend whatever its period says", () => {
+  const eur = { symbol: "EURUSD=X", source: "yahoo", exchange: "CCY", periods: day("2026-11-10T00:00:00Z", "2026-11-10T23:59:00Z") };
+  assert.equal(sessionOf(eur, at("2026-11-10T23:59:30Z")), "open");
+  assert.equal(sessionOf(eur, at("2026-11-11T12:00:00Z")), "open");
+  assert.equal(sessionOf(eur, at("2026-11-13T22:00:00Z")), "closed");
+});
+
 test("a lunch break counts only where it overlaps the quote's trading time", () => {
   // Timed 11:35 JST, inside lunch: only the minutes since the 12:30 reopening count, so it stops after 12:50.
   const inLunch = yq("7203.T", "JPX", at("2026-11-10T02:35:00Z"), TOKYO_DAY);

@@ -231,9 +231,10 @@ export function sessionTimes(quote, now) {
 
 /**
  * "open", "pre", "post" or "closed" from the quote's trading periods, and "lunch" while open inside its
- * exchange's lunch break (Yahoo's regular period runs through it); FX is "closed" over the weekend whatever
- * its period says. A pair trades "24h"; a future (WTX&) is "open" inside a segment (futuresSegment), else
- * "closed", also with no periods yet. A quote without a regular session (no Yahoo quote yet) reads its
+ * exchange's lunch break (Yahoo's regular period runs through it); FX reads its week only, "closed" over the weekend
+ * and "open" otherwise, whatever its period says (the UTC day, not a session: its last minute is no close). A
+ * pair trades "24h"; a future (WTX&) is "open" inside a segment (futuresSegment), else "closed", also with no
+ * periods yet. A quote without a regular session (no Yahoo quote yet) reads its
  * exchange's hours (hoursWindow) when it is a Taiwan or US one, "open" or "closed"; any other is "unknown".
  */
 export function sessionOf(quote, now) {
@@ -246,7 +247,7 @@ export function sessionOf(quote, now) {
     return hours.weekday && now >= start && now < end ? "open" : "closed";
   }
   const { lunch, fx } = exchangeRule(quote.exchange, quote.symbol);
-  if (fx && fxWeekend(now)) return "closed";
+  if (fx) return fxWeekend(now) ? "closed" : "open";
   const session = marketSession(quote, now);
   if (session !== "open" || !lunch) return session;
   const [lunchStart, lunchEnd] = localWindow(lunch, now);
