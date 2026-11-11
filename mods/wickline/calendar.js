@@ -147,8 +147,8 @@ export const withClosure = (quote, { closure, deadline }) => ({
  * trade time the answers carried, and each source's latest answer since the open, `[{ at, source, realtime }]`, in the
  * order that names a closure (real-time sources first). The first matching row, T being today in Taipei:
  * 1. a stock on a listed T: listed;
- * 2. a stock from 09:00 on a weekday T, its session quiet (quietSince) and no future traded since 08:45 T (the veto):
- *    noTrades;
+ * 2. a stock from 09:00 on a weekday T, its session quiet (quietSince) and T not traded (the veto: dayTraded, so a
+ *    futures trade since 08:45 T, the night's answers' included): noTrades;
  * 3–5. a future from 00:00 to 05:00: after a T-1 that is not a weekday, listed on a listed T, else none; after a
  *    listed T-1 (its night removed), listed on a listed T, else nightRemoved; after an unlisted weekday, only with
  *    the night of T-1 quiet: listed on a listed T, else the night's reading of T-1 (below);
@@ -186,7 +186,7 @@ function closureRule(market, now, open, listed, seen) {
   if (runningNight && !nightSource) return null;                                             // 4, else 9
   if (reason) return { kind: "listed", reason };                                             // 1, 3–5, 6
   if (market === "stock") {
-    const source = open !== null && !tradedSince("future", dayOpen(today)) && quietSince(open);
+    const source = open !== null && !dayTraded(today) && quietSince(open);
     return source ? noTrades(source) : null;                                                 // 2, else 9
   }
   if (minute < NIGHT_END_MIN) {

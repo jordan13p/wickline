@@ -105,6 +105,14 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
     // The veto: a futures trade since 08:45 for stocks; a stock trade since 09:00 for the futures day session.
     ["stock", T.open + 600_000, by({ [`stock ${T.open}`]: observation({ realtime: rt(T.open + 590_000) }), [`future ${T.day}`]: observation({ traded: true }) }), null],
     ["future", T.day + 600_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.day + 590_000) }) }), quiet()],
+    // A copy first shown after 15:00 has only the night's entry: a futures trade since 08:45 there vetoes too, a night
+    // trade (15:19) or the day's carried by the night's answers (13:45).
+    ["stock", T.night + 1_200_000, by({ [`stock ${T.open}`]: observation({ realtime: rt(T.night + 1_190_000) }),
+      [`future ${T.night}`]: observation({ traded: true, newest: T.night + 1_140_000, realtime: rt(T.night + 1_190_000) }) }), null],
+    ["stock", T.night + 1_200_000, by({ [`stock ${T.open}`]: observation({ realtime: rt(T.night + 1_190_000) }),
+      [`future ${T.night}`]: observation({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(T.night + 1_190_000) }) }), null],
+    ["stock", T.night + 1_200_000, by({ [`stock ${T.open}`]: observation({ realtime: rt(T.night + 1_190_000) }),
+      [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 1_190_000) }) }), quiet()],
     ["future", T.open + 60_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.open + 50_000) }), [`stock ${T.open}`]: observation({ traded: true }) }), null],
     // The night: skipped after a traded day; the whole day when nothing traded, read from the answers' newest trade (choice 5).
     ["future", T.night + 600_000, by({ [`future ${T.night}`]: observation({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(T.night + 590_000) }) }), night],
