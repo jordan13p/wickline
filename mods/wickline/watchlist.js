@@ -1062,12 +1062,6 @@ export class Watchlist {
   apply(provider, request, result) {
     const now = this.host.now();
     if (provider.overlay) {
-      // An overlay source is real time (REALTIME_SOURCES). Yahoo 奇摩股市 gives each Taiwan market's newest trade among its rows, whatever
-      // their day, so an answer of yesterday's prices still counts as one (noteTrade); any other, each priced row's.
-      const answer = { source: provider.id, realtime: REALTIME_SOURCES.has(provider.id) };
-      if (provider === yahootw) {
-        for (const [market, time] of Object.entries(result.newestTrade ?? {})) this.noteTrade(market, time, answer, now);
-      }
       // A name can come without a price (before the open): remember it all the same.
       for (const symbol of request.symbols) if (result.names?.[symbol]) this.localNames[symbol] = result.names[symbol];
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
@@ -1076,9 +1070,6 @@ export class Watchlist {
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         const had = this.overlays[symbol]?.[provider.id];
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
-        if (overlay && provider !== yahootw && this.marketFor(symbol) === "tw") {
-          this.noteTrade(twMarket(symbol), overlay.tradeTime ?? overlay.timestamp, answer, now);
-        }
         if (this.soleSource(symbol) === provider) {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
           // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
@@ -1092,6 +1083,7 @@ export class Watchlist {
         if (!overlay) this.dropOverlay(provider, symbol);
         this.setEntry(this.overlayErrors, symbol, provider.id, overlay ? undefined : error);
       }
+      this.observe(provider, result, now);
       return;
     }
     // Only an index's exchange, or its TW-only mark, can hand a symbol to another source.
@@ -1102,10 +1094,8 @@ export class Watchlist {
       if (provider.linesMs) quote.series = this.quotes[symbol]?.series ?? [];
       this.quotes[symbol] = quote;
       delete this.errors[symbol];
-      if (this.marketFor(symbol) === "tw") {
-        this.noteTrade("stock", quote.timestamp, { source: provider.id, realtime: isRealtime(quote) }, now);
-      }
     }
+    this.observe(provider, result, now);
     const config = this.config();
     for (const [symbol, error] of Object.entries(result.errors)) {
       this.errors[symbol] = coded(error);
@@ -1124,6 +1114,31 @@ export class Watchlist {
       }
     }
     if (routes) this.wakeResolved(before);
+  }
+
+  /**
+   * Notes what one answer saw of each Taiwan market, once per market (noteTrade): the decoder's `newestTrade` when it
+   * gives one (Yahoo 奇摩股市: each market's newest trade among its real-time rows, whatever their day, so an answer of
+   * yesterday's prices still counts as one), else the newest trade among the answer's priced Taiwan rows (a row's own
+   * trade time, else its time), real time as its rows are (isRealtime). Run once the rows are in, so an index reads
+   * its market by the exchange this answer gave.
+   */
+  observe(provider, result, now) {
+    const trades = {};
+    if (result.newestTrade) {
+      const realtime = REALTIME_SOURCES.has(provider.id);
+      for (const [market, time] of Object.entries(result.newestTrade)) trades[market] = { time, realtime };
+    } else {
+      for (const [symbol, quote] of Object.entries(result.quotes)) {
+        if (this.marketFor(symbol) !== "tw") continue;
+        const market = twMarket(symbol);
+        const time = quote.tradeTime ?? quote.timestamp;
+        const newest = trades[market]?.time ?? null;
+        const later = Number.isFinite(time) && (newest === null || time > newest);
+        trades[market] = { time: later ? time : newest, realtime: isRealtime(quote) };
+      }
+    }
+    for (const [market, { time, realtime }] of Object.entries(trades)) this.noteTrade(market, time, { source: provider.id, realtime }, now);
   }
 
   /** Each overlay source's symbols, in OVERLAYS order: what `wakeResolved` compares. */
