@@ -4,7 +4,7 @@ import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade } f
 import {
   HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
-import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
+import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, isRealtime, nextEdge, sessionOf, staleAt } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -796,7 +796,7 @@ export class Watchlist {
   }
 
   /**
-   * How long until the first of `symbols`' shown quotes turns stale, each at its own moment (msUntilStale);
+   * How long until the first of `symbols`' shown quotes turns stale, each at its own moment (staleAt);
    * at most LIVE_MAX_AGE_MS, also when none ever does. A quote that cannot turn stale in its session is
    * skipped: inside a lunch window its age stands still, also after a half day's close, and the cap wakes the
    * loop for the reopening or for the trading hours a delayed quote has not been given yet.
@@ -805,8 +805,8 @@ export class Watchlist {
     let wait = LIVE_MAX_AGE_MS;
     for (const symbol of symbols) {
       const quote = this.shown(symbol, now);
-      const left = quote ? msUntilStale(quote, sessionOf(quote, now), now) : null;
-      if (left !== null && left > 0 && left < wait) wait = left;
+      const at = quote ? staleAt(quote, sessionOf(quote, now), now) : null;
+      if (at !== null && at - now < wait) wait = at - now;
     }
     return wait;
   }

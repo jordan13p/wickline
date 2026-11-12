@@ -755,7 +755,7 @@ test("every detail wake is strictly later than now", () => {
   for (const quote of EDGE_SWEEP_QUOTES) {
     for (const [from, to] of [[at("2026-11-08T00:00:00Z"), at("2026-11-15T00:00:00Z")], ...HOLIDAY_WEEKS]) {
       for (let t = from; t < to; t += 7 * MINUTE_MS) {
-        const q = heldMarks(marked(priced(quote, t), t), t);
+        const q = marked(priced(quote, t), t);
         const wake = detailWakeAt(q, t);
         if (!(wake > t)) misses.push(`${sweepName(quote)} ${new Date(t).toISOString()} ${wake}`);
         if (q.closure) marks[q.closure.kind === "listed" ? "listed" : "inferred"]++;
@@ -1185,5 +1185,5 @@ test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", ()
   const end = at("2026-11-11T07:10:00Z");
   const d = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: at("2026-11-10T05:44:00Z"), periods: null,
     chartSource: "yahootw", closure: { kind: "noTrades", source: "yahootw" }, closureUntil: end };
-  assert.equal(detailWakeAt(heldMarks(d, fifteen), fifteen), end);
+  assert.equal(detailWakeAt(d, fifteen), end);
 });

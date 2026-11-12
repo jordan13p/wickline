@@ -326,6 +326,12 @@ export function msUntilStale(quote, session, now) {
   return FETCH_MAX_AGE_MS - (now - fetchedAt(quote, now)) + 1;
 }
 
+/** The moment `quote` turns stale in `session` (now + msUntilStale), in ms, or null when it never will or already has. */
+export function staleAt(quote, session, now) {
+  const left = msUntilStale(quote, session, now);
+  return left !== null && left > 0 ? now + left : null;
+}
+
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
  * as new) and not cached (a kept price after a failed refresh reads stalled at once). unconfirmed: real time in
@@ -420,24 +426,20 @@ export function chartQuote(quote) {
 export const DETAIL_WAKE_CAP_MS = 600_000;
 
 /**
- * The next moment after `now` at which the open detail of `quote` (already heldMarks at `now`) can read differently,
- * in ms, or null: the earliest of its row's next edge (nextEdge), its price's stale moment (msUntilStale, in the
- * session it reads), its line's when the line is another source's real-time quote (chartQuote), and its mark's end
- * (`closureUntil`). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
+ * The next moment after `now` at which the open detail of `quote`, with its marks as held at `now` (heldMarks), can
+ * read differently, in ms, or null: the earliest of its row's next edge (nextEdge), its price's stale moment
+ * (staleAt, in the session it reads), its line's when the line is another source's real-time quote (chartQuote), and
+ * its mark's end (`closureUntil`). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
  */
-export function detailWakeAt(quote, now) {
+export function detailWakeAt(detail, now) {
+  const quote = heldMarks(detail, now);
   const session = sessionOf(quote, now);
-  const staleAt = (q) => {
-    const left = msUntilStale(q, session, now);
-    return left !== null && left > 0 ? now + left : null;
-  };
-  const moments = [nextEdge(quote, now), staleAt(quote)];
+  const moments = [nextEdge(quote, now), staleAt(quote, session, now), quote.closureUntil];
   if (quote.chartSource && quote.chartSource !== quote.source) {
     const chart = chartQuote(quote);
-    if (isRealtime(chart)) moments.push(staleAt(chart));
+    if (isRealtime(chart)) moments.push(staleAt(chart, session, now));
   }
-  if (quote.closureUntil != null) moments.push(quote.closureUntil);
-  const ahead = moments.filter((at) => at !== null && at > now);
+  const ahead = moments.filter((at) => at != null && at > now);
   return ahead.length ? Math.min(...ahead) : null;
 }
 
@@ -450,7 +452,7 @@ export function detailWakeAt(quote, now) {
 export async function followDetail(detail, { now, sleep, changed }) {
   for (;;) {
     const time = now();
-    const wake = detailWakeAt(heldMarks(detail, time), time);
+    const wake = detailWakeAt(detail, time);
     if (wake === null) return;
     await sleep(Math.min(wake - time, DETAIL_WAKE_CAP_MS));
     if (now() >= wake) changed();

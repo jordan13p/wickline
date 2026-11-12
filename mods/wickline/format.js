@@ -124,10 +124,11 @@ export function dayFor(quote) {
  * tested case enters it.
  */
 export function nextDayTurn(quote, now) {
-  if (resolvedMarket(quote.symbol, quote.exchange) === "tw") return taipeiAt(taipeiDay(now) + 1, 0);
+  const day = dayFor(quote);
+  if (day === taipeiDay) return taipeiAt(taipeiDay(now) + 1, 0);
   const from = new Date(now);
   let turn = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1).getTime();
-  for (let guard = 0; guard < 25 && (turn <= now || localDate(turn) === localDate(now)); guard++) {
+  for (let guard = 0; guard < 25 && (turn <= now || day(turn) === day(now)); guard++) {
     turn += 60 * MINUTE_MS;
   }
   return turn;
