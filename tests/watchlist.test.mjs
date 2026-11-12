@@ -406,6 +406,21 @@ test("mergeOverlay: a quote over itself keeps its own name, currency and periods
   assert.equal(mergeOverlay({ ...own, periods }, own, line).chartSource, "yahootw");
 });
 
+test("mergeOverlay: a fresh overlay never inherits the base's cached flag; the line's is chartCached", () => {
+  const base = { ...yq("2330.TW", "TAI", 1_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")), series: [1, 2], cached: true };
+  const mis = { symbol: "2330.TW", source: "mis", price: 500, timestamp: 2_000 };
+  const row = mergeOverlay(base, mis, null);
+  assert.deepEqual([row.source, row.cached, row.chartCached, row.chartSource], ["mis", undefined, true, "yahoo"]);
+  // A sole source over itself keeps its own cached flag and has no chart flag.
+  const own = { symbol: "^TWOII", source: "yahootw", price: 300, timestamp: 3_000 };
+  const sole = mergeOverlay({ ...own, cached: true }, own, null);
+  assert.deepEqual([sole.cached, sole.chartCached], [true, undefined]);
+  // Not cached: neither key.
+  const { cached, ...plain } = base;
+  assert.ok(!("cached" in mergeOverlay(plain, mis, null)));
+  assert.ok(!("chartCached" in mergeOverlay(plain, mis, null)));
+});
+
 // Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
 const TW_NOW = 1794188480000;
 const TW_ROWS = jsonFixture("yahootw-stocklist");

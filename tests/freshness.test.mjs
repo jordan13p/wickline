@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, chartQuote, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
   shownLimit,
 } from "../mods/wickline/freshness.js";
 import { bandState, hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
@@ -86,6 +86,23 @@ test("the detail source line reads state · source", () => {
   // Base only: unchanged.
   const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: NOW };
   assert.deepEqual(detailSource(base, "open", NOW, say("en")), [["Yahoo Finance · regular session", "delayed 20 min"]]);
+});
+
+test("detailSource reads a cached Yahoo line under a Finnhub price as before the split", () => {
+  // AAPL's Yahoo Finance quote (line to 10:00 NY) failed at 10:05; Finnhub prices it live at 10:05.
+  const now = at("2026-11-10T15:05:00Z");
+  const base = { ...yq("AAPL", "NMS", at("2026-11-10T15:00:00Z"), day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    fetchedAt: at("2026-11-10T15:00:05Z"), series: [1, 2], cached: true };
+  const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: now - 10_000 }, null);
+  assert.deepEqual(detailSource(row, "open", now, say("en")), [["Price: Live · Finnhub"], ["Line: quote stopped at " + formatTime(base.timestamp) + " · Yahoo Finance"]]);
+});
+
+test("chartQuote is the line's quote, with the line's own cached flag", () => {
+  const q = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: 9, chartSource: "yahoo", chartTimestamp: 5,
+    chartFetchedAt: 7, chartCached: true, cached: undefined };
+  assert.deepEqual(
+    [chartQuote(q).source, chartQuote(q).timestamp, chartQuote(q).fetchedAt, chartQuote(q).cached, chartQuote(q).exchange],
+    ["yahoo", 5, 7, true, "NMS"]);
 });
 
 // Yahoo reports ^TWII on TAI: a Taiwan quote, 20 minutes late like Taiwan stocks.

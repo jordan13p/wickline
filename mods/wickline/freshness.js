@@ -30,8 +30,9 @@ function staleAfterMs(quote) {
 }
 
 // When a Yahoo Finance quote's age is taken: at its fetch, but now for a `cached` one (its last fetch failed,
-// see Watchlist.shown), so cached data never looks fresh. One without a fetch time (every provider sets it)
-// counts as fetched now, so its age still grows rather than reading NaN, which would never stall.
+// see Watchlist.shown), so cached data never looks fresh; the line's quote (chartQuote) carries the line's flag.
+// One without a fetch time (every provider sets it) counts as fetched now, so its age still grows rather than
+// reading NaN, which would never stall.
 const fetchedAt = (quote, now) => (quote.cached ? now : quote.fetchedAt ?? now);
 
 // A quote's age against staleAfterMs. An overlay's (a real-time source's own) runs from its time to now. A
@@ -389,6 +390,14 @@ const PRICE_KEYS = { from: "detail.priceFrom", alone: "detail.priceSource" };
 const LINE_KEYS = { from: "detail.lineFrom", alone: "detail.lineSource" };
 const sourceText = (keys, state, source, tx) => (state === null ? tx(keys.alone, { source }) : tx(keys.from, { state, source }));
 
+/** A row's line as a quote of its own source: its times and cached flag (`chartCached`), not the price's. */
+export function chartQuote(quote) {
+  return {
+    ...quote, source: quote.chartSource, timestamp: quote.chartTimestamp, fetchedAt: quote.chartFetchedAt,
+    cached: quote.chartCached,
+  };
+}
+
 /**
  * The detail dialog's sources as lines, each a list of parts (joined with ` · `). A real-time price
  * names its state and source on one line: `Price: Live · TWSE MIS`, or its source alone while unconfirmed
@@ -405,9 +414,7 @@ export function detailSource(quote, session, now, tx) {
     const price = sourceText(PRICE_KEYS, own, tx(`src.${quote.source}`), tx);
     if (!quote.chartSource) return [[price]];
     if (quote.chartSource === quote.source) return [[price], [sourceText(LINE_KEYS, own, tx(`src.${quote.source}`), tx)]];
-    const chart = {
-      ...quote, source: quote.chartSource, timestamp: quote.chartTimestamp, fetchedAt: quote.chartFetchedAt,
-    };
+    const chart = chartQuote(quote);
     const state = isRealtime(chart) ? stateText(freshness(chart, session, now), tx) : delayWords(chart, tx);
     return [[price], [sourceText(LINE_KEYS, state, tx(`src.${quote.chartSource}`), tx)]];
   }
