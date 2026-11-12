@@ -160,3 +160,25 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
     deadline(T.open + 300_000, stock(observation({ traded: true, realtime: rt(T.open) }))), deadline(T.open + 300_000, () => undefined)],
     [T.open + 600_000, T.open + 1_800_000, null, null]);
 });
+
+// Wednesday 11/11, unlisted: the day session (08:45) answered quietly until 14:59:50 (an answer after 15:00 is filed
+// under the night's open), no stock traded.
+const QUIET_DAY = { dayOpen: at("2026-11-11T00:45:00Z"), nightOpen: at("2026-11-11T07:00:00Z") };
+const quietDayAnswers = (nightAnswer) => (market, open) => {
+  if (market !== "future") return undefined;
+  if (open === QUIET_DAY.dayOpen) return observation({ realtime: [{ at: at("2026-11-11T06:59:50Z"), source: "yahootw" }] });
+  if (open === QUIET_DAY.nightOpen && nightAnswer) return observation({ realtime: [{ at: nightAnswer, source: "yahootw" }] });
+  return undefined;
+};
+
+test("a quiet futures day with no night answer: 今日無成交 until 15:10:00, announced as a deadline", () => {
+  const read = (iso) => closureOf("future", at(iso), () => null, quietDayAnswers(null));
+  assert.deepEqual(read("2026-11-11T07:05:00Z"), { closure: { kind: "noTrades", source: "yahootw" }, deadline: at("2026-11-11T07:10:00Z") });
+  assert.deepEqual(read("2026-11-11T07:09:59Z").closure, { kind: "noTrades", source: "yahootw" });
+  assert.deepEqual(read("2026-11-11T07:10:00Z"), { closure: null, deadline: null });
+});
+
+test("with a night answer the 15:10 deadline is as before", () => {
+  const seen = quietDayAnswers(at("2026-11-11T07:00:30Z"));
+  assert.equal(closureOf("future", at("2026-11-11T07:05:00Z"), () => null, seen).deadline, at("2026-11-11T07:10:00Z"));
+});

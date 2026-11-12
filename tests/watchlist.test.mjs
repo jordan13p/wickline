@@ -9,7 +9,7 @@ import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance
 import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
-import { collapsedRow, detailTimes, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
+import { collapsedRow, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
   chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq, zhLabel,
@@ -2006,6 +2006,33 @@ test("at 15:00 a priced future is asked every 10 s until the night's first trade
     assert.equal(quote.timestamp, first);
     assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
   }, from);
+});
+
+// A quiet day's 今日無成交 ends at the night's 15:10 cap even when nothing answers the night: the row turns on its own
+// edge, not at the next round.
+test("a 429 from 15:00 on a quiet futures day: WTX& turns at 15:10:00, not at the next round", async () => {
+  // Start at 14:59:30 Wednesday 11/11 (not before 08:55: hours of rounds would pass advance()'s 1 000-tick limit, which
+  // then jumps the clock silently). The answers at 14:59:30-14:59:50 are filed under the day's 08:45 open, and their
+  // newest trade (04:59 on 11/11, the night's last) is before 08:45; from 15:00:00 every request answers 429.
+  const host = futuresHost(["WTX&"], { yahootw: () => (host.clock >= at("2026-11-11T07:00:00Z")
+    ? { status: 429, ok: false, text: "" } : futuresAt(at("2026-11-10T20:59:00Z"))) });
+  const redraws = [];
+  const cap = at("2026-11-11T07:10:00Z");
+  await soleRun(host, async (w) => {
+    await withTZ("Asia/Taipei", async () => {
+      await advance(host, cap - 1_000);
+      assert.equal(zhLabel(w.shown("WTX&", host.clock), host.clock), "今日無成交 · 11/11 04:59");
+      assert.equal(w.shown("WTX&", host.clock).noTradesDeadline, cap);
+      const asked = host.requests.length;
+      await advance(host, cap + 1_000);
+      assert.ok(redraws.includes(cap), redraws.join());
+      assert.equal(host.requests.length, asked);              // no request in [cap - 1 000, cap + 1 000]
+      assert.equal(zhLabel(w.shown("WTX&", host.clock), host.clock), "報價停在 04:59");
+      assert.equal(failureNote(w.shown("WTX&", host.clock)), "quote.cached");
+      assert.equal(w.shown("WTX&", host.clock).closure, null);
+      assert.deepEqual(w.notes(host.clock), []);
+    });
+  }, at("2026-11-11T06:59:30Z"), redraws);
 });
 
 // With no night trade after a traded day (TAIFEX holding no night session, or a feed that stopped at the day close), the

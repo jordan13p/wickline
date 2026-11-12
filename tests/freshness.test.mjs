@@ -620,6 +620,9 @@ const answeredAt = (time, kind, source) => observation({ [kind]: [{ at: time, so
 const quietRealtime = (time) => () => answeredAt(time, "realtime", "yahootw");
 const quietDelayed = (time) => () => answeredAt(time, "delayed", "yahoo");
 const isNightOpen = (open) => taipeiMinute(open) === NIGHT_SESSION.from;
+// `quietDay`: only the day sessions (08:45 and 09:00) answer, so a quiet day's 今日無成交 carries past 15:00 with no night
+// answer at all and ends at the night's 15:10 cap.
+const quietDay = (time) => (market, open) => (isNightOpen(open) ? undefined : answeredAt(time, "realtime", "yahootw"));
 const quietNight = (time) => (market, open) => (isNightOpen(open) ? { ...answeredAt(time, "realtime", "yahootw"), newest: open - 1 } : undefined);
 
 // The instants in [from, to), stepped by `step`, where what `quote` reads changes without an edge at or before it.
@@ -681,6 +684,8 @@ const EDGE_SWEEP_QUOTES = [
   { symbol: "WTX&", periods: LINE_PERIODS, answers: quietRealtime },
   { symbol: "WTX&", periods: null, answers: quietNight },
   { symbol: "WTX&", periods: LINE_PERIODS, answers: quietNight },
+  { symbol: "WTX&", periods: null, answers: quietDay },
+  { symbol: "WTX&", periods: LINE_PERIODS, answers: quietDay },
 ];
 const sweepName = (quote) => `${quote.symbol} ${quote.periods ? "with" : "without"} periods${quote.answers ? `, ${quote.answers.name}` : ""}`;
 
