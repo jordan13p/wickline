@@ -4,7 +4,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { bandCurrency, collapsedRow, displayName, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
+import { bandCurrency, collapsedRow, displayName, failureNote, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
 import { CLOSED_STATES, bandState, freshness, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
@@ -42,19 +42,18 @@ export function band(view, root, t) {
     .when(!symbols.length, (el) => el.child(div().text_color(t.dim).truncate().child(view.tx("band.empty"))))
     .children(symbols.map((symbol) => {
       const quote = w.shown(symbol, now);
-      const failed = Boolean(w.errors[symbol]);
       const code = quote && bandCurrency(quote);
       const mark = quote && dot(t, bandState(quote, now));
       return h_flex().flex_none().gap(5).items_center().whitespace_nowrap()
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
         .child(quote
-          ? priceBox(`bw-band-price-${symbol}`, number(quote), failed ? t.dim : t.foreground, view.limitMark(t, quote, failed, now), { pad: 3 })
-          : div().text_color(t.dim).child(failed ? view.tx("band.unavailable") : "…"))
+          ? priceBox(`bw-band-price-${symbol}`, number(quote), quote.cached ? t.dim : t.foreground, view.limitMark(t, quote, now), { pad: 3 })
+          : div().text_color(t.dim).child(w.errors[symbol] ? view.tx("band.unavailable") : "…"))
         // Its own `dim` text, 2px further out than the gap, so a lit price's 3px block keeps 4px clear of it.
         .when(Boolean(code), (el) => el.child(div().ml(2).text_color(t.dim).child(code)))
         .when(Boolean(quote), (el) => el.child(div().text_color(view.changeColor(t, quote.changePercent)).child(formatChange(quote.changePercent))))
-        .when(Boolean(quote) && failed, (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
+        .when(Boolean(quote?.cached), (el) => el.child(div().text_color(t.dim).child(view.tx("band.cached"))));
     }));
 }
 
@@ -161,17 +160,19 @@ function rowData(view, t, now, symbol, source) {
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
     // The price as both layouts draw it: lit at its limit (see limitMark), `dim` when cached.
-    price: quote && priceBox(`bw-price-${symbol}`, number(quote), source.failed ? t.dim : t.foreground, view.limitMark(t, quote, source.failed, now)),
+    price: quote && priceBox(`bw-price-${symbol}`, number(quote), quote.cached ? t.dim : t.foreground, view.limitMark(t, quote, now)),
   };
 }
 
 // A price's currency in its own slot, 8px after the digits: 4px clear of a lit price's block.
 const currencySlot = (t, quote) => div().flex_none().w(CODE_W).pl(8).text_size(11).text_color(t.dim).child(quote.currency ?? "");
 
-// Under a row: a cached quote's reason, a real-time source's fallback, Finnhub's budget.
+// Under a row: a cached price's or line's reason, a real-time source's fallback, Finnhub's budget.
 function rowNotes(view, t, { quote, failed, fallback, overCap }) {
+  const note = quote && failureNote(quote);
   return [
-    failed && div().text_size(11).text_color(t.blocked).child(quote ? view.tx("quote.cached", { reason: view.say(failed) }) : view.say(failed)),
+    failed && (!quote || note) && div().text_size(11).text_color(t.blocked)
+      .child(quote ? view.tx(note, { reason: view.say(failed) }) : view.say(failed)),
     fallback && div().text_size(11).text_color(t.blocked).child(quote ? view.fallbackText(quote, fallback) : view.say(fallback)),
     overCap && div().text_size(11).text_color(t.dim).child(view.tx("finnhub.overCap", { cap: finnhubCap(view.settings.sources.us.budgetPerMinute) })),
   ].filter(Boolean);

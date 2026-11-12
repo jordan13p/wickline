@@ -330,3 +330,9 @@ test("the no-trades wording, in every language", () => {
     ["오늘 체결 없음", "오늘 아직 체결이 없어 휴장일 수 있습니다", "야간 체결 아직 없음", "{source}에 오늘 체결이 아직 없습니다.", "{source}에 야간 거래 체결이 아직 없습니다."],
   ]);
 });
+
+test("the cached-chart note in five languages, with its reason", () => {
+  const expected = { en: "Cached chart · R", "zh-TW": "走勢圖為快取 · R", "zh-CN": "走势图为缓存 · R",
+    ja: "チャートはキャッシュ表示 · R", ko: "캐시된 차트 · R" };
+  for (const [lang, text] of Object.entries(expected)) assert.equal(t(lang, "quote.chartCached", { reason: "R" }), text);
+});

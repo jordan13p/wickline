@@ -7,9 +7,9 @@ import {
 } from "../mods/wickline/freshness.js";
 import { bandState, hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
-import { closureOf, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
+import { closureOf, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
-import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import { dayFor, failureNote, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
 import { CLOSE_1224, LINE_PERIODS, SEGMENTS, at, day, listed2026, observation, say, withTZ, yq, zhLabel } from "./helpers.mjs";
@@ -899,4 +899,37 @@ test("a cached Yahoo Finance base under a live MIS price leaves the MIS price li
   const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")), cached: true };
   const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
   assert.equal(freshness(row, sessionOf(row, time), time).state, "live");
+});
+
+test("a live MIS price over a failed Yahoo Finance base: live, lit at its limit, the line's note", () => {
+  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
+  const base = { ...yq("6488.TWO", "TWO", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    fetchedAt: time - 590_000, series: [1, 2], previousClose: 500, cached: true };
+  const mis = { symbol: "6488.TWO", source: "mis", price: 550, limitUp: 550, limitDown: 450, timestamp: time - 5_000 };
+  const row = mergeOverlay(base, mis, null);
+  assert.equal(freshness(row, "open", time).state, "live");
+  assert.equal(shownLimit(row, "open", time), "up");
+  assert.equal(failureNote(row), "quote.chartCached");
+  assert.equal(bandState(row, time), "live");
+  // The overlay itself gone stale reads stalled by age, still with the line's note, still not cached.
+  assert.equal(freshness(row, "open", time + 116_000).state, "stalled");
+  assert.deepEqual([row.cached, failureNote(row)], [undefined, "quote.chartCached"]);
+});
+
+test("2330.TW's detail with MIS live over a failed Yahoo Finance quote names both sources", () => {
+  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
+  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    fetchedAt: time - 590_000, series: [1, 2], cached: true };
+  const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
+  assert.deepEqual(detailSource(row, "open", time, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
+  assert.equal(failureNote(row), "quote.chartCached");
+});
+
+test("Yahoo 奇摩股市 with its own line over a failed Yahoo Finance base: no row note", () => {
+  const time = at("2026-11-10T02:00:00Z");
+  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")), cached: true };
+  const today = taipeiDay(time);
+  const own = { symbol: "2330.TW", source: "yahootw", price: 500, timestamp: time - 5_000, day: today };
+  const row = mergeOverlay(base, own, { day: today, series: [499, 500] });
+  assert.equal(failureNote(row), null);
 });

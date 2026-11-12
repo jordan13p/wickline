@@ -1,7 +1,7 @@
 // node --test tests/  (format.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
+import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, failureNote, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { formatDate, sessionTimesParts, stateText } from "../mods/wickline/format.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { CLOSE_1224, at, day, withTZ } from "./helpers.mjs";
@@ -273,4 +273,10 @@ test("the 今日無成交 label, header and session times", () => {
     assert.equal(freshnessLabel(night, freshness(night, "closed", later), later, "zh-TW", zh), "已收盤 · 13:45");
     assert.deepEqual(sessionTimesParts(sessionTimes(night, later), "zh-TW", zh), ["交易時段：日盤 08:45–13:45", "夜盤尚無成交"]);
   });
+});
+
+test("the failure note names what is cached: the price first, else the line, else nothing", () => {
+  assert.equal(failureNote({ cached: true, chartCached: true }), "quote.cached");
+  assert.equal(failureNote({ chartCached: true }), "quote.chartCached");
+  assert.equal(failureNote({ source: "yahootw", chartSource: "yahootw" }), null);
 });

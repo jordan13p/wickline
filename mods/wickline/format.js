@@ -91,6 +91,14 @@ function localDate(ms) {
 }
 
 /**
+ * The row's and the detail's failure note: the string key for what is cached (the price first, else the line), or
+ * null when nothing is, so a reason with no cached part shown draws no note.
+ */
+export function failureNote(quote) {
+  return quote.cached ? "quote.cached" : quote.chartCached ? "quote.chartCached" : null;
+}
+
+/**
  * A quote from an earlier day than `now`'s, by its own day (dayFor), gets its date, so a closed market never reads as
  * today's: "Oct 31" in English, "10/31" in the other languages.
  */
