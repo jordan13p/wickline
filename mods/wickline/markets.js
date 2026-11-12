@@ -91,6 +91,7 @@ export function usOffsetMin(ms) {
 }
 
 export const MINUTE_MS = 60_000;
+export const HOUR_MS = 3_600_000;
 export const DAY_MS = 86_400_000;
 
 /** The day number of `ms` on a clock at a fixed UTC offset of `offsetMin`; by hand, as QuickJS has no `Intl`. */

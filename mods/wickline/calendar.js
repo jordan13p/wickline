@@ -49,6 +49,8 @@ const isWeekday = (day) => tradesOn(TAIFEX_HOURS, day);
 export const taipeiMinute = (ms) => Math.floor((ms - taipeiDay(ms) * DAY_MS + TAIFEX_HOURS.offsetMin * MINUTE_MS) / MINUTE_MS);
 /** `minute` (Taipei, since midnight) of Taipei day `day`, in ms. */
 export const taipeiAt = (day, minute) => dayStart(TAIFEX_HOURS.offsetMin, day) + minute * MINUTE_MS;
+/** The Taipei midnight after `now`, in ms. */
+export const nextTaipeiMidnight = (now) => taipeiAt(taipeiDay(now) + 1, 0);
 
 /** A ROC date ("1151225": year 115 + 1911, month, day) as a Taipei day number; null when malformed. */
 export function rocDay(value) {
@@ -146,22 +148,22 @@ export function closureOf(market, now, listed, seen) {
 }
 
 /**
- * `quote` with its Taiwan market's reading (closureOf): `closure`, the deadline as `noTradesDeadline` (freshness.js
+ * `quote` with its Taiwan market's reading (closureOf): `closure`, the deadline as `closureDeadline` (freshness.js
  * nextEdge wakes the row there) and the mark's end as `closureUntil` (heldMarks: the open detail, which fetches nothing
  * and so never learns a new reading, drops the mark there), each when there is one.
  */
 export const withClosure = (quote, { closure, deadline, until }) => ({
-  ...quote, closure, ...(deadline !== null && { noTradesDeadline: deadline }), ...(until !== null && { closureUntil: until }),
+  ...quote, closure, ...(deadline !== null && { closureDeadline: deadline }), ...(until !== null && { closureUntil: until }),
 });
 
 /**
  * `quote` as the open detail reads it at `now`: itself while its mark holds (`closureUntil` unset, or still ahead);
- * from that moment a copy without the mark (`closure` and `closureUntil` null, no `noTradesDeadline`), so the detail
+ * from that moment a copy without the mark (`closure` and `closureUntil` null, no `closureDeadline`), so the detail
  * reads its session from its periods and TAIFEX's table again rather than a closure that is over.
  */
 export function heldMarks(quote, now) {
   if (quote.closureUntil == null || now < quote.closureUntil) return quote;
-  const { noTradesDeadline: _deadline, ...rest } = quote;
+  const { closureDeadline: _deadline, ...rest } = quote;
   return { ...rest, closure: null, closureUntil: null };
 }
 
@@ -214,7 +216,7 @@ function closureRule(market, now, open, listed, seen) {
     || tradedSince("stock", taipeiAt(day, TWSE_HOURS.from));
   // Where each row's reading ends (see above); the cap is the night's deadline (its open + INFER_REALTIME_MS: only
   // real-time sources price futures).
-  const midnight = taipeiAt(today + 1, 0);
+  const midnight = nextTaipeiMidnight(now);
   const nightEnd = taipeiAt(today, NIGHT_END_MIN);
   const cap = taipeiAt(today, NIGHT_SESSION.from) + INFER_REALTIME_MS;
   const ruled = (closure, until) => ({ closure, until: closure ? until : null });

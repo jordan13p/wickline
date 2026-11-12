@@ -218,10 +218,10 @@ test("closureOf: when each mark read at a moment stops holding", () => {
 
 test("heldMarks keeps a mark 1 ms before its end and drops it at the end", () => {
   const end = at("2026-11-11T21:00:00Z");
-  const q = { symbol: "WTX&", closure: { kind: "nightNoTrades", source: "yahootw" }, noTradesDeadline: 1, closureUntil: end };
+  const q = { symbol: "WTX&", closure: { kind: "nightNoTrades", source: "yahootw" }, closureDeadline: 1, closureUntil: end };
   assert.equal(heldMarks(q, end - 1), q);
   const dropped = heldMarks(q, end);
-  assert.deepEqual([dropped.closure, dropped.closureUntil, "noTradesDeadline" in dropped], [null, null, false]);
+  assert.deepEqual([dropped.closure, dropped.closureUntil, "closureDeadline" in dropped], [null, null, false]);
   const plain = { symbol: "AAPL" };
   assert.equal(heldMarks(plain, end), plain);                                     // a quote with no mark end is kept as it is
 });

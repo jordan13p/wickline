@@ -327,13 +327,13 @@ export class Watchlist {
   /**
    * What the detail dialog opens on, all read at one `now`, or null without a quote: the row as shown (a Taiwan row
    * with its mark's end, `closureUntil`, by marked: the open detail fetches nothing and must drop a mark that is over),
-   * without its next inference deadline (`noTradesDeadline`: the detail gets no new answers, so nothing turns there),
-   * its error (`error`) and its overlay's (`fallback`, overlayError).
+   * without its next deadline (`closureDeadline`: the detail gets no new answers, so no inference lands there, and
+   * `closureUntil` alone ends the mark), its error (`error`) and its overlay's (`fallback`, overlayError).
    */
   detailQuote(symbol, now) {
     const quote = this.shown(symbol, now);
     if (!quote) return null;
-    const { noTradesDeadline: _deadline, ...held } = quote;
+    const { closureDeadline: _deadline, ...held } = quote;
     return { ...held, error: this.errors[symbol] ?? null, fallback: this.overlayError(symbol, now) };
   }
 
@@ -377,7 +377,7 @@ export class Watchlist {
 
   /**
    * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure`, its next deadline as
-   * `noTradesDeadline` and its mark's end as `closureUntil` (closureAt, by calendar.js withClosure; freshness.js
+   * `closureDeadline` and its mark's end as `closureUntil` (closureAt, by calendar.js withClosure; freshness.js
    * nextEdge wakes the row at the deadline):
    * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
    * closure.

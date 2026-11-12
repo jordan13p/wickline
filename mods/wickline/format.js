@@ -1,8 +1,8 @@
 // How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
 // No Herdr imports, so tests run it under Node.
 import { isCryptoPair, positive, timedByTrade } from "./quotes.js";
-import { taipeiAt, taipeiDay } from "./calendar.js";
-import { MINUTE_MS, resolvedMarket } from "./markets.js";
+import { nextTaipeiMidnight, taipeiDay } from "./calendar.js";
+import { HOUR_MS, resolvedMarket } from "./markets.js";
 
 /**
  * The line through `series`, scaled into its box as [x%, y%] points, and where
@@ -128,11 +128,11 @@ export function dayFor(quote) {
  */
 export function nextDayTurn(quote, now) {
   const day = dayFor(quote);
-  if (day === taipeiDay) return taipeiAt(taipeiDay(now) + 1, 0);
+  if (day === taipeiDay) return nextTaipeiMidnight(now);
   const from = new Date(now);
   let turn = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1).getTime();
   for (let guard = 0; guard < 25 && (turn <= now || day(turn) === day(now)); guard++) {
-    turn += 60 * MINUTE_MS;
+    turn += HOUR_MS;
   }
   return turn;
 }

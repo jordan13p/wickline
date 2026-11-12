@@ -178,9 +178,9 @@ function dayEdges(quote, now) {
   return [edge(nextDayTurn(quote, now))];
 }
 
-// A Taiwan row's next deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js closureOf), where its
+// A Taiwan row's next deadline (`closureDeadline`, set by Watchlist#marked from calendar.js closureOf), where its
 // closure may turn: an inference deadline (to "noTrades" or, for a future's night, "nightNoTrades"), or its mark's end.
-const deadlineEdges = (quote) => (quote.noTradesDeadline ? [edge(quote.noTradesDeadline)] : []);
+const deadlineEdges = (quote) => (quote.closureDeadline ? [edge(quote.closureDeadline)] : []);
 
 // Every source of a row's edges: what it reads (sessionOf, its day) changes only at one of them.
 const EDGE_SOURCES = [sessionEdges, dayEdges, deadlineEdges];
@@ -421,6 +421,14 @@ export function chartQuote(quote) {
   };
 }
 
+// The line's own quote (chartQuote) when the line has a reading of its own: another source's than the price's, real
+// time; else null (no line, the price's own, or a delayed one, which reads by its exchange's delay).
+function lineReading(quote) {
+  if (!quote.chartSource || quote.chartSource === quote.source) return null;
+  const chart = chartQuote(quote);
+  return isRealtime(chart) ? chart : null;
+}
+
 // The open detail sleeps at most this long at a time, then rereads the clock: a machine that slept, or a clock that
 // moved, costs at most this much lateness.
 export const DETAIL_WAKE_CAP_MS = 600_000;
@@ -434,17 +442,15 @@ const readStaleAt = (quote, session, now) => (freshness(quote, session, now).sta
  * read differently, in ms, or null: the earliest of its row's next edge (nextEdge), its mark's end (`closureUntil`),
  * and the stale moments (readStaleAt, in the session it reads) of what the detail shows a state for: a real-time
  * price that is not a pair (a delayed stock prints its delay, a pair no state), and a line that is another source's
- * real-time quote (chartQuote). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
+ * real-time quote (lineReading). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
  */
 export function detailWakeAt(detail, now) {
   const quote = heldMarks(detail, now);
   const session = sessionOf(quote, now);
   const moments = [nextEdge(quote, now), quote.closureUntil];
   if (isRealtime(quote) && !isCryptoPair(quote.symbol)) moments.push(readStaleAt(quote, session, now));
-  if (quote.chartSource && quote.chartSource !== quote.source) {
-    const chart = chartQuote(quote);
-    if (isRealtime(chart)) moments.push(readStaleAt(chart, session, now));
-  }
+  const line = lineReading(quote);
+  if (line) moments.push(readStaleAt(line, session, now));
   const ahead = moments.filter((at) => at != null && at > now);
   return ahead.length ? Math.min(...ahead) : null;
 }
@@ -481,8 +487,8 @@ export function detailSource(quote, session, now, tx) {
     const price = sourceText(PRICE_KEYS, own, tx(`src.${quote.source}`), tx);
     if (!quote.chartSource) return [[price]];
     if (quote.chartSource === quote.source) return [[price], [sourceText(LINE_KEYS, own, tx(`src.${quote.source}`), tx)]];
-    const chart = chartQuote(quote);
-    const state = isRealtime(chart) ? stateText(freshness(chart, session, now), tx) : delayWords(chart, tx);
+    const line = lineReading(quote);
+    const state = line ? stateText(freshness(line, session, now), tx) : delayWords(chartQuote(quote), tx);
     return [[price], [sourceText(LINE_KEYS, state, tx(`src.${quote.chartSource}`), tx)]];
   }
   if (isCryptoPair(quote.symbol)) return [[tx("detail.sourceCrypto")]];

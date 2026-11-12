@@ -2022,7 +2022,7 @@ test("a 429 from 15:00 on a quiet futures day: WTX& turns at 15:10:00, not at th
     await withTZ("Asia/Taipei", async () => {
       await advance(host, cap - 1_000);
       assert.equal(zhLabel(w.shown("WTX&", host.clock), host.clock), "今日無成交 · 11/11 04:59");
-      assert.equal(w.shown("WTX&", host.clock).noTradesDeadline, cap);
+      assert.equal(w.shown("WTX&", host.clock).closureDeadline, cap);
       const asked = host.requests.length;
       await advance(host, cap + 1_000);
       assert.ok(redraws.includes(cap), redraws.join());
@@ -2791,9 +2791,9 @@ test("the open detail leaves out the row's inference deadline: on a listed day i
     yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
   await soleRun(host, (w) => {
     const row = w.shown("2330.TW", host.clock);
-    assert.deepEqual([row.closure?.kind, row.noTradesDeadline, row.closureUntil], ["listed", at("2026-12-25T01:10:00Z"), end]);
+    assert.deepEqual([row.closure?.kind, row.closureDeadline, row.closureUntil], ["listed", at("2026-12-25T01:10:00Z"), end]);
     const detail = w.detailQuote("2330.TW", host.clock);
-    assert.ok(!("noTradesDeadline" in detail));
+    assert.ok(!("closureDeadline" in detail));
     assert.equal(detail.closureUntil, end);
     assert.equal(detailWakeAt(detail, host.clock), end);
   }, now);

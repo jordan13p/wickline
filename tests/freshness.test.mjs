@@ -1121,7 +1121,7 @@ test("a futures day's 今日無成交 opened at 15:05 ends at 15:10, never Live"
   const end = at("2026-11-11T07:10:00Z");                                          // 15:10
   // Last trade 13:44 on 11/10; TAIFEX's table; the mark as closureOf gave it at 15:05.
   const detail = wtxDetail({ timestamp: at("2026-11-10T05:44:00Z"), closure: { kind: "noTrades", source: "yahootw" },
-    noTradesDeadline: end, closureUntil: end });
+    closureDeadline: end, closureUntil: end });
   assert.equal(sessionOf(heldMarks(detail, end - 1_000), end - 1_000), "noTrades");
   const after = heldMarks(detail, end);
   assert.equal(sessionOf(after, end), "open");
@@ -1197,7 +1197,7 @@ test("followDetail ends when its sleep rejects, with no later redraw", async () 
 });
 
 test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", () => {
-  // No noTradesDeadline, so nothing but closureUntil falls at 15:10 (nextEdge gives 00:00 here).
+  // No closureDeadline, so nothing but closureUntil falls at 15:10 (nextEdge gives 00:00 here).
   const fifteen = at("2026-11-11T07:00:00Z");
   const end = at("2026-11-11T07:10:00Z");
   const d = wtxDetail({ timestamp: at("2026-11-10T05:44:00Z"), closure: { kind: "noTrades", source: "yahootw" }, closureUntil: end });
