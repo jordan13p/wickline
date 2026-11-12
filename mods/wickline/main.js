@@ -553,13 +553,13 @@ export default class Wickline extends View {
   }
 
   /**
-   * A price at its own source's limit, as drawn: null for any other, for a price shown as cached (`quote.cached`), and
-   * for one no longer current (shownLimit: stalled, or a trial match before the open).
+   * A price at its own source's limit, as drawn: null for any other, and for one no longer current (shownLimit:
+   * cached, stalled, or a trial match before the open).
    * Its color is the gain or loss color by the limit's side, whatever the %: an ex-dividend day's limits are
    * set from a reference price, not the previous close.
    */
   limitMark(t, quote, now) {
-    const limit = !quote.cached && shownLimit(quote, sessionOf(quote, now), now);
+    const limit = shownLimit(quote, sessionOf(quote, now), now);
     if (!limit) return null;
     const up = limit === "up";
     // At its limit the price is the limit, so its own text names it.

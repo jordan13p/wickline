@@ -159,6 +159,17 @@ test("MIS's trial match before the open is not lit, a close at the limit is", ()
   assert.equal(shownLimit({ ...tw(close), periods: today }, "closed", nextMorning), null);
 });
 
+// A kept price after a failed refresh is no longer being confirmed, so its limit may have opened since.
+test("a cached price is never lit, even a close at the limit", () => {
+  const open = Date.parse("2026-11-09T01:00:00Z");
+  const close = Date.parse("2026-11-09T05:30:00Z");
+  const later = Date.parse("2026-11-09T07:00:00Z");
+  const q = { symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: close,
+    periods: { pre: null, regular: [open, close], post: null } };
+  assert.equal(shownLimit(q, sessionOf(q, later), later), "up");
+  assert.equal(shownLimit({ ...q, cached: true }, sessionOf(q, later), later), null);
+});
+
 // Fixed clocks in UTC; Tuesday 2026-11-10.
 const HK_DAY = day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z");
 

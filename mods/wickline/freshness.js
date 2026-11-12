@@ -382,9 +382,11 @@ const AFTER_CLOSE_MS = 90 * MINUTE_MS;
  * tells it apart, also while a copy that slept still holds yesterday's periods. The time may be the feed's
  * (Yahoo 奇摩股市), which is never earlier than the stock's own trade today. TWSE's after-close window is a stock's:
  * a future's price belongs to its periods only up to their end. A listed closed day ("holiday") and a day without
- * trades ("noTrades") count as closed.
+ * trades ("noTrades") count as closed. A cached price (`quote.cached`, kept through a failed refresh) is never lit:
+ * nothing confirms the lock still holds.
  */
 export function shownLimit(quote, session, now) {
+  if (quote.cached) return null;
   const { state } = freshness(quote, session, now);
   const regular = quote.periods?.regular;
   const end = regular && regular[1] + (kindOf(quote.symbol) === "future" ? 0 : AFTER_CLOSE_MS);
