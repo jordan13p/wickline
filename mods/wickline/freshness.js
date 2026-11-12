@@ -425,19 +425,25 @@ export function chartQuote(quote) {
 // moved, costs at most this much lateness.
 export const DETAIL_WAKE_CAP_MS = 600_000;
 
+// A stale moment the open detail reads (staleAt), or null: none for a quote that already reads stalled, which stays so
+// until an edge (a cached price reads stalled at once; one still at the previous close, unconfirmed, still turns).
+const readStaleAt = (quote, session, now) => (freshness(quote, session, now).state === "stalled" ? null : staleAt(quote, session, now));
+
 /**
  * The next moment after `now` at which the open detail of `quote`, with its marks as held at `now` (heldMarks), can
- * read differently, in ms, or null: the earliest of its row's next edge (nextEdge), its price's stale moment
- * (staleAt, in the session it reads), its line's when the line is another source's real-time quote (chartQuote), and
- * its mark's end (`closureUntil`). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
+ * read differently, in ms, or null: the earliest of its row's next edge (nextEdge), its mark's end (`closureUntil`),
+ * and the stale moments (readStaleAt, in the session it reads) of what the detail shows a state for: a real-time
+ * price that is not a pair (a delayed stock prints its delay, a pair no state), and a line that is another source's
+ * real-time quote (chartQuote). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
  */
 export function detailWakeAt(detail, now) {
   const quote = heldMarks(detail, now);
   const session = sessionOf(quote, now);
-  const moments = [nextEdge(quote, now), staleAt(quote, session, now), quote.closureUntil];
+  const moments = [nextEdge(quote, now), quote.closureUntil];
+  if (isRealtime(quote) && !isCryptoPair(quote.symbol)) moments.push(readStaleAt(quote, session, now));
   if (quote.chartSource && quote.chartSource !== quote.source) {
     const chart = chartQuote(quote);
-    if (isRealtime(chart)) moments.push(staleAt(chart, session, now));
+    if (isRealtime(chart)) moments.push(readStaleAt(chart, session, now));
   }
   const ahead = moments.filter((at) => at != null && at > now);
   return ahead.length ? Math.min(...ahead) : null;

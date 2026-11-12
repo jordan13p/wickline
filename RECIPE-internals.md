@@ -32,7 +32,7 @@ The open detail fetches nothing, so it keeps the closure mark it opened with onl
 | a future's `noTrades` | 05:00–15:10 | 15:10 that day |
 | a future's `noTrades`, `nightNoTrades` | 15:10–24:00 | 05:00 the next day |
 
-An open detail wakes, one task at a time, at the earliest of its quote's next edge, its price's and its line's stale moments and its mark's end; each sleep is at most 10 min and then rereads the clock; it redraws only when a wake is reached and ends with the dialog.
+An open detail wakes, one task at a time, at the earliest of its quote's next edge, its mark's end and the stale moments of what it shows a state for (a real-time price, not a pair's; a line that is another source's real-time quote), none for a quote that already reads stalled (a cached one); never at an inference deadline, since it gets no new answers; each sleep is at most 10 min and then rereads the clock; it redraws only when a wake is reached and ends with the dialog.
 
 ## Stored layouts
 

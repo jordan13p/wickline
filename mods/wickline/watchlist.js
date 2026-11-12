@@ -327,11 +327,14 @@ export class Watchlist {
   /**
    * What the detail dialog opens on, all read at one `now`, or null without a quote: the row as shown (a Taiwan row
    * with its mark's end, `closureUntil`, by marked: the open detail fetches nothing and must drop a mark that is over),
+   * without its next inference deadline (`noTradesDeadline`: the detail gets no new answers, so nothing turns there),
    * its error (`error`) and its overlay's (`fallback`, overlayError).
    */
   detailQuote(symbol, now) {
     const quote = this.shown(symbol, now);
-    return quote ? { ...quote, error: this.errors[symbol] ?? null, fallback: this.overlayError(symbol, now) } : null;
+    if (!quote) return null;
+    const { noTradesDeadline: _deadline, ...held } = quote;
+    return { ...held, error: this.errors[symbol] ?? null, fallback: this.overlayError(symbol, now) };
   }
 
   /**

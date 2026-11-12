@@ -8,7 +8,7 @@ import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
-import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
+import { LIVE_MAX_AGE_MS, detailWakeAt, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { collapsedRow, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
@@ -2780,5 +2780,21 @@ test("detailQuote stamps a Taiwan row's mark end from the same now; others have 
     assert.equal(aapl.symbol, "AAPL");
     assert.ok(!("closureUntil" in aapl));
     assert.equal(w.detailQuote("MSFT", now), null);
+  }, now);
+});
+
+test("the open detail leaves out the row's inference deadline: on a listed day it wakes at the mark's end, not 09:10", async () => {
+  // At 09:05 on the listed 12/25 the quiet answers since 09:00 give the row a 09:10 deadline before the mark's end.
+  const now = at("2026-12-25T01:05:00Z");
+  const end = at("2026-12-25T16:00:00Z");                                          // 00:00 on 12/26
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1224),
+    yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
+  await soleRun(host, (w) => {
+    const row = w.shown("2330.TW", host.clock);
+    assert.deepEqual([row.closure?.kind, row.noTradesDeadline, row.closureUntil], ["listed", at("2026-12-25T01:10:00Z"), end]);
+    const detail = w.detailQuote("2330.TW", host.clock);
+    assert.ok(!("noTradesDeadline" in detail));
+    assert.equal(detail.closureUntil, end);
+    assert.equal(detailWakeAt(detail, host.clock), end);
   }, now);
 });

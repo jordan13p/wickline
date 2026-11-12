@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   LIVE_MAX_AGE_MS, REALTIME_SOURCES, chartQuote, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
-  shownLimit,
+  shownLimit, staleAt,
 } from "../mods/wickline/freshness.js";
 import {
   DETAIL_WAKE_CAP_MS, bandState, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
@@ -1202,4 +1202,56 @@ test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", ()
   const end = at("2026-11-11T07:10:00Z");
   const d = wtxDetail({ timestamp: at("2026-11-10T05:44:00Z"), closure: { kind: "noTrades", source: "yahootw" }, closureUntil: end });
   assert.equal(detailWakeAt(d, fifteen), end);
+});
+
+test("a delayed stock's open detail does not wake at its stale moment: it prints its delay, never a state", () => {
+  const time = at("2026-11-10T02:00:00Z");                                         // 10:00 Hong Kong
+  const q = { ...yq("0700.HK", "HKG", time - 60_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")), fetchedAt: time - 30_000 };
+  const stale = staleAt(q, "open", time);                                          // the fetch guard, + 270 001
+  assert.equal(stale, time + 270_001);
+  assert.deepEqual(detailSource(q, "open", stale, say("en")), detailSource(q, "open", time, say("en")));
+  assert.equal(detailWakeAt(q, time), at("2026-11-10T04:00:00Z"));                  // 12:00, the lunch break
+});
+
+test("a pair's open detail does not wake at its stale moment: it shows no state", () => {
+  const time = at("2026-11-10T15:07:00Z");               // :07, so no zone's midnight falls within the next 2 min
+  const pair = { symbol: "BTC/USDT", source: "binance", price: 90_000, timestamp: time - 10_000, periods: null };
+  assert.equal(staleAt(pair, "24h", time), time + 110_001);
+  assert.deepEqual(detailSource(pair, "24h", time + 110_001, say("en")), detailSource(pair, "24h", time, say("en")));
+  const wake = detailWakeAt(pair, time);
+  assert.equal(wake, nextEdge(pair, time));
+  assert.ok(wake > time + 110_001, `${wake - time}`);
+});
+
+test("a cached real-time detail already reads stalled: its next wake is its next edge, not its age's ts + 120 001", () => {
+  const time = at("2026-11-10T02:00:00Z");                                         // 10:00 Taipei
+  const q = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: time - 5_000, cached: true,
+    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), chartSource: "yahootw" };
+  const stalled = { state: "stalled", delayMinutes: null, stoppedAt: q.timestamp };
+  assert.deepEqual(freshness(q, "open", time), stalled);
+  assert.deepEqual(freshness(q, "open", q.timestamp + 120_001), stalled);
+  assert.equal(detailWakeAt(q, time), at("2026-11-10T05:30:00Z"));                  // 13:30, the close
+});
+
+test("a cached real-time Yahoo Finance price still at the previous close wakes where it turns stalled", () => {
+  const open = at("2026-11-10T14:30:00Z");                                         // 09:30 New York
+  const close = { ...fetched(yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), open - 60_000), cached: true };
+  assert.equal(freshness(close, "open", open + 120_000).state, "unconfirmed");
+  assert.equal(freshness(close, "open", open + 120_001).state, "stalled");
+  assert.equal(detailWakeAt(close, open + 60_000), open + 120_001);
+});
+
+test("a cached Yahoo Finance line: no wake at its stale moment once it reads stopped, one while at the previous close", () => {
+  const time = at("2026-11-10T15:05:00Z");                                         // 10:05 New York
+  const base = { ...yq("AAPL", "NMS", time - 30_000, US_DAY), fetchedAt: time - 25_000, series: [1, 2], cached: true };
+  const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: time - 10_000 }, null);
+  // The line reads stopped now and at its age's moment (+ 90 001): only the price's own (+ 110 001) is a wake.
+  assert.deepEqual(detailSource(row, "open", time + 90_001, say("en"))[1], detailSource(row, "open", time, say("en"))[1]);
+  assert.equal(detailWakeAt(row, time), time + 110_001);
+  // A line still at the previous close reads unconfirmed until the open + 120 s, before the price's moment.
+  const open = at("2026-11-10T14:30:00Z");
+  const prior = { ...yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), fetchedAt: open - 60_000, series: [1, 2], cached: true };
+  const early = mergeOverlay(prior, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: open + 3_000 }, null);
+  assert.notDeepEqual(detailSource(early, "open", open + 120_001, say("en"))[1], detailSource(early, "open", open + 5_000, say("en"))[1]);
+  assert.equal(detailWakeAt(early, open + 5_000), open + 120_001);
 });
