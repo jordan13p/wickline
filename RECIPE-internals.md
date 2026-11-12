@@ -19,6 +19,10 @@ Yahoo 奇摩股市, past the request above: A future's row counts only while at 
 
 TWSE MIS, past the request above: Codes keep case (`tse_00632R.tw`; lower case gets an empty answer). `provider` (0.3.1's key) is written from `mis` on every save and wins on load (a downgrade keeps the choice).
 
+## Sessions
+
+Futures (`WTX&`): sessions from the line's `sourceTradingPeriods` while `now` is on their own trading day, else TAIFEX's hours (night 15:00–05:00, day 08:45–13:45, Taipei, each opening Monday to Friday, but not on a listed closed day, whose night reads closed). Inside a session the real-time rules apply (`Live`; the day close with no night trade reads `報價停在 13:44` from 15:00, asked every 10 s, then closed from 15:10); between sessions, and over the weekend, it reads closed with its last trade time (`已收盤 · 05:00`), with no stale check and no wake for one.
+
 ## Stored layouts
 
 The storage RECIPE.md lists, field by field:
