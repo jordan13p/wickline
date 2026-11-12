@@ -197,7 +197,10 @@ test("closureOf: when each mark read at a moment stops holding", () => {
     ["stock", "2026-11-11T02:00:00Z", by({ [`stock ${T.stock}`]: observation(rt(at("2026-11-11T01:59:00Z"))) }), "noTrades",
       "2026-11-11T16:00:00Z"],                                                                   // 10:00 → 00:00
     ["stock", "2026-12-24T17:00:00Z", none, "listed", "2026-12-25T16:00:00Z"],                    // 12/25 01:00 → 12/26 00:00
-    ["future", "2026-12-24T22:00:00Z", none, "listed", "2026-12-25T16:00:00Z"],                   // 12/25 06:00 → 12/26 00:00
+    // A future's listed mark holds through the night the listed day removes, read from 05:00 (row 6) or before (rows 3–5).
+    ["future", "2026-12-24T22:00:00Z", none, "listed", "2026-12-25T21:00:00Z"],                   // 12/25 06:00 → 12/26 05:00
+    ["future", "2026-12-24T18:00:00Z", by({ [`future ${at("2026-12-24T07:00:00Z")}`]: observation(rt(at("2026-12-24T17:59:00Z"))) }),
+      "listed", "2026-12-25T21:00:00Z"],                                                         // 12/25 02:00 → 12/26 05:00
     ["future", "2026-11-11T18:00:00Z", by({ [`future ${T.night}`]: observation({ ...tradedDay, ...rt(at("2026-11-11T17:59:00Z")) }) }),
       "nightNoTrades", "2026-11-11T21:00:00Z"],                                                  // 02:00 → 05:00
     ["future", "2026-12-25T18:00:00Z", none, "nightRemoved", "2026-12-25T21:00:00Z"],              // Sat 12/26 02:00 → 05:00

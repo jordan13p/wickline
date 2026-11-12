@@ -27,7 +27,8 @@ The open detail fetches nothing, so it keeps the closure mark it opened with onl
 
 | Mark | Read at (Taipei) | Ends |
 |---|---|---|
-| any stock mark; `listed` on either market | any time | the next 00:00 |
+| any stock mark | any time | the next 00:00 |
+| a future's `listed` | any time | 05:00 the next day (the night it removes) |
 | a future's `noTrades`, `nightNoTrades`, `nightRemoved` | 00:00–05:00 | 05:00 that day |
 | a future's `noTrades` | 05:00–15:10 | 15:10 that day |
 | a future's `noTrades`, `nightNoTrades` | 15:10–24:00 | 05:00 the next day |

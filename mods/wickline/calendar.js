@@ -192,8 +192,10 @@ export function heldMarks(quote, now) {
  *    T has not traded, its day session's reading carries on: noTrades (after it, a night source that went quiet
  *    leaves the existing reading); the reading ends at that cap (15:10:00) with no night answer at all;
  * 9. otherwise none.
- * Each reading's end: a stock's, and any listed day's, the next 00:00 (it lasts the Taipei day); a future's read
- * before 05:00, 05:00 (the night's end); its day's (7, 8b), the cap at 15:10; its night's from 15:10 (8), the next 05:00.
+ * Each reading's end: a stock's, its listed day's included, the next 00:00 (it lasts the Taipei day); a future's listed
+ * day's, 05:00 the next day (the night it removes, which the 00:00 row reads as closed: nightRemoved, or listed again
+ * on a listed T+1); a future's read before 05:00, 05:00 (the night's end); its day's (7, 8b), the cap at 15:10; its
+ * night's from 15:10 (8), the next 05:00.
  * A night's reading of day D: after a day that traded (its day session, the night's newest trade since 08:45 D, or a
  * stock since 09:00 D), the night is closed and says it has no trades yet (nightNoTrades); after a day without trades,
  * the whole day has none (noTrades).
@@ -218,6 +220,8 @@ function closureRule(market, now, open, listed, seen) {
   // real-time sources price futures).
   const midnight = nextTaipeiMidnight(now);
   const nightEnd = taipeiAt(today, NIGHT_END_MIN);
+  // A future's listed mark outlasts the day: the night that runs from 15:00 on T to 05:00 on T+1 is removed too.
+  const listedEnd = market === "future" ? taipeiAt(today + 1, NIGHT_END_MIN) : midnight;
   const cap = taipeiAt(today, NIGHT_SESSION.from) + INFER_REALTIME_MS;
   const ruled = (closure, until) => ({ closure, until: closure ? until : null });
   const noTrades = (source) => ({ kind: "noTrades", source });
@@ -227,7 +231,7 @@ function closureRule(market, now, open, listed, seen) {
   const runningNight = market === "future" && minute < NIGHT_END_MIN && isWeekday(before) && !listed(before);
   const nightSource = runningNight ? quietSince(open) : null;
   if (runningNight && !nightSource) return ruled(null);                                       // 4, else 9
-  if (reason) return ruled({ kind: "listed", reason }, midnight);                             // 1, 3–5, 6
+  if (reason) return ruled({ kind: "listed", reason }, listedEnd);                            // 1, 3–5, 6
   if (market === "stock") {
     const source = open !== null && !dayTraded(today) && quietSince(open);
     return ruled(source ? noTrades(source) : null, midnight);                                 // 2, else 9

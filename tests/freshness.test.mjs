@@ -1149,6 +1149,31 @@ test("WTX&'s detail opened at 23:50 on 12/24 into a listed 12/25: stalled, then 
   }
 });
 
+test("WTX&'s detail opened at 20:00 on listed 12/25 holds 休市 through the night it removes, to 05:00 on 12/26", async () => {
+  const opened = at("2026-12-25T12:00:00Z");                                       // 20:00 on 12/25
+  const midnight = at("2026-12-25T16:00:00Z");                                     // 00:00 on 12/26
+  const end = at("2026-12-25T21:00:00Z");                                          // 05:00 on 12/26
+  // The detail's quote as Watchlist#detailQuote composes it: the rules table's reading at opening, without its deadline.
+  const { closureDeadline: _deadline, ...detail } = marked(wtxDetail({ timestamp: at("2026-12-24T05:44:00Z") }), opened);
+  assert.equal(detail.closure?.kind, "listed");
+  assert.equal(detail.closureUntil, end);
+  for (let time = midnight; time < end; time += MINUTE_MS) {
+    const held = heldMarks(detail, time);
+    const session = sessionOf(held, time);
+    assert.equal(session, "holiday", new Date(time).toISOString());
+    assert.ok(!["live", "stalled"].includes(freshness(held, session, time).state), new Date(time).toISOString());
+  }
+  const after = heldMarks(detail, end);
+  assert.equal(after.closure, null);
+  assert.equal(sessionOf(after, end), "closed");
+  // The day edge comes first (the row's own date turns), then the mark's end.
+  assert.ok(detailWakeAt(detail, midnight - MINUTE_MS) <= midnight);
+  const { redraws } = await wakes(detail, opened, end + 5_000);
+  for (const moment of [midnight, end]) {
+    assert.ok(redraws.some((t) => t >= moment && t <= moment + 1_000), `${new Date(moment).toISOString()}: ${redraws.join()}`);
+  }
+});
+
 test("2330.TW's detail opened at 22:00 on listed 2/12 reads 已收盤 with the date from 00:00 on 2/13", () => {
   // LISTED_2026 lists Thursday 2/12 and Friday 2/13 (市場無交易，僅辦理結算交割作業). Last trade 2/11 13:30.
   const end = at("2026-02-12T16:00:00Z");                                          // 00:00 on 2/13
