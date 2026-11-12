@@ -275,12 +275,20 @@ test("the 今日無成交 label, header and session times", () => {
   });
 });
 
-test("the failure note names what is cached: the price first, else the line, else nothing; none without an error", () => {
+test("the failure note names what is cached: the price first, else the line; none on the price's own line or without an error", () => {
   const error = { code: "request.timeout", params: {} };
   assert.equal(failureNote({ cached: true, chartCached: true }, error), "quote.cached");
   assert.equal(failureNote({ chartCached: true }, error), "quote.chartCached");
   assert.equal(failureNote({ source: "yahootw", chartSource: "yahootw" }, error), null);
   assert.equal(failureNote({ cached: true, chartCached: true }, null), null);
+});
+
+test("the failure note keeps the reason alone on a row whose line is not its price's and holds nothing cached", () => {
+  const error = { code: "request.timeout", params: {} };
+  // A MIS price with no Yahoo Finance quote under it: no line at all.
+  assert.equal(failureNote({ source: "mis", chartSource: null }, error), "reason");
+  assert.equal(failureNote({ source: "finnhub" }, error), "reason");
+  assert.equal(failureNote({ source: "mis", chartSource: null }, null), null);
 });
 
 test("nextDayTurn: Taipei midnight for a Taiwan row, the local one for others, over DST", () => {

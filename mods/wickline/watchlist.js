@@ -109,7 +109,8 @@ export function pickOverlay(byProvider, order, now, base = null) {
  * quote. Works with no base yet. A quote over itself (a symbol's sole source, base and overlay from one source)
  * has no line but the overlay's own: without one, no line and no `chartSource`. `cached` is the shown price's
  * (the base's, kept only when the price is the base's own); the base's flag on a line shown under another
- * source's price is `chartCached`, so a fresh overlay never reads as cached for the base's failed fetch.
+ * source's price is `chartCached`, so a fresh overlay never reads as cached for the base's failed fetch, and only
+ * when that line has points: an empty one shows no chart to call cached.
  */
 export function mergeOverlay(base, overlay, line) {
   if (!overlay) return base;
@@ -124,7 +125,7 @@ export function mergeOverlay(base, overlay, line) {
   return {
     ...price,
     ...(fallback === null && cached ? { cached } : {}),
-    ...(!own && fallback?.cached ? { chartCached: true } : {}),
+    ...(!own && fallback?.cached && fallback.series?.length ? { chartCached: true } : {}),
     previousClose,
     changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
     name: base?.name ?? null,

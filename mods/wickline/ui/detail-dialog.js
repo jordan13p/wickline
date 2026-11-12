@@ -3,10 +3,10 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { hasLimits, isCryptoPair } from "../quotes.js";
-import { displayName, detailTimes, failureNote, formatChange, number, sessionTimesParts } from "../format.js";
+import { displayName, detailTimes, formatChange, number, sessionTimesParts } from "../format.js";
 import { detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
-import { chart, priceBox, priceInk, segments } from "./parts.js";
+import { chart, failureText, priceBox, priceInk, segments } from "./parts.js";
 
 // The dialog a row opens: the day's chart, its range and the session.
 export function detailView(view, t) {
@@ -15,9 +15,9 @@ export function detailView(view, t) {
   const q = heldMarks(view.detail, now);
   const color = view.changeColor(t, q.changePercent);
   const mark = view.limitMark(t, q, now);
-  const note = failureNote(q, q.error);
   const session = sessionOf(q, now);
   const tx = (key, params) => view.tx(key, params);
+  const note = failureText(q, q.error, (reason) => view.say(reason), tx);
   const source = detailSource(q, session, now, tx);
   const times = detailTimes(q, now, view.lang, tx);
   const hours = sessionTimesParts(sessionTimes(q, now), view.lang, tx);
@@ -55,6 +55,6 @@ export function detailView(view, t) {
       .child(stat("detail.limitUpPrice", q.limitUp)).child(stat("detail.limitDownPrice", q.limitDown))
       .child(div().flex_1()).child(div().flex_1())))
     .child(v_flex().gap(2).children([...source, ...(hours.length ? [hours] : []), times].map((parts) => segments(t, parts))))
-    .when(Boolean(note), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.tx(note, { reason: view.say(q.error) }))))
+    .when(Boolean(note), (el) => el.child(div().text_size(11).text_color(t.blocked).child(note)))
     .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback))));
 }

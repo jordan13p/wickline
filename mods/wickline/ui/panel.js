@@ -4,14 +4,14 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { bandCurrency, collapsedRow, displayName, failureNote, formatChange, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
+import { bandCurrency, collapsedRow, displayName, formatChange, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
 import { bandState, freshness, rowDate, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, REMOVE_W, RIGHT_INSET, SCROLL_LANE, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, sparkWidth, tableColumns } from "../layout.js";
-import { button, chart, dot, icon, iconButton, link, priceBox, priceInk } from "./parts.js";
+import { button, chart, dot, failureText, icon, iconButton, link, priceBox, priceInk } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
 // The day line spans a sidebar row's three lines (16, 14 and 14 px, 2 px apart); see sidebarRow.
@@ -165,10 +165,10 @@ function rowData(view, t, now, symbol, source) {
 // A price's currency in its own slot, 8px after the digits: 4px clear of a lit price's block.
 const currencySlot = (t, quote) => div().flex_none().w(CODE_W).pl(8).text_size(11).text_color(t.dim).child(quote.currency ?? "");
 
-// Under a row: a cached price's or line's reason, a real-time source's fallback, Finnhub's budget.
+// Under a row: a failure's reason (with what is cached, if anything), a real-time source's fallback, Finnhub's budget.
 function rowNotes(view, t, { quote, failed, fallback, overCap }) {
-  const key = quote && failureNote(quote, failed);
-  const note = key ? view.tx(key, { reason: view.say(failed) }) : !quote && failed ? view.say(failed) : null;
+  const say = (reason) => view.say(reason);
+  const note = quote ? failureText(quote, failed, say, (key, params) => view.tx(key, params)) : failed && say(failed);
   return [
     note && div().text_size(11).text_color(t.blocked).child(note),
     fallback && div().text_size(11).text_color(t.blocked).child(quote ? view.fallbackText(quote, fallback) : view.say(fallback)),

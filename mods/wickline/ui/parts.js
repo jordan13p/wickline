@@ -1,8 +1,8 @@
 // Stateless drawing helpers shared by the panel and the dialogs: each takes the theme and what it
-// draws, and returns an element. No Herdr calls, no state.
+// draws, and returns an element (failureText, the words both draw). No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, Checkbox, Switch } from "gpui-base";
-import { chartGeometry } from "../format.js";
+import { chartGeometry, failureNote } from "../format.js";
 import { SPIN_MS } from "../motion.js";
 
 // The soft fill under a line chart.
@@ -57,6 +57,14 @@ export function button(t, id, label, onClick) {
 
 /** A price's ink when it is not lit: `dim` while cached (kept through a failed refresh), else `foreground`. */
 export const priceInk = (t, quote) => (quote.cached ? t.dim : t.foreground);
+
+// The failure note under a price (failureNote) for `quote` after `error`, or null: the reason alone, or inside the
+// words for what is cached. `say` words a reason, `tx` translates.
+export function failureText(quote, error, say, tx) {
+  const key = failureNote(quote, error);
+  if (key === null) return null;
+  return key === "reason" ? say(error) : tx(key, { reason: say(error) });
+}
 
 /**
  * A price in a content-sized box whose padding and negative margin cancel, so its digits stay put, lit or not.

@@ -91,13 +91,16 @@ function localDate(ms) {
 }
 
 /**
- * The row's and the detail's failure note for `quote` after `error` (its fetch's reason): the string key for what is
- * cached (the price first, else the line), or null without an error or when nothing is cached, so a reason with no
- * cached part shown draws no note.
+ * The row's and the detail's failure note for `quote` after `error` (its Yahoo Finance or sole source's reason): null
+ * without an error; the string key for what is cached, the price first ("quote.cached"), else the line
+ * ("quote.chartCached"); null when the line shown is the price source's own (the failure touches nothing shown); else
+ * "reason", the reason alone, so a row priced by another source without its Yahoo Finance quote never loses why.
  */
 export function failureNote(quote, error) {
   if (!error) return null;
-  return quote.cached ? "quote.cached" : quote.chartCached ? "quote.chartCached" : null;
+  if (quote.cached) return "quote.cached";
+  if (quote.chartCached) return "quote.chartCached";
+  return quote.chartSource === quote.source ? null : "reason";
 }
 
 /**

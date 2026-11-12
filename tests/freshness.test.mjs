@@ -996,6 +996,22 @@ test("Yahoo 奇摩股市 with its own line over a failed Yahoo Finance base: no 
   assert.equal(failureNote(row, { code: "request.timeout", params: {} }), null);
 });
 
+test("a live MIS price where Yahoo Finance never answered keeps the reason alone", () => {
+  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
+  const row = mergeOverlay(undefined, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
+  assert.equal(failureNote(row, { code: "request.timeout", params: {} }), "reason");
+  assert.equal(freshness(row, sessionOf(row, time), time).state, "live");
+});
+
+test("a cached Yahoo Finance base with no line under a live MIS price: no cached chart, the reason alone", () => {
+  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
+  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    fetchedAt: time - 590_000, series: [], cached: true };
+  const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
+  assert.ok(!("chartCached" in row));
+  assert.equal(failureNote(row, { code: "request.timeout", params: {} }), "reason");
+});
+
 test("a live row carries no date; a stalled one keeps it; the detail's times keep it", () => {
   withTZ("Asia/Taipei", () => {
     const midnight = at("2026-11-11T16:00:00Z"); // 00:00 on 11/12 local
