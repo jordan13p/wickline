@@ -23,7 +23,7 @@ TWSE MIS, past the request above: Codes keep case (`tse_00632R.tw`; lower case g
 
 Futures (`WTX&`): sessions from the line's `sourceTradingPeriods` while `now` is on their own trading day, else TAIFEX's hours (night 15:00–05:00, day 08:45–13:45, Taipei, each opening Monday to Friday, but not on a listed closed day, whose night reads closed). Inside a session the real-time rules apply (`Live`; the day close with no night trade reads `報價停在 13:44` from 15:00, asked every 10 s, then closed from 15:10); between sessions, and over the weekend, it reads closed with its last trade time (`已收盤 · 05:00`), with no stale check and no wake for one.
 
-The open detail fetches nothing, so it keeps the closure mark it opened with (`closureUntil`, `calendar.js`) only until the mark's end, then reads the quote without it:
+The open detail fetches nothing, so it keeps the closure mark it opened with only until the mark's end (`closureUntil`, which `closureOf` in `calendar.js` gives beside the mark from the same rules table), then reads the quote without it:
 
 | Mark | Read at (Taipei) | Ends |
 |---|---|---|

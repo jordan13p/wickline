@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  INFER_DELAYED_MS, INFER_REALTIME_MS, INFER_RECENT_MS, closureOf, closureUntil, currentOpen, heldMarks, parseHolidays, rocDay,
+  INFER_DELAYED_MS, INFER_REALTIME_MS, INFER_RECENT_MS, closureOf, currentOpen, heldMarks, parseHolidays, rocDay,
   taipeiDay,
 } from "../mods/wickline/calendar.js";
 import { HOLIDAYS_2026, at, listed2026, observation } from "./helpers.mjs";
@@ -174,9 +174,10 @@ const quietDayAnswers = (nightAnswer) => (market, open) => {
 
 test("a quiet futures day with no night answer: 今日無成交 until 15:10:00, announced as a deadline", () => {
   const read = (iso) => closureOf("future", at(iso), () => null, quietDayAnswers(null));
-  assert.deepEqual(read("2026-11-11T07:05:00Z"), { closure: { kind: "noTrades", source: "yahootw" }, deadline: at("2026-11-11T07:10:00Z") });
+  const cap = at("2026-11-11T07:10:00Z");
+  assert.deepEqual(read("2026-11-11T07:05:00Z"), { closure: { kind: "noTrades", source: "yahootw" }, deadline: cap, until: cap });
   assert.deepEqual(read("2026-11-11T07:09:59Z").closure, { kind: "noTrades", source: "yahootw" });
-  assert.deepEqual(read("2026-11-11T07:10:00Z"), { closure: null, deadline: null });
+  assert.deepEqual(read("2026-11-11T07:10:00Z"), { closure: null, deadline: null, until: null });
 });
 
 test("with a night answer the 15:10 deadline is as before", () => {
@@ -184,22 +185,35 @@ test("with a night answer the 15:10 deadline is as before", () => {
   assert.equal(closureOf("future", at("2026-11-11T07:05:00Z"), () => null, seen).deadline, at("2026-11-11T07:10:00Z"));
 });
 
-test("closureUntil: when each mark read at a moment stops holding", () => {
-  const T = (iso) => at(iso);
-  const noTrades = { kind: "noTrades", source: "yahootw" };
+// Each mark read at a moment and when it stops holding without a new answer, from the schedule and the answers each
+// row of closureRule reads (Wed 11/11 unlisted, Fri 12/25 listed).
+test("closureOf: when each mark read at a moment stops holding", () => {
+  const T = { day: at("2026-11-11T00:45:00Z"), night: at("2026-11-11T07:00:00Z"), stock: at("2026-11-11T01:00:00Z") };
+  const rt = (time) => ({ realtime: [{ at: time, source: "yahootw" }] });
+  const by = (entries) => (market, open) => entries[`${market} ${open}`];
+  const tradedDay = { newest: at("2026-11-11T05:45:00Z") };
   const cases = [
-    ["stock", noTrades, "2026-11-11T02:00:00Z", "2026-11-11T16:00:00Z"],                         // 10:00 → 00:00
-    ["stock", { kind: "listed", reason: "x" }, "2026-12-24T17:00:00Z", "2026-12-25T16:00:00Z"],  // 12/25 01:00 → 12/26 00:00
-    ["future", { kind: "listed", reason: "x" }, "2026-12-24T22:00:00Z", "2026-12-25T16:00:00Z"],
-    ["future", { kind: "nightNoTrades", source: "yahootw" }, "2026-11-11T18:00:00Z", "2026-11-11T21:00:00Z"], // 02:00 → 05:00
-    ["future", { kind: "nightRemoved" }, "2026-12-25T18:00:00Z", "2026-12-25T21:00:00Z"],
-    ["future", noTrades, "2026-11-11T02:00:00Z", "2026-11-11T07:10:00Z"],                       // 10:00 (row 7) → 15:10
-    ["future", noTrades, "2026-11-11T07:05:00Z", "2026-11-11T07:10:00Z"],                       // 15:05 (row 8b) → 15:10
-    ["future", noTrades, "2026-11-11T08:00:00Z", "2026-11-11T21:00:00Z"],                       // 16:00 (row 8) → 05:00
-    ["future", { kind: "nightNoTrades", source: "yahootw" }, "2026-11-11T08:00:00Z", "2026-11-11T21:00:00Z"],
+    // [market, now, seen, kind, until] (Taipei time in the comment)
+    ["stock", "2026-11-11T02:00:00Z", by({ [`stock ${T.stock}`]: observation(rt(at("2026-11-11T01:59:00Z"))) }), "noTrades",
+      "2026-11-11T16:00:00Z"],                                                                   // 10:00 → 00:00
+    ["stock", "2026-12-24T17:00:00Z", none, "listed", "2026-12-25T16:00:00Z"],                    // 12/25 01:00 → 12/26 00:00
+    ["future", "2026-12-24T22:00:00Z", none, "listed", "2026-12-25T16:00:00Z"],                   // 12/25 06:00 → 12/26 00:00
+    ["future", "2026-11-11T18:00:00Z", by({ [`future ${T.night}`]: observation({ ...tradedDay, ...rt(at("2026-11-11T17:59:00Z")) }) }),
+      "nightNoTrades", "2026-11-11T21:00:00Z"],                                                  // 02:00 → 05:00
+    ["future", "2026-12-25T18:00:00Z", none, "nightRemoved", "2026-12-25T21:00:00Z"],              // Sat 12/26 02:00 → 05:00
+    ["future", "2026-11-11T02:00:00Z", by({ [`future ${T.day}`]: observation(rt(at("2026-11-11T01:59:00Z"))) }), "noTrades",
+      "2026-11-11T07:10:00Z"],                                                                   // 10:00 (row 7) → 15:10
+    ["future", "2026-11-11T07:05:00Z", quietDayAnswers(null), "noTrades", "2026-11-11T07:10:00Z"], // 15:05 (row 8b) → 15:10
+    ["future", "2026-11-11T08:00:00Z", by({ [`future ${T.night}`]: observation(rt(at("2026-11-11T07:59:00Z"))) }), "noTrades",
+      "2026-11-11T21:00:00Z"],                                                                   // 16:00 (row 8) → 05:00
+    ["future", "2026-11-11T08:00:00Z", by({ [`future ${T.night}`]: observation({ ...tradedDay, ...rt(at("2026-11-11T07:59:00Z")) }) }),
+      "nightNoTrades", "2026-11-11T21:00:00Z"],
   ];
-  for (const [market, closure, now, until] of cases) assert.equal(closureUntil(market, closure, T(now)), T(until), `${market} ${closure.kind} ${now}`);
-  assert.equal(closureUntil("stock", null, T("2026-11-11T02:00:00Z")), null);
+  for (const [market, now, seen, kind, until] of cases) {
+    const reading = closureOf(market, at(now), listed2026, seen);
+    assert.deepEqual([reading.closure?.kind, reading.until], [kind, at(until)], `${market} ${kind} ${now}`);
+  }
+  assert.equal(closureOf("stock", at("2026-11-11T02:00:00Z"), listed2026, none).until, null);
 });
 
 test("heldMarks keeps a mark 1 ms before its end and drops it at the end", () => {

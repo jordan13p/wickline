@@ -11,7 +11,7 @@ import { chart, priceBox, segments } from "./parts.js";
 // The dialog a row opens: the day's chart, its range and the session.
 export function detailView(view, t) {
   const now = Date.now();
-  // The mark it opened with until that mark's end, then none (calendar.js closureUntil): the dialog never refetches.
+  // The mark it opened with until that mark's end, then none (calendar.js heldMarks): the dialog never refetches.
   const q = heldMarks(view.detail, now);
   const color = view.changeColor(t, q.changePercent);
   const mark = view.limitMark(t, q, now);

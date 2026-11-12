@@ -9,7 +9,7 @@ import {
   DETAIL_WAKE_CAP_MS, bandState, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
 } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
-import { closureOf, closureUntil, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
+import { closureOf, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import {
   dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts,
@@ -605,9 +605,10 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // nextEdge announced a step before, so a wait cut at the next edge never sleeps past a change. sessionEdges follows
 // sessionOf's branches by hand; this sweep is what keeps the two in step. A new way of reading a session adds its
 // quotes to EDGE_SWEEP_QUOTES.
-// A Taiwan quote carries the closure of its time and its next inference deadline, by the composition Watchlist#marked
-// uses (closureOf in its twMarket, through withClosure; here from the 2026 schedule, and the answers its `answers`
-// gives at that time, else none), so the sweep reads a listed day, and a day or night without trades, as a row does.
+// A Taiwan quote carries the closure of its time, its next deadline and its mark's end, by the composition
+// Watchlist#marked uses (closureOf in its twMarket, through withClosure; here from the 2026 schedule, and the answers
+// its `answers` gives at that time, else none), so the sweep reads a listed day, and a day or night without trades, as
+// a row does.
 const marked = (quote, time) => (resolvedMarket(quote.symbol, quote.exchange) !== "tw" ? quote
   : withClosure(quote, closureOf(twMarket(quote.symbol), time, listed2026, quote.answers?.(time) ?? (() => undefined))));
 // What a row reads: its session, its day, and its no-trades reading, which the detail's session times and
@@ -734,21 +735,16 @@ test("a row reading a closure is told of no opening inside a closure", () => {
 
 // The open detail's wake is never now or earlier, and never missing (every real quote has its row's midnight ahead), so
 // its loop never sleeps for nothing nor stops early: each sweep quote, given a real-time source and a trade 30 s before
-// (so the stale moment is a number, not NaN), marked at its time as a row is and stamped with its mark's end as the
-// detail's quote is, over a plain week and the weeks with listed days.
+// (so the stale moment is a number, not NaN), marked at its time as a row is (with its mark's end, as the detail's
+// quote is), over a plain week and the weeks with listed days.
 test("every detail wake is strictly later than now", () => {
   const priced = (quote, t) => ({ ...quote, source: quote.symbol === "BTC/USDT" ? "binance" : "yahootw", timestamp: t - 30_000 });
-  const detailAt = (quote, t) => {
-    const row = marked(priced(quote, t), t);
-    const tw = resolvedMarket(quote.symbol, quote.exchange) === "tw";
-    return tw ? { ...row, closureUntil: closureUntil(twMarket(quote.symbol), row.closure, t) } : row;
-  };
   const misses = [];
   const marks = { listed: 0, inferred: 0, endFirst: 0 };
   for (const quote of EDGE_SWEEP_QUOTES) {
     for (const [from, to] of [[at("2026-11-08T00:00:00Z"), at("2026-11-15T00:00:00Z")], ...HOLIDAY_WEEKS]) {
       for (let t = from; t < to; t += 7 * MINUTE_MS) {
-        const q = heldMarks(detailAt(quote, t), t);
+        const q = heldMarks(marked(priced(quote, t), t), t);
         const wake = detailWakeAt(q, t);
         if (!(wake > t)) misses.push(`${sweepName(quote)} ${new Date(t).toISOString()} ${wake}`);
         if (q.closure) marks[q.closure.kind === "listed" ? "listed" : "inferred"]++;

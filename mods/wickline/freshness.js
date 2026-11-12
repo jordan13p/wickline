@@ -177,8 +177,8 @@ function dayEdges(quote, now) {
   return [edge(nextDayTurn(quote, now))];
 }
 
-// A Taiwan row's next inference deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js closureOf), where
-// its closure may turn to "noTrades" or, for a future's night, to "nightNoTrades".
+// A Taiwan row's next deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js closureOf), where its
+// closure may turn: an inference deadline (to "noTrades" or, for a future's night, "nightNoTrades"), or its mark's end.
 const deadlineEdges = (quote) => (quote.noTradesDeadline ? [edge(quote.noTradesDeadline)] : []);
 
 // Every source of a row's edges: what it reads (sessionOf, its day) changes only at one of them.

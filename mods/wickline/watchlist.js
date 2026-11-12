@@ -2,7 +2,7 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade } from "./quotes.js";
 import {
-  HOLIDAYS_URL, closureOf, closureUntil, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
+  HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
 import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
@@ -324,17 +324,13 @@ export class Watchlist {
   }
 
   /**
-   * What the detail dialog opens on, all read at one `now`, or null without a quote: the row as shown, its error
-   * (`error`), its overlay's (`fallback`, overlayError) and, for a Taiwan row, when its mark stops holding
-   * (`closureUntil`, calendar.js closureUntil), since the open detail fetches nothing and must drop a mark that is over.
+   * What the detail dialog opens on, all read at one `now`, or null without a quote: the row as shown (a Taiwan row
+   * with its mark's end, `closureUntil`, by marked: the open detail fetches nothing and must drop a mark that is over),
+   * its error (`error`) and its overlay's (`fallback`, overlayError).
    */
   detailQuote(symbol, now) {
     const quote = this.shown(symbol, now);
-    if (!quote) return null;
-    return {
-      ...quote, error: this.errors[symbol] ?? null, fallback: this.overlayError(symbol, now),
-      ...(this.marketFor(symbol) === "tw" && { closureUntil: closureUntil(twMarket(symbol), quote.closure, now) }),
-    };
+    return quote ? { ...quote, error: this.errors[symbol] ?? null, fallback: this.overlayError(symbol, now) } : null;
   }
 
   /**
@@ -376,8 +372,9 @@ export class Watchlist {
   }
 
   /**
-   * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure` and its next inference
-   * deadline as `noTradesDeadline` (closureAt, by calendar.js withClosure; freshness.js nextEdge wakes the row there):
+   * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure`, its next deadline as
+   * `noTradesDeadline` and its mark's end as `closureUntil` (closureAt, by calendar.js withClosure; freshness.js
+   * nextEdge wakes the row at the deadline):
    * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
    * closure.
    */
@@ -387,9 +384,9 @@ export class Watchlist {
   }
 
   /**
-   * A Taiwan `market`'s reading at `now`, `{ closure, deadline }` (calendar.js closureOf), from the schedule held and
-   * the answers seen, with the sources on read once. Every row of a market reads the same, so it is worked out once
-   * per market and `now`, until closureRev moves.
+   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until }` (calendar.js closureOf), from the schedule
+   * held and the answers seen, with the sources on read once. Every row of a market reads the same, so it is worked
+   * out once per market and `now`, until closureRev moves.
    */
   closureAt(market, now) {
     if (this.closures.now !== now || this.closures.rev !== this.closureRev) {
