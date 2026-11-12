@@ -2028,7 +2028,7 @@ test("a 429 from 15:00 on a quiet futures day: WTX& turns at 15:10:00, not at th
       assert.ok(redraws.includes(cap), redraws.join());
       assert.equal(host.requests.length, asked);              // no request in [cap - 1 000, cap + 1 000]
       assert.equal(zhLabel(w.shown("WTX&", host.clock), host.clock), "報價停在 04:59");
-      assert.equal(failureNote(w.shown("WTX&", host.clock)), "quote.cached");
+      assert.equal(failureNote(w.shown("WTX&", host.clock), w.errors["WTX&"]), "quote.cached");
       assert.equal(w.shown("WTX&", host.clock).closure, null);
       assert.deepEqual(w.notes(host.clock), []);
     });

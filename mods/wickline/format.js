@@ -91,10 +91,12 @@ function localDate(ms) {
 }
 
 /**
- * The row's and the detail's failure note: the string key for what is cached (the price first, else the line), or
- * null when nothing is, so a reason with no cached part shown draws no note.
+ * The row's and the detail's failure note for `quote` after `error` (its fetch's reason): the string key for what is
+ * cached (the price first, else the line), or null without an error or when nothing is cached, so a reason with no
+ * cached part shown draws no note.
  */
-export function failureNote(quote) {
+export function failureNote(quote, error) {
+  if (!error) return null;
   return quote.cached ? "quote.cached" : quote.chartCached ? "quote.chartCached" : null;
 }
 

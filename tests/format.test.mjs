@@ -275,10 +275,12 @@ test("the 今日無成交 label, header and session times", () => {
   });
 });
 
-test("the failure note names what is cached: the price first, else the line, else nothing", () => {
-  assert.equal(failureNote({ cached: true, chartCached: true }), "quote.cached");
-  assert.equal(failureNote({ chartCached: true }), "quote.chartCached");
-  assert.equal(failureNote({ source: "yahootw", chartSource: "yahootw" }), null);
+test("the failure note names what is cached: the price first, else the line, else nothing; none without an error", () => {
+  const error = { code: "request.timeout", params: {} };
+  assert.equal(failureNote({ cached: true, chartCached: true }, error), "quote.cached");
+  assert.equal(failureNote({ chartCached: true }, error), "quote.chartCached");
+  assert.equal(failureNote({ source: "yahootw", chartSource: "yahootw" }, error), null);
+  assert.equal(failureNote({ cached: true, chartCached: true }, null), null);
 });
 
 test("nextDayTurn: Taipei midnight for a Taiwan row, the local one for others, over DST", () => {

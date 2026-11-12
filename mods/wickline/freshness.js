@@ -31,9 +31,10 @@ function staleAfterMs(quote) {
 }
 
 // When a Yahoo Finance quote's age is taken: at its fetch, but now for a `cached` one (its last fetch failed,
-// see Watchlist.shown), so cached data never looks fresh; the line's quote (chartQuote) carries the line's flag.
-// One without a fetch time (every provider sets it) counts as fetched now, so its age still grows rather than
-// reading NaN, which would never stall.
+// see Watchlist.shown), so a cached delayed quote ages to now and its wake (msUntilStale) is timed from now; a
+// cached real-time quote never reads live by freshness()'s own rule. The line's quote (chartQuote) carries the
+// line's flag. One without a fetch time (every provider sets it) counts as fetched now, so its age still grows
+// rather than reading NaN, which would never stall.
 const fetchedAt = (quote, now) => (quote.cached ? now : quote.fetchedAt ?? now);
 
 // A quote's age against staleAfterMs. An overlay's (a real-time source's own) runs from its time to now. A

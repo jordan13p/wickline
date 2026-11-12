@@ -55,6 +55,9 @@ export function button(t, id, label, onClick) {
     .on_click((_e, cx) => onClick(cx)).child(label);
 }
 
+/** A price's ink when it is not lit: `dim` while cached (kept through a failed refresh), else `foreground`. */
+export const priceInk = (t, quote) => (quote.cached ? t.dim : t.foreground);
+
 /**
  * A price in a content-sized box whose padding and negative margin cancel, so its digits stay put, lit or not.
  * `mark` (a price at its limit, from the view's limitMark) lights it as Taiwan's quote boards do: a solid

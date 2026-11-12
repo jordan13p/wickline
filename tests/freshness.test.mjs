@@ -970,11 +970,12 @@ test("a live MIS price over a failed Yahoo Finance base: live, lit at its limit,
   const row = mergeOverlay(base, mis, null);
   assert.equal(freshness(row, "open", time).state, "live");
   assert.equal(shownLimit(row, "open", time), "up");
-  assert.equal(failureNote(row), "quote.chartCached");
+  const failed = { code: "request.timeout", params: {} };   // why the Yahoo Finance base failed
+  assert.equal(failureNote(row, failed), "quote.chartCached");
   assert.equal(bandState(row, time), "live");
   // The overlay itself gone stale reads stalled by age, still with the line's note, still not cached.
   assert.equal(freshness(row, "open", time + 116_000).state, "stalled");
-  assert.deepEqual([row.cached, failureNote(row)], [undefined, "quote.chartCached"]);
+  assert.deepEqual([row.cached, failureNote(row, failed)], [undefined, "quote.chartCached"]);
 });
 
 test("2330.TW's detail with MIS live over a failed Yahoo Finance quote names both sources", () => {
@@ -983,7 +984,7 @@ test("2330.TW's detail with MIS live over a failed Yahoo Finance quote names bot
     fetchedAt: time - 590_000, series: [1, 2], cached: true };
   const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
   assert.deepEqual(detailSource(row, "open", time, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
-  assert.equal(failureNote(row), "quote.chartCached");
+  assert.equal(failureNote(row, { code: "request.timeout", params: {} }), "quote.chartCached");
 });
 
 test("Yahoo 奇摩股市 with its own line over a failed Yahoo Finance base: no row note", () => {
@@ -992,7 +993,7 @@ test("Yahoo 奇摩股市 with its own line over a failed Yahoo Finance base: no 
   const today = taipeiDay(time);
   const own = { symbol: "2330.TW", source: "yahootw", price: 500, timestamp: time - 5_000, day: today };
   const row = mergeOverlay(base, own, { day: today, series: [499, 500] });
-  assert.equal(failureNote(row), null);
+  assert.equal(failureNote(row, { code: "request.timeout", params: {} }), null);
 });
 
 test("a live row carries no date; a stalled one keeps it; the detail's times keep it", () => {

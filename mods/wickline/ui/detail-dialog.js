@@ -6,16 +6,16 @@ import { hasLimits, isCryptoPair } from "../quotes.js";
 import { displayName, detailTimes, failureNote, formatChange, number, sessionTimesParts } from "../format.js";
 import { detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
-import { chart, priceBox, segments } from "./parts.js";
+import { chart, priceBox, priceInk, segments } from "./parts.js";
 
 // The dialog a row opens: the day's chart, its range and the session.
 export function detailView(view, t) {
   const now = Date.now();
-  // The mark it opened with until that mark's end, then none (calendar.js heldMarks): the dialog never refetches.
+  // Never refetched: its mark holds only until that mark's end.
   const q = heldMarks(view.detail, now);
   const color = view.changeColor(t, q.changePercent);
   const mark = view.limitMark(t, q, now);
-  const note = failureNote(q);
+  const note = failureNote(q, q.error);
   const session = sessionOf(q, now);
   const tx = (key, params) => view.tx(key, params);
   const source = detailSource(q, session, now, tx);
@@ -36,7 +36,7 @@ export function detailView(view, t) {
       .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
         .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×")))
     .child(h_flex().gap(10).items_end()
-      .child(priceBox("bw-detail-price", number(q), q.cached ? t.dim : t.foreground, mark, { pad: 6 }).text_size(26).font_semibold())
+      .child(priceBox("bw-detail-price", number(q), priceInk(t, q), mark, { pad: 6 }).text_size(26).font_semibold())
       // Outside the price, as in the rows: a lit price's 6px block keeps 4px clear of it.
       .when(Boolean(q.currency), (el) => el.child(div().pb(4).text_size(13).text_color(t.dim).child(q.currency)))
       .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent)))
@@ -55,6 +55,6 @@ export function detailView(view, t) {
       .child(stat("detail.limitUpPrice", q.limitUp)).child(stat("detail.limitDownPrice", q.limitDown))
       .child(div().flex_1()).child(div().flex_1())))
     .child(v_flex().gap(2).children([...source, ...(hours.length ? [hours] : []), times].map((parts) => segments(t, parts))))
-    .when(Boolean(q.error && note), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.tx(note, { reason: view.say(q.error) }))))
+    .when(Boolean(note), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.tx(note, { reason: view.say(q.error) }))))
     .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback))));
 }

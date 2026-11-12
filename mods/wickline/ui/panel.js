@@ -11,7 +11,7 @@ import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";
 import { CODE_W, COLUMN_GAP, GUTTER, NUMBER_W, REMOVE_W, RIGHT_INSET, SCROLL_LANE, TABLE_COLUMNS, TABLE_MAX_WIDTH, columnWidth, nameWidth, sparkWidth, tableColumns } from "../layout.js";
-import { button, chart, dot, icon, iconButton, link, priceBox } from "./parts.js";
+import { button, chart, dot, icon, iconButton, link, priceBox, priceInk } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
 // The day line spans a sidebar row's three lines (16, 14 and 14 px, 2 px apart); see sidebarRow.
@@ -48,7 +48,7 @@ export function band(view, root, t) {
         .child(div().font_semibold().child(symbol))
         .when(Boolean(mark), (el) => el.child(mark))
         .child(quote
-          ? priceBox(`bw-band-price-${symbol}`, number(quote), quote.cached ? t.dim : t.foreground, view.limitMark(t, quote, now), { pad: 3 })
+          ? priceBox(`bw-band-price-${symbol}`, number(quote), priceInk(t, quote), view.limitMark(t, quote, now), { pad: 3 })
           : div().text_color(t.dim).child(w.errors[symbol] ? view.tx("band.unavailable") : "…"))
         // Its own `dim` text, 2px further out than the gap, so a lit price's 3px block keeps 4px clear of it.
         .when(Boolean(code), (el) => el.child(div().ml(2).text_color(t.dim).child(code)))
@@ -148,7 +148,6 @@ function problemLines(view, t) {
 function rowData(view, t, now, symbol, source) {
   const { quote } = source;
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
-  // rowDate: no date on a live row or a closed label (which carries its own).
   const stale = quote ? rowDate(quote, fresh, now, view.lang) : "";
   const label = quote ? freshnessLabel(quote, fresh, now, view.lang, (key, params) => view.tx(key, params)) : "";
   const shown = rowName(symbol, label, quote ? displayName(quote, view.lang) : null);
@@ -159,7 +158,7 @@ function rowData(view, t, now, symbol, source) {
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
     // The price as both layouts draw it: lit at its limit (see limitMark), `dim` when cached.
-    price: quote && priceBox(`bw-price-${symbol}`, number(quote), quote.cached ? t.dim : t.foreground, view.limitMark(t, quote, now)),
+    price: quote && priceBox(`bw-price-${symbol}`, number(quote), priceInk(t, quote), view.limitMark(t, quote, now)),
   };
 }
 
@@ -168,10 +167,10 @@ const currencySlot = (t, quote) => div().flex_none().w(CODE_W).pl(8).text_size(1
 
 // Under a row: a cached price's or line's reason, a real-time source's fallback, Finnhub's budget.
 function rowNotes(view, t, { quote, failed, fallback, overCap }) {
-  const note = quote && failureNote(quote);
+  const key = quote && failureNote(quote, failed);
+  const note = key ? view.tx(key, { reason: view.say(failed) }) : !quote && failed ? view.say(failed) : null;
   return [
-    failed && (!quote || note) && div().text_size(11).text_color(t.blocked)
-      .child(quote ? view.tx(note, { reason: view.say(failed) }) : view.say(failed)),
+    note && div().text_size(11).text_color(t.blocked).child(note),
     fallback && div().text_size(11).text_color(t.blocked).child(quote ? view.fallbackText(quote, fallback) : view.say(fallback)),
     overCap && div().text_size(11).text_color(t.dim).child(view.tx("finnhub.overCap", { cap: finnhubCap(view.settings.sources.us.budgetPerMinute) })),
   ].filter(Boolean);
