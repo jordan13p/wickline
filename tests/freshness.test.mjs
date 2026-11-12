@@ -1045,6 +1045,14 @@ async function wakes(detail, from, until) {
   return { redraws, asked };
 }
 
+// A closed 2330.TW (Yahoo 奇摩股市, 11/10's periods, 13:30 trade) opened at 21:00 Taipei: its next wake is 00:00, 3 h on.
+const CLOSED_2330 = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: at("2026-11-10T05:30:00Z"),
+  periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), chartSource: "yahootw" };
+const NINE_PM = at("2026-11-10T13:00:00Z");
+const MIDNIGHT_TPE = at("2026-11-10T16:00:00Z");
+// An open WTX& detail on Yahoo 奇摩股市 and TAIFEX's table (periods null), with its trade time and marks in `overrides`.
+const wtxDetail = (overrides) => ({ symbol: "WTX&", source: "yahootw", price: 23_000, periods: null, chartSource: "yahootw", ...overrides });
+
 test("AAPL's open detail turns from Live to stopped about a second after 120 s", async () => {
   const trade = at("2026-11-10T15:00:00Z");                                        // 10:00:00 NY
   const detail = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: trade, price: 230,
@@ -1083,8 +1091,7 @@ test("a night mark opened at 02:00 ends at 05:00: 已收盤, the night's hours s
   const opened = at("2026-11-11T18:00:00Z");                                       // 02:00 Thursday 11/12
   const end = at("2026-11-11T21:00:00Z");                                          // 05:00
   // The day traded until 13:45 on 11/11; the night (15:00) had no trade; TAIFEX's table (periods null).
-  const detail = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: at("2026-11-11T05:45:00Z"), periods: null,
-    chartSource: "yahootw", closure: { kind: "nightNoTrades", source: "yahootw" }, closureUntil: end };
+  const detail = wtxDetail({ timestamp: at("2026-11-11T05:45:00Z"), closure: { kind: "nightNoTrades", source: "yahootw" }, closureUntil: end });
   assert.equal(detailWakeAt(detail, opened), end);
   withTZ("Asia/Taipei", () => {
     const hours = (time) => sessionTimesParts(sessionTimes(heldMarks(detail, time), time), "zh-TW", say("zh-TW")).join(" · ");
@@ -1097,8 +1104,8 @@ test("a night mark opened at 02:00 ends at 05:00: 已收盤, the night's hours s
 test("a futures day's 今日無成交 opened at 15:05 ends at 15:10, never Live", () => {
   const end = at("2026-11-11T07:10:00Z");                                          // 15:10
   // Last trade 13:44 on 11/10; TAIFEX's table; the mark as closureOf gave it at 15:05.
-  const detail = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: at("2026-11-10T05:44:00Z"), periods: null,
-    chartSource: "yahootw", closure: { kind: "noTrades", source: "yahootw" }, noTradesDeadline: end, closureUntil: end };
+  const detail = wtxDetail({ timestamp: at("2026-11-10T05:44:00Z"), closure: { kind: "noTrades", source: "yahootw" },
+    noTradesDeadline: end, closureUntil: end });
   assert.equal(sessionOf(heldMarks(detail, end - 1_000), end - 1_000), "noTrades");
   const after = heldMarks(detail, end);
   assert.equal(sessionOf(after, end), "open");
@@ -1107,7 +1114,7 @@ test("a futures day's 今日無成交 opened at 15:05 ends at 15:10, never Live"
 
 test("WTX&'s detail opened at 23:50 on 12/24 into a listed 12/25: stalled, then 已收盤, never 休市 or Live", async () => {
   const trade = at("2026-12-24T15:49:30Z");                                        // 23:49:30 Thursday 12/24
-  const detail = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: trade, periods: null, chartSource: "yahootw" };
+  const detail = wtxDetail({ timestamp: trade });
   const state = (time) => freshness(detail, sessionOf(detail, time), time).state;
   assert.equal(state(trade + 120_000), "live");
   assert.equal(state(trade + 120_001), "stalled");
@@ -1143,12 +1150,6 @@ test("2330.TW's detail opened at 22:00 on listed 2/12 reads 已收盤 with the d
   });
 });
 
-// A closed 2330.TW (Yahoo 奇摩股市, 11/10's periods, 13:30 trade) opened at 21:00 Taipei: its next wake is 00:00, 3 h on.
-const CLOSED_2330 = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: at("2026-11-10T05:30:00Z"),
-  periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), chartSource: "yahootw" };
-const NINE_PM = at("2026-11-10T13:00:00Z");
-const MIDNIGHT_TPE = at("2026-11-10T16:00:00Z");
-
 test("followDetail sleeps in 10-minute steps to a far wake and redraws only when it is reached", async () => {
   const { redraws, asked } = await wakes(CLOSED_2330, NINE_PM, MIDNIGHT_TPE + 1_000);
   assert.equal(asked.length, 19);
@@ -1183,7 +1184,6 @@ test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", ()
   // No noTradesDeadline, so nothing but closureUntil falls at 15:10 (nextEdge gives 00:00 here).
   const fifteen = at("2026-11-11T07:00:00Z");
   const end = at("2026-11-11T07:10:00Z");
-  const d = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: at("2026-11-10T05:44:00Z"), periods: null,
-    chartSource: "yahootw", closure: { kind: "noTrades", source: "yahootw" }, closureUntil: end };
+  const d = wtxDetail({ timestamp: at("2026-11-10T05:44:00Z"), closure: { kind: "noTrades", source: "yahootw" }, closureUntil: end });
   assert.equal(detailWakeAt(d, fifteen), end);
 });
