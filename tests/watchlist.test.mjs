@@ -1694,7 +1694,7 @@ test("after the Taiwan close the idle wake still lands when the shown overlay ha
   assert.equal(w.shown("2330.TW", now + 60_001).source, "mis");
 });
 
-test("a cached Yahoo quote never reads live: after a failed fetch its age runs to now", () => {
+test("a cached Yahoo quote never reads live: stalled from the first failure, its stale wake by age", () => {
   const w = new Watchlist(fakeHost(() => ok({})));
   const success = at("2026-11-10T15:00:00Z"); // the last good fetch, 10:00 in New York
   w.quotes.AAPL = { ...yq("AAPL", "NMS", success - 10_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")), fetchedAt: success };
@@ -1702,7 +1702,7 @@ test("a cached Yahoo quote never reads live: after a failed fetch its age runs t
   // No error: the fetch-based rule, live until the 5-minute guard.
   assert.equal(state(success + 121_000), "live");
   w.errors.AAPL = { code: "yahoo.unreachable", params: {} };
-  assert.equal(state(success + 110_000), "live");
+  assert.equal(state(success + 110_000), "stalled");
   assert.equal(state(success + 110_001), "stalled");
   assert.equal(state(at("2026-11-10T15:02:01Z")), "stalled");
   assert.equal(w.staleInMs(["AAPL"], success + 60_000), 50_001);

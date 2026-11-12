@@ -12,7 +12,7 @@ import { mergeOverlay } from "../mods/wickline/watchlist.js";
 import { dayFor, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
-import { CLOSE_1224, LINE_PERIODS, SEGMENTS, at, day, listed2026, observation, say, yq } from "./helpers.mjs";
+import { CLOSE_1224, LINE_PERIODS, SEGMENTS, at, day, listed2026, observation, say, withTZ, yq, zhLabel } from "./helpers.mjs";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
@@ -841,4 +841,62 @@ test("a Finnhub-only US stock that stopped before the close reads stalled all ev
   assert.equal(sessionOf(aapl(at("2026-11-11T20:50:00Z")), evening), "closed");
   assert.equal(state(at("2026-11-11T20:50:00Z"), evening), "stalled");         // 15:50
   assert.equal(state(at("2026-11-11T20:59:40Z"), evening), "closed");          // 15:59:40
+});
+
+test("a cached price is never live, in any session that would read live; paused and other states keep theirs", () => {
+  const stalledAt = (ts) => ({ state: "stalled", delayMinutes: null, stoppedAt: ts });
+  const pair = { symbol: "BTC/USDT", source: "binance", timestamp: now - 10_000, periods: null, cached: true };
+  assert.deepEqual(freshness(pair, "24h", now), stalledAt(now - 10_000));
+  const mis = { symbol: "2330.TW", source: "mis", timestamp: now - 5_000, periods: null, cached: true };
+  assert.deepEqual(freshness(mis, "open", now), stalledAt(now - 5_000));
+  for (const session of ["closed", "lunch", "holiday", "noTrades", "pre", "post"]) {
+    assert.equal(freshness(mis, session, now).state, session);
+  }
+  // Unconfirmed stays unconfirmed: an unknown session, and a Yahoo price still at the previous close.
+  assert.equal(freshness({ ...mis, source: "finnhub" }, "unknown", now).state, "unconfirmed");
+  const open = at("2026-11-10T14:30:00Z");                   // 09:30 New York
+  const prior = { ...yq("AAPL", "NMS", open - 61_200_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    fetchedAt: open + 5_000, cached: true };                  // yesterday's 16:00 close, fetched at 09:30:05
+  assert.equal(freshness(prior, "open", open + 20_000).state, "unconfirmed");
+  assert.equal(freshness(prior, "open", open + 119_000).state, "unconfirmed");
+  assert.equal(freshness(prior, "open", open + 121_000).state, "stalled");
+  // A delayed cached quote keeps its delay until its age passes delay + 5 min (15 + 5 min for HKG).
+  const tenHK = at("2026-11-10T02:00:00Z");                  // 10:00 Hong Kong
+  const hk = { ...yq("0700.HK", "HKG", tenHK - 60_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")), cached: true };
+  assert.equal(freshness(hk, "open", tenHK).state, "delayed");
+  assert.equal(freshness(hk, "open", tenHK - 60_000 + 20 * 60_000 + 1_000).state, "stalled");
+});
+
+test("a recent cached Yahoo Finance line under a live Finnhub price reads stopped by the rule, not by age", () => {
+  const time = at("2026-11-10T15:05:00Z");                  // 10:05 New York
+  const base = { ...yq("AAPL", "NMS", time - 30_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    fetchedAt: time - 25_000, series: [1, 2], cached: true };
+  const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: time - 10_000 }, null);
+  // A cached line used to read Live by its age (30 s); it now reads stopped at its own time.
+  assert.deepEqual(detailSource(row, "open", time, say("en")),
+    [["Price: Live · Finnhub"], [`Line: quote stopped at ${formatTime(base.timestamp)} · Yahoo Finance`]]);
+});
+
+test("a sole-source future rate limited 5 s after its price reads 報價停在 22:00 at once", () => {
+  const price = at("2026-11-11T14:00:00Z");           // 22:00 Taipei, night session
+  const q = { symbol: "WTX&", source: "yahootw", timestamp: price, periods: { pre: null, regular: null, post: null,
+    segments: [[at("2026-11-11T07:00:00Z"), at("2026-11-11T21:00:00Z")]] }, chartSource: "yahootw", cached: true };
+  const time = price + 5_000;
+  withTZ("Asia/Taipei", () => {
+    assert.equal(zhLabel(q, time), "報價停在 22:00");
+    assert.deepEqual(detailSource(q, sessionOf(q, time), time, say("zh-TW")),
+      [["價格：報價停在 22:00 · Yahoo 奇摩股市"], ["走勢：報價停在 22:00 · Yahoo 奇摩股市"]]);
+  });
+});
+
+test("the stale wake judges a cached quote by age, as before", () => {
+  const q = { symbol: "2330.TW", source: "yahootw", timestamp: now - 5_000, periods: null, cached: true };
+  assert.equal(msUntilStale(q, "open", now), 115_001);
+});
+
+test("a cached Yahoo Finance base under a live MIS price leaves the MIS price live", () => {
+  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
+  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")), cached: true };
+  const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
+  assert.equal(freshness(row, sessionOf(row, time), time).state, "live");
 });

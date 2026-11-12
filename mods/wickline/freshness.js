@@ -326,12 +326,13 @@ export function msUntilStale(quote, session, now) {
 
 /**
  * live: real time (isRealtime), trading, at most LIVE_MAX_AGE_MS old (a quote timed ahead of the clock counts
- * as new). unconfirmed: real time in an "unknown" session (no periods, and no exchange hours to read), or a
- * real-time Yahoo quote still at the previous close after today's open (beforeOpen), until today's first trade
- * or the fetch guard. stalled: past its msUntilStale, real time or delayed. delayed: any other quote, with its
- * exchange's minutes when the table holds them; a Yahoo future (`=F`) or an exchange without a delay never
- * stalls. closed / holiday / noTrades / pre / post / lunch: the session, except a closed one read from the hours after
- * a price that had stalled by the close (stoppedBeforeClose): stalled.
+ * as new) and not cached (a kept price after a failed refresh reads stalled at once). unconfirmed: real time in
+ * an "unknown" session (no periods, and no exchange hours to read), or a real-time Yahoo quote still at the
+ * previous close after today's open (beforeOpen), until today's first trade or the fetch guard. stalled: past
+ * its msUntilStale, real time or delayed. delayed: any other quote, with its exchange's minutes when the table
+ * holds them; a Yahoo future (`=F`) or an exchange without a delay never stalls. closed / holiday / noTrades /
+ * pre / post / lunch: the session, except a closed one read from the hours after a price that had stalled by the
+ * close (stoppedBeforeClose): stalled.
  */
 export function freshness(quote, session, now) {
   if (session === "closed" && stoppedBeforeClose(quote, now)) return result("stalled", null, quote.timestamp);
@@ -341,7 +342,10 @@ export function freshness(quote, session, now) {
   const left = msUntilStale(quote, session, now);
   if (left !== null && left <= 0) return result("stalled", null, quote.timestamp);
   if (beforeOpen(quote)) return result("unconfirmed");
-  return realtime ? result("live") : result("delayed", delayMinutes(quote));
+  if (!realtime) return result("delayed", delayMinutes(quote));
+  // A kept price is no longer being refreshed, so its age says nothing about whether the feed still runs: it stops
+  // at its own time from the first failure instead of passing for live until the age limit.
+  return quote.cached ? result("stalled", null, quote.timestamp) : result("live");
 }
 
 /** The states of a market closed for the rest of the day (a row's label carries its date): closed, 休市, 今日無成交. */
