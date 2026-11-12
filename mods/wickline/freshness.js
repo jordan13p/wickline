@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
-import { taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
-import { formatStaleDate, stateText } from "./format.js";
+import { taipeiMinute } from "./calendar.js";
+import { formatStaleDate, nextDayTurn, stateText } from "./format.js";
 import {
   DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, dayStart, exchangeRule, kindOf, localDay,
   localWindow, resolvedMarket, tradesOn, usOffsetMin, weekdayOf,
@@ -170,10 +170,10 @@ function sessionEdges(quote, now) {
   return lunch ? [...edges, edge(lunch[0]), opening(lunch[1])] : edges;
 }
 
-// The next Taipei midnight for a Taiwan quote, where its row's day (dayFor: taipeiDay) turns; none for any other.
+// The next turn of the row's own day (format.js nextDayTurn): Taipei midnight for a Taiwan row, else local midnight.
+// Never an opening: it only redraws.
 function dayEdges(quote, now) {
-  if (resolvedMarket(quote.symbol, quote.exchange) !== "tw") return [];
-  return [edge(taipeiAt(taipeiDay(now) + 1, 0))];
+  return [edge(nextDayTurn(quote, now))];
 }
 
 // A Taiwan row's next inference deadline (`noTradesDeadline`, set by Watchlist#marked from calendar.js closureOf), where

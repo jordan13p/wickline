@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, failureNote, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
-import { formatDate, sessionTimesParts, stateText } from "../mods/wickline/format.js";
+import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { CLOSE_1224, at, day, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
@@ -279,4 +279,25 @@ test("the failure note names what is cached: the price first, else the line, els
   assert.equal(failureNote({ cached: true, chartCached: true }), "quote.cached");
   assert.equal(failureNote({ chartCached: true }), "quote.chartCached");
   assert.equal(failureNote({ source: "yahootw", chartSource: "yahootw" }), null);
+});
+
+test("nextDayTurn: Taipei midnight for a Taiwan row, the local one for others, over DST", () => {
+  const aapl = { symbol: "AAPL", exchange: "NMS" };
+  withTZ("America/New_York", () => {
+    assert.equal(nextDayTurn(aapl, at("2026-03-08T16:00:00Z")), at("2026-03-09T04:00:00Z"));   // a 23 h day
+    assert.equal(nextDayTurn(aapl, at("2026-11-01T17:00:00Z")), at("2026-11-02T05:00:00Z"));   // a 25 h day
+    assert.equal(nextDayTurn({ symbol: "2330.TW" }, at("2026-11-10T20:00:00Z")), at("2026-11-11T16:00:00Z"));
+  });
+  withTZ("America/Santiago", () => {
+    // 2026-09-06 has no 00:00: the day turns at 01:00 (04:00Z).
+    assert.equal(nextDayTurn(aapl, at("2026-09-06T02:30:00Z")), at("2026-09-06T04:00:00Z"));
+    // 2026-04-04 runs 23:00-24:00 twice: the turn is the second 24:00 (04:00Z), never the first 23:00.
+    assert.equal(nextDayTurn(aapl, at("2026-04-05T02:30:00Z")), at("2026-04-05T04:00:00Z"));
+  });
+  // A London clock turns AAPL at London midnight and 2330.TW at Taipei midnight.
+  withTZ("Europe/London", () => {
+    const time = at("2026-11-10T12:00:00Z");
+    assert.equal(nextDayTurn(aapl, time), at("2026-11-11T00:00:00Z"));
+    assert.equal(nextDayTurn({ symbol: "2330.TW" }, time), at("2026-11-10T16:00:00Z"));
+  });
 });

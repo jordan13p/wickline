@@ -1,8 +1,8 @@
 // How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
 // No Herdr imports, so tests run it under Node.
 import { isCryptoPair, positive, timedByTrade } from "./quotes.js";
-import { taipeiDay } from "./calendar.js";
-import { resolvedMarket } from "./markets.js";
+import { taipeiAt, taipeiDay } from "./calendar.js";
+import { MINUTE_MS, resolvedMarket } from "./markets.js";
 
 /**
  * The line through `series`, scaled into its box as [x%, y%] points, and where
@@ -113,6 +113,22 @@ export function formatStaleDate(quote, now, lang = "en") {
  */
 export function dayFor(quote) {
   return resolvedMarket(quote.symbol, quote.exchange) === "tw" ? taipeiDay : localDate;
+}
+
+/**
+ * The next moment after `now` at which a row's day (dayFor) turns, in ms: Taipei midnight for a Taiwan quote, else the
+ * next local midnight. A turn that lands early (at or before `now`, or still on `now`'s date) steps on by the hour
+ * until the date has turned. That is defense for a runtime whose Date resolves a midnight that way (QuickJS); no
+ * tested case enters it.
+ */
+export function nextDayTurn(quote, now) {
+  if (resolvedMarket(quote.symbol, quote.exchange) === "tw") return taipeiAt(taipeiDay(now) + 1, 0);
+  const from = new Date(now);
+  let turn = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1).getTime();
+  for (let guard = 0; guard < 25 && (turn <= now || localDate(turn) === localDate(now)); guard++) {
+    turn += 60 * MINUTE_MS;
+  }
+  return turn;
 }
 
 /** A local date as a row prints it: "Oct 31" in English, "10/31" in the other languages. */

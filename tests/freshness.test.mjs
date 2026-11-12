@@ -560,13 +560,15 @@ test("nextEdge: each market's next edge, and its next opening", () => {
       "2026-11-13T21:00:00Z", "2026-11-13T22:00:00Z", "2026-11-15T22:00:00Z"],
     [{ symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") },
       "2026-11-10T06:00:00Z", "2026-11-10T16:00:00Z", null],                                      // 14:00: Taipei midnight
-    [us, "2026-11-11T01:30:00Z", null, null],                                                   // after post; no Taiwan midnight
-    [{ symbol: "BTC/USDT", periods: null }, "2026-11-10T06:00:00Z", null, null],
+    [us, "2026-11-11T01:30:00Z", "2026-11-11T16:00:00Z", null],                                 // after post: the row's own midnight
+    [{ symbol: "BTC/USDT", periods: null }, "2026-11-10T06:00:00Z", "2026-11-10T16:00:00Z", null],
   ];
-  for (const [quote, iso, edge, opening] of cases) {
-    assert.equal(nextEdge(quote, at(iso)), edge && at(edge), `${quote.symbol} ${iso}`);
-    assert.equal(nextEdge(quote, at(iso), { openings: true }), opening && at(opening), `${quote.symbol} ${iso} opening`);
-  }
+  withTZ("Asia/Taipei", () => {
+    for (const [quote, iso, edge, opening] of cases) {
+      assert.equal(nextEdge(quote, at(iso)), edge && at(edge), `${quote.symbol} ${iso}`);
+      assert.equal(nextEdge(quote, at(iso), { openings: true }), opening && at(opening), `${quote.symbol} ${iso} opening`);
+    }
+  });
 });
 
 // A wait cut at the next edge is never zero: standing on an edge gives the one after it.
@@ -574,9 +576,11 @@ test("nextEdge on an edge gives the next one", () => {
   const hk = { symbol: "0700.HK", exchange: "HKG", periods: day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z") };
   const wtx = { symbol: "WTX&", periods: null };
   const fx = { symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-13T00:00:00Z", "2026-11-14T00:00:00Z") };
-  assert.equal(nextEdge(hk, at("2026-11-10T04:00:00Z")), at("2026-11-10T05:00:00Z"));  // 12:00 HK → 13:00
-  assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z")); // 15:00 Taipei → midnight
-  assert.equal(nextEdge(fx, at("2026-11-13T22:00:00Z")), at("2026-11-15T22:00:00Z"));  // Friday 22:00 → Sunday's
+  withTZ("Asia/Taipei", () => {
+    assert.equal(nextEdge(hk, at("2026-11-10T04:00:00Z")), at("2026-11-10T05:00:00Z"));  // 12:00 HK → 13:00
+    assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z")); // 15:00 Taipei → midnight
+    assert.equal(nextEdge(fx, at("2026-11-13T22:00:00Z")), at("2026-11-14T16:00:00Z"));  // Friday 22:00 → Taipei midnight, before Sunday's
+  });
 });
 
 // A future's line holds its trading day's segments (Monday's night, Tuesday's day); Tuesday's 15:00 night opening is
@@ -591,7 +595,7 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
   assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z"), openings), null);
 });
 
-// The edge invariant: what a row reads (its session, and a Taiwan row's day by dayFor) changes only at a moment that
+// The edge invariant: what a row reads (its session, and its day by dayFor) changes only at a moment that
 // nextEdge announced a step before, so a wait cut at the next edge never sleeps past a change. sessionEdges follows
 // sessionOf's branches by hand; this sweep is what keeps the two in step. A new way of reading a session adds its
 // quotes to EDGE_SWEEP_QUOTES.
@@ -600,13 +604,13 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // gives at that time, else none), so the sweep reads a listed day, and a day or night without trades, as a row does.
 const marked = (quote, time) => (resolvedMarket(quote.symbol, quote.exchange) !== "tw" ? quote
   : withClosure(quote, closureOf(twMarket(quote.symbol), time, listed2026, quote.answers?.(time) ?? (() => undefined))));
-// What a row reads: its session, a Taiwan row's day, and its no-trades reading, which the detail's session times and
+// What a row reads: its session, its day, and its no-trades reading, which the detail's session times and
 // the status line's note read apart from sessionOf.
 const INFERRED = ["noTrades", "nightNoTrades"];
 const reading = (quote, time) => {
   const row = marked(quote, time);
   const noTrades = INFERRED.includes(row.closure?.kind) ? row.closure : null;
-  return `${sessionOf(row, time)} ${resolvedMarket(row.symbol, row.exchange) === "tw" ? dayFor(row)(time) : ""} ${JSON.stringify(noTrades)}`;
+  return `${sessionOf(row, time)} ${dayFor(row)(time)} ${JSON.stringify(noTrades)}`;
 };
 // Answers that carry no trade, one a minute (the latest at `time`) from every session: Yahoo 奇摩股市's for
 // `quietRealtime`, Yahoo Finance's for `quietDelayed`. `quietNight`: only the nights are observed, each answer carrying
@@ -693,6 +697,16 @@ test("every change in what a row reads comes at or after an edge announced for i
     reads(delayed, "2026-11-10T01:30:00Z"), reads(night, "2026-11-10T07:09:59Z"), reads(night, "2026-11-10T07:10:00Z")],
   ["open null", 'noTrades {"kind":"noTrades","source":"yahootw"}', "open null", 'noTrades {"kind":"noTrades","source":"yahoo"}', "open null",
     'closed {"kind":"nightNoTrades","source":"yahootw"}']);
+});
+
+test("the edge sweep holds on New York and Santiago clocks, each row turning at its own midnight", () => {
+  const SANTIAGO_WEEKS = [[at("2026-04-02T00:00:00Z"), at("2026-04-08T00:00:00Z")], [at("2026-09-03T00:00:00Z"), at("2026-09-09T00:00:00Z")]];
+  withTZ("America/New_York", () => {
+    for (const quote of EDGE_SWEEP_QUOTES) for (const week of EDGE_SWEEP_WEEKS) assert.deepEqual(unannounced(quote, week), [], sweepName(quote));
+  });
+  withTZ("America/Santiago", () => {
+    for (const quote of EDGE_SWEEP_QUOTES) for (const week of SANTIAGO_WEEKS) assert.deepEqual(unannounced(quote, week), [], sweepName(quote));
+  });
 });
 
 test("a row reading a closure is told of no opening inside a closure", () => {

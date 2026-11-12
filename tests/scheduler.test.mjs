@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/wickline/watchlist.js";
 import { LIVE_MAX_AGE_MS, freshness, sessionOf } from "../mods/wickline/freshness.js";
-import { advance, at, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop } from "./helpers.mjs";
+import { advance, at, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, zhLabel } from "./helpers.mjs";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { yahoo } from "../mods/wickline/providers/yahoo.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
@@ -908,4 +908,54 @@ test("a docked copy hidden after a round does not wake for a boundary", async ()
   assert.equal(host.requests.length, 1);
   assert.ok(!host.redraws.some((time) => time >= NOON_HK && time <= NOON_HK + 1_000), host.redraws.join());
   await stop(w, host, runs);
+});
+
+// AAPL on Yahoo Finance alone, its Friday 11/13 answer (built as hkHost() builds 0700.HK's, redraw times in
+// host.redraws): `exchangeName: "NMS"`, `regularMarketTime` 2026-11-13T21:00Z, regular 2026-11-13T14:30Z-21:00Z.
+const SUN_MIDNIGHT = at("2026-11-14T16:00:00Z");                  // 00:00 Sunday 11/15, Taipei
+function aaplHost() {
+  const host = fakeHost((url) => chart({ symbol: chartSymbol(url), regularMarketPrice: 230, regularMarketTime: at("2026-11-13T21:00:00Z") / 1000,
+    previousClose: 228, currency: "USD", exchangeName: "NMS",
+    currentTradingPeriod: { regular: { start: at("2026-11-13T14:30:00Z") / 1000, end: at("2026-11-13T21:00:00Z") / 1000 } } }));
+  host.store = { version: 1, symbols: ["AAPL"], paused: false };
+  host.redraws = [];
+  host.changed = () => host.redraws.push(host.clock);
+  return host;
+}
+
+test("an AAPL row on a Taipei clock gains its date at local midnight, without a round", async () => {
+  await withTZ("Asia/Taipei", async () => {
+    const host = aaplHost();
+    // 40 s before: from 60 s, Yahoo Finance's 60 s cadence would put a round (and its redraw) at 00:00:00 exactly.
+    host.clock = SUN_MIDNIGHT - 40_000;
+    const w = new Watchlist(host);
+    const runs = start(w, host);
+    await advance(host, SUN_MIDNIGHT - 1_000);
+    assert.equal(zhLabel(w.shown("AAPL", host.clock), host.clock), "已收盤 · 05:00");
+    const asked = host.requests.length;
+    await advance(host, SUN_MIDNIGHT + 1_000);
+    assert.ok(host.redraws.some((time) => time >= SUN_MIDNIGHT && time <= SUN_MIDNIGHT + 1_000), host.redraws.join());
+    assert.equal(zhLabel(w.shown("AAPL", host.clock), host.clock), "已收盤 · 11/14 05:00");
+    assert.equal(host.requests.length, asked);                    // no round for the midnight edge
+    await stop(w, host, runs);
+  });
+});
+
+test("a hidden docked copy does not wake for a row's midnight", async () => {
+  await withTZ("Asia/Taipei", async () => {
+    const host = aaplHost();
+    // 90 s before, as the HK twin: from 40 s the shown copy's rest would already sleep to the 00:00 edge.
+    host.clock = SUN_MIDNIGHT - 90_000;
+    let shown = true;
+    host.shown = () => shown;
+    const w = new Watchlist(host);
+    const runs = start(w, host);
+    await advance(host, SUN_MIDNIGHT - 85_000);
+    assert.ok(w.shown("AAPL", host.clock).periods.regular);
+    shown = false;
+    await advance(host, SUN_MIDNIGHT + 5_000);
+    assert.equal(host.requests.length, 1);
+    assert.ok(!host.redraws.some((time) => time >= SUN_MIDNIGHT && time <= SUN_MIDNIGHT + 1_000), host.redraws.join());
+    await stop(w, host, runs);
+  });
 });
