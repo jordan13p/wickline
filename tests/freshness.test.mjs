@@ -5,11 +5,11 @@ import {
   LIVE_MAX_AGE_MS, REALTIME_SOURCES, chartQuote, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
   shownLimit,
 } from "../mods/wickline/freshness.js";
-import { bandState, hoursWindow, nextEdge } from "../mods/wickline/freshness.js";
+import { bandState, hoursWindow, nextEdge, rowDate } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
 import { closureOf, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
-import { dayFor, failureNote, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import { dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
 import { CLOSE_1224, LINE_PERIODS, SEGMENTS, at, day, listed2026, observation, say, withTZ, yq, zhLabel } from "./helpers.mjs";
@@ -932,4 +932,33 @@ test("Yahoo 奇摩股市 with its own line over a failed Yahoo Finance base: no 
   const own = { symbol: "2330.TW", source: "yahootw", price: 500, timestamp: time - 5_000, day: today };
   const row = mergeOverlay(base, own, { day: today, series: [499, 500] });
   assert.equal(failureNote(row), null);
+});
+
+test("a live row carries no date; a stalled one keeps it; the detail's times keep it", () => {
+  withTZ("Asia/Taipei", () => {
+    const midnight = at("2026-11-11T16:00:00Z"); // 00:00 on 11/12 local
+    const pair = { symbol: "BTC/USDT", source: "binance", timestamp: midnight - 2_000, periods: null };
+    const live = freshness(pair, "24h", midnight + 3_000);
+    assert.equal(live.state, "live");
+    assert.equal(rowDate(pair, live, midnight + 3_000, "zh-TW"), "");
+    const old = { ...pair, timestamp: midnight - 120_000 };
+    const stalled = freshness(old, "24h", midnight + 60_000);
+    assert.equal(rowDate(old, stalled, midnight + 60_000, "zh-TW"), "11/11");
+    assert.match(detailTimes(pair, midnight + 3_000, "zh-TW", say("zh-TW"))[0], /11\/11/);
+    // WTX& live at 00:00:05 Taipei, traded at 23:59:55 (11/11 is a Wednesday, so the night session runs).
+    const wtx = { symbol: "WTX&", source: "yahootw", timestamp: midnight - 5_000, periods: null };
+    const time = midnight + 5_000;
+    const fresh = freshness(wtx, sessionOf(wtx, time), time);
+    assert.equal(fresh.state, "live");
+    assert.equal(rowDate(wtx, fresh, time, "zh-TW"), "");
+    // Delayed and pre-session quotes from an earlier day keep their date: only a live row drops it.
+    const hk = { symbol: "0700.HK", exchange: "HKG", source: "yahoo", timestamp: midnight - 5_000, periods: null };
+    const delayed = freshness(hk, "open", midnight + 5_000);
+    assert.equal(delayed.state, "delayed");
+    assert.equal(rowDate(hk, delayed, midnight + 5_000, "zh-TW"), "11/11");
+    const aapl = { symbol: "AAPL", exchange: "NMS", source: "yahoo", timestamp: midnight - 5_000, periods: null };
+    const pre = freshness(aapl, "pre", midnight + 5_000);
+    assert.equal(pre.state, "pre");
+    assert.equal(rowDate(aapl, pre, midnight + 5_000, "zh-TW"), "11/11");
+  });
 });

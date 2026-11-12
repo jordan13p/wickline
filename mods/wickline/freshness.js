@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades. No Herdr imports, so tests run it under Node.
 import { taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
-import { stateText } from "./format.js";
+import { formatStaleDate, stateText } from "./format.js";
 import {
   DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, dayStart, exchangeRule, kindOf, localDay,
   localWindow, resolvedMarket, tradesOn, usOffsetMin, weekdayOf,
@@ -350,6 +350,15 @@ export function freshness(quote, session, now) {
 
 /** The states of a market closed for the rest of the day (a row's label carries its date): closed, 休市, 今日無成交. */
 export const CLOSED_STATES = new Set(["closed", "holiday", "noTrades"]);
+
+/**
+ * The date a row adds after its state: none on a live row (its price is of this moment, and a quote stamped just
+ * before local midnight must not read as yesterday's) and none after a closed label (which carries its own date);
+ * any other quote from an earlier local day gets it.
+ */
+export function rowDate(quote, fresh, now, lang) {
+  return fresh.state === "live" || CLOSED_STATES.has(fresh.state) ? "" : formatStaleDate(quote, now, lang);
+}
 
 /**
  * The state the band's dot is drawn for, at `now`: the row's freshness, except that a day without trades by inference

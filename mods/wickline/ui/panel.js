@@ -4,8 +4,8 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Input, Scrollbar } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { bandCurrency, collapsedRow, displayName, failureNote, formatChange, formatStaleDate, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
-import { CLOSED_STATES, bandState, freshness, sessionOf } from "../freshness.js";
+import { bandCurrency, collapsedRow, displayName, failureNote, formatChange, formatTime, freshnessLabel, number, rowName, signed } from "../format.js";
+import { bandState, freshness, rowDate, sessionOf } from "../freshness.js";
 import { nextOf } from "../markets.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
@@ -148,9 +148,8 @@ function problemLines(view, t) {
 function rowData(view, t, now, symbol, source) {
   const { quote } = source;
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
-  // A closed, 休市 or 今日無成交 label carries its own date; any other quote from an earlier day gets one.
-  const dated = CLOSED_STATES.has(fresh?.state);
-  const stale = quote && !dated ? formatStaleDate(quote, now, view.lang) : "";
+  // rowDate: no date on a live row or a closed label (which carries its own).
+  const stale = quote ? rowDate(quote, fresh, now, view.lang) : "";
   const label = quote ? freshnessLabel(quote, fresh, now, view.lang, (key, params) => view.tx(key, params)) : "";
   const shown = rowName(symbol, label, quote ? displayName(quote, view.lang) : null);
   return {
