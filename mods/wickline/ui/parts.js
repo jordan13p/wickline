@@ -1,5 +1,5 @@
 // Stateless drawing helpers shared by the panel and the dialogs: each takes the theme and what it
-// draws, and returns an element (failureText, the words both draw). No Herdr calls, no state.
+// draws, and returns an element, except failureText, which returns the failure note's words. No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, Checkbox, Switch } from "gpui-base";
 import { chartGeometry, failureNote } from "../format.js";
