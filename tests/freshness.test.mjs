@@ -5,14 +5,20 @@ import {
   LIVE_MAX_AGE_MS, REALTIME_SOURCES, chartQuote, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
   shownLimit,
 } from "../mods/wickline/freshness.js";
-import { bandState, hoursWindow, nextEdge, rowDate } from "../mods/wickline/freshness.js";
+import {
+  DETAIL_WAKE_CAP_MS, bandState, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
+} from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
-import { closureOf, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
+import { closureOf, closureUntil, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { mergeOverlay } from "../mods/wickline/watchlist.js";
-import { dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import {
+  dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts,
+} from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
-import { CLOSE_1224, LINE_PERIODS, SEGMENTS, at, day, listed2026, observation, say, withTZ, yq, zhLabel } from "./helpers.mjs";
+import {
+  CLOSE_1224, LINE_PERIODS, SEGMENTS, advance, at, day, fakeHost, listed2026, observation, ok, say, withTZ, yq, zhLabel,
+} from "./helpers.mjs";
 
 const now = 1_000_000;
 const quote = (fields) => ({ symbol: "AAPL", source: "yahoo", timestamp: now - 5_000, periods: null, ...fields });
@@ -726,6 +732,35 @@ test("a row reading a closure is told of no opening inside a closure", () => {
     ["holiday", "closed"]);
 });
 
+// The open detail's wake is never now or earlier, and never missing (every real quote has its row's midnight ahead), so
+// its loop never sleeps for nothing nor stops early: each sweep quote, given a real-time source and a trade 30 s before
+// (so the stale moment is a number, not NaN), marked at its time as a row is and stamped with its mark's end as the
+// detail's quote is, over a plain week and the weeks with listed days.
+test("every detail wake is strictly later than now", () => {
+  const priced = (quote, t) => ({ ...quote, source: quote.symbol === "BTC/USDT" ? "binance" : "yahootw", timestamp: t - 30_000 });
+  const detailAt = (quote, t) => {
+    const row = marked(priced(quote, t), t);
+    const tw = resolvedMarket(quote.symbol, quote.exchange) === "tw";
+    return tw ? { ...row, closureUntil: closureUntil(twMarket(quote.symbol), row.closure, t) } : row;
+  };
+  const misses = [];
+  const marks = { listed: 0, inferred: 0, endFirst: 0 };
+  for (const quote of EDGE_SWEEP_QUOTES) {
+    for (const [from, to] of [[at("2026-11-08T00:00:00Z"), at("2026-11-15T00:00:00Z")], ...HOLIDAY_WEEKS]) {
+      for (let t = from; t < to; t += 7 * MINUTE_MS) {
+        const q = heldMarks(detailAt(quote, t), t);
+        const wake = detailWakeAt(q, t);
+        if (!(wake > t)) misses.push(`${sweepName(quote)} ${new Date(t).toISOString()} ${wake}`);
+        if (q.closure) marks[q.closure.kind === "listed" ? "listed" : "inferred"]++;
+        if (q.closure && wake === q.closureUntil) marks.endFirst++;
+      }
+    }
+  }
+  assert.deepEqual(misses, []);
+  // The marks' ends are in the sweep: listed days, inferred marks, and samples where the mark's end is the first wake.
+  assert.ok(marks.listed > 0 && marks.inferred > 0 && marks.endFirst > 0, JSON.stringify(marks));
+});
+
 test("a closed day: no dot, never stale, lit as closed, 休市 in the detail", () => {
   const now = at("2026-12-25T02:00:00Z");
   const q = { symbol: "2330.TW", source: "yahootw", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: CLOSE_1224,
@@ -980,4 +1015,167 @@ test("a live row carries no date; a stalled one keeps it; the detail's times kee
     assert.equal(pre.state, "pre");
     assert.equal(rowDate(aapl, pre, midnight + 5_000, "zh-TW"), "11/11");
   });
+});
+
+// What the open detail shows at `time`: its session, its source lines and the row's label, from its quote as held then.
+const shownAt = (detail, time) => {
+  const q = heldMarks(detail, time);
+  const session = sessionOf(q, time);
+  return { session, source: detailSource(q, session, time, say("zh-TW")), label: zhLabel(q, time) };
+};
+// Runs followDetail on a fake clock from `from` until `until`, returning the redraw times and each sleep asked. A sleep
+// that would end past `until` rejects, as cx.sleep does once the dialog closes, which ends the loop.
+async function wakes(detail, from, until) {
+  const host = fakeHost(() => ok({}));
+  host.clock = from;
+  const redraws = [];
+  const asked = [];
+  const sleep = (ms) => { asked.push(ms); return host.clock + ms > until ? Promise.reject(new Error("closed")) : host.sleep(ms); };
+  const run = followDetail(detail, { now: host.now, sleep, changed: () => redraws.push(host.clock) }).catch(() => {});
+  await advance(host, until);
+  await run;
+  return { redraws, asked };
+}
+
+test("AAPL's open detail turns from Live to stopped about a second after 120 s", async () => {
+  const trade = at("2026-11-10T15:00:00Z");                                        // 10:00:00 NY
+  const detail = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: trade, price: 230,
+    periods: day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z") };
+  assert.equal(detailWakeAt(detail, trade + 30_000), trade + 120_001);
+  const { redraws } = await wakes(detail, trade + 30_000, trade + 125_000);
+  assert.ok(redraws.some((time) => time >= trade + 120_000 && time <= trade + 121_000), redraws.join());
+  assert.match(shownAt(detail, trade + 120_000).source[0][0], /即時/);
+  assert.match(shownAt(detail, trade + 120_001).source[0][0], /報價停在/);
+});
+
+test("a Finnhub price with a live Yahoo Finance line: the line turns stale at its own moment, first", () => {
+  const time = at("2026-11-10T15:05:00Z");                                         // 10:05 New York
+  // The line's Yahoo quote was 5 s old when fetched 250 s ago: its fetch guard falls at +50 001, before the price's +110 001.
+  const q = { symbol: "AAPL", source: "finnhub", exchange: "NMS", price: 230, timestamp: time - 10_000,
+    periods: day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z"),
+    chartSource: "yahoo", chartTimestamp: time - 255_000, chartFetchedAt: time - 250_000 };
+  assert.equal(detailWakeAt(q, time), time + 50_001);
+  withTZ("Asia/Taipei", () => {
+    const [[price], [line]] = shownAt(q, time + 50_001).source;
+    assert.match(price, /即時/);
+    assert.match(line, /報價停在/);
+  });
+});
+
+test("0700.HK's open detail reads 午休 within a second of 12:00", async () => {
+  const noon = at("2026-11-10T04:00:00Z");                                         // 12:00 Hong Kong
+  // Fetched 30 s after its quote (fetchedAt set, so the fetch guard does not sit at +300 001 for ever).
+  const detail = { ...yq("0700.HK", "HKG", noon - 90_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")), fetchedAt: noon - 60_000 };
+  const { redraws } = await wakes(detail, noon - 60_000, noon + 5_000);
+  assert.ok(redraws.some((t) => t >= noon && t <= noon + 1_000), redraws.join());
+  assert.equal(sessionOf(heldMarks(detail, noon), noon), "lunch");
+});
+
+test("a night mark opened at 02:00 ends at 05:00: 已收盤, the night's hours shown again", () => {
+  const opened = at("2026-11-11T18:00:00Z");                                       // 02:00 Thursday 11/12
+  const end = at("2026-11-11T21:00:00Z");                                          // 05:00
+  // The day traded until 13:45 on 11/11; the night (15:00) had no trade; TAIFEX's table (periods null).
+  const detail = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: at("2026-11-11T05:45:00Z"), periods: null,
+    chartSource: "yahootw", closure: { kind: "nightNoTrades", source: "yahootw" }, closureUntil: end };
+  assert.equal(detailWakeAt(detail, opened), end);
+  withTZ("Asia/Taipei", () => {
+    const hours = (time) => sessionTimesParts(sessionTimes(heldMarks(detail, time), time), "zh-TW", say("zh-TW")).join(" · ");
+    assert.match(hours(end - 1_000), /夜盤尚無成交/);
+    assert.match(hours(end), /日盤 08:45–13:45 · 夜盤 15:00–05:00/);
+    assert.equal(sessionOf(heldMarks(detail, end), end), "closed");
+  });
+});
+
+test("a futures day's 今日無成交 opened at 15:05 ends at 15:10, never Live", () => {
+  const end = at("2026-11-11T07:10:00Z");                                          // 15:10
+  // Last trade 13:44 on 11/10; TAIFEX's table; the mark as closureOf gave it at 15:05.
+  const detail = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: at("2026-11-10T05:44:00Z"), periods: null,
+    chartSource: "yahootw", closure: { kind: "noTrades", source: "yahootw" }, noTradesDeadline: end, closureUntil: end };
+  assert.equal(sessionOf(heldMarks(detail, end - 1_000), end - 1_000), "noTrades");
+  const after = heldMarks(detail, end);
+  assert.equal(sessionOf(after, end), "open");
+  assert.equal(freshness(after, "open", end).state, "stalled");
+});
+
+test("WTX&'s detail opened at 23:50 on 12/24 into a listed 12/25: stalled, then 已收盤, never 休市 or Live", async () => {
+  const trade = at("2026-12-24T15:49:30Z");                                        // 23:49:30 Thursday 12/24
+  const detail = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: trade, periods: null, chartSource: "yahootw" };
+  const state = (time) => freshness(detail, sessionOf(detail, time), time).state;
+  assert.equal(state(trade + 120_000), "live");
+  assert.equal(state(trade + 120_001), "stalled");
+  const midnight = at("2026-12-24T16:00:00Z");
+  const nightEnd = at("2026-12-24T21:00:00Z");                                     // 05:00 on 12/25
+  const dayOpen = at("2026-12-25T00:45:00Z");                                      // 08:45 on 12/25
+  const { redraws } = await wakes(detail, trade + 30_000, dayOpen + 5_000);
+  for (const moment of [midnight, nightEnd, dayOpen]) {
+    assert.ok(redraws.some((t) => t >= moment && t <= moment + 1_000), `${new Date(moment).toISOString()}: ${redraws.join()}`);
+  }
+  assert.equal(sessionOf(detail, nightEnd), "closed");
+  assert.equal(state(at("2026-12-25T01:00:00Z")), "stalled");                        // 09:00 on 12/25
+  for (let time = trade + 120_001; time < at("2026-12-25T21:00:00Z"); time += MINUTE_MS) {   // to 05:00 on 12/26
+    assert.notEqual(state(time), "live", new Date(time).toISOString());
+    assert.notEqual(sessionOf(detail, time), "holiday", new Date(time).toISOString());
+  }
+});
+
+test("2330.TW's detail opened at 22:00 on listed 2/12 reads 已收盤 with the date from 00:00 on 2/13", () => {
+  // LISTED_2026 lists Thursday 2/12 and Friday 2/13 (市場無交易，僅辦理結算交割作業). Last trade 2/11 13:30.
+  const end = at("2026-02-12T16:00:00Z");                                          // 00:00 on 2/13
+  const detail = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: at("2026-02-11T05:30:00Z"),
+    periods: day("2026-02-11T01:00:00Z", "2026-02-11T05:30:00Z"), chartSource: "yahootw",
+    closure: { kind: "listed", reason: "市場無交易，僅辦理結算交割作業" }, closureUntil: end };
+  withTZ("Asia/Taipei", () => {
+    assert.equal(sessionOf(heldMarks(detail, end - 1_000), end - 1_000), "holiday");
+    assert.equal(zhLabel(heldMarks(detail, end), end), "已收盤 · 2/11 13:30");
+    for (let time = end; time < at("2026-02-13T05:30:00Z"); time += MINUTE_MS) {
+      const q = heldMarks(detail, time);
+      assert.notEqual(freshness(q, sessionOf(q, time), time).state, "live", new Date(time).toISOString());
+      assert.equal(zhLabel(q, time), "已收盤 · 2/11 13:30", new Date(time).toISOString());
+    }
+  });
+});
+
+// A closed 2330.TW (Yahoo 奇摩股市, 11/10's periods, 13:30 trade) opened at 21:00 Taipei: its next wake is 00:00, 3 h on.
+const CLOSED_2330 = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: at("2026-11-10T05:30:00Z"),
+  periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), chartSource: "yahootw" };
+const NINE_PM = at("2026-11-10T13:00:00Z");
+const MIDNIGHT_TPE = at("2026-11-10T16:00:00Z");
+
+test("followDetail sleeps in 10-minute steps to a far wake and redraws only when it is reached", async () => {
+  const { redraws, asked } = await wakes(CLOSED_2330, NINE_PM, MIDNIGHT_TPE + 1_000);
+  assert.equal(asked.length, 19);
+  assert.ok(asked.every((ms) => ms > 0 && ms <= DETAIL_WAKE_CAP_MS), asked.join());
+  assert.deepEqual(redraws, [MIDNIGHT_TPE]);
+});
+
+test("followDetail after a system sleep past its wake redraws once and computes the next wake from the new now", async () => {
+  // The machine slept through the 00:00 wake: the first sleep returns with the clock at 01:00, an hour past it.
+  let clock = NINE_PM;
+  const asked = [];
+  const redraws = [];
+  const sleep = (ms) => {
+    asked.push(ms);
+    if (asked.length === 1) { clock = MIDNIGHT_TPE + 3_600_000; return Promise.resolve(); }
+    return Promise.reject(new Error("closed"));
+  };
+  await followDetail(CLOSED_2330, { now: () => clock, sleep, changed: () => redraws.push(clock) }).catch(() => {});
+  assert.deepEqual(redraws, [MIDNIGHT_TPE + 3_600_000]);
+  assert.equal(asked[1], DETAIL_WAKE_CAP_MS);
+});
+
+test("followDetail ends when its sleep rejects, with no later redraw", async () => {
+  const redraws = [];
+  const done = followDetail(CLOSED_2330, { now: () => NINE_PM, sleep: () => Promise.reject(new Error("closed")),
+    changed: () => redraws.push(1) });
+  await assert.rejects(done);
+  assert.deepEqual(redraws, []);
+});
+
+test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", () => {
+  // No noTradesDeadline, so nothing but closureUntil falls at 15:10 (nextEdge gives 00:00 here).
+  const fifteen = at("2026-11-11T07:00:00Z");
+  const end = at("2026-11-11T07:10:00Z");
+  const d = { symbol: "WTX&", source: "yahootw", price: 23_000, timestamp: at("2026-11-10T05:44:00Z"), periods: null,
+    chartSource: "yahootw", closure: { kind: "noTrades", source: "yahootw" }, closureUntil: end };
+  assert.equal(detailWakeAt(heldMarks(d, fifteen), fifteen), end);
 });

@@ -1,15 +1,18 @@
-// The detail dialog: a copy whose props carry `detail` draws only this, and starts no loop.
+// The detail dialog: a copy whose props carry `detail` draws only this;
+// it fetches nothing and redraws at its quote's own moments (freshness.js followDetail).
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { hasLimits, isCryptoPair } from "../quotes.js";
 import { displayName, detailTimes, failureNote, formatChange, number, sessionTimesParts } from "../format.js";
 import { detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
+import { heldMarks } from "../calendar.js";
 import { chart, priceBox, segments } from "./parts.js";
 
 // The dialog a row opens: the day's chart, its range and the session.
 export function detailView(view, t) {
-  const q = view.detail;
   const now = Date.now();
+  // The mark it opened with until that mark's end, then none (calendar.js closureUntil): the dialog never refetches.
+  const q = heldMarks(view.detail, now);
   const color = view.changeColor(t, q.changePercent);
   const mark = view.limitMark(t, q, now);
   const note = failureNote(q);

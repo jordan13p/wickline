@@ -1,6 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
-// that is recent while its market trades. No Herdr imports, so tests run it under Node.
-import { taipeiMinute } from "./calendar.js";
+// that is recent while its market trades; and when an open detail must redraw (detailWakeAt,
+// followDetail). No Herdr imports, so tests run it under Node.
+import { heldMarks, taipeiMinute } from "./calendar.js";
 import { formatStaleDate, nextDayTurn, stateText } from "./format.js";
 import {
   DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, dayStart, exchangeRule, kindOf, localDay,
@@ -409,6 +410,48 @@ export function chartQuote(quote) {
     ...quote, source: quote.chartSource, timestamp: quote.chartTimestamp, fetchedAt: quote.chartFetchedAt,
     cached: quote.chartCached,
   };
+}
+
+// The open detail sleeps at most this long at a time, then rereads the clock: a machine that slept, or a clock that
+// moved, costs at most this much lateness.
+export const DETAIL_WAKE_CAP_MS = 600_000;
+
+/**
+ * The next moment after `now` at which the open detail of `quote` (already heldMarks at `now`) can read differently,
+ * in ms, or null: the earliest of its row's next edge (nextEdge), its price's stale moment (msUntilStale, in the
+ * session it reads), its line's when the line is another source's real-time quote (chartQuote), and its mark's end
+ * (`closureUntil`). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
+ */
+export function detailWakeAt(quote, now) {
+  const session = sessionOf(quote, now);
+  const staleAt = (q) => {
+    const left = msUntilStale(q, session, now);
+    return left !== null && left > 0 ? now + left : null;
+  };
+  const moments = [nextEdge(quote, now), staleAt(quote)];
+  if (quote.chartSource && quote.chartSource !== quote.source) {
+    const chart = chartQuote(quote);
+    if (isRealtime(chart)) moments.push(staleAt(chart));
+  }
+  if (quote.closureUntil != null) moments.push(quote.closureUntil);
+  const ahead = moments.filter((at) => at !== null && at > now);
+  return ahead.length ? Math.min(...ahead) : null;
+}
+
+/**
+ * The open detail's one task: a data timer, not animation. It fetches nothing; one wake at a time, it sleeps to the
+ * quote's next reading change (detailWakeAt, from its marks as held then), at most DETAIL_WAKE_CAP_MS per sleep before
+ * it rereads the clock, and calls `changed()` (a redraw) only once a wake is reached, so a wake hours away costs one
+ * redraw. It returns when nothing is ahead. The copy's `cx` ends it: a cancelled sleep rejects, and so does this.
+ */
+export async function followDetail(detail, { now, sleep, changed }) {
+  for (;;) {
+    const time = now();
+    const wake = detailWakeAt(heldMarks(detail, time), time);
+    if (wake === null) return;
+    await sleep(Math.min(wake - time, DETAIL_WAKE_CAP_MS));
+    if (now() >= wake) changed();
+  }
 }
 
 /**

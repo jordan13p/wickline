@@ -154,6 +154,33 @@ export const withClosure = (quote, { closure, deadline }) => ({
 });
 
 /**
+ * When a closure a Taiwan `market` ("stock" | "future", as twMarket gives it) reads at `now` stops holding, in ms; null
+ * without one. The open detail is a copy that fetches nothing and so never learns a new reading: it holds the mark it
+ * was given until then (heldMarks). A stock's mark, and any listed day's, lasts the Taipei day, to the next 00:00. A
+ * future's lasts its session: read before 05:00, to 05:00 (the night's end); from 05:00 to 15:10, to 15:10 (where the
+ * day's reading, carried past 15:00, ends without a night answer: row 8b); from 15:10, to 05:00 the next day.
+ */
+export function closureUntil(market, closure, now) {
+  if (!closure) return null;
+  const today = taipeiDay(now);
+  if (market === "stock" || closure.kind === "listed") return taipeiAt(today + 1, 0);
+  if (taipeiMinute(now) < NIGHT_END_MIN) return taipeiAt(today, NIGHT_END_MIN);
+  const dayEnd = taipeiAt(today, NIGHT_SESSION.from) + INFER_REALTIME_MS;
+  return now < dayEnd ? dayEnd : taipeiAt(today + 1, NIGHT_END_MIN);
+}
+
+/**
+ * `quote` as the open detail reads it at `now`: itself while its mark holds (`closureUntil` unset, or still ahead);
+ * from that moment a copy without the mark (`closure` and `closureUntil` null, no `noTradesDeadline`), so the detail
+ * reads its session from its periods and TAIFEX's table again rather than a closure that is over.
+ */
+export function heldMarks(quote, now) {
+  if (quote.closureUntil == null || now < quote.closureUntil) return quote;
+  const { noTradesDeadline: _deadline, ...rest } = quote;
+  return { ...rest, closure: null, closureUntil: null };
+}
+
+/**
  * The closure of a Taiwan `market` at `now` while its current session (opened at `open`, or null) has not traded: the
  * one place a quote's closure is decided, as `{ closure, until }`: `closure` one value, null or `{ kind, reason?, source? }`,
  * `until` the moment a reading carried on without an answer of its own ends (row 8b), else null:

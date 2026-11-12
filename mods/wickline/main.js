@@ -12,7 +12,7 @@ import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
 import { changeTone, number } from "./format.js";
-import { sessionOf, shownLimit } from "./freshness.js";
+import { followDetail, sessionOf, shownLimit } from "./freshness.js";
 import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, heldFilter, nextOf, openFilter, readFilter, resolvedMarket } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
@@ -57,6 +57,10 @@ export default class Wickline extends View {
     if (given.detail) {
       this.detail = given.detail;
       this.overlay = given.overlay;
+      // Redraws at the quote's own moments (a stale price, a session's edge, a mark's end); it fetches nothing.
+      cx.spawn(async (cx) => {
+        await followDetail(this.detail, { now: () => Date.now(), sleep: (ms) => cx.sleep(ms), changed: () => cx.notify() });
+      });
       return;
     }
     if (given.settings) {
@@ -480,12 +484,9 @@ export default class Wickline extends View {
   }
 
   openDetail(symbol) {
-    const quote = this.watch.shown(symbol);
-    if (!quote) return;
-    openOverlay({
-      mod: MOD_ID, kind: "dialog", width: 440,
-      props: { detail: { ...quote, error: this.watch.errors[symbol] ?? null, fallback: this.watch.overlayError(symbol) } },
-    });
+    const detail = this.watch.detailQuote(symbol, Date.now());
+    if (!detail) return;
+    openOverlay({ mod: MOD_ID, kind: "dialog", width: 440, props: { detail } });
   }
 
   openSettings(tab) {

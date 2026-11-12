@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  INFER_DELAYED_MS, INFER_REALTIME_MS, INFER_RECENT_MS, closureOf, currentOpen, parseHolidays, rocDay, taipeiDay,
+  INFER_DELAYED_MS, INFER_REALTIME_MS, INFER_RECENT_MS, closureOf, closureUntil, currentOpen, heldMarks, parseHolidays, rocDay,
+  taipeiDay,
 } from "../mods/wickline/calendar.js";
 import { HOLIDAYS_2026, at, listed2026, observation } from "./helpers.mjs";
 
@@ -181,4 +182,32 @@ test("a quiet futures day with no night answer: 今日無成交 until 15:10:00, 
 test("with a night answer the 15:10 deadline is as before", () => {
   const seen = quietDayAnswers(at("2026-11-11T07:00:30Z"));
   assert.equal(closureOf("future", at("2026-11-11T07:05:00Z"), () => null, seen).deadline, at("2026-11-11T07:10:00Z"));
+});
+
+test("closureUntil: when each mark read at a moment stops holding", () => {
+  const T = (iso) => at(iso);
+  const noTrades = { kind: "noTrades", source: "yahootw" };
+  const cases = [
+    ["stock", noTrades, "2026-11-11T02:00:00Z", "2026-11-11T16:00:00Z"],                         // 10:00 → 00:00
+    ["stock", { kind: "listed", reason: "x" }, "2026-12-24T17:00:00Z", "2026-12-25T16:00:00Z"],  // 12/25 01:00 → 12/26 00:00
+    ["future", { kind: "listed", reason: "x" }, "2026-12-24T22:00:00Z", "2026-12-25T16:00:00Z"],
+    ["future", { kind: "nightNoTrades", source: "yahootw" }, "2026-11-11T18:00:00Z", "2026-11-11T21:00:00Z"], // 02:00 → 05:00
+    ["future", { kind: "nightRemoved" }, "2026-12-25T18:00:00Z", "2026-12-25T21:00:00Z"],
+    ["future", noTrades, "2026-11-11T02:00:00Z", "2026-11-11T07:10:00Z"],                       // 10:00 (row 7) → 15:10
+    ["future", noTrades, "2026-11-11T07:05:00Z", "2026-11-11T07:10:00Z"],                       // 15:05 (row 8b) → 15:10
+    ["future", noTrades, "2026-11-11T08:00:00Z", "2026-11-11T21:00:00Z"],                       // 16:00 (row 8) → 05:00
+    ["future", { kind: "nightNoTrades", source: "yahootw" }, "2026-11-11T08:00:00Z", "2026-11-11T21:00:00Z"],
+  ];
+  for (const [market, closure, now, until] of cases) assert.equal(closureUntil(market, closure, T(now)), T(until), `${market} ${closure.kind} ${now}`);
+  assert.equal(closureUntil("stock", null, T("2026-11-11T02:00:00Z")), null);
+});
+
+test("heldMarks keeps a mark 1 ms before its end and drops it at the end", () => {
+  const end = at("2026-11-11T21:00:00Z");
+  const q = { symbol: "WTX&", closure: { kind: "nightNoTrades", source: "yahootw" }, noTradesDeadline: 1, closureUntil: end };
+  assert.equal(heldMarks(q, end - 1), q);
+  const dropped = heldMarks(q, end);
+  assert.deepEqual([dropped.closure, dropped.closureUntil, "noTradesDeadline" in dropped], [null, null, false]);
+  const plain = { symbol: "AAPL" };
+  assert.equal(heldMarks(plain, end), plain);                                     // a quote with no mark end is kept as it is
 });

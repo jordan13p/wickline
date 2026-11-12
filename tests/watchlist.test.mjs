@@ -2764,3 +2764,21 @@ test("turning Yahoo 奇摩股市 off drops its no-trades note at once", async ()
     assert.equal(w.errors["WTX&"].code, "yahootw.futuresNeedSource");
   }, at("2026-11-11T00:44:30Z"));
 });
+
+test("detailQuote stamps a Taiwan row's mark end from the same now; others have none", async () => {
+  // The schedule comes in from TWSE's answer (taiwanHost's `holidays`, HOLIDAYS_2026) on the first round.
+  const now = at("2026-12-25T02:00:00Z");                                          // 10:00 on the listed 12/25
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => stockList(CLOSE_1224),
+    yahoo: (s) => (s === "AAPL" ? chart(AAPL) : twYahooAt(s, CLOSE_1224, "2026-12-24")) });
+  host.store = { version: 1, symbols: ["2330.TW", "AAPL"], paused: false };
+  await soleRun(host, (w) => {
+    const tw = w.detailQuote("2330.TW", now);
+    assert.deepEqual(tw.closure, { kind: "listed", reason: "行憲紀念日" });
+    assert.equal(tw.closureUntil, at("2026-12-25T16:00:00Z"));
+    assert.deepEqual([tw.error, tw.fallback], [null, null]);
+    const aapl = w.detailQuote("AAPL", now);
+    assert.equal(aapl.symbol, "AAPL");
+    assert.ok(!("closureUntil" in aapl));
+    assert.equal(w.detailQuote("MSFT", now), null);
+  }, now);
+});

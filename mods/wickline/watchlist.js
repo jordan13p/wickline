@@ -2,7 +2,7 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade } from "./quotes.js";
 import {
-  HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
+  HOLIDAYS_URL, closureOf, closureUntil, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
 import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, isRealtime, msUntilStale, nextEdge, sessionOf } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
@@ -321,6 +321,20 @@ export class Watchlist {
     const quote = mergeOverlay(this.unmarkedBase(symbol, now), pick?.overlay, pick && this.lines[pick.id]?.[symbol]);
     const localName = this.localNames[symbol];
     return this.marked(symbol, quote && localName && !quote.localName ? { ...quote, localName } : quote, now);
+  }
+
+  /**
+   * What the detail dialog opens on, all read at one `now`, or null without a quote: the row as shown, its error
+   * (`error`), its overlay's (`fallback`, overlayError) and, for a Taiwan row, when its mark stops holding
+   * (`closureUntil`, calendar.js closureUntil), since the open detail fetches nothing and must drop a mark that is over.
+   */
+  detailQuote(symbol, now) {
+    const quote = this.shown(symbol, now);
+    if (!quote) return null;
+    return {
+      ...quote, error: this.errors[symbol] ?? null, fallback: this.overlayError(symbol, now),
+      ...(this.marketFor(symbol) === "tw" && { closureUntil: closureUntil(twMarket(symbol), quote.closure, now) }),
+    };
   }
 
   /**
