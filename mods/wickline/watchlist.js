@@ -419,27 +419,31 @@ export class Watchlist {
     const twRealtime = reading.twRealtime && kindOf(symbol) === "stock";
     const flaggedAt = this.auctionAt[symbol];
     const held = (quote.tradeTime ?? quote.timestamp) < flaggedAt;
-    const own = twRealtime && quote.source === "yahoo" ? withoutActivity(quote) : quote;
-    const book = this.rowBook(symbol, own, held, now);
+    const priced = twRealtime && quote.source === "yahoo" ? withoutActivity(quote) : quote;
+    const { book: _book, ...own } = priced;
+    const book = this.rowBook(symbol, priced, held, now);
     const closed = withClosure(book ? { ...own, book } : own, reading);
     if (!twRealtime && !held) return closed;
     return { ...closed, ...(twRealtime && { twRealtime: true }), ...(held && { auctionAt: flaggedAt }) };
   }
 
   /**
-   * The book a Taiwan row shows (see marked), its price and activity untouched: while MIS's flag holds the price
-   * (`held`) and that flag carried levels, its auction book; else the quote's own, marked as the auction's (`auction:
-   * true`) when it is a Taiwan stock's from Yahoo 奇摩股市 fetched inside the call auction around `now`
-   * (auctionWindowStart), so one fetched before it never shows as the auction's; else, without one, an empty book
-   * while MIS's latest answer had no level (`noLevels`); else none (undefined).
+   * The book a Taiwan row shows (see marked), its price and activity untouched, or null: while MIS's flag holds the
+   * price (`held`) and that flag carried levels, its auction book; else the quote's own. A Taiwan stock's book from
+   * Yahoo 奇摩股市 fetched inside a call auction (auctionWindowStart) is that auction's: marked `auction: true` while
+   * `now` is still in the same window, and none once it is not, so it never shows as the market's book nor as another
+   * auction's. Without a book, an empty one while MIS's latest answer had no level (`noLevels`).
    */
   rowBook(symbol, quote, held, now) {
     if (held && this.auctionBooks[symbol]) return this.auctionBooks[symbol];
-    if (quote.book) {
-      const start = quote.source === yahootw.id && kindOf(symbol) === "stock" ? auctionWindowStart(now) : null;
-      return start !== null && quote.fetchedAt >= start ? { ...quote.book, auction: true } : quote.book;
+    const { book } = quote;
+    if (book) {
+      const fetchedIn = quote.source === yahootw.id && kindOf(symbol) === "stock"
+        ? auctionWindowStart(quote.fetchedAt) : null;
+      if (fetchedIn === null) return book;
+      return fetchedIn === auctionWindowStart(now) ? { ...book, auction: true } : null;
     }
-    return this.noLevels[symbol] ? { bids: [], asks: [] } : undefined;
+    return this.noLevels[symbol] ? { bids: [], asks: [] } : null;
   }
 
   /**

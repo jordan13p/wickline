@@ -3351,3 +3351,18 @@ test("a future's book inside the morning auction window is not an auction book",
   const w = watchHolding(BOTH_ON, ["WTX&"], { overlays: { "WTX&": { yahootw: own } } });
   assert.deepEqual(w.shown("WTX&", traded + 5_000).book, YTW_BOOK);
 });
+
+test("a Yahoo 奇摩股市 auction book belongs to the window it was fetched in", () => {
+  const at = (fetchedAt, now) => ytwWatch(ONLY_YAHOOTW, ytwAuction(fetchedAt)).shown("2330.TW", now);
+  // Inside the window it was fetched in.
+  assert.equal(detailBook(at(taipei("13:26:00"), taipei("13:27:00")), true).title, "detail.auctionBook");
+  // That window has ended: no longer the auction's, and never the market's book either.
+  const after = at(taipei("13:29:55"), taipei("13:30:05"));
+  assert.equal("book" in after, false);
+  assert.deepEqual(detailBook(after, false), { title: "detail.book", book: null, line: "detail.bookNone" });
+  // A morning book never counts in the afternoon window.
+  const morning = ytwWatch(ONLY_YAHOOTW, ytwOver(taipei("08:59:50"), { fetchedAt: taipei("08:59:55"), book: YTW_BOOK }))
+    .shown("2330.TW", taipei("13:26:00"));
+  assert.equal("book" in morning, false);
+  assert.equal(detailBook(morning, true).line, "detail.bookNone");
+});
