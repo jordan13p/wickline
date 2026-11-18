@@ -8,6 +8,7 @@ import {
 import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
 import { MINUTE_MS, kindOf } from "../markets.js";
 import { failEach, parseJson } from "./provider.js";
+import { fastPace } from "../freshness.js";
 import { period } from "./yahoo.js";
 
 // Fixed: the person cannot point it elsewhere.
@@ -223,10 +224,10 @@ export const yahootw = {
   kinds: ["stock", "index", "future"],
   overlay: true,
   spacingMs: () => 0,
-  intervalMs: (session) => (session === "open" || session === "auction" || session === "unknown" ? 10_000 : 60_000),
+  intervalMs: (session) => (fastPace(session) ? 10_000 : 60_000),
   // A line request per symbol is too many for every round: each line waits `linesMs`, and a round
   // sends at most `linesPerRound` of the due ones, longest-waiting first.
-  linesMs: (session) => (session === "open" || session === "auction" || session === "unknown" ? 120_000 : 600_000),
+  linesMs: (session) => (fastPace(session) ? 120_000 : 600_000),
   linesPerRound: 3,
   // The price batches, then a line request per symbol; the round picks the lines once the prices are in.
   // A batch's symbols this source prices alone (`config.anyDay`) go with it as `anyDay`: see decodeStockList.

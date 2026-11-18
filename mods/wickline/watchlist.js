@@ -4,8 +4,10 @@ import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade } f
 import {
   HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
-import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, isRealtime, nextEdge, sessionOf, staleAt } from "./freshness.js";
-import { DAY_MS, MINUTE_MS, TWSE_HOURS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import {
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TW_TRIAL_MATCH, auctionFlagged, isRealtime, nextEdge, sessionOf, staleAt,
+} from "./freshness.js";
+import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -94,8 +96,9 @@ function wake(state) {
  */
 export function pickOverlay(byProvider, order, now, base = null, flagged = false) {
   const held = flagged ? byProvider[mis.id] : null;
+  const heldDay = held ? taipeiDay(held.timestamp) : null;
   const misYields = Boolean(held) && order.some((id) =>
-    id !== mis.id && byProvider[id] && taipeiDay(byProvider[id].timestamp) === taipeiDay(held.timestamp));
+    id !== mis.id && byProvider[id] && taipeiDay(byProvider[id].timestamp) === heldDay);
   let newest = null;
   for (const id of order) {
     const overlay = byProvider[id];
@@ -127,16 +130,17 @@ export function mergeOverlay(base, overlay, line) {
   const previousClose = merged.previousClose ?? null;
   // A copy hidden overnight may hold yesterday's line next to today's first price.
   const own = line?.series.length && line.day === overlay.day ? line.series : null;
-  const sole = base?.source === overlay.source;
+  // The price is the base's own: a quote over itself.
+  const ownPrice = base?.source === overlay.source;
   // The base's own line, never a quote's over itself, and only from the overlay's period: both times before, or both
   // at or after, the start of the base's regular period (epoch ms, no time zone needed).
   const start = base?.periods?.regular?.[0];
   const samePeriod = start === undefined || (base.timestamp < start) === (overlay.timestamp < start);
-  const fallback = sole || !samePeriod ? null : base;
+  const fallback = ownPrice || !samePeriod ? null : base;
   const { cached, ...price } = merged;
   return {
     ...price,
-    ...(sole && cached ? { cached } : {}),
+    ...(ownPrice && cached ? { cached } : {}),
     ...(!own && fallback?.cached && fallback.series?.length ? { chartCached: true } : {}),
     previousClose,
     changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
@@ -401,16 +405,19 @@ export class Watchlist {
   marked(symbol, quote, now) {
     if (!quote || this.marketFor(symbol) !== "tw") return quote;
     const reading = this.closureAt(twMarket(symbol), now);
-    const twRealtime = kindOf(symbol) === "stock" && (reading.on[mis.id] || reading.on[yahootw.id]);
+    const twRealtime = reading.twRealtime && kindOf(symbol) === "stock";
     const flaggedAt = this.auctionAt[symbol];
     const held = (quote.tradeTime ?? quote.timestamp) < flaggedAt;
-    return { ...withClosure(quote, reading), ...(twRealtime && { twRealtime: true }), ...(held && { auctionAt: flaggedAt }) };
+    const closed = withClosure(quote, reading);
+    if (!twRealtime && !held) return closed;
+    return { ...closed, ...(twRealtime && { twRealtime: true }), ...(held && { auctionAt: flaggedAt }) };
   }
 
   /**
-   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until, on }` (calendar.js closureOf), from the schedule
-   * held and the answers seen, with the sources on read once and kept as `on` (config().on). Every row of a market
-   * reads the same, so it is worked out once per market and `now`, until closureRev moves.
+   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until, twRealtime }` (calendar.js closureOf), from the
+   * schedule held and the answers seen, with the sources on read once (config().on): `twRealtime`, whether MIS or Yahoo
+   * 奇摩股市 is on. Every row of a market reads the same, so it is worked out once per market and `now`, until closureRev
+   * moves.
    */
   closureAt(market, now) {
     if (this.closures.now !== now || this.closures.rev !== this.closureRev) {
@@ -419,7 +426,8 @@ export class Watchlist {
     const { byMarket } = this.closures;
     if (!byMarket[market]) {
       const { on } = this.config();
-      byMarket[market] = { ...closureOf(market, now, (day) => this.holidays.days[day] ?? null, (m, open) => this.observed(m, open, on)), on };
+      const reading = closureOf(market, now, (day) => this.holidays.days[day] ?? null, (m, open) => this.observed(m, open, on));
+      byMarket[market] = { ...reading, twRealtime: Boolean(on[mis.id] || on[yahootw.id]) };
     }
     return byMarket[market];
   }
@@ -525,7 +533,7 @@ export class Watchlist {
   }
 
   pick(symbol, now) {
-    const flagged = auctionFlagged({ auctionAt: this.auctionAt[symbol] }, now);
+    const flagged = auctionFlagged(this.auctionAt[symbol], now);
     return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now, this.quotes[symbol], flagged);
   }
 
@@ -812,16 +820,17 @@ export class Watchlist {
    */
   sessionFor(symbols, now) {
     let best = "closed";
-    // Before 09:00 Taipei a call auction paces as closed: its answers show nothing new, the consent texts promise the
-    // fast pace only during trading hours, and the 09:00 opening starts a round.
-    const auction = taipeiMinute(now) < TWSE_HOURS.from ? "closed" : "auction";
     for (const symbol of symbols) {
       const quote = this.baseQuote(symbol, now);
       let session = quote ? sessionOf(quote, now)
         : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(this.standIn(symbol, now), now))
         : "unknown";
-      // MIS's flag keeps the pace also where a delayed price from today reads its own session.
-      if (session === "auction" || (quote && auctionFlagged(quote, now))) session = auction;
+      // MIS's flag keeps the pace also where a delayed price from today reads its own session. Before 09:00 Taipei (the
+      // trial match's end) a call auction paces as closed: its answers show nothing new, the consent texts promise the
+      // fast pace only during trading hours, and the 09:00 opening starts a round.
+      if (session === "auction" || (quote && auctionFlagged(quote.auctionAt, now))) {
+        session = taipeiMinute(now) < TW_TRIAL_MATCH.to ? "closed" : "auction";
+      }
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
     return symbols.length ? best : "unknown";
@@ -1145,7 +1154,7 @@ export class Watchlist {
           if (!overlay) this.dropOverlay(provider, symbol);
           else if (provider === mis) delete this.auctionAt[symbol];
         } else if (!(had?.timestamp > flaggedAt)) {
-          this.auctionAt[symbol] = Math.max(this.auctionAt[symbol] ?? flaggedAt, flaggedAt);
+          this.auctionAt[symbol] = Math.max(this.auctionAt[symbol] ?? 0, flaggedAt);
         }
         this.setEntry(this.overlayErrors, symbol, provider.id, overlay ? undefined : error);
       }

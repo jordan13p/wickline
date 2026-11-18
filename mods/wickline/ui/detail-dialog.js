@@ -3,10 +3,10 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { hasLimits, isCryptoPair } from "../quotes.js";
-import { chartGeometry, displayName, detailTimes, formatChange, number, sessionTimesParts } from "../format.js";
-import { chartLayout, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
+import { displayName, detailTimes, formatChange, number, sessionTimesParts } from "../format.js";
+import { detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
-import { chart, failureText, priceBox, priceInk, segments } from "./parts.js";
+import { chart, chartShape, failureText, priceBox, priceInk, segments } from "./parts.js";
 
 // The dialog a row opens: the day's chart, its range and the session.
 export function detailView(view, t) {
@@ -43,7 +43,7 @@ export function detailView(view, t) {
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown")))))
     // The box whenever it holds a rule, a point or the price's dot (chart draws nothing more), else nothing.
-    .when(chartGeometry(q.series, q.previousClose, chartLayout(q)) !== null,
+    .when(chartShape(q) !== null,
       (el) => el.child(chart(q, color, t, { width: "full", height: 140, fill: true, dot: 6 })))
     .child(isCryptoPair(q.symbol)
       ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))

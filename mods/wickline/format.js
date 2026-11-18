@@ -13,11 +13,13 @@ import { HOUR_MS, resolvedMarket } from "./markets.js";
 export function chartGeometry(series, reference, { extent, dot } = {}) {
   const points = Array.isArray(series) ? series : [];
   const rule = positive(reference) ? reference : null;
-  const mark = dot ?? null;
-  if (!points.length && rule === null && !mark) return null;
-  const values = [...points, ...(rule === null ? [] : [rule]), ...(mark ? [mark.price] : [])];
-  let min = Math.min(...values);
-  let max = Math.max(...values);
+  if (!points.length && rule === null && !dot) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  const widen = (value) => { min = Math.min(min, value); max = Math.max(max, value); };
+  for (const value of points) widen(value);
+  if (rule !== null) widen(rule);
+  if (dot) widen(dot.price);
   if (max - min < max * 1e-9) { min -= 1; max += 1; }
   // 8% headroom keeps the stroke inside the box.
   const pad = (max - min) * 0.08;
@@ -29,7 +31,7 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
   return {
     points: points.map((value, index) => [last ? pct(index / last * width) : 0, y(value)]),
     reference: rule === null ? null : y(rule),
-    dot: mark ? [pct(mark.x), y(mark.price)] : null,
+    dot: dot ? [pct(dot.x), y(dot.price)] : null,
   };
 }
 

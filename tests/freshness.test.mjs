@@ -1507,11 +1507,11 @@ test("nextEdge wakes at the windows and the lapse", () => {
 
 test("a flag nobody refreshes lapses at 2 minutes", () => {
   const q = { ...yahooClose(), auctionAt: taipei("08:59:57") };
-  assert.equal(auctionFlagged(q, taipei("09:01:56") + 999), true);
-  assert.equal(auctionFlagged(q, taipei("09:01:57")), false);
+  assert.equal(auctionFlagged(q.auctionAt, taipei("09:01:56") + 999), true);
+  assert.equal(auctionFlagged(q.auctionAt, taipei("09:01:57")), false);
   assert.equal(sessionOf(q, taipei("09:01:56") + 999), "auction");
   assert.equal(sessionOf(q, taipei("09:01:57")), "open");
-  assert.equal(auctionFlagged(yahooClose(), taipei("09:00:00")), false);
+  assert.equal(auctionFlagged(yahooClose().auctionAt, taipei("09:00:00")), false);
 });
 
 test("The closing auction begins", () => {

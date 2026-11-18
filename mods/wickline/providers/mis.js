@@ -4,6 +4,7 @@
 // dialog. No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanText, hasLimits, limitPair, positive, positiveOrNull, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
+import { fastPace } from "../freshness.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
 export const MIS_BATCH = 50;
@@ -102,7 +103,7 @@ export const mis = {
   kinds: ["stock"],
   overlay: true,
   spacingMs: () => 0,
-  intervalMs: (session) => (session === "open" || session === "auction" || session === "unknown" ? 10_000 : 60_000),
+  intervalMs: (session) => (fastPace(session) ? 10_000 : 60_000),
   requests(symbols, { misUrl }) {
     const requests = [];
     for (let i = 0; i < symbols.length; i += MIS_BATCH) {

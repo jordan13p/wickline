@@ -13,6 +13,9 @@ const AREA_OPACITY = 0.16;
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
 export const icon = (name) => `mods/wickline/icons/${name}.svg`;
 
+// What `quote`'s chart draws (format.js chartGeometry, laid out by chartLayout), or null when its box holds nothing.
+export const chartShape = (quote) => chartGeometry(quote.series, quote.previousClose, chartLayout(quote));
+
 // The day's line, scaled to its box and reaching only as far as its trading day has run (chartLayout); the previous
 // close is a dashed rule, drawn with any number of points; a price past its line is a filled dot in `color`, `dot` px
 // (4 in rows and the table, 6 in the detail), never joined to the line and no state dot. `stroke` defaults to 2 px with
@@ -20,7 +23,7 @@ export const icon = (name) => `mods/wickline/icons/${name}.svg`;
 export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4 }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
-  const g = chartGeometry(quote.series, quote.previousClose, chartLayout(quote));
+  const g = chartShape(quote);
   if (!g) return sized;
   const layer = (path, paint) => window.paint_path(path, paint).absolute().top(0).left(0).size_full();
   const lined = g.points.length > 1;
