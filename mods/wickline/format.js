@@ -167,7 +167,7 @@ export function activityCells(quote, lang, tx) {
  * The inner/outer line: `{ left, right }` texts (`內盤 39.1% 15,147`, `外盤 60.9% 23,585`) and each side's share of their
  * sum as a fraction, for the bar. null when the quote does not carry both, or both are 0.
  */
-export function innerOuter(quote, lang, tx) {
+export function innerOuter(quote, tx) {
   const { inner, outer } = quote;
   if (typeof inner !== "number" || typeof outer !== "number" || !(inner + outer > 0)) return null;
   const innerShare = inner / (inner + outer);

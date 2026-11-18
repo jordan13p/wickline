@@ -458,28 +458,28 @@ test("A future", () => {
 });
 
 test("The bar", () => {
-  const tw = innerOuter(YTW_2330, "zh-TW", say("zh-TW"));
+  const tw = innerOuter(YTW_2330, say("zh-TW"));
   assert.equal(tw.left, "內盤 39.1% 15,147");
   assert.equal(tw.right, "外盤 60.9% 23,585");
   assert.ok(Math.abs(tw.innerShare - 0.391) < 0.0005);
   assert.ok(Math.abs(tw.outerShare - 0.609) < 0.0005);
-  const cn = innerOuter(YTW_2330, "zh-CN", say("zh-CN"));
+  const cn = innerOuter(YTW_2330, say("zh-CN"));
   assert.deepEqual([cn.left, cn.right], ["内盘 39.1% 15,147", "外盘 60.9% 23,585"]);
-  const en = innerOuter(YTW_2330, "en", say("en"));
+  const en = innerOuter(YTW_2330, say("en"));
   assert.deepEqual([en.left, en.right], ["At bid 39.1% 15,147", "At ask 60.9% 23,585"]);
 });
 
 test("an inner volume of 0 reads 0.0%", () => {
-  const io = innerOuter({ ...YTW_2330, inner: 0, outer: 38_732 }, "zh-TW", say("zh-TW"));
+  const io = innerOuter({ ...YTW_2330, inner: 0, outer: 38_732 }, say("zh-TW"));
   assert.deepEqual([io.left, io.right, io.innerShare, io.outerShare], ["內盤 0.0% 0", "外盤 100.0% 38,732", 0, 1]);
 });
 
 test("no inner/outer line without both, or with both at 0", () => {
   const { inner, outer, ...rest } = YTW_2330;
-  assert.equal(innerOuter(rest, "zh-TW", say("zh-TW")), null);
-  assert.equal(innerOuter({ ...rest, inner }, "zh-TW", say("zh-TW")), null);
-  assert.equal(innerOuter({ ...rest, outer }, "zh-TW", say("zh-TW")), null);
-  assert.equal(innerOuter({ ...rest, inner: 0, outer: 0 }, "zh-TW", say("zh-TW")), null);
+  assert.equal(innerOuter(rest, say("zh-TW")), null);
+  assert.equal(innerOuter({ ...rest, inner }, say("zh-TW")), null);
+  assert.equal(innerOuter({ ...rest, outer }, say("zh-TW")), null);
+  assert.equal(innerOuter({ ...rest, inner: 0, outer: 0 }, say("zh-TW")), null);
 });
 
 test("The second row's places", () => {

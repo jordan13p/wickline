@@ -73,7 +73,7 @@ export function detailView(view, t) {
   const root = v_flex().id("bw-detail").w_full().p(18).gap(14).text_color(t.foreground).text_size(12.5).child(header);
   if (!view.wide) return root.children(left);
   const cells = activityCells(q, view.lang, tx);
-  const flow = innerOuter(q, view.lang, tx);
+  const flow = innerOuter(q, tx);
   const right = [
     cells.length > 0 && dim(statGrid(t, cells)),
     flow !== null && dim(innerOuterBar(flow, view.changeColor(t, -1), view.changeColor(t, 1))),
