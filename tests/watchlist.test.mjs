@@ -11,10 +11,11 @@ import { t } from "../mods/wickline/i18n.js";
 import { LIVE_MAX_AGE_MS, chartLayout, detailSource, detailWakeAt, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { chartGeometry, collapsedRow, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
-  CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
-  chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq, zhLabel,
+  BOTH_ON, CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, MIS_2330_1324,
+  MIS_ON, NIGHT, SEGMENTS, advance, at, chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, misFlagged, ok, start, stop,
+  taipei, withTZ, yq, zhLabel,
 } from "./helpers.mjs";
-import { MIS_CONSENT_VERSION, MIS_URL, mis } from "../mods/wickline/providers/mis.js";
+import { MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, yahootw } from "../mods/wickline/providers/yahootw.js";
 import { taipeiDay } from "../mods/wickline/calendar.js";
 
@@ -425,9 +426,6 @@ test("mergeOverlay: a fresh overlay never inherits the base's cached flag; the l
 const TW_NOW = 1794188480000;
 const TW_ROWS = jsonFixture("yahootw-stocklist");
 const MIS_ROW = jsonFixture("mis-open").msgArray[0];
-const BOTH = { version: 1, sources: { tw: {
-  yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION },
-} } };
 const ONLY_YAHOOTW = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
 // Yahoo 奇摩股市 on with a consent to an older text: awaiting re-confirmation.
 const STALE_YAHOOTW = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } } };
@@ -480,7 +478,7 @@ async function firstRound(host, check) {
 }
 
 test("both live: Yahoo 奇摩股市 is shown", async () => {
-  await firstRound(taiwanHost(BOTH), (w) => {
+  await firstRound(taiwanHost(BOTH_ON), (w) => {
     const quote = w.shown("2330.TW", TW_NOW);
     assert.deepEqual([quote.source, quote.price, quote.localName], ["yahootw", 2240, "台積電"]);
     assert.equal(w.overlayError("2330.TW"), null);
@@ -488,7 +486,7 @@ test("both live: Yahoo 奇摩股市 is shown", async () => {
 });
 
 test("Yahoo stale, MIS live: MIS is shown with the Yahoo Finance line", async () => {
-  await firstRound(taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - 180_000) }), (w) => {
+  await firstRound(taiwanHost(BOTH_ON, { yahootw: () => stockList(TW_NOW - 180_000) }), (w) => {
     const quote = w.shown("2330.TW");
     assert.deepEqual([quote.source, quote.chartSource], ["mis", "yahoo"]);
     // The stale Yahoo 奇摩股市 price is still held; MIS wins on liveness, not by being alone.
@@ -498,7 +496,7 @@ test("Yahoo stale, MIS live: MIS is shown with the Yahoo Finance line", async ()
 
 test("both stale: the newer is shown, ties keep Yahoo 奇摩股市", async () => {
   for (const [yahootwAge, misAge, expected] of [[180_000, 300_000, "yahootw"], [300_000, 180_000, "mis"], [180_000, 180_000, "yahootw"]]) {
-    const host = taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - yahootwAge), mis: () => misAt(TW_NOW - misAge) });
+    const host = taiwanHost(BOTH_ON, { yahootw: () => stockList(TW_NOW - yahootwAge), mis: () => misAt(TW_NOW - misAge) });
     await firstRound(host, (w) => assert.equal(w.shown("2330.TW").source, expected, `${yahootwAge} ${misAge}`));
   }
 });
@@ -512,7 +510,7 @@ test("no overlay: the base, with the reason", async () => {
 });
 
 test("MIS live after a Yahoo 奇摩股市 failure shows no fallback note", async () => {
-  await firstRound(taiwanHost(BOTH, { yahootw: offline }), (w) => {
+  await firstRound(taiwanHost(BOTH_ON, { yahootw: offline }), (w) => {
     assert.equal(w.shown("2330.TW").source, "mis");
     // The failure is kept, only not shown while MIS covers the row.
     assert.equal(w.overlayErrors["2330.TW"].yahootw.code, "yahootw.unreachable");
@@ -522,7 +520,7 @@ test("MIS live after a Yahoo 奇摩股市 failure shows no fallback note", async
 
 test("a stale MIS price still shows why Yahoo 奇摩股市 has none", async () => {
   // 2330 is priced above its limit-up, and MIS has not traded for 3 minutes.
-  const host = taiwanHost(BOTH, {
+  const host = taiwanHost(BOTH_ON, {
     yahootw: () => stockList(TW_NOW - 5_000, { "2330.TW": { price: { raw: "9999" } } }), mis: () => misAt(TW_NOW - 180_000),
   });
   await firstRound(host, (w) => {
@@ -533,12 +531,12 @@ test("a stale MIS price still shows why Yahoo 奇摩股市 has none", async () =
 
 test("turning Yahoo 奇摩股市 off drops its overlay and error at once", async () => {
   // 0050 is priced above its limit-up, so it holds an error instead of an overlay.
-  const host = taiwanHost(BOTH, { yahootw: () => stockList(TW_NOW - 5_000, { "0050.TW": { price: { raw: "11" } } }) });
+  const host = taiwanHost(BOTH_ON, { yahootw: () => stockList(TW_NOW - 5_000, { "0050.TW": { price: { raw: "11" } } }) });
   host.store.symbols = ["2330.TW", "0050.TW"];
   await firstRound(host, async (w) => {
     assert.ok(w.overlays["2330.TW"].yahootw);
     assert.equal(w.overlayErrors["0050.TW"].yahootw.code, "yahootw.outOfLimits");
-    host.prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootw: false } } };
+    host.prefs = { version: 1, sources: { tw: { ...BOTH_ON.sources.tw, yahootw: false } } };
     assert.equal(w.sync(), true);
     assert.equal(w.overlays["2330.TW"].yahootw, undefined);
     assert.equal(w.overlayErrors["0050.TW"]?.yahootw, undefined);
@@ -562,7 +560,7 @@ test("a fresh install never asks tw.stock.yahoo.com", async () => {
 
 test("only MIS consented: only MIS and Yahoo Finance are asked for Taiwan", async () => {
   // Switched on, but its box never ticked.
-  const prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootwAck: null } } };
+  const prefs = { version: 1, sources: { tw: { ...BOTH_ON.sources.tw, yahootwAck: null } } };
   await firstRound(taiwanHost(prefs), async (w, host) => {
     await advance(host, TW_NOW + 61_000);
     assert.ok(host.requests.some((url) => url.startsWith(MIS_URL)));
@@ -573,7 +571,7 @@ test("only MIS consented: only MIS and Yahoo Finance are asked for Taiwan", asyn
 });
 
 test("a 403 hands Taiwan rows to MIS and pauses Yahoo 奇摩股市", async () => {
-  await firstRound(taiwanHost(BOTH, { yahootw: () => ({ status: 403, ok: false, text: "" }) }), async (w, host) => {
+  await firstRound(taiwanHost(BOTH_ON, { yahootw: () => ({ status: 403, ok: false, text: "" }) }), async (w, host) => {
     assert.equal(w.shown("2330.TW").source, "mis");
     assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "yahootw.refused", params: {} }]);
     const sent = host.requests.filter(isYahootw).length;
@@ -591,13 +589,13 @@ test("a Yahoo 奇摩股市 name reaches the row", async () => {
 const at2210 = (time = TW_NOW - 5_000) => stockList(time, { "2330.TW": { price: { raw: "2210" } } });
 
 test("the Yahoo 奇摩股市 line ends at the shown price, and is used only while its price is shown", async () => {
-  await firstRound(taiwanHost(BOTH, { yahootw: () => at2210() }), (w) => {
+  await firstRound(taiwanHost(BOTH_ON, { yahootw: () => at2210() }), (w) => {
     const quote = w.shown("2330.TW");
     assert.deepEqual(quote.series, [2200, 2205, 2210]);
     assert.deepEqual([quote.source, quote.chartSource], ["yahootw", "yahootw"]);
   });
   // A stale Yahoo 奇摩股市 price yields to a live MIS one, and its line goes with it.
-  await firstRound(taiwanHost(BOTH, { yahootw: () => at2210(TW_NOW - 180_000) }), (w) => {
+  await firstRound(taiwanHost(BOTH_ON, { yahootw: () => at2210(TW_NOW - 180_000) }), (w) => {
     assert.ok(w.lines.yahootw["2330.TW"]);
     const quote = w.shown("2330.TW");
     assert.deepEqual([quote.source, quote.chartSource, quote.series], ["mis", "yahoo", BASE_SERIES]);
@@ -776,13 +774,13 @@ test("the base line is never overwritten", async () => {
 });
 
 test("removing a symbol, or turning its source off, drops its Yahoo 奇摩股市 line", async () => {
-  const host = taiwanHost(BOTH);
+  const host = taiwanHost(BOTH_ON);
   host.store.symbols = ["2330.TW", "0050.TW"];
   await firstRound(host, (w) => {
     assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["0050.TW", "2330.TW"]);
     w.remove("0050.TW");
     assert.deepEqual(Object.keys(w.lines.yahootw), ["2330.TW"]);
-    host.prefs = { version: 1, sources: { tw: { ...BOTH.sources.tw, yahootw: false } } };
+    host.prefs = { version: 1, sources: { tw: { ...BOTH_ON.sources.tw, yahootw: false } } };
     w.sync();
     assert.equal(w.lines.yahootw?.["2330.TW"], undefined);
   });
@@ -848,7 +846,7 @@ const stockLists = (host) => host.requests.filter((url) => isYahootw(url) && url
 const chartCount = (host) => host.requests.filter((url) => url.includes("/chart/")).length;
 
 test("a Taiwan index reaches Yahoo 奇摩股市 as soon as Yahoo Finance names its exchange", async () => {
-  const host = taiwanHost(BOTH, { yahoo: atTai });
+  const host = taiwanHost(BOTH_ON, { yahoo: atTai });
   host.store = { version: 1, symbols: ["^TWII"], paused: false };
   const w = new Watchlist(host);
   const runs = start(w, host);
@@ -864,7 +862,7 @@ test("a Taiwan index reaches Yahoo 奇摩股市 as soon as Yahoo Finance names i
 });
 
 test("a wake during an overlay round adds a round, it aborts none", async () => {
-  const host = taiwanHost(BOTH, { yahoo: atTai });
+  const host = taiwanHost(BOTH_ON, { yahoo: atTai });
   host.store = { version: 1, symbols: ["2330.TW", "^TWII"], paused: false };
   // Yahoo 奇摩股市's first answer waits until released; any later one never comes, so only the first can price
   // 2330.TW.
@@ -958,7 +956,7 @@ function futuresHost(symbols = ["WTX&"], options = {}) {
 
 // An index holds the chosen market on a remove only while it waits for its first quote (filterAfterRemove).
 test("an index is pending until its first quote, overlay or error", async () => {
-  const host = taiwanHost(BOTH, { yahoo: atTai });
+  const host = taiwanHost(BOTH_ON, { yahoo: atTai });
   host.store = { version: 1, symbols: ["^TWII", "AAPL"], paused: false };
   const before = new Watchlist(host);
   assert.equal(before.pendingIndex("^TWII"), true);
@@ -966,7 +964,7 @@ test("an index is pending until its first quote, overlay or error", async () => 
   assert.equal(before.pendingIndex("AAPL"), false);
   await firstRound(host, (w) => assert.equal(w.pendingIndex("^TWII"), false));
   // Priced without an exchange: never Taiwan's, so it holds nothing.
-  const bare = taiwanHost(BOTH);
+  const bare = taiwanHost(BOTH_ON);
   bare.store = { version: 1, symbols: ["^TWII", "AAPL"], paused: false };
   await firstRound(bare, (w) => {
     assert.ok(w.quotes["^TWII"]);
@@ -1284,7 +1282,7 @@ test("turning Yahoo 奇摩股市 off while paused says not found at once", async
 test("a future goes to Yahoo 奇摩股市 alone, never with the Finnhub key", async () => {
   // Every answer is unreadable: only what is asked, and with which headers, matters here.
   const host = fakeHost(() => ok({}));
-  host.prefs = { version: 1, sources: { us: { provider: "finnhub" }, tw: BOTH.sources.tw } };
+  host.prefs = { version: 1, sources: { us: { provider: "finnhub" }, tw: BOTH_ON.sources.tw } };
   host.secrets = { [SECRET_KEY_FINNHUB]: "k".repeat(20) };
   host.store = { version: 1, symbols: ["WTX&", "AAPL", "2330.TW"], paused: false };
   await soleRun(host, (w) => {
@@ -2252,7 +2250,7 @@ test("Saturday 11/14 and the listed Saturday 10/10 read 已收盤", async () => 
 // with or without the override, so the test could not pass.
 test("a trade since 09:00 overrides the schedule for every stock row", async () => {
   const from = at("2026-12-25T02:00:00Z");
-  const host = taiwanHost(BOTH, { mis: () => misAt(host.clock - 5_000), yahootw: () => stockList(CLOSE_1224),
+  const host = taiwanHost(BOTH_ON, { mis: () => misAt(host.clock - 5_000), yahootw: () => stockList(CLOSE_1224),
     yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-25") });
   host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
   await soleRun(host, (w) => {
@@ -2378,7 +2376,7 @@ test("an empty or next year's schedule keeps the held one and is retried after a
 test("a source turned off or a pause during the schedule wait sends nothing", async () => {
   const from = at("2026-11-11T01:30:00Z");                 // 09:30
   for (const change of [(w, host) => { host.prefs = undefined; return w.sync(); }, (w) => w.pause(true)]) {
-    const host = taiwanHost(ONLY_MIS, { holidays: () => new Promise(() => {}) });
+    const host = taiwanHost(MIS_ON, { holidays: () => new Promise(() => {}) });
     await soleRun(host, async (w) => {
       assert.equal(schedules(host), 1);
       assert.ok(change(w, host));
@@ -2391,7 +2389,7 @@ test("a source turned off or a pause during the schedule wait sends nothing", as
 // A change during the wait starts the round again; a Refresh asked for while paused still goes out with it.
 test("a Refresh while paused survives a change during the schedule wait", async () => {
   const from = at("2026-11-11T01:30:00Z");                 // 09:30
-  const host = taiwanHost(ONLY_MIS, { holidays: () => new Promise(() => {}) });
+  const host = taiwanHost(MIS_ON, { holidays: () => new Promise(() => {}) });
   host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: true };
   await soleRun(host, async (w) => {
     assert.equal(schedules(host), 0);
@@ -2452,7 +2450,7 @@ test("a typhoon day with Yahoo 奇摩股市: the existing rules at 09:05, 今日
 
 // The MIS half of the typhoon scenario: MIS is shown, stalled, at 09:04:30.
 test("a typhoon day with MIS: stopped at 09:05, 今日無成交 from 09:10", async () => {
-  const host = taiwanHost(BOTH, { mis: () => misAt(CLOSE_1110), yahootw: () => stockList(CLOSE_1110), yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  const host = taiwanHost(BOTH_ON, { mis: () => misAt(CLOSE_1110), yahootw: () => stockList(CLOSE_1110), yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
   await soleRun(host, async (w) => {
     const quote = w.shown("2330.TW", host.clock);
     assert.equal(quote.source, "mis");
@@ -2469,11 +2467,10 @@ test("a typhoon day with MIS: stopped at 09:05, 今日無成交 from 09:10", asy
 
 // MIS times a row by its snapshot (`tlong`), fresh even when the snapshot had no trade (`z` is "-") and the price is
 // the book's midpoint: only a price from a trade counts as one.
-const ONLY_MIS = { version: 1, sources: { tw: { mis: true, misAck: { version: MIS_CONSENT_VERSION } } } };
 const misBookNow = (host) => () => ok({ msgArray: [{ ...MIS_ROW, z: "-", b: "2245.0000_", a: "2250.0000_", tlong: String(host.clock) }] });
 
 test("a fresh MIS snapshot without a trade is no trade: it keeps an inferred and a listed closure", async () => {
-  const typhoon = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  const typhoon = taiwanHost(MIS_ON, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
   typhoon.mis = misBookNow(typhoon);
   await soleRun(typhoon, async (w) => {
     await advance(typhoon, at("2026-11-11T01:10:05Z"));
@@ -2483,7 +2480,7 @@ test("a fresh MIS snapshot without a trade is no trade: it keeps an inferred and
     assert.equal(freshness(quote, sessionOf(quote, typhoon.clock), typhoon.clock).state, "noTrades");
     assert.deepEqual(w.notes(), noTradesToday("mis"));
   }, at("2026-11-11T01:04:30Z"));
-  const holiday = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
+  const holiday = taiwanHost(MIS_ON, { yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
   holiday.mis = misBookNow(holiday);
   await soleRun(holiday, (w) => {
     assert.deepEqual(w.shown("2330.TW", holiday.clock).closure, { kind: "listed", reason: "行憲紀念日" });
@@ -2493,7 +2490,7 @@ test("a fresh MIS snapshot without a trade is no trade: it keeps an inferred and
 // A MIS book price has no trade time (its time is the snapshot's): 今日無成交 prints no time for it, and the detail
 // gives the snapshot as the quote's time only, never as a trade.
 test("今日無成交 over a MIS book price prints no time", async () => {
-  const host = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
+  const host = taiwanHost(MIS_ON, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
   host.mis = misBookNow(host);
   await soleRun(host, async (w) => {
     await advance(host, at("2026-11-11T01:10:05Z"));
@@ -2506,7 +2503,7 @@ test("今日無成交 over a MIS book price prints no time", async () => {
 });
 
 test("休市 over a MIS book price prints no time", async () => {
-  const host = taiwanHost(ONLY_MIS, { yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
+  const host = taiwanHost(MIS_ON, { yahoo: (s) => twYahooAt(s, CLOSE_1224, "2026-12-24") });
   host.mis = misBookNow(host);
   await soleRun(host, (w) => {
     const quote = w.shown("2330.TW", host.clock);
@@ -2525,7 +2522,7 @@ test("a MIS book price stuck since an earlier day keeps its date and no time", a
     [CLOSE_1110, CLOSE_1110, "2026-11-11", at("2026-11-11T01:10:05Z"), "今日無成交 · 11/10"],                 // a typhoon day
   ];
   for (const [book, close, date, now, label] of cases) {
-    const host = taiwanHost(ONLY_MIS, { mis: misBookAt(book), yahoo: (s) => twYahooAt(s, close, date) });
+    const host = taiwanHost(MIS_ON, { mis: misBookAt(book), yahoo: (s) => twYahooAt(s, close, date) });
     await soleRun(host, async (w) => {
       await advance(host, now);
       const quote = w.shown("2330.TW", host.clock);
@@ -2801,11 +2798,10 @@ test("the open detail leaves out the row's inference deadline: on a listed day i
 
 // MIS's call-auction flag (`ts` "1" with a trial price `pz`), on Tuesday 2026-11-17 in Taipei: the answers recorded that
 // day, or hand-built from its 13:24 row for 2330. A flagged row is no price: the held MIS price stays, else Yahoo's.
-const taipei1117 = (time) => at(`2026-11-17T${time}Z`);
-const ROW_1324 = jsonFixture("mis-auction-1324").msgArray.find((row) => row.c === "2330");
-// The 13:24 row's book (bid 2170, ask 2175) as a snapshot at `time` without a trade, or flagged in the auction.
-const misBook = (time) => ({ ...ROW_1324, tlong: String(time) });
-const misFlagged = (time) => ({ ...ROW_1324, ts: "1", pz: "2150.0000", tlong: String(time) });
+// A clock time in UTC on 2026-11-17 (Taipei is 8 hours ahead).
+const utc1117 = (time) => at(`2026-11-17T${time}Z`);
+// The 13:24 row's book (bid 2170, ask 2175) as a snapshot at `time` without a trade (misFlagged: flagged in the auction).
+const misBook = (time) => ({ ...MIS_2330_1324, tlong: String(time) });
 const misRows = (...rows) => ok({ msgArray: rows });
 // One MIS answer laid over a watchlist at the host's clock, as a round would.
 const misAnswer = (w, host, response, symbols = ["2330.TW"]) => {
@@ -2813,90 +2809,90 @@ const misAnswer = (w, host, response, symbols = ["2330.TW"]) => {
   w.apply(mis, request, mis.decode(request, response, host.clock));
 };
 // Yahoo Finance's 2330.TW at 13:04, 20 minutes behind, on 11/17's periods.
-const yahoo1117 = (symbol) => twYahooAt(symbol, taipei1117("05:04:00"), "2026-11-17");
+const yahoo1117 = (symbol) => twYahooAt(symbol, utc1117("05:04:00"), "2026-11-17");
 
 test("the morning trial match shows Yahoo's close", async () => {
   // Yahoo Finance holds Monday's close, 2215.
   const close = at("2026-11-16T05:30:00Z");
-  const host = taiwanHost(ONLY_MIS, { mis: () => ok(jsonFixture("mis-auction-0838")),
+  const host = taiwanHost(MIS_ON, { mis: () => ok(jsonFixture("mis-auction-0838")),
     yahoo: (s) => twYahoo(s, { regularMarketPrice: 2215, exchangeName: "TAI", regularMarketTime: close / 1000, currentTradingPeriod: twDay("2026-11-16") }) });
   await soleRun(host, (w) => {
     const quote = w.shown("2330.TW", host.clock);
     assert.deepEqual([quote.source, quote.price], ["yahoo", 2215]);
     assert.deepEqual([w.overlayError("2330.TW"), w.errors["2330.TW"], w.problems()], [null, undefined, []]);
-    assert.equal(w.auctionAt["2330.TW"], taipei1117("00:38:28"));
-  }, taipei1117("00:38:31"));
+    assert.equal(w.auctionAt["2330.TW"], utc1117("00:38:28"));
+  }, utc1117("00:38:31"));
 });
 
 // MIS's answers through the closing auction as recorded: priced from the book at 13:23:55, flagged from 13:25:55 to
 // 13:29:58, closed at 13:30:00.
 async function closingAuction(check) {
-  const host = taiwanHost(ONLY_MIS, { yahoo: yahoo1117 });
-  host.mis = () => ok(jsonFixture(host.clock < taipei1117("05:26:04") ? "mis-auction-1324"
-    : host.clock < taipei1117("05:30:03") ? "mis-auction-1326" : host.clock < taipei1117("05:35:01") ? "mis-auction-1330" : "mis-auction-1335"));
-  await soleRun(host, (w) => check(w, host), taipei1117("05:24:01"));
+  const host = taiwanHost(MIS_ON, { yahoo: yahoo1117 });
+  host.mis = () => ok(jsonFixture(host.clock < utc1117("05:26:04") ? "mis-auction-1324"
+    : host.clock < utc1117("05:30:03") ? "mis-auction-1326" : host.clock < utc1117("05:35:01") ? "mis-auction-1330" : "mis-auction-1335"));
+  await soleRun(host, (w) => check(w, host), utc1117("05:24:01"));
 }
 
 test("the closing auction keeps the held MIS price", async () => {
   await closingAuction(async (w, host) => {
-    await advance(host, taipei1117("05:26:20"));
+    await advance(host, utc1117("05:26:20"));
     const quote = w.shown("2330.TW", host.clock);
-    assert.deepEqual([quote.source, quote.price, quote.timestamp], ["mis", 2172.5, taipei1117("05:23:55")]);
-    assert.equal(w.auctionAt["2330.TW"], taipei1117("05:25:57"));
+    assert.deepEqual([quote.source, quote.price, quote.timestamp], ["mis", 2172.5, utc1117("05:23:55")]);
+    assert.equal(w.auctionAt["2330.TW"], utc1117("05:25:57"));
     assert.equal(w.overlayError("2330.TW"), null);
   });
 });
 
 test("the close after the auction", async () => {
   await closingAuction(async (w, host) => {
-    await advance(host, taipei1117("05:30:10"));
+    await advance(host, utc1117("05:30:10"));
     assert.equal(w.shown("2330.TW", host.clock).price, 2172.5);
-    await advance(host, taipei1117("05:36:10"));
+    await advance(host, utc1117("05:36:10"));
     const quote = w.shown("2330.TW", host.clock);
-    assert.deepEqual([quote.source, quote.price, quote.timestamp], ["mis", 2170, taipei1117("05:30:00")]);
+    assert.deepEqual([quote.source, quote.price, quote.timestamp], ["mis", 2170, utc1117("05:30:00")]);
     assert.equal(w.auctionAt["2330.TW"], undefined);
   });
 });
 
 test("a held MIS price never outranks Yahoo 奇摩股市's of the same day", async () => {
   // Yahoo 奇摩股市's answer is timed by its newest trade (0050.TW's, 13:24:40); 2330.TW last traded 2175 at 13:24:25.
-  const host = taiwanHost(BOTH, { yahoo: yahoo1117,
-    yahootw: () => stockList(taipei1117("05:24:40"), { "2330.TW": { regularMarketTime: "2026-11-17T05:24:25Z" } }, jsonFixture("ytw-auction-1326")) });
+  const host = taiwanHost(BOTH_ON, { yahoo: yahoo1117,
+    yahootw: () => stockList(utc1117("05:24:40"), { "2330.TW": { regularMarketTime: "2026-11-17T05:24:25Z" } }, jsonFixture("ytw-auction-1326")) });
   host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
-  host.mis = () => misRows(host.clock < taipei1117("05:27:40") ? misBook(taipei1117("05:24:55")) : misFlagged(taipei1117("05:27:40")));
+  host.mis = () => misRows(host.clock < utc1117("05:27:40") ? misBook(utc1117("05:24:55")) : misFlagged(utc1117("05:27:40")));
   await soleRun(host, async (w) => {
-    await advance(host, taipei1117("05:28:00"));
-    assert.deepEqual([w.overlays["2330.TW"].mis.price, w.auctionAt["2330.TW"]], [2172.5, taipei1117("05:27:40")]);
+    await advance(host, utc1117("05:28:00"));
+    assert.deepEqual([w.overlays["2330.TW"].mis.price, w.auctionAt["2330.TW"]], [2172.5, utc1117("05:27:40")]);
     const quote = w.shown("2330.TW", host.clock);
     assert.deepEqual([quote.source, quote.price], ["yahootw", 2175]);
-  }, taipei1117("05:24:56"));
+  }, utc1117("05:24:56"));
 });
 
 test("a flag older than the held price is ignored", () => {
-  const host = taiwanHost(ONLY_MIS);
-  host.clock = taipei1117("05:25:00");
+  const host = taiwanHost(MIS_ON);
+  host.clock = utc1117("05:25:00");
   const w = new Watchlist(host);
-  misAnswer(w, host, misRows(misBook(taipei1117("05:24:55"))));
+  misAnswer(w, host, misRows(misBook(utc1117("05:24:55"))));
   // An answer MIS's cache served late.
-  host.clock = taipei1117("05:25:10");
-  misAnswer(w, host, misRows(misFlagged(taipei1117("05:23:50"))));
+  host.clock = utc1117("05:25:10");
+  misAnswer(w, host, misRows(misFlagged(utc1117("05:23:50"))));
   assert.equal(w.auctionAt["2330.TW"], undefined);
-  assert.equal(w.overlays["2330.TW"].mis.timestamp, taipei1117("05:24:55"));
+  assert.equal(w.overlays["2330.TW"].mis.timestamp, utc1117("05:24:55"));
 });
 
 test("a flagged answer still counts as an answer without a trade", () => {
-  const host = taiwanHost(ONLY_MIS);
+  const host = taiwanHost(MIS_ON);
   host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
-  host.clock = taipei1117("05:26:04");
+  host.clock = utc1117("05:26:04");
   const w = new Watchlist(host);
   misAnswer(w, host, ok(jsonFixture("mis-auction-1326")), ["2330.TW", "0050.TW"]);
-  const seen = w.observed("stock", taipei1117("01:00:00"), w.config().on);
+  const seen = w.observed("stock", utc1117("01:00:00"), w.config().on);
   assert.deepEqual([seen.newest, seen.answers], [null, [{ source: "mis", at: host.clock, realtime: true }]]);
 });
 
 test("auctionAt goes with MIS", () => {
-  const host = taiwanHost(ONLY_MIS);
-  host.clock = taipei1117("05:26:00");
+  const host = taiwanHost(MIS_ON);
+  host.clock = utc1117("05:26:00");
   const w = new Watchlist(host);
   const flag = () => {
     misAnswer(w, host, misRows(misFlagged(host.clock)));
@@ -2932,7 +2928,7 @@ const MONDAY_CLOSE = at("2026-11-16T05:30:00Z");
 const yahooMonday = (symbol) => twYahooAt(symbol, MONDAY_CLOSE, "2026-11-17");
 
 test("marked() gives twRealtime only with a real-time source on", () => {
-  const now = taipei1117("05:27:00");
+  const now = utc1117("05:27:00");
   const watch = (prefs) => {
     const host = taiwanHost(prefs);
     host.clock = now;
@@ -2943,9 +2939,9 @@ test("marked() gives twRealtime only with a real-time source on", () => {
   const reads = (w) => ["2330.TW", "6488.TWO", "^TWII", "WTX&"]
     .map((symbol) => w.marked(symbol, { symbol, periods: null, timestamp: now }, now).twRealtime ?? false);
   assert.deepEqual(reads(watch(undefined).w), [false, false, false, false]);
-  for (const prefs of [ONLY_MIS, ONLY_YAHOOTW, BOTH]) assert.deepEqual(reads(watch(prefs).w), [true, true, false, false]);
+  for (const prefs of [MIS_ON, ONLY_YAHOOTW, BOTH_ON]) assert.deepEqual(reads(watch(prefs).w), [true, true, false, false]);
   // Turned off, the next read at the same moment has it no more.
-  const { host, w } = watch(ONLY_MIS);
+  const { host, w } = watch(MIS_ON);
   assert.equal(reads(w)[0], true);
   host.prefs = undefined;
   assert.equal(w.sync(), true);
@@ -2953,58 +2949,58 @@ test("marked() gives twRealtime only with a real-time source on", () => {
 });
 
 test("marked() passes MIS's flag only over a price traded before it", () => {
-  const host = taiwanHost(ONLY_MIS);
-  host.clock = taipei1117("05:27:00");
+  const host = taiwanHost(MIS_ON);
+  host.clock = utc1117("05:27:00");
   const w = new Watchlist(host);
-  w.auctionAt["2330.TW"] = taipei1117("05:26:57");
+  w.auctionAt["2330.TW"] = utc1117("05:26:57");
   const flag = (fields) => w.marked("2330.TW", { symbol: "2330.TW", periods: null, ...fields }, host.clock).auctionAt;
-  assert.equal(flag({ timestamp: taipei1117("05:23:55") }), taipei1117("05:26:57"));
+  assert.equal(flag({ timestamp: utc1117("05:23:55") }), utc1117("05:26:57"));
   // Yahoo 奇摩股市 times a row at its feed: its own trade decides.
-  assert.equal(flag({ timestamp: taipei1117("05:26:59"), tradeTime: taipei1117("05:24:58") }), taipei1117("05:26:57"));
-  assert.equal(flag({ timestamp: taipei1117("05:26:57") }), undefined);
-  assert.equal(flag({ timestamp: taipei1117("05:26:59"), tradeTime: taipei1117("05:26:58") }), undefined);
+  assert.equal(flag({ timestamp: utc1117("05:26:59"), tradeTime: utc1117("05:24:58") }), utc1117("05:26:57"));
+  assert.equal(flag({ timestamp: utc1117("05:26:57") }), undefined);
+  assert.equal(flag({ timestamp: utc1117("05:26:59"), tradeTime: utc1117("05:26:58") }), undefined);
 });
 
 test("sessionFor ranks an auction base as busy", () => {
-  const host = taiwanHost(ONLY_MIS);
+  const host = taiwanHost(MIS_ON);
   const w = new Watchlist(host);
   const periods = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
   // Yahoo Finance still at Monday's close: the base reads the auction, which paces as open from 09:00.
   w.quotes["2330.TW"] = yq("2330.TW", "TAI", MONDAY_CLOSE, periods);
-  w.auctionAt["2330.TW"] = taipei1117("01:01:55");
-  assert.equal(w.sessionFor(["2330.TW"], taipei1117("01:02:22")), "auction");
+  w.auctionAt["2330.TW"] = utc1117("01:01:55");
+  assert.equal(w.sessionFor(["2330.TW"], utc1117("01:02:22")), "auction");
   delete w.auctionAt["2330.TW"];
-  assert.equal(w.sessionFor(["2330.TW"], taipei1117("05:27:00")), "auction");
+  assert.equal(w.sessionFor(["2330.TW"], utc1117("05:27:00")), "auction");
   // Before 09:00 the trial match paces as closed.
-  assert.equal(w.sessionFor(["2330.TW"], taipei1117("00:40:00")), "closed");
+  assert.equal(w.sessionFor(["2330.TW"], utc1117("00:40:00")), "closed");
   // Today's delayed price reads its own session; MIS's flag still sets the pace.
-  w.quotes["2330.TW"] = yq("2330.TW", "TAI", taipei1117("05:10:00"), periods);
-  w.auctionAt["2330.TW"] = taipei1117("05:29:58");
-  const now = taipei1117("05:31:00");
+  w.quotes["2330.TW"] = yq("2330.TW", "TAI", utc1117("05:10:00"), periods);
+  w.auctionAt["2330.TW"] = utc1117("05:29:58");
+  const now = utc1117("05:31:00");
   assert.equal(sessionOf(w.baseQuote("2330.TW", now), now), "closed");
   assert.equal(w.sessionFor(["2330.TW"], now), "auction");
-  assert.equal(w.sessionFor(["2330.TW"], taipei1117("05:31:58")), "closed");
+  assert.equal(w.sessionFor(["2330.TW"], utc1117("05:31:58")), "closed");
 });
 
 test("a copy hidden at 08:50 reads by its price at 09:10", async () => {
   // MIS flags the row until the open, then prices it.
-  const host = taiwanHost(ONLY_MIS, { yahoo: yahooMonday });
-  host.mis = () => misRows(host.clock < taipei1117("01:00:00") ? misFlagged(host.clock - 2_000)
+  const host = taiwanHost(MIS_ON, { yahoo: yahooMonday });
+  host.mis = () => misRows(host.clock < utc1117("01:00:00") ? misFlagged(host.clock - 2_000)
     : { ...misBook(host.clock - 2_000), z: "2190.0000" });
-  host.clock = taipei1117("00:49:30");
+  host.clock = utc1117("00:49:30");
   let shown = true;
   host.shown = () => shown;
   const w = new Watchlist(host);
   const runs = start(w, host);
-  await advance(host, taipei1117("00:50:00"));
+  await advance(host, utc1117("00:50:00"));
   assert.equal(reading1117(w, "2330.TW", host.clock).session, "auction");
   shown = false;
-  await advance(host, taipei1117("01:10:00"));
+  await advance(host, utc1117("01:10:00"));
   shown = true;
   // At once, before any round: the window is over and the flag lapsed.
   assert.notEqual(reading1117(w, "2330.TW", host.clock).session, "auction");
   w.wakeMissed();
-  await advance(host, taipei1117("01:10:01"));
+  await advance(host, utc1117("01:10:01"));
   const row = reading1117(w, "2330.TW", host.clock);
   assert.deepEqual([row.quote.source, row.quote.price, row.state], ["mis", 2190, "live"]);
   await stop(w, host, runs);
@@ -3013,56 +3009,55 @@ test("a copy hidden at 08:50 reads by its price at 09:10", async () => {
 test("a flag over a delayed price", async () => {
   // MIS timed out at 13:26 and dropped its held price; from 13:31 its cache still flags the row (13:29:58). Yahoo
   // 奇摩股市 is off, so the row shows Yahoo Finance's delayed price.
-  const host = taiwanHost(ONLY_MIS, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1330")) });
+  const host = taiwanHost(MIS_ON, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1330")) });
   await soleRun(host, async (w) => {
-    await advance(host, taipei1117("05:31:45"));
+    await advance(host, utc1117("05:31:45"));
     const row = reading1117(w, "2330.TW", host.clock);
     assert.deepEqual([row.quote.source, row.quote.auctionAt, row.session === "auction", row.state],
-      ["yahoo", taipei1117("05:29:58"), false, "closed"]);
+      ["yahoo", utc1117("05:29:58"), false, "closed"]);
     // MIS keeps its 10 s cadence while the flag holds.
     const asked = host.requests.filter((url) => url.startsWith(MIS_URL)).length;
     assert.equal(asked, 5);
-  }, taipei1117("05:31:00"));
+  }, utc1117("05:31:00"));
 });
 
 test("the opening trade from Yahoo 奇摩股市 ends the flag", async () => {
-  const host = taiwanHost(BOTH, { yahoo: yahooMonday, mis: () => ok(jsonFixture("mis-auction-0900")), yahootw: () => ok(jsonFixture("ytw-auction-0900")) });
+  const host = taiwanHost(BOTH_ON, { yahoo: yahooMonday, mis: () => ok(jsonFixture("mis-auction-0900")), yahootw: () => ok(jsonFixture("ytw-auction-0900")) });
   host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
   await soleRun(host, (w) => {
-    assert.equal(w.auctionAt["2330.TW"], taipei1117("00:59:57"));
-    const row = reading1117(w, "2330.TW", taipei1117("01:00:03"));
+    assert.equal(w.auctionAt["2330.TW"], utc1117("00:59:57"));
+    const row = reading1117(w, "2330.TW", utc1117("01:00:03"));
     assert.deepEqual([row.quote.source, row.quote.price, row.state], ["yahootw", 2190, "live"]);
-  }, taipei1117("01:00:03"));
+  }, utc1117("01:00:03"));
 });
 
 test("the closing auction holds Yahoo 奇摩股市's last trade", async () => {
-  const host = taiwanHost(BOTH, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1326")), yahootw: () => ok(jsonFixture("ytw-auction-1326")) });
+  const host = taiwanHost(BOTH_ON, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1326")), yahootw: () => ok(jsonFixture("ytw-auction-1326")) });
   host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
   await soleRun(host, (w) => {
-    const row = reading1117(w, "2330.TW", taipei1117("05:28:00"));
+    const row = reading1117(w, "2330.TW", utc1117("05:28:00"));
     assert.deepEqual([row.quote.source, row.quote.price, row.state], ["yahootw", 2175, "auction"]);
-  }, taipei1117("05:27:55"));
+  }, utc1117("05:27:55"));
 });
 
 test("the close from Yahoo 奇摩股市 ends the flag", async () => {
-  const host = taiwanHost(BOTH, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1330")), yahootw: () => ok(jsonFixture("ytw-auction-1330")) });
+  const host = taiwanHost(BOTH_ON, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1330")), yahootw: () => ok(jsonFixture("ytw-auction-1330")) });
   host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
   await soleRun(host, (w) => {
-    assert.equal(w.auctionAt["2330.TW"], taipei1117("05:29:58"));
-    const row = reading1117(w, "2330.TW", taipei1117("05:30:05"));
+    assert.equal(w.auctionAt["2330.TW"], utc1117("05:29:58"));
+    const row = reading1117(w, "2330.TW", utc1117("05:30:05"));
     assert.deepEqual([row.quote.source, row.quote.price, row.state], ["yahootw", 2170, "closed"]);
-  }, taipei1117("05:30:03"));
+  }, utc1117("05:30:03"));
 });
 
 // A line only under its own session's price: the base's line under another source's price only when both are from the
 // same period, before or at and after the start of the base's regular period.
-const TPE = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
 const TPE_DAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 const twBase = (time, fields = {}) => ({ ...yq("2330.TW", "TAI", time, TPE_DAY), price: 2215, previousClose: 2200, series: [2200, 2215], fetchedAt: time, ...fields });
 const misQuote = (time) => ({ symbol: "2330.TW", source: "mis", price: 2230, timestamp: time });
 
 test("A line only under its own session's price: yesterday's line under today's price", () => {
-  const row = mergeOverlay(twBase(TPE("13:30:00", "2026-11-16")), misQuote(TPE("09:00:30")), null);
+  const row = mergeOverlay(twBase(taipei("13:30:00", "2026-11-16")), misQuote(taipei("09:00:30")), null);
   assert.deepEqual([row.series, row.chartSource, row.chartTimestamp, row.chartFetchedAt], [[], null, null, null]);
   assert.ok(!("chartCached" in row));
   const layout = chartLayout(row);
@@ -3071,7 +3066,7 @@ test("A line only under its own session's price: yesterday's line under today's 
   assert.deepEqual(g.points, []);
   assert.notEqual(g.reference, null);
   // The detail names no line source.
-  const now = TPE("09:00:30");
+  const now = taipei("09:00:30");
   assert.deepEqual(detailSource(row, sessionOf(row, now), now, (key, params) => t("zh-TW", key, params)), [["價格：即時 · 證交所 MIS"]]);
 });
 
@@ -3086,7 +3081,7 @@ test("A line only under its own session's price: both from the last session", ()
 });
 
 test("A line only under its own session's price: the evening after the close", () => {
-  const row = mergeOverlay(twBase(TPE("13:30:00")), misQuote(TPE("13:30:00")), null);
+  const row = mergeOverlay(twBase(taipei("13:30:00")), misQuote(taipei("13:30:00")), null);
   assert.deepEqual([row.series, row.chartSource], [[2200, 2215], "yahoo"]);
   assert.deepEqual(chartLayout(row), { extent: 1, dot: null });
 });
@@ -3095,16 +3090,16 @@ test("A line only under its own session's price: a US row past local midnight", 
   // On a Taipei clock, 22:30 and 00:30 are one New York session (09:30 and 11:30); the periods are epoch ms.
   withTZ("Asia/Taipei", () => {
     const NY_DAY = day("2026-11-17T14:30:00Z", "2026-11-17T21:00:00Z");
-    const base = { ...yq("AAPL", "NMS", TPE("22:30:00"), NY_DAY), price: 230, previousClose: 228, series: [228, 230] };
-    const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 231, timestamp: TPE("00:30:00", "2026-11-18") }, null);
+    const base = { ...yq("AAPL", "NMS", taipei("22:30:00"), NY_DAY), price: 230, previousClose: 228, series: [228, 230] };
+    const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 231, timestamp: taipei("00:30:00", "2026-11-18") }, null);
     assert.deepEqual([row.series, row.chartSource], [[228, 230], "yahoo"]);
   });
 });
 
 test("A failure without the source's own line: yesterday's Yahoo Finance quote under today's price", () => {
   // MIS live at 09:10; Yahoo Finance, holding yesterday's quote, cannot be reached.
-  const now = TPE("09:10:00");
-  const row = mergeOverlay(twBase(TPE("13:30:00", "2026-11-16"), { cached: true }), misQuote(now - 5_000), null);
+  const now = taipei("09:10:00");
+  const row = mergeOverlay(twBase(taipei("13:30:00", "2026-11-16"), { cached: true }), misQuote(now - 5_000), null);
   assert.ok(!("chartCached" in row) && !("cached" in row));
   assert.deepEqual([row.series, row.chartSource], [[], null]);
   assert.equal(failureNote(row, { code: "network" }), "reason");
@@ -3113,7 +3108,7 @@ test("A failure without the source's own line: yesterday's Yahoo Finance quote u
 
 test("A failure without the source's own line: a real-time price without its Yahoo Finance line", () => {
   // Yahoo Finance has never answered: no base, so no line and the reason alone.
-  const now = TPE("10:00:00");
+  const now = taipei("10:00:00");
   const row = mergeOverlay(undefined, misQuote(now - 5_000), null);
   assert.deepEqual([row.series, row.chartSource], [[], null]);
   assert.equal(failureNote(row, { code: "network" }), "reason");

@@ -1,7 +1,8 @@
 // Test helpers shared by the watchlist, scheduler and provider tests: canned responses, recorded
 // fixtures, and a fake host with a virtual clock, a scripted network and a shared store.
 import { readFileSync } from "node:fs";
-import { YAHOOTW_BASE } from "../mods/wickline/providers/yahootw.js";
+import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
+import { MIS_CONSENT_VERSION } from "../mods/wickline/providers/mis.js";
 import { HOLIDAYS_URL, parseHolidays } from "../mods/wickline/calendar.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { freshnessLabel } from "../mods/wickline/format.js";
@@ -20,6 +21,8 @@ export const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } }
 export const at = (iso) => Date.parse(iso);
 export const day = (open, close) => ({ pre: null, regular: [at(open), at(close)], post: null });
 export const yq = (symbol, exchange, timestamp, periods = null) => ({ symbol, source: "yahoo", exchange, timestamp, periods });
+// A clock time on the Taipei clock (UTC+8), on Tuesday 2026-11-17 (the call-auction recordings' day) unless `date` says.
+export const taipei = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
 
 /**
  * Runs `run` with process.env.TZ set to `zone` (Node honours a change at run time) and restores the old value after,
@@ -82,6 +85,16 @@ export const observation = ({ realtime = [], delayed = [], ...fields } = {}) => 
   traded: false, newest: null, ...fields,
   answers: [...realtime.map((answer) => ({ ...answer, realtime: true })), ...delayed.map((answer) => ({ ...answer, realtime: false }))],
 });
+
+// Saved settings with TWSE MIS on (consent given), and with both MIS and Yahoo 奇摩股市 on.
+export const MIS_ON = { version: 1, sources: { tw: { mis: true, misAck: { version: MIS_CONSENT_VERSION } } } };
+export const BOTH_ON = { version: 1, sources: { tw: {
+  ...MIS_ON.sources.tw, yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION },
+} } };
+// TWSE MIS's 2330 row as recorded at 13:24 on 2026-11-17 (mis-auction-1324), and that row as a snapshot at `time`
+// flagged in a call auction (`ts` "1", trial price `pz` 2150).
+export const MIS_2330_1324 = jsonFixture("mis-auction-1324").msgArray.find((row) => row.c === "2330");
+export const misFlagged = (time) => ({ ...MIS_2330_1324, ts: "1", pz: "2150.0000", tlong: String(time) });
 
 // Translates in `lang`, as the view's tx does.
 export const say = (lang) => (key, params) => t(lang, key, params);

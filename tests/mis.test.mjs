@@ -7,7 +7,7 @@ import { displayName } from "../mods/wickline/format.js";
 import { detailSource, freshness, msUntilStale } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
 import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
-import { advance, chart, chartSymbol, fakeHost, start, stop } from "./helpers.mjs";
+import { advance, at, chart, chartSymbol, fakeHost, jsonFixture, start, stop } from "./helpers.mjs";
 import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel } from "../mods/wickline/providers/mis.js";
 
 // Recorded answers from MIS during trading hours (2026-11-05), only these symbols' rows.
@@ -19,7 +19,7 @@ const answer = (text) => ({ status: 200, ok: true, text });
 const decode = (symbols, response, now = 1) => mis.decode(mis.requests(symbols, cfg)[0], response, now);
 // The recorded 2330 row with some fields replaced.
 const row2330 = (fields) => {
-  const body = JSON.parse(OPEN);
+  const body = jsonFixture("mis-open");
   return answer(JSON.stringify({ ...body, msgArray: [{ ...body.msgArray[0], ...fields }] }));
 };
 
@@ -62,7 +62,7 @@ test("batches of 50 and none when empty", () => {
 });
 
 test("decodes the recorded answer", () => {
-  const body = JSON.parse(OPEN);
+  const body = jsonFixture("mis-open");
   const result = decode(["2330.TW", "0050.TW"], answer(OPEN), 42);
   assert.deepEqual(Object.keys(result.quotes).sort(), ["0050.TW", "2330.TW"]);
   // 00632R.TW is in the answer but was not asked for.
@@ -135,7 +135,7 @@ test("a name without a price: before the open MIS sends names only", () => {
 // MIS answers recorded around the call auctions on 2026-11-17 (and the morning of 11-18, with a TPEx stock). A row in a
 // call auction carries `ts` "1" and the auction's trial price `pz`; its book is the auction's, never a price.
 const auctionAnswer = (name) => answer(fixture(`mis-auction-${name}`));
-const auctionRow = (name, code) => JSON.parse(fixture(`mis-auction-${name}`)).msgArray.find((row) => row.c === code);
+const auctionRow = (name, code) => jsonFixture(`mis-auction-${name}`).msgArray.find((row) => row.c === code);
 
 test("a flagged row is no price and no error", () => {
   const result = decode(["2330.TW", "0050.TW"], auctionAnswer("0838"));
@@ -163,7 +163,7 @@ test("the close prices a flagged symbol again", () => {
   const close = decode(["2330.TW"], auctionAnswer("1335"));
   assert.ok(!("auction" in close));
   const quote = close.quotes["2330.TW"];
-  assert.deepEqual([quote.price, quote.timestamp, quote.fromBook], [2170, Date.parse("2026-11-17T05:30:00Z"), undefined]);
+  assert.deepEqual([quote.price, quote.timestamp, quote.fromBook], [2170, at("2026-11-17T05:30:00Z"), undefined]);
 });
 
 test("every recorded auction answer is flagged", () => {
@@ -175,7 +175,7 @@ test("every recorded auction answer is flagged", () => {
   const open = decode(["2330.TW"], auctionAnswer("0902"));
   assert.ok(!("auction" in open));
   const quote = open.quotes["2330.TW"];
-  assert.deepEqual([quote.price, quote.timestamp, quote.fromBook], [(2195 + 2200) / 2, Date.parse("2026-11-17T01:02:00Z"), true]);
+  assert.deepEqual([quote.price, quote.timestamp, quote.fromBook], [(2195 + 2200) / 2, at("2026-11-17T01:02:00Z"), true]);
 });
 
 test("TPEx flags like TWSE", () => {
@@ -358,7 +358,7 @@ test("any MIS failure drops the overlay at once", async () => {
 
 test("a price outside the limits falls back for that symbol only", async () => {
   const host = twHost(CONSENTED, () => {
-    const body = JSON.parse(OPEN);
+    const body = jsonFixture("mis-open");
     body.msgArray[0].z = "2600.0000";
     return answer(JSON.stringify(body));
   });
@@ -433,7 +433,7 @@ test("an MIS address change is used at once", async () => {
 
 // An answer with a valid row for every requested channel.
 const rowsFor = (url) => {
-  const template = JSON.parse(OPEN).msgArray[1];
+  const template = jsonFixture("mis-open").msgArray[1];
   const channels = decodeURIComponent(url.split("ex_ch=")[1].split("&")[0]).split("|");
   return answer(JSON.stringify({ msgArray: channels.map((channel) => {
     const [ex, rest] = channel.split("_");

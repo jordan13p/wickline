@@ -16,9 +16,9 @@ import {
 } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { YAHOOTW_CONSENT_VERSION, ownPeriods } from "../mods/wickline/providers/yahootw.js";
-import { MIS_CONSENT_VERSION } from "../mods/wickline/providers/mis.js";
 import {
-  CLOSE_1224, LINE_PERIODS, LISTED_2026, SEGMENTS, advance, at, day, fakeHost, listed2026, observation, ok, say, withTZ, yq, zhLabel,
+  BOTH_ON, CLOSE_1224, LINE_PERIODS, LISTED_2026, MIS_ON, SEGMENTS, advance, at, day, fakeHost, listed2026, observation, ok, say, taipei,
+  withTZ, yq, zhLabel,
 } from "./helpers.mjs";
 
 const now = 1_000_000;
@@ -1298,10 +1298,7 @@ test("a cached Yahoo Finance line: no wake at its stale moment once it reads sto
 
 // Taiwan's call auctions (試撮中). A row reads them through a real Watchlist, whose marked() gives `twRealtime` and
 // `auctionAt`; its records are set by hand. Tuesday 2026-11-17 in Taipei unless a test says otherwise.
-const taipei = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
-const MIS_ON = { version: 1, sources: { tw: { mis: true, misAck: { version: MIS_CONSENT_VERSION } } } };
 const YAHOOTW_ON = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
-const BOTH_ON = { version: 1, sources: { tw: { ...MIS_ON.sources.tw, ...YAHOOTW_ON.sources.tw } } };
 const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 // Yahoo Finance's quote: Monday's close (2215 at 13:30 on 11/16) under today's periods, or today's delayed price at `time`.
 const yahooClose = (symbol = "2330.TW") => ({ ...yq(symbol, "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY), price: 2215, series: [2200, 2215] });
@@ -1540,7 +1537,6 @@ test("the detail names 試撮中", () => {
 const NY_DAY = day("2026-11-17T14:30:00Z", "2026-11-17T21:00:00Z");
 const HK_TODAY = day("2026-11-17T01:30:00Z", "2026-11-17T08:00:00Z");
 const ny = (time) => at(`2026-11-17T${time}-05:00`);
-const hk = (time) => at(`2026-11-17T${time}+08:00`);
 const line = (fields) => ({ price: 2180, previousClose: 2200, series: [2190, 2185, 2180], ...fields });
 const lastX = (g) => g.points.at(-1)[0];
 const drawn = (q) => {
@@ -1558,9 +1554,9 @@ test("sessionProgress: US", () => {
 });
 
 test("sessionProgress: 0700.HK lunch takes no room", () => {
-  assert.equal(sessionProgress(yq("0700.HK", "HKG", hk("14:00:00"), HK_TODAY), hk("14:00:00")), 210 / 330);
+  assert.equal(sessionProgress(yq("0700.HK", "HKG", taipei("14:00:00"), HK_TODAY), taipei("14:00:00")), 210 / 330);
   // Inside the lunch break it stands at the morning's end.
-  assert.equal(sessionProgress(yq("0700.HK", "HKG", hk("12:30:00"), HK_TODAY), hk("12:30:00")), 150 / 330);
+  assert.equal(sessionProgress(yq("0700.HK", "HKG", taipei("12:30:00"), HK_TODAY), taipei("12:30:00")), 150 / 330);
 });
 
 test("sessionProgress: WTX& extent counts the night then the day", () => {
@@ -1645,7 +1641,7 @@ test("A line in its session: a future's night opens", () => {
 });
 
 test("A line in its session: a lunch break takes no room", () => {
-  const { layout, g } = drawn(line(yq("0700.HK", "HKG", hk("14:00:00"), HK_TODAY)));
+  const { layout, g } = drawn(line(yq("0700.HK", "HKG", taipei("14:00:00"), HK_TODAY)));
   assert.equal(layout.extent, 210 / 330);
   assert.equal(lastX(g), 63.64);
 });
@@ -1723,7 +1719,7 @@ test("A price after its line: Yahoo 奇摩股市's own line", () => {
 });
 
 test("A price after its line: none where the trading day is unknown", () => {
-  const q = { ...yq("0700.HK", "HKG", hk("14:00:00")), price: 400, previousClose: 390, series: [] };
+  const q = { ...yq("0700.HK", "HKG", taipei("14:00:00")), price: 400, previousClose: 390, series: [] };
   assert.deepEqual(chartLayout(q), { extent: null, dot: null });
   assert.equal(chartGeometry(q.series, q.previousClose, chartLayout(q)).dot, null);
 });
