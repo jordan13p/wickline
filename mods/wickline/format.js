@@ -7,13 +7,13 @@ import { HOUR_MS, resolvedMarket } from "./markets.js";
 /**
  * The line through `series`, scaled into its box as [x%, y%] points spread over `extent` of its width (null: all of
  * it; freshness.js chartLayout), where the reference price (the previous close) falls whenever it is positive, and
- * `dot` ({ x, price }: x a share of the width) as [x%, y%], or null. The y range holds all three. null with no point,
- * no reference and no dot.
+ * `dot` ({ x, price }: x a share of the width) as [x%, y%], or null. The y range holds all three. null when nothing
+ * would be drawn: no reference, no dot and fewer than two points (a line needs two).
  */
 export function chartGeometry(series, reference, { extent, dot } = {}) {
   const points = Array.isArray(series) ? series : [];
   const rule = positive(reference) ? reference : null;
-  if (!points.length && rule === null && !dot) return null;
+  if (points.length < 2 && rule === null && !dot) return null;
   let min = Infinity;
   let max = -Infinity;
   const widen = (value) => { min = Math.min(min, value); max = Math.max(max, value); };

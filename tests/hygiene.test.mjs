@@ -566,17 +566,6 @@ test("a collapsed sidebar row is one line with its notes", () => {
   assert.ok(row.indexOf("collapsedRow(row)") < row.indexOf("ghost ? ghostFrame("));
 });
 
-// A lone point with no rule and no dot draws nothing (a line needs two points), so the detail shows no empty box.
-test("the detail draws its chart box only when the chart draws something", () => {
-  const parts = code(read(new URL("ui/parts.js", MOD)));
-  const shape = parts.slice(parts.indexOf("export function chartShape("), parts.indexOf("export function chart("));
-  assert.match(shape, /\.reference !== null/);
-  assert.match(shape, /\.points\.length > 1/);
-  assert.match(shape, /\.dot !== null/);
-  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.match(detail, /\.when\(chartShape\(q\) !== null,\s*\(el\) => el\.child\(chart\(q,/);
-});
-
 test("the detail's stats are numbers without the currency", () => {
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
   assert.match(detail, /number\(q, price\)/);

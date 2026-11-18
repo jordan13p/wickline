@@ -75,6 +75,16 @@ test("dates by language, times in 24 hours", () => {
   assert.equal(formatTime(new Date(2026, 10, 2, 9, 5, 7).getTime(), true), "09:05:07");
 });
 
+// A line needs two points: a lone one with no rule and no dot draws nothing, so the detail shows no empty box.
+test("a lone point is drawn only with a rule or a dot", () => {
+  assert.equal(chartGeometry([2200], null), null);
+  assert.equal(chartGeometry([2200], 0, { extent: 0.5 }), null);
+  const ruled = chartGeometry([2200], 2190);
+  assert.ok(ruled.reference !== null && ruled.reference > 0 && ruled.reference < 100);
+  const dotted = chartGeometry([2200], null, { extent: 0.2, dot: { x: 0.5, price: 2210 } });
+  assert.deepEqual([dotted.reference, dotted.dot[0]], [null, 50]);
+});
+
 test("scales a line into its box", () => {
   // One point: the rule and the point at the left edge.
   const one = chartGeometry([1], 1);
