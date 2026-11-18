@@ -344,10 +344,11 @@ export class Watchlist {
   }
 
   /**
-   * What the detail dialog opens on, all read at one `now`, or null without a quote: the row as shown (a Taiwan row
-   * with its mark's end, `closureUntil`, by marked: the open detail fetches nothing and must drop a mark that is over),
-   * without its next deadline (`closureDeadline`: the detail gets no new answers, so no inference lands there, and
-   * `closureUntil` alone ends the mark), its error (`error`) and its overlay's (`fallback`, overlayError).
+   * What the detail dialog opens on and is handed (main.js handOver), all read at one `now`, or null without a quote: the
+   * row as shown (a Taiwan row with its mark's end, `closureUntil`, by marked: the open detail fetches nothing and must
+   * drop a mark that is over), without its next deadline (`closureDeadline`: the detail gets no answers of its own, so no
+   * inference lands there, and `closureUntil` alone ends the mark), its error (`error`) and its overlay's (`fallback`,
+   * overlayError).
    */
   detailQuote(symbol, now) {
     const quote = this.shown(symbol, now);

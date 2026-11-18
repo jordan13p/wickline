@@ -597,14 +597,14 @@ export function detailWakeAt(detail, now) {
 }
 
 /**
- * The open detail's one task: a data timer, not animation. It fetches nothing; one wake at a time, it sleeps to the
- * quote's next reading change (detailWakeAt, from its marks as held then), at most DETAIL_WAKE_CAP_MS per sleep before
- * it rereads the clock, and calls `changed()` (a redraw) only once a wake is reached, so a wake hours away costs one
- * redraw. `detail` is a getter, read at each wake; `woken()` gives a promise that settles when the quote was replaced,
- * and a wake recomputes at once (a quote handed in). Every real quote has an edge ahead (a day edge at
- * least), so the `null` branch is a guard: it waits for `woken()` rather than ending. Each wake leaves the abandoned
- * `sleep` pending (at most DETAIL_WAKE_CAP_MS, so about 60 at a 10 s pace); they cost little and end with the
- * dialog's `cx`, not a leak. The copy's `cx` ends it: a cancelled sleep rejects, and so does this.
+ * The open detail's one task: a data timer, not animation. It fetches nothing (its row hands it newer quotes, see
+ * main.js adoptDetail); one wake at a time, it sleeps to the quote's next reading change (detailWakeAt, from its marks
+ * as held then), at most DETAIL_WAKE_CAP_MS per sleep before it rereads the clock, and calls `changed()` (a redraw)
+ * only once a wake is reached, so a wake hours away costs one redraw. `detail` is a getter, read at each wake;
+ * `woken()` gives a promise that settles when a handed quote was adopted, and the wake recomputes at once from it.
+ * Every real quote has an edge ahead (a day edge at least), so the `null` branch is a guard: it waits for `woken()`
+ * rather than ending. Each wake leaves the abandoned `sleep` pending (at most DETAIL_WAKE_CAP_MS, so about 60 at a 10 s
+ * pace); they cost little and end with the dialog's `cx`, not a leak. The copy's `cx` ends it: a cancelled sleep rejects, and so does this.
  */
 export async function followDetail(detail, { now, sleep, changed, woken }) {
   for (;;) {

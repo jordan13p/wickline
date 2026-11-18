@@ -200,7 +200,8 @@ const ONLY_FILTER = { en: /nothing else is kept there/, "zh-TW": /只存這一�
 test("the storage disclosure names every key and the per-copy filter in all five languages", () => {
   for (const lang of LANGUAGES) {
     const text = STRINGS[lang]["privacy.storage"];
-    for (const name of ["wickline.watchlist.v1", "wickline.settings.v1", "wickline.dockTab", "wickline.filter", "localStorage"]) {
+    for (const name of ["wickline.watchlist.v1", "wickline.settings.v1", "wickline.dockTab", "wickline.detail", "wickline.filter",
+      "localStorage"]) {
       assert.ok(text.includes(name), `${lang} ${name}`);
     }
     // The filter is the only thing kept in localStorage.

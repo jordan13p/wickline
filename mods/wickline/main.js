@@ -13,6 +13,7 @@ import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
 import { changeTone, number } from "./format.js";
 import { followDetail, sessionOf, shownLimit } from "./freshness.js";
+import { DETAIL_KEY, adopt, clearsOnClose, makeToken, nextWrite, startHandover } from "./handover.js";
 import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, heldFilter, nextOf, openFilter, readFilter, resolvedMarket } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
@@ -41,6 +42,12 @@ const filterStorage = {
   getItem: (key) => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
 };
+// The open detail's hand-over (handover.js), in the shared state, saved to disk: the only code that touches its key,
+// so a proof copy swaps this object for one held in memory.
+const detailStore = {
+  read: () => shared(DETAIL_KEY),
+  write: (value) => setShared(DETAIL_KEY, value),
+};
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
 // The dialog reads only what it may show of a saved key, never the key.
 const loadSecretEnding = (name) => secrets.loadSecretEnding(fs, secretsDir(), name);
@@ -57,7 +64,10 @@ export default class Wickline extends View {
     if (given.detail) {
       this.detail = given.detail;
       this.overlay = given.overlay;
-      // Redraws at the quote's own moments (a stale price, a session's edge, a mark's end); it fetches nothing.
+      // The token its opening copy writes under, and the last `seq` it adopted (none without a token: nothing to adopt).
+      this.held = typeof given.token === "string" ? { token: given.token, seq: 1 } : null;
+      // Redraws at its quote's own moments (a stale price, a session's edge, a mark's end) and at each quote its row
+      // hands it; it fetches nothing.
       cx.spawn(async (cx) => {
         await followDetail(() => this.detail, {
           now: () => Date.now(),
@@ -126,6 +136,8 @@ export default class Wickline extends View {
     // The refresh icon's turn (see refresh): null at rest, else `{ start, needed }`, turning since `start` (ms)
     // until `needed` whole turns are done.
     this.spin = null;
+    // What this copy last handed the detail it opened (handover.js), or null: none open, or another took over.
+    this.handover = null;
     this.makeInput();
 
     this.watch = new Watchlist({
@@ -147,7 +159,7 @@ export default class Wickline extends View {
     // spawn for its whole life: sleeping and redrawing go through it.
     for (const id of this.watch.providerIds()) {
       cx.spawn(async (cx) => {
-        await this.watch.runProvider(id, { sleep: (ms) => cx.sleep(ms), changed: () => cx.notify() });
+        await this.watch.runProvider(id, { sleep: (ms) => cx.sleep(ms), changed: () => { this.handOver(); cx.notify(); } });
       });
     }
     // A language chosen in another copy reaches this one on render, where no input can be made: render
@@ -176,6 +188,8 @@ export default class Wickline extends View {
 
   close() {
     this.watch?.stop();
+    // A detail clears only its own hand-over: one opened since keeps its own.
+    if (this.held && clearsOnClose(detailStore.read(), this.held.token)) detailStore.write({});
   }
 
   // Shared by every copy; the language is the person's choice, never the market's or the system's.
@@ -488,10 +502,43 @@ export default class Wickline extends View {
     return this.watch.pause(!this.watch.preferences.paused);
   }
 
+  // Written before the dialog opens, so its first render finds its own hand-over; a second open replaces the first.
   openDetail(symbol) {
-    const detail = this.watch.detailQuote(symbol, Date.now());
+    const now = Date.now();
+    const detail = this.watch.detailQuote(symbol, now);
     if (!detail) return;
-    openOverlay({ mod: MOD_ID, kind: "dialog", width: 440, props: { detail } });
+    const token = makeToken(now, Math.random());
+    const { value, mine } = startHandover(symbol, token, detail);
+    detailStore.write(value);
+    this.handover = mine;
+    openOverlay({ mod: MOD_ID, kind: "dialog", width: 440, props: { detail, token } });
+  }
+
+  /**
+   * After each pass of a source's loop (where it calls changed(), a round or not): hands the open detail its row's quote
+   * when it reads differently, while the key still holds this copy's token (nextWrite). Read, decided and written in one
+   * synchronous step, so no other copy's write comes between. It runs inside the loop: a failed write must not end it.
+   */
+  handOver() {
+    if (!this.handover) return;
+    try {
+      const { write, mine } = nextWrite(detailStore.read(), this.handover, this.watch.detailQuote(this.handover.symbol, Date.now()),
+        this.watch.preferences.paused);
+      if (write) detailStore.write(write);
+      this.handover = mine;
+    } catch {
+      // Not handed this time: the detail keeps its last quote, and the next pass tries again.
+    }
+  }
+
+  // The detail's read of its hand-over, on render (it only reads: a write here would re-render every copy, again and
+  // again). A newer quote replaces the one held and wakes followDetail to time its next redraw from it.
+  adoptDetail() {
+    const got = adopt(detailStore.read(), this.held);
+    if (!got) return;
+    this.detail = got.quote;
+    this.held = { ...this.held, seq: got.seq };
+    this.wakeDetail?.();
   }
 
   openSettings(tab) {
@@ -515,7 +562,10 @@ export default class Wickline extends View {
   render() {
     const t = theme();
     this.readSettings();
-    if (this.detail) return detailView(this, t);
+    if (this.detail) {
+      this.adoptDetail();
+      return detailView(this, t);
+    }
     if (this.draft) return settingsView(this, t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();

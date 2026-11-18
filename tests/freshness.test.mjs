@@ -1257,6 +1257,30 @@ test("a wake recomputes from the quote the getter gives now", async () => {
   assert.deepEqual(redraws, [NINE_PM + 120_001]);
 });
 
+test("A handed quote sets the wake", async () => {
+  // 2330.TW's detail opened stalled (MIS price cached): its next wake is the 13:30 close. The row hands it MIS's live
+  // quote traded at 10:00:03, adopted at 10:00:05; the list is then paused, so nothing else is handed.
+  const periods = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+  const stalled = { symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: taipei("09:50:00"), cached: true, periods };
+  const live = { symbol: "2330.TW", source: "mis", price: 2175, timestamp: taipei("10:00:03"), periods };
+  assert.equal(detailWakeAt(stalled, taipei("10:00:00")), taipei("13:30:00"));
+  const host = fakeHost(() => ok({}));
+  host.clock = taipei("10:00:00");
+  const redraws = [];
+  let detail = stalled;
+  let wake;
+  const run = followDetail(() => detail, { now: host.now, sleep: host.sleep, changed: () => redraws.push(host.clock),
+    woken: () => new Promise((resolve) => { wake = resolve; }) });
+  run.catch(() => {});
+  await advance(host, taipei("10:00:05"));
+  detail = live;
+  wake();
+  await advance(host, taipei("10:05:00"));
+  assert.deepEqual(redraws, [taipei("10:02:03") + 1]);
+  assert.equal(shownAt(live, taipei("10:02:03")).source[0][0], "價格：即時 · 證交所 MIS");
+  withTZ("Asia/Taipei", () => assert.ok(shownAt(live, taipei("10:02:04")).source[0][0].includes("報價停在 10:00")));
+});
+
 test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", () => {
   // No closureDeadline, so nothing but closureUntil falls at 15:10 (nextEdge gives 00:00 here).
   const fifteen = at("2026-11-11T07:00:00Z");

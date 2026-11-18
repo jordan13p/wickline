@@ -652,3 +652,71 @@ test("a render reads every row's quote at its one now", () => {
   const panel = code(read(new URL("ui/panel.js", MOD)));
   assert.doesNotMatch(panel, /\.shown\(symbol\)|rowSource\(symbol\)/);
 });
+
+// A method of main.js's view, from its first line to its closing brace.
+const method = (source, head) => {
+  const start = source.indexOf(`  ${head}`);
+  assert.ok(start >= 0, head);
+  return source.slice(start, source.indexOf("\n  }\n", start));
+};
+
+// The detail copy only reads what its row hands it (handover.js): no request, no list of its own.
+test("the detail copy sends no request and owns no Watchlist", () => {
+  const main = code(read(new URL("main.js", MOD)));
+  const start = main.indexOf("if (given.detail)");
+  assert.ok(start >= 0);
+  const branch = main.slice(start, main.indexOf("return;", start));
+  for (const word of ["new Watchlist", "fetch", "runProvider"]) assert.ok(!branch.includes(word), word);
+});
+
+test("only detailStore touches wickline.detail, and the hand-over decides in one synchronous step", () => {
+  const main = code(read(new URL("main.js", MOD)));
+  assert.ok(!withoutStrings(main).includes("wickline.detail") && !/["'`]wickline\.detail["'`]/.test(main), "the key by its constant only");
+  const store = main.slice(main.indexOf("const detailStore = {"), main.indexOf("\n};\n", main.indexOf("const detailStore = {")));
+  assert.match(store, /read: \(\) => shared\(DETAIL_KEY\)/);
+  assert.match(store, /write: \(value\) => setShared\(DETAIL_KEY, value\)/);
+  const uses = [...main.matchAll(/DETAIL_KEY/g)].map((m) => m.index);
+  const importAt = main.search(/import \{[^}]*DETAIL_KEY[^}]*\} from "\.\/handover\.js";/);
+  const storeAt = main.indexOf("const detailStore = {");
+  for (const at of uses) {
+    const inImport = importAt >= 0 && at > importAt && at < main.indexOf(";", importAt);
+    const inStore = at > storeAt && at < storeAt + store.length;
+    assert.ok(inImport || inStore, `DETAIL_KEY at ${at}`);
+  }
+  const handOver = method(main, "handOver() {");
+  assert.match(handOver, /nextWrite\(detailStore\.read\(\), this\.handover, /);
+  assert.doesNotMatch(handOver, /\bawait\b/);
+  const open = method(main, "openDetail(symbol) {");
+  assert.ok(open.indexOf("detailStore.write(") >= 0 && open.indexOf("detailStore.write(") < open.indexOf("openOverlay("), "written before the dialog opens");
+  assert.match(main, /changed: \(\) => \{ this\.handOver\(\); cx\.notify\(\); \}/);
+  assert.match(method(main, "close() {"), /clearsOnClose\(detailStore\.read\(\), this\.held/);
+  const render = method(main, "render() {");
+  const branch = render.slice(render.indexOf("if (this.detail)"), render.indexOf("detailView(") + 1);
+  assert.match(branch, /this\.adoptDetail\(\)/);
+});
+
+// What the disclosure says of the open detail's key, per language.
+const DETAIL_KEY_WORDS = {
+  en: [/wickline\.detail/, /saved to disk/, /copy that opened it/, /cleared when it closes/, /next detail opens/, /no request of its own/],
+  "zh-TW": [/wickline\.detail/, /寫入磁碟/, /開啟它的那個/, /關閉時清除/, /下次開啟詳細資料/, /不會自行發出任何請求/],
+  "zh-CN": [/wickline\.detail/, /写入磁盘/, /打开它的那个/, /关闭时清除/, /下次打开详情/, /不会自行发出任何请求/],
+  ja: [/wickline\.detail/, /ディスクに保存/, /開いたコピー/, /閉じると消去/, /次に詳細を開く/, /独自のリクエストは送りません/],
+  ko: [/wickline\.detail/, /디스크에 저장/, /연 사본/, /닫으면 지웁니다/, /다음에 상세를 열/, /자체 요청은 보내지 않습니다/],
+};
+const STORAGE_NAMES = ["wickline.watchlist.v1", "wickline.settings.v1", "wickline.dockTab", "wickline.detail", "data/wickline/secrets.json",
+  "localStorage"];
+test("Storage named", () => {
+  const places = ["README.md", "README.zh-TW.md", "RECIPE.md"].map((name) => [name, read(new URL(name, ROOT))]);
+  for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.storage`, STRINGS[lang]["privacy.storage"]]);
+  for (const [name, text] of places) for (const key of STORAGE_NAMES) assert.ok(text.includes(key), `${key} in ${name}`);
+});
+
+test("The detail's key", () => {
+  // A doc says it all on one line naming the key; the app's storage text, anywhere in it.
+  const places = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]]
+    .map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n").filter((line) => line.includes("wickline.detail"))]);
+  for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.storage`, lang, [STRINGS[lang]["privacy.storage"]]]);
+  for (const [name, lang, parts] of places) {
+    assert.ok(parts.some((part) => DETAIL_KEY_WORDS[lang].every((word) => word.test(part))), name);
+  }
+});

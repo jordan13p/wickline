@@ -149,17 +149,18 @@ export function closureOf(market, now, listed, seen) {
 
 /**
  * `quote` with its Taiwan market's reading (closureOf): `closure`, the deadline as `closureDeadline` (freshness.js
- * nextEdge wakes the row there) and the mark's end as `closureUntil` (heldMarks: the open detail, which fetches nothing
- * and so never learns a new reading, drops the mark there), each when there is one.
+ * nextEdge wakes the row there) and the mark's end as `closureUntil` (heldMarks: the open detail, which learns a new
+ * reading only from its row's hand-over, drops the mark there), each when there is one.
  */
 export const withClosure = (quote, { closure, deadline, until }) => ({
   ...quote, closure, ...(deadline !== null && { closureDeadline: deadline }), ...(until !== null && { closureUntil: until }),
 });
 
 /**
- * `quote` as the open detail reads it at `now`: itself while its mark holds (`closureUntil` unset, or still ahead);
- * from that moment a copy without the mark (`closure` and `closureUntil` null, no `closureDeadline`), so the detail
- * reads its session from its periods and TAIFEX's table again rather than a closure that is over.
+ * `quote` as the open detail reads it at `now` (it learns a new reading only from its row's hand-over): itself while its
+ * mark holds (`closureUntil` unset, or still ahead); from that moment a copy without the mark (`closure` and
+ * `closureUntil` null, no `closureDeadline`), so the detail reads its session from its periods and TAIFEX's table
+ * again rather than a closure that is over.
  */
 export function heldMarks(quote, now) {
   if (quote.closureUntil == null || now < quote.closureUntil) return quote;
