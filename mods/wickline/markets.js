@@ -70,6 +70,9 @@ export const TAIFEX_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 
 export const DAY_SESSION = TAIFEX_HOURS.sessions[0];
 export const NIGHT_SESSION = TAIFEX_HOURS.sessions[1];
 
+/** Whether a source polls at its fast pace in `session` (Watchlist#sessionFor's): open, a call auction, or not yet known. */
+export const fastPace = (session) => session === "open" || session === "auction" || session === "unknown";
+
 // Regular hours used only for a Taiwan or US quote with no trading periods yet; exchange-local minutes.
 export const TWSE_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], from: 540, to: 810 }); // 09:00–13:30 Taipei, TWSE and TPEx
 export const US_HOURS = Object.freeze({ weekdays: [1, 2, 3, 4, 5], from: 570, to: 960 });                  // 09:30–16:00 New York

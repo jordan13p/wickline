@@ -165,9 +165,6 @@ export const auctionFlagged = (auctionAt, now) => now - auctionAt < LIVE_MAX_AGE
  */
 const auctionOf = (quote, now) => (quote.twRealtime && inTaiwanAuction(now)) || auctionFlagged(quote.auctionAt, now);
 
-/** Whether a source polls at its fast pace in `session` (Watchlist#sessionFor's): open, a call auction, or not yet known. */
-export const fastPace = (session) => session === "open" || session === "auction" || session === "unknown";
-
 // A Taiwan stock (not an index, not a future).
 const isTaiwanStock = (quote) => kindOf(quote.symbol) === "stock" && resolvedMarket(quote.symbol, quote.exchange) === "tw";
 

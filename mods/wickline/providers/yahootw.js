@@ -6,9 +6,8 @@ import {
   HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, withinLimits,
 } from "../quotes.js";
 import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
-import { MINUTE_MS, kindOf } from "../markets.js";
+import { MINUTE_MS, fastPace, kindOf } from "../markets.js";
 import { failEach, parseJson } from "./provider.js";
-import { fastPace } from "../freshness.js";
 import { period } from "./yahoo.js";
 
 // Fixed: the person cannot point it elsewhere.

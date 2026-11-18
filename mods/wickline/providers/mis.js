@@ -4,7 +4,7 @@
 // dialog. No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, cleanText, hasLimits, limitPair, positive, positiveOrNull, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
-import { fastPace } from "../freshness.js";
+import { fastPace } from "../markets.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
 export const MIS_BATCH = 50;
