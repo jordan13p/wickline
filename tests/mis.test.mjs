@@ -33,6 +33,9 @@ test("constants", () => {
   assert.equal(mis.spacingMs(3, 10_000), 0);
   assert.equal(mis.intervalMs("open"), 10_000);
   assert.equal(mis.intervalMs("unknown"), 10_000);
+  // A call auction paces as open (sessionFor reads one before 09:00 as closed).
+  assert.equal(mis.intervalMs("auction"), 10_000);
+  assert.equal("linesMs" in mis, false);
   for (const session of ["closed", "pre", "post"]) assert.equal(mis.intervalMs(session), 60_000, session);
 });
 

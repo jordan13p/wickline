@@ -2920,3 +2920,136 @@ test("auctionAt goes with MIS", () => {
   assert.equal(w.sync(), true);
   assert.equal(w.auctionAt["2330.TW"], undefined);
 });
+
+// Taiwan's call auctions (試撮中): what marked() gives a row, how sessionFor paces it, and the recorded answers of 11/17.
+const reading1117 = (w, symbol, now) => {
+  const quote = w.shown(symbol, now);
+  const session = sessionOf(quote, now);
+  return { quote, session, state: freshness(quote, session, now).state };
+};
+const MONDAY_CLOSE = at("2026-11-16T05:30:00Z");
+// Yahoo Finance at Monday's close under 11/17's periods, as it answers before the open.
+const yahooMonday = (symbol) => twYahooAt(symbol, MONDAY_CLOSE, "2026-11-17");
+
+test("marked() gives twRealtime only with a real-time source on", () => {
+  const now = taipei1117("05:27:00");
+  const watch = (prefs) => {
+    const host = taiwanHost(prefs);
+    host.clock = now;
+    const w = new Watchlist(host);
+    w.quotes["^TWII"] = yq("^TWII", "TAI", now - 60_000);
+    return { host, w };
+  };
+  const reads = (w) => ["2330.TW", "6488.TWO", "^TWII", "WTX&"]
+    .map((symbol) => w.marked(symbol, { symbol, periods: null, timestamp: now }, now).twRealtime ?? false);
+  assert.deepEqual(reads(watch(undefined).w), [false, false, false, false]);
+  for (const prefs of [ONLY_MIS, ONLY_YAHOOTW, BOTH]) assert.deepEqual(reads(watch(prefs).w), [true, true, false, false]);
+  // Turned off, the next read at the same moment has it no more.
+  const { host, w } = watch(ONLY_MIS);
+  assert.equal(reads(w)[0], true);
+  host.prefs = undefined;
+  assert.equal(w.sync(), true);
+  assert.equal(reads(w)[0], false);
+});
+
+test("marked() passes MIS's flag only over a price traded before it", () => {
+  const host = taiwanHost(ONLY_MIS);
+  host.clock = taipei1117("05:27:00");
+  const w = new Watchlist(host);
+  w.auctionAt["2330.TW"] = taipei1117("05:26:57");
+  const flag = (fields) => w.marked("2330.TW", { symbol: "2330.TW", periods: null, ...fields }, host.clock).auctionAt;
+  assert.equal(flag({ timestamp: taipei1117("05:23:55") }), taipei1117("05:26:57"));
+  // Yahoo 奇摩股市 times a row at its feed: its own trade decides.
+  assert.equal(flag({ timestamp: taipei1117("05:26:59"), tradeTime: taipei1117("05:24:58") }), taipei1117("05:26:57"));
+  assert.equal(flag({ timestamp: taipei1117("05:26:57") }), undefined);
+  assert.equal(flag({ timestamp: taipei1117("05:26:59"), tradeTime: taipei1117("05:26:58") }), undefined);
+});
+
+test("sessionFor ranks an auction base as busy", () => {
+  const host = taiwanHost(ONLY_MIS);
+  const w = new Watchlist(host);
+  const periods = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+  // Yahoo Finance still at Monday's close: the base reads the auction, which paces as open from 09:00.
+  w.quotes["2330.TW"] = yq("2330.TW", "TAI", MONDAY_CLOSE, periods);
+  w.auctionAt["2330.TW"] = taipei1117("01:01:55");
+  assert.equal(w.sessionFor(["2330.TW"], taipei1117("01:02:22")), "auction");
+  delete w.auctionAt["2330.TW"];
+  assert.equal(w.sessionFor(["2330.TW"], taipei1117("05:27:00")), "auction");
+  // Before 09:00 the trial match paces as closed.
+  assert.equal(w.sessionFor(["2330.TW"], taipei1117("00:40:00")), "closed");
+  // Today's delayed price reads its own session; MIS's flag still sets the pace.
+  w.quotes["2330.TW"] = yq("2330.TW", "TAI", taipei1117("05:10:00"), periods);
+  w.auctionAt["2330.TW"] = taipei1117("05:29:58");
+  const now = taipei1117("05:31:00");
+  assert.equal(sessionOf(w.baseQuote("2330.TW", now), now), "closed");
+  assert.equal(w.sessionFor(["2330.TW"], now), "auction");
+  assert.equal(w.sessionFor(["2330.TW"], taipei1117("05:31:58")), "closed");
+});
+
+test("a copy hidden at 08:50 reads by its price at 09:10", async () => {
+  // MIS flags the row until the open, then prices it.
+  const host = taiwanHost(ONLY_MIS, { yahoo: yahooMonday });
+  host.mis = () => misRows(host.clock < taipei1117("01:00:00") ? misFlagged(host.clock - 2_000)
+    : { ...misBook(host.clock - 2_000), z: "2190.0000" });
+  host.clock = taipei1117("00:49:30");
+  let shown = true;
+  host.shown = () => shown;
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, taipei1117("00:50:00"));
+  assert.equal(reading1117(w, "2330.TW", host.clock).session, "auction");
+  shown = false;
+  await advance(host, taipei1117("01:10:00"));
+  shown = true;
+  // At once, before any round: the window is over and the flag lapsed.
+  assert.notEqual(reading1117(w, "2330.TW", host.clock).session, "auction");
+  w.wakeMissed();
+  await advance(host, taipei1117("01:10:01"));
+  const row = reading1117(w, "2330.TW", host.clock);
+  assert.deepEqual([row.quote.source, row.quote.price, row.state], ["mis", 2190, "live"]);
+  await stop(w, host, runs);
+});
+
+test("a flag over a delayed price", async () => {
+  // MIS timed out at 13:26 and dropped its held price; from 13:31 its cache still flags the row (13:29:58). Yahoo
+  // 奇摩股市 is off, so the row shows Yahoo Finance's delayed price.
+  const host = taiwanHost(ONLY_MIS, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1330")) });
+  await soleRun(host, async (w) => {
+    await advance(host, taipei1117("05:31:45"));
+    const row = reading1117(w, "2330.TW", host.clock);
+    assert.deepEqual([row.quote.source, row.quote.auctionAt, row.session === "auction", row.state],
+      ["yahoo", taipei1117("05:29:58"), false, "closed"]);
+    // MIS keeps its 10 s cadence while the flag holds.
+    const asked = host.requests.filter((url) => url.startsWith(MIS_URL)).length;
+    assert.equal(asked, 5);
+  }, taipei1117("05:31:00"));
+});
+
+test("the opening trade from Yahoo 奇摩股市 ends the flag", async () => {
+  const host = taiwanHost(BOTH, { yahoo: yahooMonday, mis: () => ok(jsonFixture("mis-auction-0900")), yahootw: () => ok(jsonFixture("ytw-auction-0900")) });
+  host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
+  await soleRun(host, (w) => {
+    assert.equal(w.auctionAt["2330.TW"], taipei1117("00:59:57"));
+    const row = reading1117(w, "2330.TW", taipei1117("01:00:03"));
+    assert.deepEqual([row.quote.source, row.quote.price, row.state], ["yahootw", 2190, "live"]);
+  }, taipei1117("01:00:03"));
+});
+
+test("the closing auction holds Yahoo 奇摩股市's last trade", async () => {
+  const host = taiwanHost(BOTH, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1326")), yahootw: () => ok(jsonFixture("ytw-auction-1326")) });
+  host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
+  await soleRun(host, (w) => {
+    const row = reading1117(w, "2330.TW", taipei1117("05:28:00"));
+    assert.deepEqual([row.quote.source, row.quote.price, row.state], ["yahootw", 2175, "auction"]);
+  }, taipei1117("05:27:55"));
+});
+
+test("the close from Yahoo 奇摩股市 ends the flag", async () => {
+  const host = taiwanHost(BOTH, { yahoo: yahoo1117, mis: () => ok(jsonFixture("mis-auction-1330")), yahootw: () => ok(jsonFixture("ytw-auction-1330")) });
+  host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
+  await soleRun(host, (w) => {
+    assert.equal(w.auctionAt["2330.TW"], taipei1117("05:29:58"));
+    const row = reading1117(w, "2330.TW", taipei1117("05:30:05"));
+    assert.deepEqual([row.quote.source, row.quote.price, row.state], ["yahootw", 2170, "closed"]);
+  }, taipei1117("05:30:03"));
+});

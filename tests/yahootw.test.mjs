@@ -33,6 +33,7 @@ test("constants and cadence", () => {
   assert.equal(yahootw.spacingMs(3, 10_000), 0);
   assert.equal(yahootw.intervalMs("open"), 10_000);
   assert.equal(yahootw.intervalMs("unknown"), 10_000);
+  assert.equal(yahootw.intervalMs("auction"), 10_000);
   for (const session of ["closed", "pre", "post"]) assert.equal(yahootw.intervalMs(session), 60_000, session);
 });
 
@@ -40,6 +41,7 @@ test("line cadence", () => {
   assert.equal(yahootw.linesPerRound, 3);
   assert.equal(yahootw.linesMs("open"), 120_000);
   assert.equal(yahootw.linesMs("unknown"), 120_000);
+  assert.equal(yahootw.linesMs("auction"), 120_000);
   assert.equal(yahootw.linesMs("closed"), 600_000);
 });
 

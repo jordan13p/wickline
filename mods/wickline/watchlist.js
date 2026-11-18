@@ -2,10 +2,10 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade } from "./quotes.js";
 import {
-  HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, tradingDay, twMarket, withClosure,
+  HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
-import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, isRealtime, nextEdge, sessionOf, staleAt } from "./freshness.js";
-import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import { LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, isRealtime, nextEdge, sessionOf, staleAt } from "./freshness.js";
+import { DAY_MS, MINUTE_MS, TWSE_HOURS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -48,8 +48,9 @@ const SWITCHES = {
 };
 // A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open, and a lunch break
 // ranks below a session not yet known but above pre/post. A listed closed day and a day without trades pace as closed
-// (sessionFor then reads "closed": its line is not asked again, and no source says it prices nothing live).
-const SESSION_RANK = { open: 4, "24h": 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0, holiday: 0, noTrades: 0 };
+// (sessionFor then reads "closed": its line is not asked again, and no source says it prices nothing live). A call
+// auction paces as open: the closing auction's end brings the close.
+const SESSION_RANK = { open: 4, "24h": 4, auction: 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0, holiday: 0, noTrades: 0 };
 // Errors about the source itself, not one symbol: shown as the source's problem.
 const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadable)$/;
 // The source is down or hung: the rest of the round would only wait out more timeouts.
@@ -386,19 +387,24 @@ export class Watchlist {
   /**
    * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure`, its next deadline as
    * `closureDeadline` and its mark's end as `closureUntil` (closureAt, by calendar.js withClosure; freshness.js
-   * nextEdge wakes the row at the deadline):
+   * nextEdge wakes the row at the deadline); for a Taiwan stock, `twRealtime: true` while MIS or Yahoo 奇摩股市 is on,
+   * and MIS's flagged snapshot as `auctionAt` while the quote's price traded before it (`tradeTime`, else its time):
    * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
-   * closure.
+   * closure and call auction.
    */
   marked(symbol, quote, now) {
     if (!quote || this.marketFor(symbol) !== "tw") return quote;
-    return withClosure(quote, this.closureAt(twMarket(symbol), now));
+    const reading = this.closureAt(twMarket(symbol), now);
+    const twRealtime = kindOf(symbol) === "stock" && (reading.on[mis.id] || reading.on[yahootw.id]);
+    const flaggedAt = this.auctionAt[symbol];
+    const held = (quote.tradeTime ?? quote.timestamp) < flaggedAt;
+    return { ...withClosure(quote, reading), ...(twRealtime && { twRealtime: true }), ...(held && { auctionAt: flaggedAt }) };
   }
 
   /**
-   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until }` (calendar.js closureOf), from the schedule
-   * held and the answers seen, with the sources on read once. Every row of a market reads the same, so it is worked
-   * out once per market and `now`, until closureRev moves.
+   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until, on }` (calendar.js closureOf), from the schedule
+   * held and the answers seen, with the sources on read once and kept as `on` (config().on). Every row of a market
+   * reads the same, so it is worked out once per market and `now`, until closureRev moves.
    */
   closureAt(market, now) {
     if (this.closures.now !== now || this.closures.rev !== this.closureRev) {
@@ -407,7 +413,7 @@ export class Watchlist {
     const { byMarket } = this.closures;
     if (!byMarket[market]) {
       const { on } = this.config();
-      byMarket[market] = closureOf(market, now, (day) => this.holidays.days[day] ?? null, (m, open) => this.observed(m, open, on));
+      byMarket[market] = { ...closureOf(market, now, (day) => this.holidays.days[day] ?? null, (m, open) => this.observed(m, open, on)), on };
     }
     return byMarket[market];
   }
@@ -513,8 +519,7 @@ export class Watchlist {
   }
 
   pick(symbol, now) {
-    // MIS's flag holds while its snapshot is younger than a live MIS price.
-    const flagged = now - this.auctionAt[symbol] < LIVE_MAX_AGE_MS;
+    const flagged = auctionFlagged({ auctionAt: this.auctionAt[symbol] }, now);
     return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now, this.quotes[symbol], flagged);
   }
 
@@ -791,20 +796,26 @@ export class Watchlist {
   }
 
   /**
-   * The busiest session among `symbols`: open > unknown (no quote yet) > lunch > pre/post > closed. Read from the
-   * base quotes (baseQuote: an overlay keeps the base's trading periods). A symbol with a sole source and
-   * nothing to show (no source knows it) takes its form's session: a future's by TAIFEX's hours, so it is asked
-   * every 10 s in a session; any other counts as closed, so it is never polled every 10 s. One that source has
-   * answered as not found counts as closed too, so a mistyped code never holds the batch at 10 s; the wake at
-   * each TAIFEX opening still asks it.
+   * The busiest session among `symbols`: open or auction > unknown (no quote yet) > lunch > pre/post > closed. Read
+   * from the base quotes (baseQuote: an overlay keeps the base's trading periods); one MIS still flags
+   * (auctionFlagged) reads "auction" whatever its session, and "auction" reads "closed" before 09:00 Taipei. A symbol
+   * with a sole source and nothing to show (no source knows it) takes its form's session: a future's by TAIFEX's
+   * hours, so it is asked every 10 s in a session; any other counts as closed, so it is never polled every 10 s.
+   * One that source has answered as not found counts as closed too, so a mistyped code never holds the batch at
+   * 10 s; the wake at each TAIFEX opening still asks it.
    */
   sessionFor(symbols, now) {
     let best = "closed";
+    // Before 09:00 Taipei a call auction paces as closed: its answers show nothing new, the consent texts promise the
+    // fast pace only during trading hours, and the 09:00 opening starts a round.
+    const auction = taipeiMinute(now) < TWSE_HOURS.from ? "closed" : "auction";
     for (const symbol of symbols) {
       const quote = this.baseQuote(symbol, now);
-      const session = quote ? sessionOf(quote, now)
+      let session = quote ? sessionOf(quote, now)
         : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(this.standIn(symbol, now), now))
         : "unknown";
+      // MIS's flag keeps the pace also where a delayed price from today reads its own session.
+      if (session === "auction" || (quote && auctionFlagged(quote, now))) session = auction;
       if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
     }
     return symbols.length ? best : "unknown";

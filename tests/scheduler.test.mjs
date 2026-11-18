@@ -959,3 +959,68 @@ test("a hidden docked copy does not wake for a row's midnight", async () => {
     await stop(w, host, runs);
   });
 });
+
+// Taiwan's call auctions on Tuesday 2026-11-17, MIS on alone. MIS answers its 2330 row (as recorded at 13:24) by
+// `misRow(clock)`, priced (`traded`) or flagged in the auction (`flagged`); Yahoo Finance answers 2330.TW at `yahooTime`
+// on 11/17's periods. The times of MIS's requests are in host.misAt, the redraws in host.redraws.
+const taipei1117 = (time) => at(`2026-11-17T${time}+08:00`);
+const MIS_2330 = jsonFixture("mis-auction-1324").msgArray.find((row) => row.c === "2330");
+const traded = (time) => ({ ...MIS_2330, z: "2172.5000", tlong: String(time) });
+const flagged = (time) => ({ ...MIS_2330, ts: "1", pz: "2150.0000", tlong: String(time) });
+function auctionHost(misRow, yahooTime) {
+  const host = fakeHost((url) => {
+    if (url.startsWith(MIS_URL)) {
+      host.misAt.push(host.clock);
+      return ok({ msgArray: [misRow(host.clock)] });
+    }
+    return chart({ symbol: chartSymbol(url), regularMarketPrice: 2180, regularMarketTime: yahooTime / 1000, previousClose: 2215,
+      currency: "TWD", exchangeName: "TAI",
+      currentTradingPeriod: { regular: { start: taipei1117("09:00:00") / 1000, end: taipei1117("13:30:00") / 1000 } } });
+  });
+  host.misAt = [];
+  host.redraws = [];
+  host.changed = () => host.redraws.push(host.clock);
+  host.prefs = { version: 1, sources: { tw: { mis: true, misAck: { version: MIS_CONSENT_VERSION } } } };
+  host.store = { version: 1, symbols: ["2330.TW"], paused: false };
+  return host;
+}
+const sessionAt = (w, time) => sessionOf(w.shown("2330.TW", time), time);
+
+test("MIS polls every 10 s in the closing auction, 60 s in the trial match", async () => {
+  // The closing auction: MIS priced the row until 13:25, then flags it.
+  const afternoon = auctionHost((time) => (time < taipei1117("13:25:00") ? traded(time - 1_000) : flagged(time - 2_000)), taipei1117("13:04:00"));
+  afternoon.clock = taipei1117("13:24:30");
+  let w = new Watchlist(afternoon);
+  let runs = start(w, afternoon);
+  await advance(afternoon, taipei1117("13:28:00"));
+  assert.equal(sessionAt(w, taipei1117("13:27:00")), "auction");
+  const late = afternoon.misAt.filter((time) => time >= taipei1117("13:27:00"));
+  assert.deepEqual(late.slice(1).map((time, i) => time - late[i]), Array(6).fill(10_000));   // 13:27:00 … 13:28:00
+  await stop(w, afternoon, runs);
+  // The trial match: MIS flags the row until the open; Yahoo Finance holds Monday's close.
+  const morning = auctionHost((time) => (time < taipei1117("09:00:00") ? flagged(time - 2_000) : traded(time - 1_000)), at("2026-11-16T05:30:00Z"));
+  morning.clock = taipei1117("08:40:30");
+  w = new Watchlist(morning);
+  runs = start(w, morning);
+  await advance(morning, taipei1117("09:00:05"));
+  assert.equal(sessionAt(w, taipei1117("08:40:31")), "auction");
+  const minutes = Array.from({ length: 20 }, (_, i) => taipei1117("08:40:30") + i * 60_000);
+  // Every 60 s, and a round at the 09:00 opening.
+  assert.deepEqual(morning.misAt, [...minutes, taipei1117("09:00:00")]);
+  await stop(w, morning, runs);
+});
+
+test("The closing auction begins", async () => {
+  // MIS prices the row live every 10 s (13:24:03, …, 13:24:53, 13:25:03); the auction begins between two rounds.
+  const host = auctionHost((time) => (time < taipei1117("13:25:00") ? traded(time - 1_000) : flagged(time - 2_000)), taipei1117("13:04:00"));
+  host.clock = taipei1117("13:24:03");
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, taipei1117("13:24:59"));
+  assert.equal(zhLabel(w.shown("2330.TW", host.clock), host.clock), "即時");
+  await advance(host, taipei1117("13:25:01"));
+  assert.ok(host.redraws.some((time) => time >= taipei1117("13:25:00") && time <= taipei1117("13:25:01")), host.redraws.join());
+  assert.ok(!host.misAt.some((time) => time >= taipei1117("13:25:00") && time <= taipei1117("13:25:01")), host.misAt.join());
+  assert.equal(zhLabel(w.shown("2330.TW", taipei1117("13:25:00")), taipei1117("13:25:00")), "試撮中");
+  await stop(w, host, runs);
+});

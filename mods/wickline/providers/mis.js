@@ -102,7 +102,7 @@ export const mis = {
   kinds: ["stock"],
   overlay: true,
   spacingMs: () => 0,
-  intervalMs: (session) => (session === "open" || session === "unknown" ? 10_000 : 60_000),
+  intervalMs: (session) => (session === "open" || session === "auction" || session === "unknown" ? 10_000 : 60_000),
   requests(symbols, { misUrl }) {
     const requests = [];
     for (let i = 0; i < symbols.length; i += MIS_BATCH) {

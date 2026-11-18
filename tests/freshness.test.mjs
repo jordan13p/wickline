@@ -2,22 +2,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, chartQuote, detailSource, freshness, futuresSegment, isRealtime, msUntilStale, sessionName, sessionOf,
-  shownLimit, staleAt,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, chartQuote, detailSource, freshness, futuresSegment, inTaiwanAuction, isRealtime,
+  msUntilStale, sessionName, sessionOf, shownLimit, staleAt,
 } from "../mods/wickline/freshness.js";
 import {
   DETAIL_WAKE_CAP_MS, bandState, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
 } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
 import { closureOf, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
-import { mergeOverlay } from "../mods/wickline/watchlist.js";
+import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
 import {
   dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts,
 } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
-import { ownPeriods } from "../mods/wickline/providers/yahootw.js";
+import { YAHOOTW_CONSENT_VERSION, ownPeriods } from "../mods/wickline/providers/yahootw.js";
+import { MIS_CONSENT_VERSION } from "../mods/wickline/providers/mis.js";
 import {
-  CLOSE_1224, LINE_PERIODS, SEGMENTS, advance, at, day, fakeHost, listed2026, observation, ok, say, withTZ, yq, zhLabel,
+  CLOSE_1224, LINE_PERIODS, LISTED_2026, SEGMENTS, advance, at, day, fakeHost, listed2026, observation, ok, say, withTZ, yq, zhLabel,
 } from "./helpers.mjs";
 
 const now = 1_000_000;
@@ -136,16 +137,18 @@ test("a price at its limit is lit only while that is still true", () => {
   assert.equal(shownLimit(at({ price: 2400 }), "open", now), null);
 });
 
-// Yahoo gives Taiwan no pre-market period (its pre and post are zero-length), so 08:45 reads "closed", the
-// same as after 13:30: only a price from today's regular session is lit once the market is not open.
+// Yahoo gives Taiwan no pre-market period (its pre and post are zero-length), so 08:45 reads the trial match (or
+// "closed"), and after 13:30 "closed": only a price from today's regular session is lit once the market is not open.
 test("MIS's trial match before the open is not lit, a close at the limit is", () => {
   const open = Date.parse("2026-11-09T01:00:00Z");
   const close = Date.parse("2026-11-09T05:30:00Z");
   const tw = (timestamp) => ({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp,
     periods: { pre: null, regular: [open, close], post: null } });
-  const before = Date.parse("2026-11-09T00:45:00Z");
-  assert.equal(sessionOf(tw(before), before), "closed");
-  assert.equal(shownLimit(tw(before), sessionOf(tw(before), before), before), null);
+  // At 08:45 MIS holds yesterday's price, at its limit-up: the trial match, not a stock locked at its limit.
+  const before = Date.parse("2026-11-10T00:45:00Z");
+  const yesterday = { ...tw(close), twRealtime: true };
+  assert.equal(sessionOf(yesterday, before), "auction");
+  assert.equal(shownLimit(yesterday, sessionOf(yesterday, before), before), null);
   const later = Date.parse("2026-11-09T07:00:00Z");
   assert.equal(shownLimit(tw(close), sessionOf(tw(close), later), later), "up");
   // After hours: TWSE's fixed-price trades end 14:30, an hour past the close.
@@ -704,8 +707,15 @@ const EDGE_SWEEP_QUOTES = [
   { symbol: "WTX&", periods: LINE_PERIODS, answers: quietNight },
   { symbol: "WTX&", periods: null, answers: quietDay },
   { symbol: "WTX&", periods: LINE_PERIODS, answers: quietDay },
+  // Call auctions: a Taiwan stock with a real-time source on (Watchlist#marked's `twRealtime`), with and without periods, on
+  // an unlisted day without trades, and with MIS's flag (`auctionAt`, Tuesday 11/10 at 09:01:55), which lapses on its own.
+  { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), twRealtime: true },
+  { symbol: "2330.TW", periods: null, twRealtime: true },
+  { symbol: "2330.TW", periods: null, twRealtime: true, answers: quietRealtime },
+  { symbol: "2330.TW", periods: null, twRealtime: true, auctionAt: at("2026-11-10T01:01:55Z") },
 ];
-const sweepName = (quote) => `${quote.symbol} ${quote.periods ? "with" : "without"} periods${quote.answers ? `, ${quote.answers.name}` : ""}`;
+const sweepName = (quote) => `${quote.symbol} ${quote.periods ? "with" : "without"} periods${quote.answers ? `, ${quote.answers.name}` : ""}`
+  + `${quote.twRealtime ? ", real time on" : ""}${quote.auctionAt ? ", flagged" : ""}`;
 
 test("every change in what a row reads comes at or after an edge announced for it", () => {
   for (const quote of EDGE_SWEEP_QUOTES) {
@@ -1279,4 +1289,244 @@ test("a cached Yahoo Finance line: no wake at its stale moment once it reads sto
   const early = mergeOverlay(prior, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: open + 3_000 }, null);
   assert.notDeepEqual(detailSource(early, "open", open + 120_001, say("en"))[1], detailSource(early, "open", open + 5_000, say("en"))[1]);
   assert.equal(detailWakeAt(early, open + 5_000), open + 120_001);
+});
+
+// Taiwan's call auctions (試撮中). A row reads them through a real Watchlist, whose marked() gives `twRealtime` and
+// `auctionAt`; its records are set by hand. Tuesday 2026-11-17 in Taipei unless a test says otherwise.
+const taipei = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
+const MIS_ON = { version: 1, sources: { tw: { mis: true, misAck: { version: MIS_CONSENT_VERSION } } } };
+const YAHOOTW_ON = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
+const BOTH_ON = { version: 1, sources: { tw: { ...MIS_ON.sources.tw, ...YAHOOTW_ON.sources.tw } } };
+const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+// Yahoo Finance's quote: Monday's close (2215 at 13:30 on 11/16) under today's periods, or today's delayed price at `time`.
+const yahooClose = (symbol = "2330.TW") => ({ ...yq(symbol, "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY), price: 2215, series: [2200, 2215] });
+const yahooDelayed = (time, symbol = "2330.TW") => ({ ...yq(symbol, "TAI", time, TW_TODAY), price: 2180, series: [2190, 2180] });
+const misPrice = (time, fields = {}) => ({ symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: time, ...fields });
+const ytwTrade = (price, time, symbol = "2330.TW") => ({ symbol, source: "yahootw", price, timestamp: time, tradeTime: time, day: taipeiDay(time) });
+
+// A watchlist with `prefs` on and, for `symbol`, the base quote, the overlays by source and MIS's flagged snapshot.
+function twWatch(prefs, { base, overlays, auctionAt } = {}, symbol = "2330.TW") {
+  const host = fakeHost(() => ok({}));
+  host.prefs = prefs;
+  host.store = { version: 1, symbols: [symbol], paused: false };
+  const w = new Watchlist(host);
+  if (base) w.quotes[symbol] = base;
+  if (overlays) w.overlays[symbol] = overlays;
+  if (auctionAt !== undefined) w.auctionAt[symbol] = auctionAt;
+  return w;
+}
+// What a row reads at `now`: its quote, session and state, and its label in `lang` with the row's date after it.
+function rowAt(w, now, symbol = "2330.TW", lang = "zh-TW") {
+  const quote = w.shown(symbol, now);
+  const session = sessionOf(quote, now);
+  const fresh = freshness(quote, session, now);
+  const date = rowDate(quote, fresh, now, lang);
+  const label = [freshnessLabel(quote, fresh, now, lang, say(lang)), date && t(lang, "quote.asOf", { date })].filter(Boolean).join(" · ");
+  return { quote, session, state: fresh.state, label };
+}
+// The states a row draws a dot for (ui/parts.js dot): filled for live, a ring for these.
+const DOT_STATES = ["live", "unconfirmed", "stalled", "delayed"];
+
+test("The morning trial match", () => {
+  withTZ("Asia/Taipei", () => {
+    const w = twWatch(MIS_ON, { base: yahooClose(), auctionAt: taipei("08:37:58") });
+    const row = rowAt(w, taipei("08:38:00"));
+    assert.deepEqual([row.quote.price, row.quote.series, row.session], [2215, [2200, 2215], "auction"]);
+    assert.ok(!DOT_STATES.includes(row.state));
+    assert.equal(row.label, "試撮中 · 截至 11/16");
+  });
+});
+
+test("The closing auction", () => {
+  const w = twWatch(YAHOOTW_ON, { base: yahooDelayed(taipei("13:08:00")),
+    overlays: { yahootw: { ...ytwTrade(2175, taipei("13:24:58")), timestamp: taipei("13:24:59") } } });
+  const row = rowAt(w, taipei("13:28:00"));
+  assert.deepEqual([row.quote.source, row.quote.price, row.state, row.label], ["yahootw", 2175, "auction", "試撮中"]);
+  assert.ok(!DOT_STATES.includes(row.state));
+});
+
+test("Yahoo Finance alone", () => {
+  assert.deepEqual([rowAt(twWatch(undefined, { base: yahooClose() }), taipei("08:38:00")).state,
+    rowAt(twWatch(undefined, { base: yahooDelayed(taipei("13:08:00")) }), taipei("13:28:00")).state], ["closed", "delayed"]);
+});
+
+test("A delayed price in the afternoon", () => {
+  // MIS has failed since 13:20: its price was dropped, and with it any flag.
+  const row = rowAt(twWatch(MIS_ON, { base: yahooDelayed(taipei("13:08:00")) }), taipei("13:28:00"));
+  assert.deepEqual([row.quote.twRealtime, row.session, row.state], [true, "open", "delayed"]);
+});
+
+test("An index", () => {
+  const row = rowAt(twWatch(YAHOOTW_ON, { base: yahooClose("^TWII") }, "^TWII"), taipei("08:38:00"), "^TWII");
+  assert.deepEqual([row.quote.twRealtime, row.session], [undefined, "closed"]);
+});
+
+test("A listed closed day", () => {
+  const w = twWatch(MIS_ON, { base: { ...yq("2330.TW", "TAI", CLOSE_1224, day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z")), price: 2215 } });
+  w.holidays.days = LISTED_2026;
+  assert.equal(rowAt(w, taipei("08:38:00", "2026-12-25")).session, "holiday");
+});
+
+test("A closure the schedule does not list", () => {
+  // An unlisted typhoon day: MIS answers from the open, never with a trade.
+  const w = twWatch(MIS_ON, { base: yahooClose() });
+  assert.equal(rowAt(w, taipei("08:38:00")).session, "auction");
+  for (const time of ["09:00:10", "09:29:50"]) w.noteTrade("stock", NaN, { source: "mis", realtime: true }, taipei(time));
+  assert.equal(rowAt(w, taipei("09:30:00")).session, "noTrades");
+});
+
+test("A late opening match", () => {
+  const w = twWatch(MIS_ON, { base: yahooClose("0050.TW"), auctionAt: taipei("09:01:55") }, "0050.TW");
+  assert.equal(rowAt(w, taipei("09:02:22"), "0050.TW").session, "auction");
+  // MIS prices it: its trade is after the snapshot, so the flag no longer holds the row.
+  w.overlays["0050.TW"] = { mis: { ...misPrice(taipei("09:02:25")), symbol: "0050.TW", price: 94.6 } };
+  const row = rowAt(w, taipei("09:02:30"), "0050.TW");
+  assert.deepEqual([row.quote.price, row.session, row.state], [94.6, "open", "live"]);
+});
+
+test("Another source has the opening trade", () => {
+  const w = twWatch(BOTH_ON, { base: yahooClose(), overlays: { yahootw: ytwTrade(2190, taipei("09:00:02")) }, auctionAt: taipei("08:59:57") });
+  const row = rowAt(w, taipei("09:00:03"));
+  assert.deepEqual([row.quote.price, row.state], [2190, "live"]);
+});
+
+test("The close from another source", () => {
+  const w = twWatch(BOTH_ON, { base: yahooDelayed(taipei("13:10:00")),
+    overlays: { mis: misPrice(taipei("13:23:55")), yahootw: ytwTrade(2170, taipei("13:30:00")) }, auctionAt: taipei("13:29:58") });
+  const row = rowAt(w, taipei("13:30:05"));
+  assert.deepEqual([row.quote.price, row.state], [2170, "closed"]);
+});
+
+test("A flag nobody refreshes", () => {
+  const w = twWatch(MIS_ON, { base: yahooClose(), auctionAt: taipei("08:59:57") });
+  const detail = w.detailQuote("2330.TW", taipei("09:00:30"));
+  assert.equal(sessionOf(detail, taipei("09:01:56") + 999), "auction");
+  assert.equal(sessionOf(detail, taipei("09:01:57")), "open");
+  assert.equal(detailWakeAt(detail, taipei("09:00:30")), taipei("09:01:57"));
+});
+
+test("A trade in the flag's own second", () => {
+  const w = twWatch(BOTH_ON, { base: yahooClose("0050.TW"), overlays: { yahootw: ytwTrade(94.55, taipei("09:00:00"), "0050.TW") },
+    auctionAt: taipei("09:00:00") }, "0050.TW");
+  const row = rowAt(w, taipei("09:00:01"), "0050.TW");
+  assert.deepEqual([row.quote.price, row.state], [94.55, "live"]);
+});
+
+test("A flag over a delayed price", () => {
+  // MIS timed out at 13:26 and dropped its held price; its next answer still flags the row. The delayed price reads as it
+  // would without the flag: delayed inside the session, closed after 13:30 by its own periods.
+  for (const [flaggedAt, now, state] of [["13:27:58", "13:28:00", "delayed"], ["13:29:58", "13:31:00", "closed"]]) {
+    const row = rowAt(twWatch(MIS_ON, { base: yahooDelayed(taipei("13:08:00")), auctionAt: taipei(flaggedAt) }), taipei(now));
+    assert.deepEqual([row.quote.auctionAt, row.session === "auction", row.state], [taipei(flaggedAt), false, state], now);
+  }
+});
+
+test("A flag outside the windows", () => {
+  const w = twWatch(MIS_ON, { base: yahooDelayed(taipei("10:10:00")), overlays: { mis: misPrice(taipei("10:29:30")) }, auctionAt: taipei("10:29:58") });
+  const held = rowAt(w, taipei("10:30:05"));
+  assert.deepEqual([held.quote.price, held.state], [2172.5, "auction"]);
+  w.overlays["2330.TW"].mis = misPrice(taipei("10:31:00"), { price: 2160 });
+  const priced = rowAt(w, taipei("10:31:02"));
+  assert.deepEqual([priced.quote.price, priced.state], [2160, "live"]);
+});
+
+test("A call auction in English", () => {
+  withTZ("Asia/Taipei", () => {
+    const row = rowAt(twWatch(MIS_ON, { base: yahooClose() }), taipei("08:38:00"), "2330.TW", "en");
+    assert.ok(!DOT_STATES.includes(row.state));
+    assert.equal(row.label, "Call auction · As of Nov 16");
+  });
+});
+
+test("Taiwan auction before its periods", () => {
+  const row = rowAt(twWatch(MIS_ON, { overlays: { mis: misPrice(taipei("13:24:30")) } }), taipei("13:27:00"));
+  assert.deepEqual([row.quote.periods, row.state], [null, "auction"]);
+});
+
+test("MIS's close does not come", () => {
+  // MIS alone prices the row, holds its 13:23:55 book price through the auction, and its cache keeps answering 13:29:58's flag.
+  for (const base of [yahooDelayed(taipei("13:10:00")), undefined]) {
+    const row = rowAt(twWatch(MIS_ON, { base, overlays: { mis: misPrice(taipei("13:23:55")) }, auctionAt: taipei("13:29:58") }), taipei("13:32:00"));
+    assert.deepEqual([row.quote.price, row.state, freshness(row.quote, row.session, taipei("13:32:00")).stoppedAt],
+      [2172.5, "stalled", taipei("13:23:55")], base ? "with periods" : "without");
+  }
+});
+
+test("a still-fresh flag at 13:31 reads auction, not stalled", () => {
+  const w = twWatch(MIS_ON, { overlays: { mis: misPrice(taipei("13:23:55")) }, auctionAt: taipei("13:29:58") });
+  assert.deepEqual([rowAt(w, taipei("13:31:00")).state, rowAt(w, taipei("13:32:00")).state], ["auction", "stalled"]);
+});
+
+test("A Taiwan stock's last trade before the auction", () => {
+  // MIS off: Yahoo 奇摩股市's price, with no trading periods yet. Its close is taken at 13:25.
+  const row = rowAt(twWatch(YAHOOTW_ON, { overlays: { yahootw: ytwTrade(2175, taipei("13:24:50")) } }), taipei("13:30:30"));
+  assert.deepEqual([row.quote.periods, row.state], [null, "closed"]);
+});
+
+test("Held at the limit through the closing auction", () => {
+  const limitUp = { symbol: "6488.TWO", source: "mis", price: 563, limitUp: 563, limitDown: 461, timestamp: taipei("13:24:50") };
+  const w = twWatch(MIS_ON, { overlays: { mis: limitUp } }, "6488.TWO");
+  const row = rowAt(w, taipei("13:27:00"), "6488.TWO");
+  assert.equal(row.state, "auction");
+  assert.equal(shownLimit(row.quote, row.session, taipei("13:27:00")), "up");
+  // A cached price keeps the auction's word, never lit.
+  const cached = { ...row.quote, cached: true };
+  assert.deepEqual([freshness(cached, row.session, taipei("13:27:00")).state, shownLimit(cached, row.session, taipei("13:27:00"))], ["auction", null]);
+});
+
+test("the windows are half-open", () => {
+  const q = { symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: taipei("13:30:00", "2026-11-16"), periods: TW_TODAY, twRealtime: true };
+  const reads = (time, date) => sessionOf(q, taipei(time, date));
+  assert.deepEqual(["08:30:00", "13:25:00"].map((time) => reads(time)), ["auction", "auction"]);
+  assert.deepEqual(["09:00:00", "13:30:00"].map((time) => reads(time)), ["open", "closed"]);
+  assert.equal(sessionOf(q, taipei("08:30:00") - 1), "closed");
+  assert.deepEqual([inTaiwanAuction(taipei("08:30:00")), inTaiwanAuction(taipei("08:59:59")), inTaiwanAuction(taipei("09:00:00")),
+    inTaiwanAuction(taipei("13:25:00")), inTaiwanAuction(taipei("13:30:00"))], [true, true, false, true, false]);
+  // Saturday 11/21: no auction.
+  assert.equal(inTaiwanAuction(taipei("08:40:00", "2026-11-21")), false);
+});
+
+test("nextEdge wakes at the windows and the lapse", () => {
+  const q = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: taipei("13:30:00", "2026-11-16"), periods: TW_TODAY, twRealtime: true };
+  assert.equal(nextEdge(q, taipei("08:29:00")), taipei("08:30:00"));
+  assert.equal(nextEdge(q, taipei("08:30:00")), taipei("09:00:00"));
+  assert.equal(nextEdge(q, taipei("13:24:59")), taipei("13:25:00"));
+  assert.equal(nextEdge({ ...q, auctionAt: taipei("08:59:57") }, taipei("09:00:30")), taipei("09:01:57"));
+  // Without a real-time source on, the windows are no edge; MIS's flag still lapses at its moment.
+  const { twRealtime: _on, ...off } = q;
+  assert.equal(nextEdge(off, taipei("08:29:00")), taipei("09:00:00"));
+  // The windows' edges never start a round: today's periods hold no opening after 09:00.
+  assert.equal(nextEdge(q, taipei("08:29:00"), { openings: true }), taipei("09:00:00"));
+  assert.equal(nextEdge(q, taipei("13:24:59"), { openings: true }), null);
+});
+
+test("a flag nobody refreshes lapses at 2 minutes", () => {
+  const q = { ...yahooClose(), auctionAt: taipei("08:59:57") };
+  assert.equal(auctionFlagged(q, taipei("09:01:56") + 999), true);
+  assert.equal(auctionFlagged(q, taipei("09:01:57")), false);
+  assert.equal(sessionOf(q, taipei("09:01:56") + 999), "auction");
+  assert.equal(sessionOf(q, taipei("09:01:57")), "open");
+  assert.equal(auctionFlagged(yahooClose(), taipei("09:00:00")), false);
+});
+
+test("The closing auction begins", () => {
+  // MIS prices the row live at 13:24:59; at 13:25:00 it reads the auction, an edge announced a second before.
+  const q = { ...misPrice(taipei("13:24:58")), periods: TW_TODAY, twRealtime: true };
+  assert.equal(freshness(q, sessionOf(q, taipei("13:24:59")), taipei("13:24:59")).state, "live");
+  assert.equal(nextEdge(q, taipei("13:24:59")), taipei("13:25:00"));
+  assert.equal(sessionOf(q, taipei("13:25:00")), "auction");
+});
+
+test("A copy shown again after the open", () => {
+  // Hidden at 08:50 reading 試撮中 under MIS's flag; at 09:10 the windows and the lapse are both read from the clock.
+  const q = { ...yahooClose(), twRealtime: true, auctionAt: taipei("08:49:58") };
+  assert.equal(sessionOf(q, taipei("08:50:00")), "auction");
+  assert.equal(sessionOf(q, taipei("09:10:00")), "open");
+});
+
+test("the detail names 試撮中", () => {
+  const q = { ...misPrice(taipei("13:24:58")), periods: TW_TODAY, twRealtime: true };
+  const now = taipei("13:27:00");
+  assert.equal(sessionName(q, sessionOf(q, now), now), "auction");
+  assert.deepEqual(detailSource(q, sessionOf(q, now), now, say("zh-TW")), [["價格：試撮中 · 證交所 MIS"]]);
 });

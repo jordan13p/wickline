@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades; and when an open detail must redraw (detailWakeAt,
 // followDetail). No Herdr imports, so tests run it under Node.
-import { heldMarks, taipeiMinute } from "./calendar.js";
+import { heldMarks, taipeiDay, taipeiMinute } from "./calendar.js";
 import { formatStaleDate, nextDayTurn, stateText } from "./format.js";
 import {
   DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, dayStart, exchangeRule, kindOf, localDay,
@@ -133,6 +133,33 @@ function lunchWithin(quote, regular, at) {
   return !regular || (start > regular[0] && end < regular[1]) ? [start, end] : null;
 }
 
+// Taiwan's call auctions on the Taipei clock, in minutes since midnight, [from, to): the morning trial match and the
+// closing auction. A Taiwan stock's trading stops at the closing auction's start.
+const TW_TRIAL_MATCH = { from: 510, to: 540 };
+const TW_CLOSING_AUCTION = { from: 805, to: 810 };
+const TW_AUCTIONS = [TW_TRIAL_MATCH, TW_CLOSING_AUCTION];
+
+// A Taiwan auction window on the Taipei date of `at`, as [start, end) in ms.
+const auctionWindow = (window, at) => localWindow({ offsetMin: TWSE_HOURS.offsetMin, ...window }, at);
+
+/** Whether `now` is inside one of Taiwan's call auctions (TW_AUCTIONS) on a TWSE trading weekday. */
+export function inTaiwanAuction(now) {
+  if (!tradesOn(TWSE_HOURS, localDay(TWSE_HOURS.offsetMin, now))) return false;
+  return TW_AUCTIONS.some((window) => {
+    const [start, end] = auctionWindow(window, now);
+    return now >= start && now < end;
+  });
+}
+
+/**
+ * Whether MIS still flags `quote` as in a call auction: its flagged snapshot (`auctionAt`, set by Watchlist#marked
+ * while the shown price traded before it) is younger than a live MIS price. The only reading of that record.
+ */
+export const auctionFlagged = (quote, now) => now - quote.auctionAt < LIVE_MAX_AGE_MS;
+
+// A Taiwan stock (not an index, not a future).
+const isTaiwanStock = (quote) => kindOf(quote.symbol) === "stock" && resolvedMarket(quote.symbol, quote.exchange) === "tw";
+
 const edge = (at) => ({ at, opening: false });
 const opening = (at) => ({ at, opening: true });
 
@@ -182,8 +209,22 @@ function dayEdges(quote, now) {
 // closure may turn: an inference deadline (to "noTrades" or, for a future's night, "nightNoTrades"), or its mark's end.
 const deadlineEdges = (quote) => (quote.closureDeadline ? [edge(quote.closureDeadline)] : []);
 
+// Where a row's call auction (sessionOf) can begin or end: for a Taiwan stock with a real-time source on
+// (`twRealtime`), each auction window's start and end on the Taipei date of `now` and the next one, on trading weekdays,
+// none while it reads a listed closed day (which ends at midnight, the row's own edge); and the moment MIS's flag lapses
+// (auctionFlagged). Never an opening: a call auction trades nothing, so they only redraw.
+function auctionEdges(quote, now) {
+  const edges = quote.auctionAt === undefined ? [] : [edge(quote.auctionAt + LIVE_MAX_AGE_MS)];
+  if (!quote.twRealtime || quote.closure?.kind === "listed") return edges;
+  for (const at of [now, now + DAY_MS]) {
+    if (!tradesOn(TWSE_HOURS, localDay(TWSE_HOURS.offsetMin, at))) continue;
+    for (const window of TW_AUCTIONS) edges.push(...auctionWindow(window, at).map(edge));
+  }
+  return edges;
+}
+
 // Every source of a row's edges: what it reads (sessionOf, its day) changes only at one of them.
-const EDGE_SOURCES = [sessionEdges, dayEdges, deadlineEdges];
+const EDGE_SOURCES = [sessionEdges, dayEdges, deadlineEdges, auctionEdges];
 
 /**
  * The next moment after `now` at which `quote`'s row reads differently (EDGE_SOURCES), in ms, or null; with
@@ -202,7 +243,7 @@ export function nextEdge(quote, now, { openings = false } = {}) {
   return next;
 }
 
-/** The detail's session key suffix: a trading future's "day" or "night", else `session` itself. */
+/** The detail's session key suffix: a trading future's "day" or "night", else `session` itself ("auction" too). */
 export function sessionName(quote, session, now) {
   return (session === "open" && kindOf(quote.symbol) === "future" && futuresSegment(quote, now)) || session;
 }
@@ -265,12 +306,17 @@ export function sessionTimes(quote, now) {
  * pair trades "24h"; a future (WTX&) is "open" inside a segment (futuresSegment), else "closed", also with no
  * periods yet. A quote without a regular session (no Yahoo quote yet) reads its
  * exchange's hours (hoursWindow) when it is a Taiwan or US one, "open" or "closed"; any other is "unknown".
+ * After the closures, a Taiwan stock reads "auction" (a call auction: it trades nothing) inside an auction window
+ * (inTaiwanAuction) with a real-time source on (`twRealtime`), or while MIS flags it (auctionFlagged), unless it is a
+ * delayed quote from today's Taipei date, which reads by its own session.
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";
   const closure = quote.closure?.kind;
   if (closure === "listed") return "holiday";
   if (closure === "noTrades") return "noTrades";
+  const auction = (quote.twRealtime && inTaiwanAuction(now)) || auctionFlagged(quote, now);
+  if (auction && !(!isRealtime(quote) && taipeiDay(quote.timestamp) === taipeiDay(now))) return "auction";
   if (kindOf(quote.symbol) === "future") return futuresSegment(quote, now) ? "open" : "closed";
   if (!quote.periods?.regular) {
     const hours = hoursWindow(quote, now);
@@ -291,18 +337,27 @@ const result = (state, delayMinutes = null, stoppedAt = null) => ({ state, delay
 // A price whose session sessionOf read from its exchange's hours (no periods; not a future) that is from today's
 // session and was already past its stale limit at the close: the hours say the market closed, not when this feed
 // stopped, so it stopped before the close and is never taken for it. From the next day's open window it is an earlier
-// day's trade and reads closed with its date.
+// day's trade and reads closed with its date. A Taiwan stock's trading stops at 13:25, when the closing auction begins.
 function stoppedBeforeClose(quote, now) {
   if (quote.periods?.regular || kindOf(quote.symbol) === "future") return false;
   const hours = hoursWindow(quote, now);
   const limit = staleAfterMs(quote);
   if (!hours?.weekday || limit === null) return false;
   const [start, end] = hours.regular;
-  return now >= end && quote.timestamp >= start && quote.timestamp < end - limit;
+  const close = isTaiwanStock(quote) ? auctionWindow(TW_CLOSING_AUCTION, now)[0] : end;
+  return now >= end && quote.timestamp >= start && quote.timestamp < close - limit;
 }
 
-// Sessions a quote reads as, never stale: the market is not trading (regular-session prices only).
-const PAUSED = new Set(["closed", "holiday", "noTrades", "pre", "post", "lunch"]);
+// A Taiwan stock's MIS price from today, timed before the closing auction, after 13:30: MIS's close always carries 13:30's
+// time, so this is a stuck MIS cache that never sent the close, and must not pass for it.
+function misMissedClose(quote, now) {
+  if (quote.source !== "mis" || !isTaiwanStock(quote) || now < localWindow(TWSE_HOURS, now)[1]) return false;
+  return taipeiDay(quote.timestamp) === taipeiDay(now) && quote.timestamp < auctionWindow(TW_CLOSING_AUCTION, now)[0];
+}
+
+// Sessions a quote reads as, never stale: the market is not trading (regular-session prices only), or a call auction is
+// matching orders.
+const PAUSED = new Set(["closed", "holiday", "noTrades", "pre", "post", "lunch", "auction"]);
 
 /**
  * How long until a quote turns stale in `session`, in ms: at least 1 while it has not yet, 0 or less once it
@@ -339,11 +394,13 @@ export function staleAt(quote, session, now) {
  * previous close after today's open (beforeOpen), until today's first trade or the fetch guard. stalled: past
  * its msUntilStale, real time or delayed. delayed: any other quote, with its exchange's minutes when the table
  * holds them; a Yahoo future (`=F`) or an exchange without a delay never stalls. closed / holiday / noTrades /
- * pre / post / lunch: the session, except a closed one read from the hours after a price that had stalled by the
- * close (stoppedBeforeClose): stalled.
+ * pre / post / lunch / auction: the session, except a closed one read from the hours after a price that had stalled
+ * by the close (stoppedBeforeClose), or after a MIS price that never reached the close (misMissedClose): stalled.
  */
 export function freshness(quote, session, now) {
-  if (session === "closed" && stoppedBeforeClose(quote, now)) return result("stalled", null, quote.timestamp);
+  if (session === "closed" && (stoppedBeforeClose(quote, now) || misMissedClose(quote, now))) {
+    return result("stalled", null, quote.timestamp);
+  }
   if (PAUSED.has(session)) return result(session);
   const realtime = isRealtime(quote);
   if (realtime && session === "unknown") return result("unconfirmed");
@@ -385,12 +442,13 @@ const AFTER_CLOSE_MS = 90 * MINUTE_MS;
  * A quote's limit as drawn: "up", "down" or null (see priceLimit), only while it still holds: live, or once
  * the market is not open (closed, after hours) for a price from the regular session its periods describe.
  * Never stalled (the lock may have opened since), unconfirmed, or before the open: Yahoo gives Taiwan no
- * pre-market period, so MIS's trial match at 08:45 reads "closed", and only its time, outside the session,
- * tells it apart, also while a copy that slept still holds yesterday's periods. The time may be the feed's
+ * pre-market period, so a price at 08:45 reads "closed" without a real-time source on, and only its time, outside
+ * the session, tells it apart, also while a copy that slept still holds yesterday's periods. The time may be the feed's
  * (Yahoo 奇摩股市), which is never earlier than the stock's own trade today. TWSE's after-close window is a stock's:
  * a future's price belongs to its periods only up to their end. A listed closed day ("holiday") and a day without
  * trades ("noTrades") count as closed. A cached price (`quote.cached`, kept through a failed refresh) is never lit:
- * nothing confirms the lock still holds.
+ * nothing confirms the lock still holds. In a call auction ("auction") a price held from today's trading is lit,
+ * as before 13:25 and after the close; one from an earlier day (the morning's trial match) is not.
  */
 export function shownLimit(quote, session, now) {
   if (quote.cached) return null;
@@ -399,7 +457,8 @@ export function shownLimit(quote, session, now) {
   const end = regular && regular[1] + (kindOf(quote.symbol) === "future" ? 0 : AFTER_CLOSE_MS);
   const traded = Boolean(regular) && quote.timestamp >= regular[0] && quote.timestamp <= end;
   const closed = CLOSED_STATES.has(state) || state === "post";
-  return state === "live" || (closed && traded) ? priceLimit(quote) : null;
+  const heldToday = state === "auction" && taipeiDay(quote.tradeTime ?? quote.timestamp) === taipeiDay(now);
+  return state === "live" || (closed && traded) || heldToday ? priceLimit(quote) : null;
 }
 
 // A delayed quote's lateness in words: its exchange's minutes, else that the delay is not provided.

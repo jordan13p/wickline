@@ -246,6 +246,11 @@ test("a price at its limit is named in every language", () => {
 });
 
 
+test("a call auction is named in every language", () => {
+  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.auction")), ["Call auction", "試撮中", "试撮中", "板寄せ中", "단일가매매"]);
+  for (const lang of LANGUAGES) assert.ok("session.auction" in STRINGS[lang], lang);
+});
+
 test("the lunch break is named in every language", () => {
   assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.lunch")), ["Lunch", "午休", "午休", "昼休み", "점심 휴장"]);
 });
