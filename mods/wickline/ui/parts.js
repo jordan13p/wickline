@@ -3,6 +3,7 @@
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, Checkbox, Switch } from "gpui-base";
 import { chartGeometry, failureNote } from "../format.js";
+import { chartLayout } from "../freshness.js";
 import { SPIN_MS } from "../motion.js";
 
 // The soft fill under a line chart.
@@ -12,27 +13,36 @@ const AREA_OPACITY = 0.16;
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
 export const icon = (name) => `mods/wickline/icons/${name}.svg`;
 
-// The day's line, scaled to its box; the previous close is a dashed rule. `stroke` defaults to 2 px with
+// The day's line, scaled to its box and reaching only as far as its trading day has run (chartLayout); the previous
+// close is a dashed rule, drawn with any number of points; a price past its line is a filled dot in `color`, `dot` px
+// (4 in rows and the table, 6 in the detail), never joined to the line and no state dot. `stroke` defaults to 2 px with
 // the area and 1.25 px without.
-export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25 }) {
+export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4 }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
-  const g = chartGeometry(quote.series, quote.previousClose);
+  const g = chartGeometry(quote.series, quote.previousClose, chartLayout(quote));
   if (!g) return sized;
   const layer = (path, paint) => window.paint_path(path, paint).absolute().top(0).left(0).size_full();
+  const lined = g.points.length > 1;
   let line = PathBuilder.stroke(stroke);
   g.points.forEach(([x, y], i) => { line = i ? line.line_to(`${x}%`, `${y}%`) : line.move_to(`${x}%`, `${y}%`); });
+  const end = lined ? g.points[g.points.length - 1][0] : 0;
+  const half = dot / 2;
   return sized
     .when(g.reference !== null, (el) => el.child(layer(
       PathBuilder.stroke(1).dash_array([3, 3]).move_to("0%", `${g.reference}%`).line_to("100%", `${g.reference}%`).build(),
       t.border)))
-    .when(Boolean(fill), (el) => {
+    .when(lined && Boolean(fill), (el) => {
       let area = PathBuilder.fill().move_to("0%", "100%");
       for (const [x, y] of g.points) area = area.line_to(`${x}%`, `${y}%`);
-      return el.child(layer(area.line_to("100%", "100%").close().build(),
+      return el.child(layer(area.line_to(`${end}%`, "100%").close().build(),
         Background.solid(color).opacity(AREA_OPACITY)));
     })
-    .child(layer(line.build(), color));
+    .when(lined, (el) => el.child(layer(line.build(), color)))
+    // Inset by half the dot across, so a dot at either end stays whole inside the box.
+    .when(g.dot !== null, (el) => el.child(div().absolute().top(0).bottom(0).left(half).right(half)
+      .child(div().absolute().left(`${g.dot[0]}%`).top(`${g.dot[1]}%`).ml(-half).mt(-half).w(dot).h(dot).rounded_full()
+        .bg(color))));
 }
 
 // 6px: filled for a live quote, a 1px ring when the price may not be current, none for a session.

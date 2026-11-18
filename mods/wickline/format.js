@@ -5,24 +5,31 @@ import { nextTaipeiMidnight, taipeiDay } from "./calendar.js";
 import { HOUR_MS, resolvedMarket } from "./markets.js";
 
 /**
- * The line through `series`, scaled into its box as [x%, y%] points, and where
- * the reference price (the previous close) falls, or null when it is outside.
- * Fewer than two points draw nothing.
+ * The line through `series`, scaled into its box as [x%, y%] points spread over `extent` of its width (null: all of
+ * it; freshness.js chartLayout), where the reference price (the previous close) falls whenever it is positive, and
+ * `dot` ({ x, price }: x a share of the width) as [x%, y%], or null. The y range holds all three. null with no point,
+ * no reference and no dot.
  */
-export function chartGeometry(series, reference) {
-  if (!Array.isArray(series) || series.length < 2) return null;
-  const values = positive(reference) ? [...series, reference] : series;
+export function chartGeometry(series, reference, { extent, dot } = {}) {
+  const points = Array.isArray(series) ? series : [];
+  const rule = positive(reference) ? reference : null;
+  const mark = dot ?? null;
+  if (!points.length && rule === null && !mark) return null;
+  const values = [...points, ...(rule === null ? [] : [rule]), ...(mark ? [mark.price] : [])];
   let min = Math.min(...values);
   let max = Math.max(...values);
   if (max - min < max * 1e-9) { min -= 1; max += 1; }
   // 8% headroom keeps the stroke inside the box.
   const pad = (max - min) * 0.08;
   min -= pad; max += pad;
-  const y = (value) => Math.round((1 - (value - min) / (max - min)) * 10000) / 100;
-  const last = series.length - 1;
+  const pct = (share) => Math.round(share * 10000) / 100;
+  const y = (value) => pct(1 - (value - min) / (max - min));
+  const width = extent ?? 1;
+  const last = points.length - 1;
   return {
-    points: series.map((value, index) => [Math.round(index / last * 10000) / 100, y(value)]),
-    reference: positive(reference) ? y(reference) : null,
+    points: points.map((value, index) => [last ? pct(index / last * width) : 0, y(value)]),
+    reference: rule === null ? null : y(rule),
+    dot: mark ? [pct(mark.x), y(mark.price)] : null,
   };
 }
 

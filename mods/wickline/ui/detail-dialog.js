@@ -3,8 +3,8 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { hasLimits, isCryptoPair } from "../quotes.js";
-import { displayName, detailTimes, formatChange, number, sessionTimesParts } from "../format.js";
-import { detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
+import { chartGeometry, displayName, detailTimes, formatChange, number, sessionTimesParts } from "../format.js";
+import { chartLayout, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
 import { chart, failureText, priceBox, priceInk, segments } from "./parts.js";
 
@@ -42,9 +42,9 @@ export function detailView(view, t) {
       .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent)))
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown")))))
-    .child(q.series?.length > 1
-      ? chart(q, color, t, { width: "full", height: 140, fill: true })
-      : div().h(60).flex().items_center().justify_center().text_color(t.dim).child(view.tx("detail.noLine")))
+    // The box whenever it holds a rule, a point or the price's dot (chart draws nothing more), else nothing.
+    .when(chartGeometry(q.series, q.previousClose, chartLayout(q)) !== null,
+      (el) => el.child(chart(q, color, t, { width: "full", height: 140, fill: true, dot: 6 })))
     .child(isCryptoPair(q.symbol)
       ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
         .child(stat("detail.low24h", q.low))

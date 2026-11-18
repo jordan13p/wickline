@@ -76,9 +76,29 @@ test("dates by language, times in 24 hours", () => {
 });
 
 test("scales a line into its box", () => {
-  assert.equal(chartGeometry([1], 1), null);
+  // One point: the rule and the point at the left edge.
+  const one = chartGeometry([1], 1);
+  assert.deepEqual(one.points.map((p) => p[0]), [0]);
+  assert.notEqual(one.reference, null);
+  assert.equal(one.dot, null);
   const g = chartGeometry([10, 20], 15);
   assert.deepEqual(g.points.map((p) => p[0]), [0, 100]);
+  assert.equal(g.dot, null);
+  // Points spread over the extent only; a null extent is the whole box, 0 keeps them at the left edge.
+  assert.deepEqual(chartGeometry([10, 20, 15], 15, { extent: 0.25 }).points.map((p) => p[0]), [0, 12.5, 25]);
+  assert.deepEqual(chartGeometry([10, 20], 15, { extent: null }).points.map((p) => p[0]), [0, 100]);
+  assert.deepEqual(chartGeometry([10, 20], 15, { extent: 0 }).points.map((p) => p[0]), [0, 0]);
+  // The dot's price is inside the y range: above every point here, still inside the box.
+  const dotted = chartGeometry([10, 20], 15, { extent: 0.25, dot: { x: 0.5, price: 30 } });
+  assert.equal(dotted.dot[0], 50);
+  assert.ok(dotted.dot[1] > 0 && dotted.dot[1] < 100);
+  assert.ok(dotted.points.every(([, y]) => y > dotted.dot[1]));
+  // No points: the rule alone, the dot alone, or nothing.
+  assert.deepEqual(chartGeometry([], 15).points, []);
+  assert.notEqual(chartGeometry([], 15).reference, null);
+  assert.deepEqual(chartGeometry([], null, { dot: { x: 0, price: 15 } }).dot, [0, 50]);
+  assert.equal(chartGeometry([], null), null);
+  assert.equal(chartGeometry(undefined, 0), null);
   assert.ok(g.points[0][1] > g.points[1][1]);
   assert.ok(g.reference > g.points[1][1] && g.reference < g.points[0][1]);
   assert.ok(g.points.every(([, y]) => y > 0 && y < 100));

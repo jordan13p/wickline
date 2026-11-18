@@ -8,8 +8,8 @@ import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
 import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
-import { LIVE_MAX_AGE_MS, detailWakeAt, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
-import { collapsedRow, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
+import { LIVE_MAX_AGE_MS, chartLayout, detailSource, detailWakeAt, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
+import { chartGeometry, collapsedRow, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
 import {
   CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, NIGHT, SEGMENTS, advance, at,
   chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, ok, start, stop, withTZ, yq, zhLabel,
@@ -3052,4 +3052,70 @@ test("the close from Yahoo 奇摩股市 ends the flag", async () => {
     const row = reading1117(w, "2330.TW", taipei1117("05:30:05"));
     assert.deepEqual([row.quote.source, row.quote.price, row.state], ["yahootw", 2170, "closed"]);
   }, taipei1117("05:30:03"));
+});
+
+// A line only under its own session's price: the base's line under another source's price only when both are from the
+// same period, before or at and after the start of the base's regular period.
+const TPE = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
+const TPE_DAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+const twBase = (time, fields = {}) => ({ ...yq("2330.TW", "TAI", time, TPE_DAY), price: 2215, previousClose: 2200, series: [2200, 2215], fetchedAt: time, ...fields });
+const misQuote = (time) => ({ symbol: "2330.TW", source: "mis", price: 2230, timestamp: time });
+
+test("A line only under its own session's price: yesterday's line under today's price", () => {
+  const row = mergeOverlay(twBase(TPE("13:30:00", "2026-11-16")), misQuote(TPE("09:00:30")), null);
+  assert.deepEqual([row.series, row.chartSource, row.chartTimestamp, row.chartFetchedAt], [[], null, null, null]);
+  assert.ok(!("chartCached" in row));
+  const layout = chartLayout(row);
+  assert.notEqual(layout.dot, null);
+  const g = chartGeometry(row.series, row.previousClose, layout);
+  assert.deepEqual(g.points, []);
+  assert.notEqual(g.reference, null);
+  // The detail names no line source.
+  const now = TPE("09:00:30");
+  assert.deepEqual(detailSource(row, sessionOf(row, now), now, (key, params) => t("zh-TW", key, params)), [["價格：即時 · 證交所 MIS"]]);
+});
+
+test("A line only under its own session's price: both from the last session", () => {
+  const NY_DAY = day("2026-11-17T14:30:00Z", "2026-11-17T21:00:00Z");
+  const close = at("2026-11-16T21:00:00Z");
+  const base = { ...yq("AAPL", "NMS", close, NY_DAY), price: 230, previousClose: 228, series: [228, 229, 230] };
+  const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230.1, timestamp: close }, null);
+  assert.deepEqual([row.series, row.chartSource], [[228, 229, 230], "yahoo"]);
+  assert.deepEqual(chartLayout(row), { extent: 1, dot: null });
+  assert.equal(chartGeometry(row.series, row.previousClose, chartLayout(row)).points.at(-1)[0], 100);
+});
+
+test("A line only under its own session's price: the evening after the close", () => {
+  const row = mergeOverlay(twBase(TPE("13:30:00")), misQuote(TPE("13:30:00")), null);
+  assert.deepEqual([row.series, row.chartSource], [[2200, 2215], "yahoo"]);
+  assert.deepEqual(chartLayout(row), { extent: 1, dot: null });
+});
+
+test("A line only under its own session's price: a US row past local midnight", () => {
+  // On a Taipei clock, 22:30 and 00:30 are one New York session (09:30 and 11:30); the periods are epoch ms.
+  withTZ("Asia/Taipei", () => {
+    const NY_DAY = day("2026-11-17T14:30:00Z", "2026-11-17T21:00:00Z");
+    const base = { ...yq("AAPL", "NMS", TPE("22:30:00"), NY_DAY), price: 230, previousClose: 228, series: [228, 230] };
+    const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 231, timestamp: TPE("00:30:00", "2026-11-18") }, null);
+    assert.deepEqual([row.series, row.chartSource], [[228, 230], "yahoo"]);
+  });
+});
+
+test("A failure without the source's own line: yesterday's Yahoo Finance quote under today's price", () => {
+  // MIS live at 09:10; Yahoo Finance, holding yesterday's quote, cannot be reached.
+  const now = TPE("09:10:00");
+  const row = mergeOverlay(twBase(TPE("13:30:00", "2026-11-16"), { cached: true }), misQuote(now - 5_000), null);
+  assert.ok(!("chartCached" in row) && !("cached" in row));
+  assert.deepEqual([row.series, row.chartSource], [[], null]);
+  assert.equal(failureNote(row, { code: "network" }), "reason");
+  assert.equal(zhLabel(row, now), "即時");
+});
+
+test("A failure without the source's own line: a real-time price without its Yahoo Finance line", () => {
+  // Yahoo Finance has never answered: no base, so no line and the reason alone.
+  const now = TPE("10:00:00");
+  const row = mergeOverlay(undefined, misQuote(now - 5_000), null);
+  assert.deepEqual([row.series, row.chartSource], [[], null]);
+  assert.equal(failureNote(row, { code: "network" }), "reason");
+  assert.equal(zhLabel(row, now), "即時");
 });

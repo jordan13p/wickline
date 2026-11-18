@@ -341,3 +341,7 @@ test("the cached-chart note in five languages, with its reason", () => {
     ja: "チャートはキャッシュ表示 · R", ko: "캐시된 차트 · R" };
   for (const [lang, text] of Object.entries(expected)) assert.equal(t(lang, "quote.chartCached", { reason: "R" }), text);
 });
+
+test("no language words a missing line: the detail draws its box instead", () => {
+  for (const lang of LANGUAGES) assert.ok(!("detail.noLine" in STRINGS[lang]), lang);
+});

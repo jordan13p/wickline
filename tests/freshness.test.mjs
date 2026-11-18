@@ -2,8 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, chartQuote, detailSource, freshness, futuresSegment, inTaiwanAuction, isRealtime,
-  msUntilStale, sessionName, sessionOf, shownLimit, staleAt,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, chartLayout, chartQuote, detailSource, freshness, futuresSegment, inTaiwanAuction, isRealtime,
+  msUntilStale, sessionName, sessionOf, sessionProgress, shownLimit, staleAt,
 } from "../mods/wickline/freshness.js";
 import {
   DETAIL_WAKE_CAP_MS, bandState, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
@@ -12,7 +12,7 @@ import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/w
 import { closureOf, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
 import {
-  dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts,
+  chartGeometry, dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts,
 } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { YAHOOTW_CONSENT_VERSION, ownPeriods } from "../mods/wickline/providers/yahootw.js";
@@ -1283,12 +1283,17 @@ test("a cached Yahoo Finance line: no wake at its stale moment once it reads sto
   // The line reads stopped now and at its age's moment (+ 90 001): only the price's own (+ 110 001) is a wake.
   assert.deepEqual(detailSource(row, "open", time + 90_001, say("en"))[1], detailSource(row, "open", time, say("en"))[1]);
   assert.equal(detailWakeAt(row, time), time + 110_001);
-  // A line still at the previous close reads unconfirmed until the open + 120 s, before the price's moment.
+  // A line still at the previous close, under a price from the same period (an after-hours one), reads unconfirmed
+  // until the open + 120 s.
   const open = at("2026-11-10T14:30:00Z");
   const prior = { ...yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), fetchedAt: open - 60_000, series: [1, 2], cached: true };
-  const early = mergeOverlay(prior, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: open + 3_000 }, null);
+  const early = mergeOverlay(prior, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: at("2026-11-09T23:00:00Z") }, null);
   assert.notDeepEqual(detailSource(early, "open", open + 120_001, say("en"))[1], detailSource(early, "open", open + 5_000, say("en"))[1]);
   assert.equal(detailWakeAt(early, open + 5_000), open + 120_001);
+  // Under today's price it is an earlier period's line: not drawn, no line source, no wake of its own.
+  const today = mergeOverlay(prior, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: open + 3_000 }, null);
+  assert.equal(detailSource(today, "open", open + 5_000, say("en")).length, 1);
+  assert.equal(detailWakeAt(today, open + 5_000), open + 123_001);
 });
 
 // Taiwan's call auctions (試撮中). A row reads them through a real Watchlist, whose marked() gives `twRealtime` and
@@ -1529,4 +1534,206 @@ test("the detail names 試撮中", () => {
   const now = taipei("13:27:00");
   assert.equal(sessionName(q, sessionOf(q, now), now), "auction");
   assert.deepEqual(detailSource(q, sessionOf(q, now), now, say("zh-TW")), [["價格：試撮中 · 證交所 MIS"]]);
+});
+
+// A line in its session: how far across its box a line reaches (sessionProgress, chartLayout), drawn by chartGeometry.
+const NY_DAY = day("2026-11-17T14:30:00Z", "2026-11-17T21:00:00Z");
+const HK_TODAY = day("2026-11-17T01:30:00Z", "2026-11-17T08:00:00Z");
+const ny = (time) => at(`2026-11-17T${time}-05:00`);
+const hk = (time) => at(`2026-11-17T${time}+08:00`);
+const line = (fields) => ({ price: 2180, previousClose: 2200, series: [2190, 2185, 2180], ...fields });
+const lastX = (g) => g.points.at(-1)[0];
+const drawn = (q) => {
+  const layout = chartLayout(q);
+  return { layout, g: chartGeometry(q.series, q.previousClose, layout) };
+};
+
+test("sessionProgress: Taiwan mid-morning", () => {
+  const q = yq("2330.TW", "TAI", taipei("10:07:30"), TW_TODAY);
+  assert.equal(sessionProgress(q, taipei("10:07:30")), 0.25);
+});
+
+test("sessionProgress: US", () => {
+  assert.equal(sessionProgress(yq("AAPL", "NMS", ny("12:45:00"), NY_DAY), ny("12:45:00")), 0.5);
+});
+
+test("sessionProgress: 0700.HK lunch takes no room", () => {
+  assert.equal(sessionProgress(yq("0700.HK", "HKG", hk("14:00:00"), HK_TODAY), hk("14:00:00")), 210 / 330);
+  // Inside the lunch break it stands at the morning's end.
+  assert.equal(sessionProgress(yq("0700.HK", "HKG", hk("12:30:00"), HK_TODAY), hk("12:30:00")), 150 / 330);
+});
+
+test("sessionProgress: WTX& extent counts the night then the day", () => {
+  const night = at("2026-11-09T07:02:00Z"); // 15:02 Taipei
+  const morning = at("2026-11-10T02:00:00Z"); // 10:00 Taipei the next day
+  const future = (timestamp, periods) => ({ symbol: "WTX&", source: "yahootw", timestamp, periods });
+  for (const periods of [LINE_PERIODS, null]) {
+    assert.equal(sessionProgress(future(morning, periods), night), 2 / 1140, `night ${Boolean(periods)}`);
+    assert.equal(sessionProgress(future(morning, periods), morning), 915 / 1140, `day ${Boolean(periods)}`);
+    // Between the sessions, the night is whole and the day not begun.
+    assert.equal(sessionProgress(future(morning, periods), at("2026-11-10T00:00:00Z")), 840 / 1140);
+  }
+  // A future priced from periods without their segments takes TAIFEX's.
+  const { segments: _segments, ...daily } = LINE_PERIODS;
+  assert.equal(sessionProgress(future(morning, daily), morning), 915 / 1140);
+});
+
+test("sessionProgress: WTX& over a weekend", () => {
+  // Saturday: Friday 23:00's price sits on Monday's trading day, whose night opened Friday 15:00.
+  const q = { symbol: "WTX&", source: "yahootw", timestamp: taipei("23:00:00", "2026-11-20"), periods: null };
+  assert.equal(sessionProgress(q, q.timestamp), 480 / 1140);
+  assert.equal(chartLayout({ ...q, price: 27000, series: [26990, 27000], chartTimestamp: q.timestamp }).extent, 480 / 1140);
+});
+
+test("sessionProgress: a time before the period gives 1", () => {
+  const q = yq("2330.TW", "TAI", taipei("10:00:00"), TW_TODAY);
+  assert.equal(sessionProgress(q, taipei("08:38:00")), 1);
+  assert.equal(sessionProgress(q, taipei("13:30:00")), 1);
+  assert.equal(sessionProgress(q, taipei("20:00:00")), 1);
+});
+
+test("sessionProgress: yesterday's bars under today's periods fill the box", () => {
+  const q = yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY);
+  for (const t of [taipei("10:00:00", "2026-11-16"), taipei("10:00:00"), taipei("13:30:00", "2026-11-16")]) {
+    assert.equal(sessionProgress(q, t), 1);
+  }
+});
+
+test("sessionProgress: hours only", () => {
+  const q = { symbol: "2330.TW", source: "mis", timestamp: taipei("10:07:30") };
+  assert.equal(sessionProgress(q, taipei("10:07:30")), 0.25);
+  assert.equal(sessionProgress(q, taipei("08:38:00")), 1);
+  assert.equal(sessionProgress(q, taipei("14:00:00")), 1);
+  assert.equal(sessionProgress({ symbol: "AAPL", source: "finnhub", timestamp: ny("12:45:00") }, ny("12:45:00")), 0.5);
+});
+
+test("sessionProgress: null by kind", () => {
+  const t = taipei("10:00:00");
+  for (const q of [
+    { symbol: "BTC/USDT", source: "binance", timestamp: t },
+    yq("EURUSD=X", "CCY", t, day("2026-11-17T00:00:00Z", "2026-11-17T23:59:00Z")),
+    yq("GC=F", "CMX", t, day("2026-11-16T23:00:00Z", "2026-11-17T22:00:00Z")),
+    yq("KC=F", "NYB", t, day("2026-11-17T09:15:00Z", "2026-11-17T18:30:00Z")),
+    yq("KC=F", undefined, t),
+    // Neither periods nor exchange hours.
+    yq("0700.HK", "HKG", t),
+  ]) assert.equal(sessionProgress(q, t), null, q.symbol);
+});
+
+test("sessionProgress: a zero-length period gives 1", () => {
+  const traded = taipei("13:30:00", "2026-11-16");
+  const q = yq("^TWII", "TAI", traded, { pre: null, regular: [traded, traded], post: null });
+  for (const t of [traded, taipei("10:00:00")]) assert.equal(sessionProgress(q, t), 1);
+});
+
+test("A line in its session: mid-morning", () => {
+  const { layout, g } = drawn(line({ ...yq("2330.TW", "TAI", taipei("10:07:30"), TW_TODAY), series: [2190, 2185, 2180, 2182, 2180] }));
+  assert.deepEqual(layout, { extent: 0.25, dot: null });
+  assert.equal(lastX(g), 25);
+  assert.ok(g.points.every(([x]) => x <= 25));
+  assert.notEqual(g.reference, null);
+  assert.equal(g.dot, null);
+});
+
+test("A line in its session: a future's night opens", () => {
+  const time = at("2026-11-09T07:02:00Z");
+  const q = line({ symbol: "WTX&", source: "yahootw", timestamp: time, chartSource: "yahootw", chartTimestamp: time, periods: LINE_PERIODS });
+  const { layout, g } = drawn(q);
+  assert.deepEqual(layout, { extent: 2 / 1140, dot: null });
+  assert.equal(lastX(g), 0.18);
+  assert.notEqual(g.reference, null);
+});
+
+test("A line in its session: a lunch break takes no room", () => {
+  const { layout, g } = drawn(line(yq("0700.HK", "HKG", hk("14:00:00"), HK_TODAY)));
+  assert.equal(layout.extent, 210 / 330);
+  assert.equal(lastX(g), 63.64);
+});
+
+test("A line in its session: a finished day", () => {
+  // After the close, and at 08:38 the next morning, the line quote's time is the close: the box is full.
+  const yahoo = line(yq("2330.TW", "TAI", taipei("13:30:00"), TW_TODAY));
+  assert.equal(drawn(yahoo).layout.extent, 1);
+  assert.equal(lastX(drawn(yahoo).g), 100);
+  const mis = line({ ...yahoo, source: "mis", timestamp: taipei("13:30:00"), chartSource: "yahoo", chartTimestamp: taipei("13:30:00") });
+  assert.deepEqual(drawn(mis).layout, { extent: 1, dot: null });
+  // Hours only: yesterday's close read the next morning.
+  const hoursOnly = line({ symbol: "2330.TW", source: "yahootw", timestamp: taipei("13:30:00", "2026-11-16") });
+  assert.equal(drawn(hoursOnly).layout.extent, 1);
+});
+
+test("A line in its session: one point", () => {
+  const { g } = drawn(line({ ...yq("2330.TW", "TAI", taipei("09:01:00"), TW_TODAY), series: [2190] }));
+  assert.equal(g.points.length, 1);
+  assert.equal(g.points[0][0], 0);
+  assert.notEqual(g.reference, null);
+});
+
+test("A line in its session: crypto", () => {
+  const q = { symbol: "BTC/USDT", source: "binance", timestamp: taipei("10:00:00"), price: 90000, previousClose: null, series: [89000, 90000] };
+  const { layout, g } = drawn(q);
+  assert.deepEqual(layout, { extent: null, dot: null });
+  assert.equal(lastX(g), 100);
+});
+
+test("A price after its line: MIS over a late Yahoo Finance line", () => {
+  const q = line({
+    ...yq("2330.TW", "TAI", taipei("10:00:05"), TW_TODAY), source: "mis", price: 2200, chartSource: "yahoo", chartTimestamp: taipei("09:40:00"),
+  });
+  const { layout, g } = drawn(q);
+  assert.equal(layout.extent, 40 / 270);
+  assert.deepEqual(layout.dot, { x: (60 * 60 + 5) / (270 * 60), price: 2200 });
+  assert.equal(lastX(g), 14.81);
+  assert.equal(g.dot[0], 22.25);
+  assert.ok(g.dot[1] > 0 && g.dot[1] < 100);
+  // 2200, the highest price, sits above every point of the line.
+  assert.ok(g.points.every(([, y]) => y > g.dot[1]));
+});
+
+test("A price after its line: before Yahoo Finance's first bar", () => {
+  const q = line({ ...yq("2330.TW", "TAI", taipei("09:05:00"), TW_TODAY), source: "mis", series: [], chartSource: null, chartTimestamp: null });
+  const { layout, g } = drawn(q);
+  assert.equal(layout.dot.x, 5 / 270);
+  assert.deepEqual(g.points, []);
+  assert.notEqual(g.reference, null);
+  assert.equal(g.dot[0], 1.85);
+});
+
+test("A price after its line: a line one bar behind", () => {
+  const q = line({ ...yq("AAPL", "NMS", ny("10:03:00"), NY_DAY), source: "finnhub", chartSource: "yahoo", chartTimestamp: ny("10:00:00") });
+  assert.equal(chartLayout(q).dot, null);
+  // Past 5 minutes it is drawn; at exactly 5 it is not.
+  assert.equal(chartLayout({ ...q, timestamp: ny("10:05:00") }).dot, null);
+  assert.notEqual(chartLayout({ ...q, timestamp: ny("10:05:01") }).dot, null);
+});
+
+test("A price after its line: a future without its day's line", () => {
+  const time = at("2026-11-09T07:00:40Z"); // 15:00:40 Taipei
+  const q = line({ symbol: "WTX&", source: "yahootw", timestamp: time, periods: LINE_PERIODS, series: [], chartSource: null, chartTimestamp: null });
+  const { layout, g } = drawn(q);
+  assert.equal(layout.dot.x, 40 / (1140 * 60));
+  assert.equal(g.dot[0], 0.06);
+  assert.notEqual(g.reference, null);
+});
+
+test("A price after its line: Yahoo 奇摩股市's own line", () => {
+  const time = taipei("10:30:00");
+  const q = line({ ...yq("0050.TW", "TAI", time, TW_TODAY), source: "yahootw", chartSource: "yahootw", chartTimestamp: time });
+  assert.equal(chartLayout(q).dot, null);
+});
+
+test("A price after its line: none where the trading day is unknown", () => {
+  const q = { ...yq("0700.HK", "HKG", hk("14:00:00")), price: 400, previousClose: 390, series: [] };
+  assert.deepEqual(chartLayout(q), { extent: null, dot: null });
+  assert.equal(chartGeometry(q.series, q.previousClose, chartLayout(q)).dot, null);
+});
+
+test("A price dot in an auction", () => {
+  // 13:27: 試撮中, the price held from 13:24:50, past the Yahoo Finance line's 13:05 end. The price's dot is no state dot.
+  const now = taipei("13:27:00");
+  const q = line({
+    ...yq("2330.TW", "TAI", taipei("13:24:50"), TW_TODAY), source: "mis", twRealtime: true, chartSource: "yahoo", chartTimestamp: taipei("13:05:00"),
+  });
+  assert.equal(freshness(q, sessionOf(q, now), now).state, "auction");
+  assert.notEqual(chartLayout(q).dot, null);
 });

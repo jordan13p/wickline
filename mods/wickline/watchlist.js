@@ -116,7 +116,9 @@ export function pickOverlay(byProvider, order, now, base = null, flagged = false
  * has no line but the overlay's own: without one, no line and no `chartSource`. `cached` is the shown price's
  * (the base's, kept only when the price is the base's own); the base's flag on a line shown under another
  * source's price is `chartCached`, so a fresh overlay never reads as cached for the base's failed fetch, and only
- * when that line has points: an empty one shows no chart to call cached.
+ * when that line has points: an empty one shows no chart to call cached. The base's line under an overlay price from
+ * another trading period (yesterday's line under today's first price) is no line: none, no `chartSource`, no
+ * `chartCached`.
  */
 export function mergeOverlay(base, overlay, line) {
   if (!overlay) return base;
@@ -125,12 +127,16 @@ export function mergeOverlay(base, overlay, line) {
   const previousClose = merged.previousClose ?? null;
   // A copy hidden overnight may hold yesterday's line next to today's first price.
   const own = line?.series.length && line.day === overlay.day ? line.series : null;
-  // The base's own line, never a quote's over itself.
-  const fallback = base?.source === overlay.source ? null : base;
+  const sole = base?.source === overlay.source;
+  // The base's own line, never a quote's over itself, and only from the overlay's period: both times before, or both
+  // at or after, the start of the base's regular period (epoch ms, no time zone needed).
+  const start = base?.periods?.regular?.[0];
+  const samePeriod = start === undefined || (base.timestamp < start) === (overlay.timestamp < start);
+  const fallback = sole || !samePeriod ? null : base;
   const { cached, ...price } = merged;
   return {
     ...price,
-    ...(fallback === null && cached ? { cached } : {}),
+    ...(sole && cached ? { cached } : {}),
     ...(!own && fallback?.cached && fallback.series?.length ? { chartCached: true } : {}),
     previousClose,
     changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
