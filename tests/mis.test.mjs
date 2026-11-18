@@ -133,7 +133,7 @@ test("a name without a price: before the open MIS sends names only", () => {
 });
 
 // MIS answers recorded around the call auctions on 2026-11-17 (and the morning of 11-18, with a TPEx stock). A row in a
-// call auction carries `ts` "1" and the auction's trial price `pz`; its book is the auction's, never a price.
+// call auction carries `ts` "1" (and the trial price `pz` once orders cross); its book is the auction's, never a price.
 const auctionAnswer = (name) => answer(fixture(`mis-auction-${name}`));
 const auctionRow = (name, code) => jsonFixture(`mis-auction-${name}`).msgArray.find((row) => row.c === code);
 
@@ -144,6 +144,16 @@ test("a flagged row is no price and no error", () => {
   assert.equal(result.auction["2330.TW"], Number(auctionRow("0838", "2330").tlong));
   assert.equal(result.auction["0050.TW"], Number(auctionRow("0838", "0050").tlong));
   assert.deepEqual(result.names, { "2330.TW": "台積電", "0050.TW": "元大台灣50" });
+});
+
+test("a flagged row without a trial price is still no price", () => {
+  // A thin stock whose bids and asks do not cross has no `pz` in the auction; its book is still the auction's.
+  const body = jsonFixture("mis-auction-0838");
+  const row = { ...auctionRow("0838", "2330"), pz: "-", b: "2145.0000_2140.0000_", a: "2150.0000_2155.0000_" };
+  const result = decode(["2330.TW"], answer(JSON.stringify({ ...body, msgArray: [row] })));
+  assert.deepEqual(result.quotes, {});
+  assert.deepEqual(result.errors, {});
+  assert.deepEqual(result.auction, { "2330.TW": Number(row.tlong) });
 });
 
 test("a name-only row is never a flag", () => {

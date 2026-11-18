@@ -40,10 +40,10 @@ function bookPrice(bid, ask, up, down) {
  * Overlays by requested symbol. The price is the last trade (`z`); when the last 5-second snapshot
  * had none (`-`), the order book's (bookPrice), marked `fromBook`: its time is the snapshot's, not a trade's.
  * A row with neither, or without a time, has no overlay and no error. A row MIS sent for a symbol that was
- * not asked for is ignored. A row MIS flags as in a call auction (`ts` "1" with a positive trial price `pz`,
- * as from 08:30 to the open and from 13:25 to the close) has no overlay and no error either: its book is the
- * auction's, never a price. Its symbol goes in `auction`, mapped to the flagged snapshot's time; the key is there
- * only when not empty.
+ * not asked for is ignored. A row MIS flags as in a call auction (`ts` "1" with a snapshot time, as from 08:30 to
+ * the open and from 13:25 to the close, whatever its trial price `pz` reads: an auction whose orders do not cross
+ * has none) has no overlay and no error either: its book is the auction's, never a price. A name-only row carries
+ * no `ts`. Its symbol goes in `auction`, mapped to the flagged snapshot's time; the key is there only when not empty.
  */
 export function decodeMis(symbols, response, now) {
   // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
@@ -63,7 +63,7 @@ export function decodeMis(symbols, response, now) {
     const name = cleanText(row.n);
     if (name) names[symbol] = name;
     const time = Number(row.tlong);
-    if (row.ts === "1" && positive(Number(row.pz)) && positive(time)) {
+    if (row.ts === "1" && positive(time)) {
       auction[symbol] = time;
       continue;
     }

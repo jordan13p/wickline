@@ -2796,7 +2796,7 @@ test("the open detail leaves out the row's inference deadline: on a listed day i
   }, now);
 });
 
-// MIS's call-auction flag (`ts` "1" with a trial price `pz`), on Tuesday 2026-11-17 in Taipei: the answers recorded that
+// MIS's call-auction flag (`ts` "1", here with a trial price `pz`), on Tuesday 2026-11-17 in Taipei: the answers recorded that
 // day, or hand-built from its 13:24 row for 2330. A flagged row is no price: the held MIS price stays, else Yahoo's.
 // A clock time in UTC on 2026-11-17 (Taipei is 8 hours ahead).
 const utc1117 = (time) => at(`2026-11-17T${time}Z`);
