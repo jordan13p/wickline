@@ -74,7 +74,7 @@ test("decodes the recorded answer", () => {
   assert.equal(etf.timestamp, Number(row.tlong));
   assert.deepEqual(etf, {
     symbol: "0050.TW", source: "mis", name: row.n, price: 98.7, previousClose: 99.85,
-    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, volume: Number(row.v), sizeUnit: "lot", timestamp: Number(row.tlong), fetchedAt: 42,
+    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, volume: Number(row.v), sizeUnit: "lot", lastSize: Number(row.tv), timestamp: Number(row.tlong), fetchedAt: 42,
   });
   // No trade in the last snapshot: the best bid/ask midpoint.
   assert.equal(result.quotes["2330.TW"].price, (2265 + 2270) / 2);
@@ -636,7 +636,8 @@ test("a flagged row's volume is not read", () => {
 test("MIS v of 0 is absent", () => {
   const body = jsonFixture("mis-detail-1330");
   for (const v of ["0", "-", undefined]) {
-    const rows = body.msgArray.map((row) => ({ ...row, v }));
+    // Without the last trade's size too, so no count is left to carry a unit.
+    const rows = body.msgArray.map((row) => ({ ...row, v, tv: v }));
     const { quotes } = decode(["2330.TW"], answer(JSON.stringify({ ...body, msgArray: rows })));
     assert.ok(quotes["2330.TW"], String(v));
     assert.equal("volume" in quotes["2330.TW"], false, String(v));
@@ -648,4 +649,19 @@ test("a price taken from the book carries the row's volume", () => {
   const { quotes } = decode(["2330.TW"], detailAnswer("1324"));
   assert.equal(quotes["2330.TW"].fromBook, true);
   assert.equal(quotes["2330.TW"].volume, 36_918);
+});
+
+test("MIS last size", () => {
+  const traded = decode(["2330.TW"], detailAnswer("1330")).quotes["2330.TW"];
+  assert.deepEqual([traded.lastSize, traded.sizeUnit], [4_869, "lot"]);
+  // A price from the book has no trade, so no last size.
+  const fromBook = decode(["2330.TW"], detailAnswer("1324")).quotes["2330.TW"];
+  assert.equal(fromBook.fromBook, true);
+  assert.equal("lastSize" in fromBook, false);
+  const body = jsonFixture("mis-detail-1330");
+  for (const tv of ["0", "-", undefined]) {
+    const rows = body.msgArray.map((row) => ({ ...row, tv }));
+    const quote = decode(["2330.TW"], answer(JSON.stringify({ ...body, msgArray: rows }))).quotes["2330.TW"];
+    assert.equal("lastSize" in quote, false, String(tv));
+  }
 });

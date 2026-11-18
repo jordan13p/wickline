@@ -58,6 +58,25 @@ export function statCell(t, cell) {
       .when(Boolean(cell.unit), (el) => el.child(div().ml(3).text_size(10.5).text_color(t.dim).child(cell.unit))));
 }
 
+// Cells (statCell) two to a row, as the detail's activity grid; an odd last cell keeps its column.
+export function statGrid(t, cells) {
+  const rows = [];
+  for (let i = 0; i < cells.length; i += 2) rows.push(h_flex().gap(12).child(statCell(t, cells[i])).child(statCell(t, cells[i + 1] ?? null)));
+  return v_flex().gap(10).children(rows);
+}
+
+// The inner/outer line (format.js innerOuter) over a 4 px bar of two parts 2 px apart, sized by their shares: inner in
+// `innerColor`, outer in `outerColor`. A side with no share draws no part.
+export function innerOuterBar(flow, innerColor, outerColor) {
+  return v_flex().gap(6)
+    .child(h_flex().justify_between().gap(8).text_size(11)
+      .child(div().whitespace_nowrap().child(flow.left)).child(div().whitespace_nowrap().child(flow.right)))
+    .child(h_flex().h(4).gap(2)
+      .when(flow.innerShare > 0, (el) => el.child(div().flex_none().h_full().rounded(2).bg(innerColor)
+        .w(`${Math.round(flow.innerShare * 1000) / 10}%`)))
+      .when(flow.outerShare > 0, (el) => el.child(div().flex_1().h_full().rounded(2).bg(outerColor))));
+}
+
 // 6px: filled for a live quote, a 1px ring when the price may not be current, none for a session.
 export function dot(t, state) {
   const dot = div().flex_none().w(6).h(6).rounded_full();

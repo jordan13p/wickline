@@ -71,6 +71,7 @@ export function decodeMis(symbols, response, now) {
     const ask = best(row.a);
     const limits = limitPair(positiveOrNull(row.u), positiveOrNull(row.w));
     const traded = positiveOrNull(row.z);
+    const lastSize = positiveOrNull(row.tv);
     const price = traded ?? bookPrice(bid, ask, limits.limitUp, limits.limitDown);
     if (!price || !positive(time)) continue;
     if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
@@ -88,6 +89,8 @@ export function decodeMis(symbols, response, now) {
       low: positiveOrNull(row.l),
       ...limits,
       ...sized(positiveOrNull(row.v), "lot"),
+      // The last trade's size (`tv`), in lots too; a price from the book has none.
+      ...(traded && lastSize && { lastSize, sizeUnit: "lot" }),
       timestamp: time,
       fetchedAt: now,
       ...(!traded && { fromBook: true }),

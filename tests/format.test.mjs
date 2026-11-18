@@ -3,9 +3,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, failureNote, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { compact, formatAmount, formatCount, formatSize, secondRow } from "../mods/wickline/format.js";
+import { activityCells, amplitude, formatShare, innerOuter } from "../mods/wickline/format.js";
+import { decodeStockList } from "../mods/wickline/providers/yahootw.js";
 import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
-import { CLOSE_1224, at, day, say, withTZ } from "./helpers.mjs";
+import { CLOSE_1224, at, day, jsonFixture, ok, say, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
 
 test("formats without Intl", () => {
@@ -418,4 +420,82 @@ test("sizes by unit and language", () => {
   assert.equal(formatSize(1, "contract", "en", say("en")).unit, "contract");
   assert.deepEqual(formatSize(1234.5, "BTC", "en", say("en")), { value: "1,234.5", unit: "BTC" });
   assert.deepEqual(formatSize(48_213_500, "share", "en", say("en")), { value: "48.2M", unit: "" });
+});
+
+// The recorded 2026-11-18 rows (2330.TW after the close, WTX& in the day session) as Yahoo 奇摩股市's decoder gives them.
+const DETAIL_NOW = at("2026-11-18T06:05:00Z");
+const ytw = (name, symbol) => decodeStockList([symbol], ok(jsonFixture(name)), DETAIL_NOW).quotes[symbol];
+const YTW_2330 = ytw("ytw-detail-close", "2330.TW");
+const YTW_WTX = ytw("ytw-detail-mixed", "WTX&");
+const texts = (cells) => cells.map((cell) => cell && text(cell));
+
+test("Yahoo 奇摩股市's activity", () => {
+  assert.deepEqual(texts(activityCells(YTW_2330, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "昨量 54,723 張", "成交值 920.47 億", "單量 4,869 張"]);
+  // Below 1 億, 萬.
+  assert.equal(text(activityCells({ ...YTW_2330, turnover: 48_213_500 }, "zh-TW", say("zh-TW"))[2]), "成交值 4,821.35 萬");
+});
+
+test("Other languages", () => {
+  const en = activityCells(YTW_2330, "en", say("en"));
+  assert.equal(text(en[0]), "Volume 42,269 lots");
+  assert.equal(text(en[2]), "Turnover 92.05B");
+  const cn = activityCells(YTW_2330, "zh-CN", say("zh-CN"));
+  assert.equal(text(cn[0]), "成交量 42,269 张");
+  assert.equal(text(cn[2]), "成交额 920.47 亿");
+});
+
+test("MIS alone", () => {
+  const mis = { symbol: "2330.TW", source: "mis", price: 2175, previousClose: 2170, volume: 42_269, lastSize: 4_869, sizeUnit: "lot" };
+  assert.deepEqual(texts(activityCells(mis, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "單量 4,869 張"]);
+  assert.deepEqual(activityCells({ symbol: "2330.TW", price: 2175 }, "zh-TW", say("zh-TW")), []);
+});
+
+test("A future", () => {
+  assert.deepEqual(texts(activityCells(YTW_WTX, "zh-TW", say("zh-TW"))), ["成交量 82,587 口", "昨量 170,139 口", "單量 3 口"]);
+  const row = secondRow(YTW_WTX, true, "zh-TW", say("zh-TW"));
+  assert.equal(row[0], null);
+  assert.equal(row.length, 4);
+});
+
+test("The bar", () => {
+  const tw = innerOuter(YTW_2330, "zh-TW", say("zh-TW"));
+  assert.equal(tw.left, "內盤 39.1% 15,147");
+  assert.equal(tw.right, "外盤 60.9% 23,585");
+  assert.ok(Math.abs(tw.innerShare - 0.391) < 0.0005);
+  assert.ok(Math.abs(tw.outerShare - 0.609) < 0.0005);
+  const cn = innerOuter(YTW_2330, "zh-CN", say("zh-CN"));
+  assert.deepEqual([cn.left, cn.right], ["内盘 39.1% 15,147", "外盘 60.9% 23,585"]);
+  const en = innerOuter(YTW_2330, "en", say("en"));
+  assert.deepEqual([en.left, en.right], ["At bid 39.1% 15,147", "At ask 60.9% 23,585"]);
+});
+
+test("an inner volume of 0 reads 0.0%", () => {
+  const io = innerOuter({ ...YTW_2330, inner: 0, outer: 38_732 }, "zh-TW", say("zh-TW"));
+  assert.deepEqual([io.left, io.right, io.innerShare, io.outerShare], ["內盤 0.0% 0", "外盤 100.0% 38,732", 0, 1]);
+});
+
+test("no inner/outer line without both, or with both at 0", () => {
+  const { inner, outer, ...rest } = YTW_2330;
+  assert.equal(innerOuter(rest, "zh-TW", say("zh-TW")), null);
+  assert.equal(innerOuter({ ...rest, inner }, "zh-TW", say("zh-TW")), null);
+  assert.equal(innerOuter({ ...rest, outer }, "zh-TW", say("zh-TW")), null);
+  assert.equal(innerOuter({ ...rest, inner: 0, outer: 0 }, "zh-TW", say("zh-TW")), null);
+});
+
+test("The second row's places", () => {
+  const q = { symbol: "2330.TW", price: 2175, high: 2210, low: 2150, previousClose: 2170, avgPrice: 2177, limitUp: 2385, limitDown: 1955,
+    volume: 42_269, sizeUnit: "lot" };
+  assert.deepEqual(texts(secondRow(q, true, "zh-TW", say("zh-TW"))), ["均價 2,177.00", "漲停價 2,385.00", "跌停價 1,955.00", "振幅 2.76%"]);
+  // One column keeps its volume under open, and no amplitude.
+  assert.deepEqual(texts(secondRow(q, false, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "漲停價 2,385.00", "跌停價 1,955.00", null]);
+  assert.equal(text(secondRow(YTW_2330, true, "zh-TW", say("zh-TW"))[0]), "均價 2,177.00");
+});
+
+test("amplitude and shares", () => {
+  assert.ok(Math.abs(amplitude({ high: 2210, low: 2150, previousClose: 2170 }) - 2.7649) < 0.0001);
+  assert.equal(amplitude({ high: 2210, low: 2150, previousClose: null }), null);
+  assert.equal(amplitude({ high: 2210, previousClose: 2170 }), null);
+  assert.equal(formatShare(39.107), "39.1%");
+  assert.equal(formatShare(2.76498, 2), "2.76%");
+  assert.equal(formatShare(0), "0.0%");
 });

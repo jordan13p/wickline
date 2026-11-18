@@ -582,6 +582,14 @@ test("the detail's session times sit between the source lines and the times", ()
   assert.match(detail, /sessionTimesParts\(sessionTimes\(q, now\), view\.lang, tx\)/);
 });
 
+test("rows keep their own look: only the detail dims together", () => {
+  const panel = code(read(new URL("ui/panel.js", MOD)));
+  assert.match(panel, /priceInk\(/);
+  assert.doesNotMatch(panel, /detailDimmed/);
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /detailDimmed\(/);
+});
+
 test("no module names session.unknown, and the detail's header shows no word for an unknown session", () => {
   for (const file of jsFiles()) assert.ok(!code(read(file)).includes("session.unknown"), relativeName(file));
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));

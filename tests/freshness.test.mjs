@@ -6,7 +6,7 @@ import {
   msUntilStale, sessionName, sessionOf, sessionProgress, shownLimit, staleAt,
 } from "../mods/wickline/freshness.js";
 import {
-  DETAIL_WAKE_CAP_MS, bandState, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
+  DETAIL_WAKE_CAP_MS, bandState, detailDimmed, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
 } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
 import { closureOf, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
@@ -1782,4 +1782,17 @@ test("A price dot in an auction", () => {
   });
   assert.equal(freshness(q, sessionOf(q, now), now).state, "auction");
   assert.notEqual(chartLayout(q).dot, null);
+});
+
+test("Stalled", () => {
+  const q = ytwTrade(2175, taipei("10:00:00"));
+  const dimmedAt = (quote, now) => detailDimmed(quote, sessionOf(quote, now), now);
+  assert.equal(dimmedAt(q, taipei("10:01:00")), false);
+  assert.equal(dimmedAt(q, taipei("10:02:01")), true);
+  // A closing price, kept through a failed refresh: dimmed though its session reads closed.
+  const close = ytwTrade(2175, taipei("13:30:00"));
+  const evening = taipei("20:00:00");
+  assert.equal(sessionOf(close, evening), "closed");
+  assert.equal(dimmedAt(close, evening), false);
+  assert.equal(dimmedAt({ ...close, cached: true }, evening), true);
 });

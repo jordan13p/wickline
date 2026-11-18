@@ -646,12 +646,82 @@ test("an index row carries no volume", () => {
   assert.equal("sizeUnit" in quotes["^TWII"], false);
 });
 
+const detailQuote = (rows, symbol) => decodeStockList([symbol], ok(rows), DETAIL_NOW).quotes[symbol];
+const CLOSE_ROWS = jsonFixture("ytw-detail-close");
+const withFields = (fields, rows = CLOSE_ROWS) => rows.map((row) => ({ ...row, ...fields }));
+
 test("a volume of 0 or none is absent", () => {
   for (const volumeK of [0, "-", undefined, null]) {
-    const rows = jsonFixture("ytw-detail-close").map((row) => ({ ...row, volumeK }));
+    // Without any count, no unit either.
+    const rows = jsonFixture("ytw-detail-close").map((row) => ({ ...row, volumeK, previousVolumeK: volumeK, singleVolumeK: volumeK }));
     const quote = decodeStockList(["2330.TW"], ok(rows), DETAIL_NOW).quotes["2330.TW"];
     assert.ok(quote, String(volumeK));
     assert.equal("volume" in quote, false, String(volumeK));
     assert.equal("sizeUnit" in quote, false, String(volumeK));
   }
+});
+
+test("a count without the day's volume keeps its unit", () => {
+  const rows = jsonFixture("ytw-detail-mixed").map((row) => ({ ...row, volumeK: 0 }));
+  const quote = detailQuote(rows, "WTX&");
+  assert.equal("volume" in quote, false);
+  assert.deepEqual([quote.previousVolume, quote.lastSize, quote.sizeUnit], [170_139, 3, "contract"]);
+});
+
+test("A Taiwan stock from Yahoo 奇摩股市 (activity)", () => {
+  const q = detailQuote(CLOSE_ROWS, "2330.TW");
+  assert.deepEqual([q.volume, q.previousVolume, Math.round(q.turnover), q.avgPrice, q.lastSize, q.inner, q.outer, q.sizeUnit],
+    [42_269, 54_723, 92_047_260_000, 2_177, 4_869, 15_147, 23_585, "lot"]);
+});
+
+test("A future counts in contracts (activity)", () => {
+  const q = detailQuote(jsonFixture("ytw-detail-mixed"), "WTX&");
+  assert.deepEqual([q.volume, q.inner, q.outer, q.sizeUnit, q.lastSize, q.previousVolume], [82_587, 41_343, 40_603, "contract", 3, 170_139]);
+  assert.equal("turnover" in q, false);
+  assert.equal("avgPrice" in q, false);
+});
+
+test("Inner and outer", () => {
+  const kept = detailQuote(CLOSE_ROWS, "2330.TW");
+  assert.deepEqual([kept.inner, kept.outer], [15_147, 23_585]);
+  const off = detailQuote(withFields({ totalMarketVolK: 38_700 }), "2330.TW");
+  assert.equal("inner" in off, false);
+  assert.equal("outer" in off, false);
+  assert.deepEqual([off.volume, off.price, off.lastSize], [42_269, 2_175, 4_869]);
+});
+
+test("totals that are not numbers are none, never 0", () => {
+  for (const blank of [" ", "", "-", null, undefined, "1e3", "-5", NaN, -1]) {
+    for (const field of ["inMarket", "outMarket", "totalMarketVolK"]) {
+      const q = detailQuote(withFields({ [field]: blank }), "2330.TW");
+      assert.equal("inner" in q, false, `${field} ${JSON.stringify(blank)}`);
+      assert.equal("outer" in q, false, `${field} ${JSON.stringify(blank)}`);
+    }
+  }
+  // A plain numeric string counts.
+  const text = detailQuote(withFields({ inMarket: "15147", outMarket: "23585", totalMarketVolK: "38732" }), "2330.TW");
+  assert.deepEqual([text.inner, text.outer], [15_147, 23_585]);
+});
+
+test("zero turnover and a dash average are absent", () => {
+  for (const [turnoverM, avgPrice] of [["0", "-"], [0, "0"], [undefined, undefined], [null, null], ["-", ""]]) {
+    const q = detailQuote(withFields({ turnoverM, avgPrice }), "2330.TW");
+    assert.ok(q, String(turnoverM));
+    assert.equal("turnover" in q, false, String(turnoverM));
+    assert.equal("avgPrice" in q, false, String(avgPrice));
+    assert.equal(q.volume, 42_269);
+  }
+});
+
+test("an inner volume of 0 is kept", () => {
+  const q = detailQuote(withFields({ inMarket: 0, outMarket: 38_732 }), "2330.TW");
+  assert.deepEqual([q.inner, q.outer], [0, 38_732]);
+});
+
+test("an index row carries no activity", () => {
+  const rows = ROWS.filter((row) => row.symbol === "^TWII").map((row) => ({
+    ...row, previousVolumeK: 5_000, turnoverM: "1000", avgPrice: "20000", singleVolumeK: "3", inMarket: 1, outMarket: 2, totalMarketVolK: 3,
+  }));
+  const q = decodeStockList(["^TWII"], ok(rows), NOW, ["^TWII"]).quotes["^TWII"];
+  for (const field of ["previousVolume", "turnover", "avgPrice", "lastSize", "inner", "outer"]) assert.equal(field in q, false, field);
 });

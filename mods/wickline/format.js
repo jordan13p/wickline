@@ -141,17 +141,57 @@ export function formatSize(n, sizeUnit, lang, tx) {
   return sizeUnit === "share" ? compact(n, lang) : { value: formatAmount(n), unit: sizeUnit };
 }
 
+/** A share as an unsigned percentage, `places` decimals: `39.1%`, `2.76%` (never formatChange's signed `+2.76%`). */
+export const formatShare = (percent, places = 1) => `${percent.toFixed(places)}%`;
+
+/** The day's amplitude in percent, (high − low) / previous close × 100; null without all three. */
+export function amplitude(quote) {
+  return positive(quote.high) && positive(quote.low) && positive(quote.previousClose)
+    ? (quote.high - quote.low) / quote.previousClose * 100 : null;
+}
+
+// A count the quote carries as a cell in its size unit, or null without one.
+const sizeCell = (quote, key, n, lang, tx) => (positive(n) ? { label: tx(key), ...formatSize(n, quote.sizeUnit, lang, tx) } : null);
+
+/**
+ * The two-column detail's activity, a cell per value the quote carries, in this order: volume, previous volume, turnover
+ * (compact, 2 decimals: `920.47 億`, `92.05B`) and the last trade's size. A value it does not carry leaves no cell.
+ */
+export function activityCells(quote, lang, tx) {
+  const turnover = positive(quote.turnover) ? { label: tx("detail.turnover"), ...compact(quote.turnover, lang, 2) } : null;
+  return [sizeCell(quote, "detail.volume", quote.volume, lang, tx), sizeCell(quote, "detail.previousVolume", quote.previousVolume, lang, tx),
+    turnover, sizeCell(quote, "detail.lastSize", quote.lastSize, lang, tx)].filter(Boolean);
+}
+
+/**
+ * The inner/outer line: `{ left, right }` texts (`內盤 39.1% 15,147`, `外盤 60.9% 23,585`) and each side's share of their
+ * sum as a fraction, for the bar. null when the quote does not carry both, or both are 0.
+ */
+export function innerOuter(quote, lang, tx) {
+  const { inner, outer } = quote;
+  if (typeof inner !== "number" || typeof outer !== "number" || !(inner + outer > 0)) return null;
+  const innerShare = inner / (inner + outer);
+  const outerShare = outer / (inner + outer);
+  const side = (key, n, share) => `${tx(key)} ${formatShare(share * 100)} ${formatCount(n)}`;
+  return { left: side("detail.inner", inner, innerShare), right: side("detail.outer", outer, outerShare), innerShare, outerShare };
+}
+
 /**
  * The detail's second row of price levels, a cell per column of the first row (3 for a pair, else 4), or null when
- * every place is empty: the volume under open, the limits under high and low. A cell is `{ label, value, unit }`; a
- * place without a value is null, so it keeps its column. `wide` is a two-column detail, whose places are not drawn here.
+ * every place is empty: the limits under high and low; in one column (`wide` false) the volume under open, in two the
+ * average price under open and the amplitude under previous close. A cell is `{ label, value, unit }`; a place without
+ * a value is null, so it keeps its column.
  */
 export function secondRow(quote, wide, lang, tx) {
   const pair = isCryptoPair(quote.symbol);
-  const volume = positive(quote.volume) ? { label: tx(pair ? "detail.volume24h" : "detail.volume"), ...formatSize(quote.volume, quote.sizeUnit, lang, tx) } : null;
-  const limit = (label, value) => (hasLimits(quote.limitUp, quote.limitDown) ? { label: tx(label), value: number(quote, value), unit: "" } : null);
-  const places = [volume, limit("detail.limitUpPrice", quote.limitUp), limit("detail.limitDownPrice", quote.limitDown)];
-  if (!pair) places.push(null);
+  const plain = (label, value) => ({ label: tx(label), value, unit: "" });
+  const swing = amplitude(quote);
+  const first = wide
+    ? (positive(quote.avgPrice) ? plain("detail.avgPrice", number(quote, quote.avgPrice)) : null)
+    : sizeCell(quote, pair ? "detail.volume24h" : "detail.volume", quote.volume, lang, tx);
+  const limit = (label, value) => (hasLimits(quote.limitUp, quote.limitDown) ? plain(label, number(quote, value)) : null);
+  const places = [first, limit("detail.limitUpPrice", quote.limitUp), limit("detail.limitDownPrice", quote.limitDown)];
+  if (!pair) places.push(wide && swing !== null ? plain("detail.amplitude", formatShare(swing, 2)) : null);
   return places.some(Boolean) ? places : null;
 }
 

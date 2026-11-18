@@ -1,5 +1,7 @@
 // Which layout Wickline draws at a size, and which table columns fit a width.
 // No Herdr imports, so tests run it under Node.
+import { kindOf, marketOf } from "./markets.js";
+import { misEnabled, yahootwEnabled } from "./settings.js";
 
 // Below this height: the one-line band.
 export const BAND_MAX_HEIGHT = 72;
@@ -97,4 +99,19 @@ export function tableColumns(width) {
 export function nameWidth(width, ids) {
   const room = Math.min(width, TABLE_MAX_WIDTH);
   return Math.max(NAME_MIN_WIDTH, Math.min(NAME_MAX_WIDTH, room - needed(ids) + NAME_MIN_WIDTH));
+}
+
+// The detail dialog's widths: one column, or two for a quote that can carry a book (canCarryBook).
+export const DETAIL_WIDTH = 440;
+export const DETAIL_WIDE_WIDTH = 720;
+
+/**
+ * Whether a detail opened now can carry a book, so it opens in two columns (chosen at open, kept while open): a Taiwan
+ * stock with TWSE MIS or Yahoo 奇摩股市 on, or a future with Yahoo 奇摩股市 on (MIS has no futures). `settings` is
+ * readSettings' result.
+ */
+export function canCarryBook(quote, settings) {
+  const kind = kindOf(quote.symbol);
+  if (kind === "future") return yahootwEnabled(settings);
+  return kind === "stock" && marketOf(quote.symbol) === "tw" && (misEnabled(settings) || yahootwEnabled(settings));
 }

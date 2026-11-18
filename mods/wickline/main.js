@@ -24,7 +24,7 @@ import {
 import { BINANCE_URL } from "./providers/binance.js";
 import { MIS_URL } from "./providers/mis.js";
 import { FINNHUB_URL } from "./providers/finnhub.js";
-import { layoutFor, wantsCard } from "./layout.js";
+import { DETAIL_WIDE_WIDTH, DETAIL_WIDTH, canCarryBook, layoutFor, wantsCard } from "./layout.js";
 import { MOD_ID } from "./panes.js";
 import * as moves from "./moves.js";
 import { band, sidebar, table, yieldView } from "./ui/panel.js";
@@ -64,6 +64,8 @@ export default class Wickline extends View {
     if (given.detail) {
       this.detail = given.detail;
       this.overlay = given.overlay;
+      // Two columns or one, chosen when it opened and kept while it is open.
+      this.wide = given.wide === true;
       // The token its opening copy writes under, and the last `seq` it adopted (none without a token: nothing to adopt).
       this.held = typeof given.token === "string" ? { token: given.token, seq: 1 } : null;
       // Redraws at its quote's own moments (a stale price, a session's edge, a mark's end) and at each quote its row
@@ -511,7 +513,8 @@ export default class Wickline extends View {
     const { value, mine } = startHandover(symbol, token, detail);
     detailStore.write(value);
     this.handover = mine;
-    openOverlay({ mod: MOD_ID, kind: "dialog", width: 440, props: { detail, token } });
+    const wide = canCarryBook(detail, this.settings);
+    openOverlay({ mod: MOD_ID, kind: "dialog", width: wide ? DETAIL_WIDE_WIDTH : DETAIL_WIDTH, props: { detail, token, wide } });
   }
 
   /**

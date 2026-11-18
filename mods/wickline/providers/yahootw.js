@@ -3,7 +3,7 @@
 // This file holds the host, limits and decoder; the switch and consent live in settings.js and the
 // settings dialog. No Herdr imports, so tests run it under Node.
 import {
-  HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, sized, withinLimits,
+  HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, withinLimits,
 } from "../quotes.js";
 import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
 import { MINUTE_MS, fastPace, kindOf } from "../markets.js";
@@ -58,6 +58,39 @@ const count = (value, future) => {
   const n = Number(value);
   return positive(n) ? Math.round(future ? n * 1000 : n) : null;
 };
+
+// A total as sent, for the activity checks: a number or a plain numeric string at or above 0 (0 kept), in whole units
+// as `count`'s; anything else (" ", "", "-", null) is none, never `Number(" ")`'s 0.
+const amount = (value, future) => {
+  const n = typeof value === "string" && /^\d+(\.\d+)?$/.test(value) ? Number(value) : value;
+  return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(future ? n * 1000 : n) : null;
+};
+
+/**
+ * A stock's or future's activity (quotes.js ACTIVITY_FIELDS), each field absent when the row does not send it or sends
+ * 0 or `-`: counts in lots or contracts, with their unit whenever one is there; turnover in the currency (`turnoverM`
+ * is in millions); the average price; inner and outer volume only when, compared exactly, they add up to the
+ * continuous-trading total (`totalMarketVolK`), else neither, the rest kept.
+ */
+function activity(row, future) {
+  const counts = {
+    volume: count(row.volumeK, future),
+    previousVolume: count(row.previousVolumeK, future),
+    lastSize: count(row.singleVolumeK, future),
+  };
+  const millions = positiveOrNull(row.turnoverM);
+  const inner = amount(row.inMarket, future);
+  const outer = amount(row.outMarket, future);
+  const total = amount(row.totalMarketVolK, future);
+  const fields = {
+    ...counts,
+    sizeUnit: Object.values(counts).some((n) => n !== null) ? (future ? "contract" : "lot") : null,
+    turnover: millions === null ? null : millions * 1e6,
+    avgPrice: positiveOrNull(row.avgPrice),
+    ...(inner !== null && outer !== null && total !== null && inner + outer === total && { inner, outer }),
+  };
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== null));
+}
 
 const time = (value) => {
   const ms = typeof value === "string" ? Date.parse(value) : NaN;
@@ -153,8 +186,8 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       // An instrument only this source prices takes its market and currency from here.
       exchange: exchangeCode(row.exchange),
       currency: currencyCode(row.currency),
-      // An index's volume is not read.
-      ...(kindOf(symbol) !== "index" && sized(count(row.volumeK, future), future ? "contract" : "lot")),
+      // An index's activity is not read.
+      ...(kindOf(symbol) !== "index" && activity(row, future)),
       tradeTime,
       day,
       fetchedAt: now,

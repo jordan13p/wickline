@@ -640,3 +640,11 @@ export function detailSource(quote, session, now, tx) {
   if (isCryptoPair(quote.symbol)) return [[tx("detail.sourceCrypto")]];
   return [[tx("detail.sourceStock"), delayWords(quote, tx)]];
 }
+
+/**
+ * Whether the detail dims its price with its activity, inner/outer volume and book: its price is kept through a failed
+ * refresh (`cached`) or reads stalled, so nothing beside it looks current. Rows keep their own look.
+ */
+export function detailDimmed(quote, session, now) {
+  return Boolean(quote.cached) || freshness(quote, session, now).state === "stalled";
+}

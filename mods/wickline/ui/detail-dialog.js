@@ -3,12 +3,18 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
-import { displayName, detailTimes, formatChange, number, secondRow, sessionTimesParts, signed } from "../format.js";
-import { detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
+import {
+  activityCells, displayName, detailTimes, formatChange, innerOuter, number, secondRow, sessionTimesParts, signed,
+} from "../format.js";
+import { detailDimmed, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
-import { chart, chartShape, failureText, priceBox, priceInk, segments, statCell } from "./parts.js";
+import { chart, chartShape, failureText, innerOuterBar, priceBox, segments, statCell, statGrid } from "./parts.js";
 
-// The dialog a row opens: the day's chart, its range and the session.
+// How far a stopped price dims, with the activity beside it.
+const DIM_OPACITY = 0.5;
+
+// The dialog a row opens: the day's chart, its range and the session. A quote that can carry a book (main.js
+// openDetail) opens wide, in two columns: the price, chart, levels and source lines on the left, its activity on the right.
 export function detailView(view, t) {
   const now = Date.now();
   // Never refetched: its row hands it newer quotes; a mark holds until its end or the next hand-over.
@@ -21,41 +27,59 @@ export function detailView(view, t) {
   const source = detailSource(q, session, now, tx);
   const times = detailTimes(q, now, view.lang, tx);
   const hours = sessionTimesParts(sessionTimes(q, now), view.lang, tx);
-  const second = secondRow(q, false, view.lang, tx);
+  const second = secondRow(q, view.wide, view.lang, tx);
   const amount = signed(q);
+  // A stalled or cached price dims with its activity, so nothing beside it looks current; its ink stays foreground.
+  const dimmed = detailDimmed(q, session, now);
+  const dim = (el) => (dimmed ? el.opacity(DIM_OPACITY) : el);
   const stat = (label, price) => v_flex().flex_1().gap(2)
     .child(div().text_size(10.5).text_color(t.dim).child(view.tx(label)))
     .child(div().font_semibold().child(number(q, price)));
 
-  return v_flex().id("bw-detail").w_full().p(18).gap(14).text_color(t.foreground).text_size(12.5)
-    .child(h_flex().items_center().gap(10)
-      .child(v_flex().flex_1().min_w(0).gap(2)
-        .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
-        .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, view.lang) ?? "")))
-      // The session as plain text: a filled dot means a live quote, everywhere. No word while it is not known.
-      .when(sessionName(q, session, now) !== "unknown", (el) => el
-        .child(div().flex_none().text_size(11).text_color(t.muted).child(view.tx(`session.${sessionName(q, session, now)}`))))
-      .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
-        .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×")))
-    .child(h_flex().gap(10).items_end()
-      .child(priceBox("bw-detail-price", number(q), priceInk(t, q), mark, { pad: 6 }).text_size(26).font_semibold())
+  const header = h_flex().items_center().gap(10)
+    .child(v_flex().flex_1().min_w(0).gap(2)
+      .child(div().text_size(16).font_semibold().truncate().child(q.symbol))
+      .child(div().text_size(11.5).text_color(t.dim).truncate().child(displayName(q, view.lang) ?? "")))
+    // The session as plain text: a filled dot means a live quote, everywhere. No word while it is not known.
+    .when(sessionName(q, session, now) !== "unknown", (el) => el
+      .child(div().flex_none().text_size(11).text_color(t.muted).child(view.tx(`session.${sessionName(q, session, now)}`))))
+    .child(div().id("bw-detail-close").flex_none().w(18).text_right().text_size(14).text_color(t.dim).cursor_pointer()
+      .hover((s) => s.text_color(t.foreground)).on_click(() => view.closeDialog()).child("×"));
+  const left = [
+    dim(h_flex().gap(10).items_end()
+      .child(priceBox("bw-detail-price", number(q), t.foreground, mark, { pad: 6 }).text_size(26).font_semibold())
       // Outside the price, as in the rows: a lit price's 6px block keeps 4px clear of it.
       .when(Boolean(q.currency), (el) => el.child(div().pb(4).text_size(13).text_color(t.dim).child(q.currency)))
       .when(amount !== "—", (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(color).child(amount)))
       .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent)))
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
-        .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown")))))
+        .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown"))))),
     // The box only when its chart draws something (chartShape: a rule, a line or the price's dot), else nothing.
-    .when(chartShape(q) !== null,
-      (el) => el.child(chart(q, color, t, { width: "full", height: 140, fill: true, dot: 6 })))
-    .child(isCryptoPair(q.symbol)
+    chartShape(q) !== null && chart(q, color, t, { width: "full", height: 140, fill: true, dot: 6 }),
+    isCryptoPair(q.symbol)
       ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
         .child(stat("detail.low24h", q.low))
       : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
-        .child(stat("detail.prevClose", q.previousClose)))
-    // The second row on the same grid: the volume under open, the day's limits under high and low (at a limit or not).
-    .when(second !== null, (el) => el.child(h_flex().gap(12).children(second.map((cell) => statCell(t, cell)))))
-    .child(v_flex().gap(2).children([...source, ...(hours.length ? [hours] : []), times].map((parts) => segments(t, parts))))
-    .when(Boolean(note), (el) => el.child(div().text_size(11).text_color(t.blocked).child(note)))
-    .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback))));
+        .child(stat("detail.prevClose", q.previousClose)),
+    // The second row on the same grid: the limits under high and low (at a limit or not); under open, one column's
+    // volume (its activity, dimmed with the price) or two columns' average price.
+    second !== null && h_flex().gap(12).children(second.map((cell, i) =>
+      (i === 0 && !view.wide ? dim(statCell(t, cell)) : statCell(t, cell)))),
+    v_flex().gap(2).children([...source, ...(hours.length ? [hours] : []), times].map((parts) => segments(t, parts))),
+    Boolean(note) && div().text_size(11).text_color(t.blocked).child(note),
+    Boolean(q.fallback) && div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback)),
+  ].filter(Boolean);
+
+  const root = v_flex().id("bw-detail").w_full().p(18).gap(14).text_color(t.foreground).text_size(12.5).child(header);
+  if (!view.wide) return root.children(left);
+  const cells = activityCells(q, view.lang, tx);
+  const flow = innerOuter(q, view.lang, tx);
+  const right = [
+    cells.length > 0 && dim(statGrid(t, cells)),
+    flow !== null && dim(innerOuterBar(flow, view.changeColor(t, -1), view.changeColor(t, 1))),
+  ].filter(Boolean);
+  return root.child(h_flex().items_start().gap(28)
+    .child(v_flex().flex_1().min_w(0).gap(14).children(left))
+    // Only with something to show: an empty column would read as a gap.
+    .when(right.length > 0, (el) => el.child(v_flex().flex_none().w(268).gap(14).children(right))));
 }

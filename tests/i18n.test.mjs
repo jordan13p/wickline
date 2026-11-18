@@ -359,3 +359,17 @@ test("the volume labels and units are in every language", () => {
     for (const [key, text] of Object.entries(keys)) assert.equal(STRINGS[lang][key], text, `${lang} ${key}`);
   }
 });
+
+test("the activity labels are in every language", () => {
+  const expected = {
+    en: ["Prev volume", "Turnover", "Last size", "Average", "Range", "At bid", "At ask"],
+    "zh-TW": ["昨量", "成交值", "單量", "均價", "振幅", "內盤", "外盤"],
+    "zh-CN": ["昨量", "成交额", "单量", "均价", "振幅", "内盘", "外盘"],
+    ja: ["前日出来高", "売買代金", "直近約定数量", "平均価格", "値幅率", "内盤", "外盤"],
+    ko: ["전일 거래량", "거래대금", "최근 체결량", "평균가", "진폭", "매도 체결", "매수 체결"],
+  };
+  const keys = ["detail.previousVolume", "detail.turnover", "detail.lastSize", "detail.avgPrice", "detail.amplitude", "detail.inner", "detail.outer"];
+  for (const [lang, texts] of Object.entries(expected)) {
+    keys.forEach((key, i) => assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`));
+  }
+});

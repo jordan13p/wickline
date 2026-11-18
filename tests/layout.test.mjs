@@ -5,6 +5,10 @@ import {
   BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, REMOVE_W, RIGHT_INSET, SCROLL_LANE, SPARK_MIN, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
   columnWidth, layoutFor, nameWidth, sparkWidth, tableColumns, wantsCard,
 } from "../mods/wickline/layout.js";
+import { DETAIL_WIDE_WIDTH, DETAIL_WIDTH, canCarryBook } from "../mods/wickline/layout.js";
+import { readSettings } from "../mods/wickline/settings.js";
+import { YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
+import { BOTH_ON, MIS_ON } from "./helpers.mjs";
 
 const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", "high", "low", "prevClose"];
 const KEPT = ["symbol", "state", "price", "changePct"];
@@ -118,4 +122,29 @@ test("a docked block asks for the card with card: true, and nothing else does", 
   for (const props of [{ card: "true" }, { card: 1 }, { card: false }, {}, null, undefined, { from: "tab-1" }]) {
     assert.equal(wantsCard(props), false, JSON.stringify(props));
   }
+});
+
+// Yahoo 奇摩股市 alone, consent given.
+const YAHOOTW_ON = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
+
+test("the detail's two widths", () => {
+  assert.equal(DETAIL_WIDTH, 440);
+  assert.equal(DETAIL_WIDE_WIDTH, 720);
+});
+
+test("A Taiwan stock with a real-time source", () => {
+  assert.equal(canCarryBook({ symbol: "2330.TW" }, readSettings(BOTH_ON)), true);
+  assert.equal(canCarryBook({ symbol: "2330.TW" }, readSettings(MIS_ON)), true);
+  assert.equal(canCarryBook({ symbol: "6488.TWO" }, readSettings(YAHOOTW_ON)), true);
+});
+
+test("No book to carry", () => {
+  for (const symbol of ["AAPL", "^TWII", "BTC/USDT"]) assert.equal(canCarryBook({ symbol }, readSettings(BOTH_ON)), false, symbol);
+  assert.equal(canCarryBook({ symbol: "2330.TW" }, readSettings(undefined)), false);
+  // A future has no MIS row: only Yahoo 奇摩股市 carries its book.
+  assert.equal(canCarryBook({ symbol: "WTX&" }, readSettings(MIS_ON)), false);
+  assert.equal(canCarryBook({ symbol: "WTX&" }, readSettings(YAHOOTW_ON)), true);
+  // Switched on without a current consent is off.
+  const stale = { version: 1, sources: { tw: { mis: true, misAck: { version: 0 } } } };
+  assert.equal(canCarryBook({ symbol: "2330.TW" }, readSettings(stale)), false);
 });
