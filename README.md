@@ -47,7 +47,7 @@ Each row has a dot and a label:
 
 **Lit price.** A Taiwan stock exactly at its limit-up or limit-down, as its real-time source (TWSE MIS or Yahoo TW Stock) reports it, shows its price on a solid block in the gain or loss color, the way Taiwan's quote boards light a stock at its limit; hover it for `Limit up 563.00`. A future such as `WTX&` exactly at its reported limit lights the same way; a futures price past its limits is shown, not discarded. Limits are never computed, so other markets, and Taiwan on Yahoo Finance alone, never light; nor does a stalled quote. A call auction's trial match is never a price: in the morning the row keeps the previous day's close, never lit; a price held through the closing auction stays lit when it traded at the limit that day.
 
-Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, Yahoo TW Stock and TWSE MIS every 10 seconds while Taiwan trades and in the closing auction (13:25–13:30), Yahoo TW Stock also in both futures sessions (60 otherwise), Finnhub about every 15–30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
+Each source refreshes on its own: Yahoo every 60 seconds, Binance every 15 seconds, Yahoo TW Stock and TWSE MIS every 10 seconds while Taiwan trades and in the closing auction (13:25–13:30), and for up to 2 minutes after while MIS still marks a stock in its auction, Yahoo TW Stock also in both futures sessions (60 otherwise), Finnhub about every 15–30 seconds per symbol while the US market trades. A source that fails or is rate limited backs off and its rows say why, while the others carry on.
 
 ## Install
 
