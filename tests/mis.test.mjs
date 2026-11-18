@@ -129,6 +129,60 @@ test("a name without a price: before the open MIS sends names only", () => {
   assert.deepEqual(all.names, { "2330.TW": "台積電", "0050.TW": "元大台灣50" });
 });
 
+// MIS answers recorded around the call auctions on 2026-11-17 (and the morning of 11-18, with a TPEx stock). A row in a
+// call auction carries `ts` "1" and the auction's trial price `pz`; its book is the auction's, never a price.
+const auctionAnswer = (name) => answer(fixture(`mis-auction-${name}`));
+const auctionRow = (name, code) => JSON.parse(fixture(`mis-auction-${name}`)).msgArray.find((row) => row.c === code);
+
+test("a flagged row is no price and no error", () => {
+  const result = decode(["2330.TW", "0050.TW"], auctionAnswer("0838"));
+  assert.deepEqual(result.quotes, {});
+  assert.deepEqual(result.errors, {});
+  assert.equal(result.auction["2330.TW"], Number(auctionRow("0838", "2330").tlong));
+  assert.equal(result.auction["0050.TW"], Number(auctionRow("0838", "0050").tlong));
+  assert.deepEqual(result.names, { "2330.TW": "台積電", "0050.TW": "元大台灣50" });
+});
+
+test("a name-only row is never a flag", () => {
+  const result = decode(["2330.TW", "6488.TWO"], auctionAnswer("0825"));
+  assert.deepEqual(result, { quotes: {}, errors: {}, names: { "2330.TW": "台積電", "6488.TWO": "環球晶" } });
+});
+
+test("in-session answers deep-equal as before", () => {
+  for (const text of [OPEN, LIMITS]) {
+    assert.deepEqual(Object.keys(decode(["2330.TW", "0050.TW"], answer(text))).sort(), ["errors", "names", "quotes"]);
+  }
+});
+
+test("the close prices a flagged symbol again", () => {
+  const auction = decode(["2330.TW"], auctionAnswer("1330"));
+  assert.deepEqual([auction.quotes, Object.keys(auction.auction)], [{}, ["2330.TW"]]);
+  const close = decode(["2330.TW"], auctionAnswer("1335"));
+  assert.ok(!("auction" in close));
+  const quote = close.quotes["2330.TW"];
+  assert.deepEqual([quote.price, quote.timestamp, quote.fromBook], [2170, Date.parse("2026-11-17T05:30:00Z"), undefined]);
+});
+
+test("every recorded auction answer is flagged", () => {
+  for (const name of ["0900", "1326"]) {
+    const result = decode(["2330.TW", "0050.TW"], auctionAnswer(name));
+    assert.deepEqual([result.quotes, Object.keys(result.auction).sort()], [{}, ["0050.TW", "2330.TW"]], name);
+  }
+  // Once the opening auction has matched, an unflagged snapshot without a trade is priced from its book again.
+  const open = decode(["2330.TW"], auctionAnswer("0902"));
+  assert.ok(!("auction" in open));
+  const quote = open.quotes["2330.TW"];
+  assert.deepEqual([quote.price, quote.timestamp, quote.fromBook], [(2195 + 2200) / 2, Date.parse("2026-11-17T01:02:00Z"), true]);
+});
+
+test("TPEx flags like TWSE", () => {
+  const result = decode(["2330.TW", "6488.TWO"], auctionAnswer("0831"));
+  assert.deepEqual(result.quotes, {});
+  assert.deepEqual(result.auction, {
+    "2330.TW": Number(auctionRow("0831", "2330").tlong), "6488.TWO": Number(auctionRow("0831", "6488").tlong),
+  });
+});
+
 test("limit check", () => {
   assert.equal(withinLimits(2600, 2520, 2070), false);
   assert.equal(withinLimits(2000, 2520, 2070), false);

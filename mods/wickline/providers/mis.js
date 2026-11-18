@@ -39,7 +39,10 @@ function bookPrice(bid, ask, up, down) {
  * Overlays by requested symbol. The price is the last trade (`z`); when the last 5-second snapshot
  * had none (`-`), the order book's (bookPrice), marked `fromBook`: its time is the snapshot's, not a trade's.
  * A row with neither, or without a time, has no overlay and no error. A row MIS sent for a symbol that was
- * not asked for is ignored.
+ * not asked for is ignored. A row MIS flags as in a call auction (`ts` "1" with a positive trial price `pz`,
+ * as from 08:30 to the open and from 13:25 to the close) has no overlay and no error either: its book is the
+ * auction's, never a price. Its symbol goes in `auction`, mapped to the flagged snapshot's time; the key is there
+ * only when not empty.
  */
 export function decodeMis(symbols, response, now) {
   // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
@@ -52,17 +55,22 @@ export function decodeMis(symbols, response, now) {
   const errors = {};
   // Before the open (or for a halted stock) MIS sends a row's name without any price: keep the name.
   const names = {};
+  const auction = {};
   for (const row of body.msgArray) {
     const symbol = typeof row?.ex === "string" && typeof row.c === "string" ? wanted.get(`${row.ex}_${row.c}.tw`) : undefined;
     if (!symbol) continue;
     const name = cleanText(row.n);
     if (name) names[symbol] = name;
+    const time = Number(row.tlong);
+    if (row.ts === "1" && positive(Number(row.pz)) && positive(time)) {
+      auction[symbol] = time;
+      continue;
+    }
     const bid = best(row.b);
     const ask = best(row.a);
     const limits = limitPair(positiveOrNull(row.u), positiveOrNull(row.w));
     const traded = positiveOrNull(row.z);
     const price = traded ?? bookPrice(bid, ask, limits.limitUp, limits.limitDown);
-    const time = Number(row.tlong);
     if (!price || !positive(time)) continue;
     if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("mis.outOfLimits");
@@ -83,7 +91,7 @@ export function decodeMis(symbols, response, now) {
       ...(!traded && { fromBook: true }),
     };
   }
-  return { quotes, errors, names };
+  return { quotes, errors, names, ...(Object.keys(auction).length && { auction }) };
 }
 
 /** @type {Provider} */

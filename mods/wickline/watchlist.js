@@ -88,12 +88,17 @@ function wake(state) {
  * still live (at most LIVE_MAX_AGE_MS old: the moment msUntilStale wakes an idle loop for, in any session),
  * else the newest, a tie keeping the earlier id. Null with none, or when none is live and the `base` quote is
  * real time (isRealtime) and no older than the newest: a stale overlay never hides a fresher real-time price.
+ * While MIS flags the symbol as in a call auction (`flagged`), its held price never outranks another overlay of its
+ * own Taipei day, whatever their ages: it is from before the auction.
  */
-export function pickOverlay(byProvider, order, now, base = null) {
+export function pickOverlay(byProvider, order, now, base = null, flagged = false) {
+  const held = flagged ? byProvider[mis.id] : null;
+  const misYields = Boolean(held) && order.some((id) =>
+    id !== mis.id && byProvider[id] && taipeiDay(byProvider[id].timestamp) === taipeiDay(held.timestamp));
   let newest = null;
   for (const id of order) {
     const overlay = byProvider[id];
-    if (!overlay) continue;
+    if (!overlay || (misYields && id === mis.id)) continue;
     if (now - overlay.timestamp <= LIVE_MAX_AGE_MS) return { id, overlay };
     if (!newest || overlay.timestamp > newest.overlay.timestamp) newest = { id, overlay };
   }
@@ -189,6 +194,9 @@ export class Watchlist {
     // price stays in that source's overlay slot.
     this.quotes = {};
     this.overlays = {};
+    // By symbol: the time of the snapshot in which MIS last flagged it as in a call auction (decodeMis), while MIS
+    // still flags it; kept with MIS's held price, which the flag leaves in place.
+    this.auctionAt = {};
     // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its trading
     // day), kept only while that source's price for the symbol is.
     this.lines = {};
@@ -505,7 +513,9 @@ export class Watchlist {
   }
 
   pick(symbol, now) {
-    return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now, this.quotes[symbol]);
+    // MIS's flag holds while its snapshot is younger than a live MIS price.
+    const flagged = now - this.auctionAt[symbol] < LIVE_MAX_AGE_MS;
+    return pickOverlay(this.overlays[symbol] ?? {}, OVERLAY_ORDER, now, this.quotes[symbol], flagged);
   }
 
   /**
@@ -745,7 +755,8 @@ export class Watchlist {
     for (const provider of OVERLAYS) {
       const symbols = new Set(this.symbolsFor(provider, config));
       for (const symbol of symbols) covered.add(symbol);
-      const held = [this.overlays, this.overlayErrors, this.lines[provider.id] ?? {}, this.lineTrades[provider.id] ?? {}];
+      const held = [this.overlays, this.overlayErrors, this.lines[provider.id] ?? {}, this.lineTrades[provider.id] ?? {},
+        ...(provider === mis ? [this.auctionAt] : [])];
       for (const symbol of held.flatMap(Object.keys)) {
         if (symbols.has(symbol)) continue;
         this.dropOverlay(provider, symbol);
@@ -1110,7 +1121,15 @@ export class Watchlist {
           else this.errors[symbol] = error ?? notice((had || kindOf(symbol) === "future") ? "yahootw.notFound" : "yahoo.notFound");
           continue;
         }
-        if (!overlay) this.dropOverlay(provider, symbol);
+        // A symbol in a call auction (MIS's flag) keeps the price held from before it. A flag from a snapshot older
+        // than that price is an answer MIS's cache served late: ignored.
+        const flaggedAt = result.auction?.[symbol];
+        if (flaggedAt === undefined) {
+          if (!overlay) this.dropOverlay(provider, symbol);
+          else if (provider === mis) delete this.auctionAt[symbol];
+        } else if (!(had?.timestamp > flaggedAt)) {
+          this.auctionAt[symbol] = Math.max(this.auctionAt[symbol] ?? flaggedAt, flaggedAt);
+        }
         this.setEntry(this.overlayErrors, symbol, provider.id, overlay ? undefined : error);
       }
       this.observe(provider, result, now);
@@ -1151,23 +1170,28 @@ export class Watchlist {
    * gives one (Yahoo 奇摩股市: each market's newest trade among its real-time rows, whatever their day, so an answer of
    * yesterday's prices still counts as one), else the newest trade among the answer's priced Taiwan rows (a row's own
    * trade time, else its time; a quote not timedByTrade, a MIS book price, carries no trade), real time
-   * as the row that set it is (isRealtime). Run once the rows are in, so an index reads its market by the exchange this answer
+   * as the row that set it is (isRealtime). A symbol MIS flags as in a call auction counts as a row without a trade,
+   * as its book price did. Run once the rows are in, so an index reads its market by the exchange this answer
    * gave.
    */
   observe(provider, result, now) {
     const trades = {};
+    const realtime = REALTIME_SOURCES.has(provider.id);
     if (result.newestTrade) {
-      const realtime = REALTIME_SOURCES.has(provider.id);
       for (const [market, time] of Object.entries(result.newestTrade)) trades[market] = { time, realtime };
     } else {
-      for (const [symbol, quote] of Object.entries(result.quotes)) {
+      const rows = [
+        ...Object.entries(result.quotes).map(([symbol, quote]) =>
+          [symbol, timedByTrade(quote) ? quote.tradeTime ?? quote.timestamp : null, isRealtime(quote)]),
+        ...Object.keys(result.auction ?? {}).map((symbol) => [symbol, null, realtime]),
+      ];
+      for (const [symbol, time, rowRealtime] of rows) {
         if (this.marketFor(symbol) !== "tw") continue;
         const market = twMarket(symbol);
-        const time = timedByTrade(quote) ? quote.tradeTime ?? quote.timestamp : null;
         const newest = trades[market]?.time ?? null;
         const later = Number.isFinite(time) && (newest === null || time > newest);
         // Real time as the row that set the newest trade is (the first row until one does).
-        if (later || !trades[market]) trades[market] = { time: later ? time : null, realtime: isRealtime(quote) };
+        if (later || !trades[market]) trades[market] = { time: later ? time : null, realtime: rowRealtime };
       }
     }
     for (const [market, { time, realtime }] of Object.entries(trades)) this.noteTrade(market, time, { source: provider.id, realtime }, now);
@@ -1221,10 +1245,12 @@ export class Watchlist {
     this.setEntry(this.overlayErrors, symbol, provider.id, error);
   }
 
-  // An overlay's line goes with its price, so a line is never drawn with a later price it did not end at.
+  // An overlay's line goes with its price, so a line is never drawn with a later price it did not end at; MIS's
+  // auction flag goes with MIS's price.
   dropOverlay(provider, symbol) {
     this.setEntry(this.overlays, symbol, provider.id, undefined);
     if (this.lines[provider.id]) delete this.lines[provider.id][symbol];
+    if (provider === mis) delete this.auctionAt[symbol];
   }
 
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */

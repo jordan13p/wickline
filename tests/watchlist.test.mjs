@@ -2798,3 +2798,125 @@ test("the open detail leaves out the row's inference deadline: on a listed day i
     assert.equal(detailWakeAt(detail, host.clock), end);
   }, now);
 });
+
+// MIS's call-auction flag (`ts` "1" with a trial price `pz`), on Tuesday 2026-11-17 in Taipei: the answers recorded that
+// day, or hand-built from its 13:24 row for 2330. A flagged row is no price: the held MIS price stays, else Yahoo's.
+const taipei1117 = (time) => at(`2026-11-17T${time}Z`);
+const ROW_1324 = jsonFixture("mis-auction-1324").msgArray.find((row) => row.c === "2330");
+// The 13:24 row's book (bid 2170, ask 2175) as a snapshot at `time` without a trade, or flagged in the auction.
+const misBook = (time) => ({ ...ROW_1324, tlong: String(time) });
+const misFlagged = (time) => ({ ...ROW_1324, ts: "1", pz: "2150.0000", tlong: String(time) });
+const misRows = (...rows) => ok({ msgArray: rows });
+// One MIS answer laid over a watchlist at the host's clock, as a round would.
+const misAnswer = (w, host, response, symbols = ["2330.TW"]) => {
+  const request = mis.requests(symbols, { misUrl: MIS_URL })[0];
+  w.apply(mis, request, mis.decode(request, response, host.clock));
+};
+// Yahoo Finance's 2330.TW at 13:04, 20 minutes behind, on 11/17's periods.
+const yahoo1117 = (symbol) => twYahooAt(symbol, taipei1117("05:04:00"), "2026-11-17");
+
+test("the morning trial match shows Yahoo's close", async () => {
+  // Yahoo Finance holds Monday's close, 2215.
+  const close = at("2026-11-16T05:30:00Z");
+  const host = taiwanHost(ONLY_MIS, { mis: () => ok(jsonFixture("mis-auction-0838")),
+    yahoo: (s) => twYahoo(s, { regularMarketPrice: 2215, exchangeName: "TAI", regularMarketTime: close / 1000, currentTradingPeriod: twDay("2026-11-16") }) });
+  await soleRun(host, (w) => {
+    const quote = w.shown("2330.TW", host.clock);
+    assert.deepEqual([quote.source, quote.price], ["yahoo", 2215]);
+    assert.deepEqual([w.overlayError("2330.TW"), w.errors["2330.TW"], w.problems()], [null, undefined, []]);
+    assert.equal(w.auctionAt["2330.TW"], taipei1117("00:38:28"));
+  }, taipei1117("00:38:31"));
+});
+
+// MIS's answers through the closing auction as recorded: priced from the book at 13:23:55, flagged from 13:25:55 to
+// 13:29:58, closed at 13:30:00.
+async function closingAuction(check) {
+  const host = taiwanHost(ONLY_MIS, { yahoo: yahoo1117 });
+  host.mis = () => ok(jsonFixture(host.clock < taipei1117("05:26:04") ? "mis-auction-1324"
+    : host.clock < taipei1117("05:30:03") ? "mis-auction-1326" : host.clock < taipei1117("05:35:01") ? "mis-auction-1330" : "mis-auction-1335"));
+  await soleRun(host, (w) => check(w, host), taipei1117("05:24:01"));
+}
+
+test("the closing auction keeps the held MIS price", async () => {
+  await closingAuction(async (w, host) => {
+    await advance(host, taipei1117("05:26:20"));
+    const quote = w.shown("2330.TW", host.clock);
+    assert.deepEqual([quote.source, quote.price, quote.timestamp], ["mis", 2172.5, taipei1117("05:23:55")]);
+    assert.equal(w.auctionAt["2330.TW"], taipei1117("05:25:57"));
+    assert.equal(w.overlayError("2330.TW"), null);
+  });
+});
+
+test("the close after the auction", async () => {
+  await closingAuction(async (w, host) => {
+    await advance(host, taipei1117("05:30:10"));
+    assert.equal(w.shown("2330.TW", host.clock).price, 2172.5);
+    await advance(host, taipei1117("05:36:10"));
+    const quote = w.shown("2330.TW", host.clock);
+    assert.deepEqual([quote.source, quote.price, quote.timestamp], ["mis", 2170, taipei1117("05:30:00")]);
+    assert.equal(w.auctionAt["2330.TW"], undefined);
+  });
+});
+
+test("a held MIS price never outranks Yahoo 奇摩股市's of the same day", async () => {
+  // Yahoo 奇摩股市's answer is timed by its newest trade (0050.TW's, 13:24:40); 2330.TW last traded 2175 at 13:24:25.
+  const host = taiwanHost(BOTH, { yahoo: yahoo1117,
+    yahootw: () => stockList(taipei1117("05:24:40"), { "2330.TW": { regularMarketTime: "2026-11-17T05:24:25Z" } }, jsonFixture("ytw-auction-1326")) });
+  host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
+  host.mis = () => misRows(host.clock < taipei1117("05:27:40") ? misBook(taipei1117("05:24:55")) : misFlagged(taipei1117("05:27:40")));
+  await soleRun(host, async (w) => {
+    await advance(host, taipei1117("05:28:00"));
+    assert.deepEqual([w.overlays["2330.TW"].mis.price, w.auctionAt["2330.TW"]], [2172.5, taipei1117("05:27:40")]);
+    const quote = w.shown("2330.TW", host.clock);
+    assert.deepEqual([quote.source, quote.price], ["yahootw", 2175]);
+  }, taipei1117("05:24:56"));
+});
+
+test("a flag older than the held price is ignored", () => {
+  const host = taiwanHost(ONLY_MIS);
+  host.clock = taipei1117("05:25:00");
+  const w = new Watchlist(host);
+  misAnswer(w, host, misRows(misBook(taipei1117("05:24:55"))));
+  // An answer MIS's cache served late.
+  host.clock = taipei1117("05:25:10");
+  misAnswer(w, host, misRows(misFlagged(taipei1117("05:23:50"))));
+  assert.equal(w.auctionAt["2330.TW"], undefined);
+  assert.equal(w.overlays["2330.TW"].mis.timestamp, taipei1117("05:24:55"));
+});
+
+test("a flagged answer still counts as an answer without a trade", () => {
+  const host = taiwanHost(ONLY_MIS);
+  host.store = { version: 1, symbols: ["2330.TW", "0050.TW"], paused: false };
+  host.clock = taipei1117("05:26:04");
+  const w = new Watchlist(host);
+  misAnswer(w, host, ok(jsonFixture("mis-auction-1326")), ["2330.TW", "0050.TW"]);
+  const seen = w.observed("stock", taipei1117("01:00:00"), w.config().on);
+  assert.deepEqual([seen.newest, seen.answers], [null, [{ source: "mis", at: host.clock, realtime: true }]]);
+});
+
+test("auctionAt goes with MIS", () => {
+  const host = taiwanHost(ONLY_MIS);
+  host.clock = taipei1117("05:26:00");
+  const w = new Watchlist(host);
+  const flag = () => {
+    misAnswer(w, host, misRows(misFlagged(host.clock)));
+    assert.equal(w.auctionAt["2330.TW"], host.clock);
+  };
+  // A priced answer.
+  flag();
+  misAnswer(w, host, misRows({ ...misBook(host.clock), z: "2170.0000" }));
+  assert.equal(w.auctionAt["2330.TW"], undefined);
+  // An unflagged answer without a price.
+  flag();
+  misAnswer(w, host, misRows({ ...misBook(host.clock), b: "-", a: "-" }));
+  assert.equal(w.auctionAt["2330.TW"], undefined);
+  // The overlay dropped (a failed request).
+  flag();
+  w.dropOverlay(mis, "2330.TW");
+  assert.equal(w.auctionAt["2330.TW"], undefined);
+  // MIS turned off.
+  flag();
+  host.prefs = undefined;
+  assert.equal(w.sync(), true);
+  assert.equal(w.auctionAt["2330.TW"], undefined);
+});

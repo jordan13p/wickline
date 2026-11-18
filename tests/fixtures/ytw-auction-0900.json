@@ -1,0 +1,278 @@
+[
+  {
+    "ask": {
+      "raw": "94.6",
+      "fmt": "94.60",
+      "sort": 94.6
+    },
+    "bid": {
+      "raw": "94.45",
+      "fmt": "94.45",
+      "sort": 94.45
+    },
+    "change": {
+      "raw": "-1.9",
+      "fmt": "-1.90",
+      "sort": -1.9
+    },
+    "changePercent": "-1.97%",
+    "changeStatus": "down",
+    "exchange": "TAI",
+    "holdingType": "ETF",
+    "limitDown": false,
+    "limitDownPrice": {
+      "raw": "86.85",
+      "fmt": "86.85",
+      "sort": 86.85
+    },
+    "limitUp": false,
+    "limitUpPrice": {
+      "raw": "106.05",
+      "fmt": "106.05",
+      "sort": 106.05
+    },
+    "marketStatus": "preopen",
+    "openInterest": null,
+    "messageBoardId": "finmb_34513608_lang_zh",
+    "optionType": null,
+    "previousVolume": "318688000",
+    "price": {
+      "raw": "94.55",
+      "fmt": "94.55",
+      "sort": 94.55
+    },
+    "priceDiff": null,
+    "regularMarketDayHigh": {
+      "raw": "94.6",
+      "fmt": "94.60",
+      "sort": 94.6
+    },
+    "regularMarketDayLow": {
+      "raw": "94.4",
+      "fmt": "94.40",
+      "sort": 94.4
+    },
+    "regularMarketOpen": {
+      "raw": "94.55",
+      "fmt": "94.55",
+      "sort": 94.55
+    },
+    "regularMarketPreviousClose": {
+      "raw": "96.45",
+      "fmt": "96.45",
+      "sort": 96.45
+    },
+    "regularMarketTime": "2026-11-17T01:00:02Z",
+    "relatedSymbol": null,
+    "relatedSymbolName": null,
+    "sectorId": "26",
+    "sectorName": "ETF",
+    "strikePrice": null,
+    "symbol": "0050.TW",
+    "symbolName": "元大台灣50",
+    "systexId": "0050",
+    "turnoverM": "507.98",
+    "volume": "5373000",
+    "currency": "TWD",
+    "epsTrailingTwelveMonths": null,
+    "exchangeDataDelayedBy": 0,
+    "fiftyTwoWeekHigh": null,
+    "fiftyTwoWeekLow": null,
+    "marketCap": null,
+    "marketState": null,
+    "trailingPE": null,
+    "avgPrice": "94.54",
+    "inMarket": 350,
+    "outMarket": 280,
+    "orderbook": [
+      {
+        "ask": "94.60",
+        "askVol": 100000,
+        "bid": "94.45",
+        "bidVol": 67000,
+        "askVolK": 100,
+        "bidVolK": 67
+      },
+      {
+        "ask": "94.65",
+        "askVol": 120000,
+        "bid": "94.40",
+        "bidVol": 468000,
+        "askVolK": 120,
+        "bidVolK": 468
+      },
+      {
+        "ask": "94.70",
+        "askVol": 60000,
+        "bid": "94.35",
+        "bidVol": 293000,
+        "askVolK": 60,
+        "bidVolK": 293
+      },
+      {
+        "ask": "94.75",
+        "askVol": 68000,
+        "bid": "94.30",
+        "bidVol": 12000,
+        "askVolK": 68,
+        "bidVolK": 12
+      },
+      {
+        "ask": "94.80",
+        "askVol": 591000,
+        "bid": "94.25",
+        "bidVol": 5000,
+        "askVolK": 591,
+        "bidVolK": 5
+      }
+    ],
+    "indexMeta": null,
+    "singleVolume": "11000",
+    "singleVolumeK": "11",
+    "previousVolumeK": 318688,
+    "volumeK": 5373,
+    "totalMarketVolK": 630,
+    "inMarketPercentage": "55.56%",
+    "outMarketPercentage": "44.44%",
+    "sumAskVolK": 939,
+    "sumBidVolK": 845
+  },
+  {
+    "ask": {
+      "raw": "2195",
+      "fmt": "2,195",
+      "sort": 2195
+    },
+    "bid": {
+      "raw": "2190",
+      "fmt": "2,190",
+      "sort": 2190
+    },
+    "change": {
+      "raw": "-25",
+      "fmt": "-25.00",
+      "sort": -25
+    },
+    "changePercent": "-1.13%",
+    "changeStatus": "down",
+    "exchange": "TAI",
+    "holdingType": "EQUITY",
+    "limitDown": false,
+    "limitDownPrice": {
+      "raw": "1995",
+      "fmt": "1,995",
+      "sort": 1995
+    },
+    "limitUp": false,
+    "limitUpPrice": {
+      "raw": "2435",
+      "fmt": "2,435",
+      "sort": 2435
+    },
+    "marketStatus": "preopen",
+    "openInterest": null,
+    "messageBoardId": "finmb_380075_lang_zh",
+    "optionType": null,
+    "previousVolume": "44151000",
+    "price": {
+      "raw": "2190",
+      "fmt": "2,190",
+      "sort": 2190
+    },
+    "priceDiff": null,
+    "regularMarketDayHigh": {
+      "raw": "2195",
+      "fmt": "2,195",
+      "sort": 2195
+    },
+    "regularMarketDayLow": {
+      "raw": "2190",
+      "fmt": "2,190",
+      "sort": 2190
+    },
+    "regularMarketOpen": {
+      "raw": "2195",
+      "fmt": "2,195",
+      "sort": 2195
+    },
+    "regularMarketPreviousClose": {
+      "raw": "2215",
+      "fmt": "2,215",
+      "sort": 2215
+    },
+    "regularMarketTime": "2026-11-17T01:00:02Z",
+    "relatedSymbol": null,
+    "relatedSymbolName": null,
+    "sectorId": "40",
+    "sectorName": "半導體",
+    "strikePrice": null,
+    "symbol": "2330.TW",
+    "symbolName": "台積電",
+    "systexId": "2330",
+    "turnoverM": "5544.35",
+    "volume": "2526000",
+    "currency": "TWD",
+    "epsTrailingTwelveMonths": null,
+    "exchangeDataDelayedBy": 0,
+    "fiftyTwoWeekHigh": null,
+    "fiftyTwoWeekLow": null,
+    "marketCap": null,
+    "marketState": null,
+    "trailingPE": null,
+    "avgPrice": "2194",
+    "inMarket": 45,
+    "outMarket": 60,
+    "orderbook": [
+      {
+        "ask": "2195",
+        "askVol": 107000,
+        "bid": "2190",
+        "bidVol": 46000,
+        "askVolK": 107,
+        "bidVolK": 46
+      },
+      {
+        "ask": "2200",
+        "askVol": 401000,
+        "bid": "2185",
+        "bidVol": 117000,
+        "askVolK": 401,
+        "bidVolK": 117
+      },
+      {
+        "ask": "2205",
+        "askVol": 87000,
+        "bid": "2180",
+        "bidVol": 191000,
+        "askVolK": 87,
+        "bidVolK": 191
+      },
+      {
+        "ask": "2210",
+        "askVol": 336000,
+        "bid": "2175",
+        "bidVol": 189000,
+        "askVolK": 336,
+        "bidVolK": 189
+      },
+      {
+        "ask": "2215",
+        "askVol": 327000,
+        "bid": "2170",
+        "bidVol": 216000,
+        "askVolK": 327,
+        "bidVolK": 216
+      }
+    ],
+    "indexMeta": null,
+    "singleVolume": "5000",
+    "singleVolumeK": "5",
+    "previousVolumeK": 44151,
+    "volumeK": 2526,
+    "totalMarketVolK": 105,
+    "inMarketPercentage": "42.86%",
+    "outMarketPercentage": "57.14%",
+    "sumAskVolK": 1258,
+    "sumBidVolK": 759
+  }
+]
