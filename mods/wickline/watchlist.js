@@ -810,8 +810,8 @@ export class Watchlist {
   }
 
   /**
-   * The busiest session among `symbols`: open or auction > unknown (no quote yet) > lunch > pre/post > closed. Read
-   * from the base quotes (baseQuote: an overlay keeps the base's trading periods); one MIS still flags
+   * The busiest session among `symbols`: open or auction (open on a tie) > unknown (no quote yet) > lunch > pre/post >
+   * closed. Read from the base quotes (baseQuote: an overlay keeps the base's trading periods); one MIS still flags
    * (auctionFlagged) reads "auction" whatever its session, and "auction" reads "closed" before 09:00 Taipei. A symbol
    * with a sole source and nothing to show (no source knows it) takes its form's session: a future's by TAIFEX's
    * hours, so it is asked every 10 s in a session; any other counts as closed, so it is never polled every 10 s.
@@ -831,7 +831,10 @@ export class Watchlist {
       if (session === "auction" || (quote && auctionFlagged(quote.auctionAt, now))) {
         session = taipeiMinute(now) < TW_TRIAL_MATCH.to ? "closed" : "auction";
       }
-      if (SESSION_RANK[session] > SESSION_RANK[best]) best = session === "24h" ? "open" : session;
+      if (session === "24h") session = "open";
+      // On a tie, open wins over an auction, so a flagged stock listed first never hides that the market is open.
+      const rank = SESSION_RANK[session] - SESSION_RANK[best];
+      if (rank > 0 || (rank === 0 && session === "open")) best = session;
     }
     return symbols.length ? best : "unknown";
   }

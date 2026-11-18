@@ -2982,6 +2982,34 @@ test("sessionFor ranks an auction base as busy", () => {
   assert.equal(w.sessionFor(["2330.TW"], utc1117("05:31:58")), "closed");
 });
 
+// A stock MIS flags during trading hours (a disposition stock's periodic match) listed before a trading one: the batch
+// still reads open, whatever the list order.
+test("sessionFor reads open over a flagged stock listed first", () => {
+  const w = new Watchlist(taiwanHost(MIS_ON));
+  const periods = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+  const now = utc1117("02:30:00");
+  for (const symbol of ["0050.TW", "2330.TW"]) w.quotes[symbol] = yq(symbol, "TAI", utc1117("02:10:00"), periods);
+  w.auctionAt["0050.TW"] = utc1117("02:29:58");
+  assert.equal(w.sessionFor(["0050.TW", "2330.TW"], now), "open");
+  assert.equal(w.sessionFor(["2330.TW", "0050.TW"], now), "open");
+  assert.equal(w.sessionFor(["0050.TW"], now), "auction");
+});
+
+test("a flagged stock listed first does not hide that Yahoo 奇摩股市 has nothing real time", async () => {
+  const from = utc1117("02:30:00"); // 10:30
+  const host = taiwanHost(BOTH_ON, {
+    yahootw: () => stockList(at("2026-11-16T05:30:00Z")),
+    mis: () => misRows({ ...misFlagged(host.clock - 2_000), c: "0050" }, { ...misBook(host.clock - 2_000), z: "2190.0000" }),
+    yahoo: (symbol) => twYahooAt(symbol, utc1117("02:10:00"), "2026-11-17"),
+  });
+  host.store = { version: 1, symbols: ["0050.TW", "2330.TW"], paused: false };
+  await soleRun(host, async (w) => {
+    await advance(host, from + 15_000);
+    assert.ok(w.auctionAt["0050.TW"]);
+    assert.deepEqual(w.problems().map(({ provider, code }) => [provider, code]), [["yahootw", "yahootw.noLiveRows"]]);
+  }, from);
+});
+
 test("a copy hidden at 08:50 reads by its price at 09:10", async () => {
   // MIS flags the row until the open, then prices it.
   const host = taiwanHost(MIS_ON, { yahoo: yahooMonday });
