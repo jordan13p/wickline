@@ -42,7 +42,7 @@ export function detailView(view, t) {
       .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent)))
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown")))))
-    // The box whenever it holds a rule, a point or the price's dot (chart draws nothing more), else nothing.
+    // The box only when its chart draws something (chartShape: a rule, a line or the price's dot), else nothing.
     .when(chartShape(q) !== null,
       (el) => el.child(chart(q, color, t, { width: "full", height: 140, fill: true, dot: 6 })))
     .child(isCryptoPair(q.symbol)
