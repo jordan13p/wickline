@@ -431,7 +431,7 @@ const YTW_WTX = ytw("ytw-detail-mixed", "WTX&");
 const texts = (cells) => cells.map((cell) => cell && text(cell));
 
 test("Yahoo 奇摩股市's activity", () => {
-  assert.deepEqual(texts(activityCells(YTW_2330, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "昨量 54,723 張", "成交值 920.47 億", "單量 4,869 張"]);
+  assert.deepEqual(texts(activityCells(YTW_2330, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "昨日成交量 54,723 張", "成交值 920.47 億", "最後一筆 4,869 張"]);
   // Below 1 億, 萬.
   assert.equal(text(activityCells({ ...YTW_2330, turnover: 48_213_500 }, "zh-TW", say("zh-TW"))[2]), "成交值 4,821.35 萬");
 });
@@ -447,12 +447,12 @@ test("Other languages", () => {
 
 test("MIS alone", () => {
   const mis = { symbol: "2330.TW", source: "mis", price: 2175, previousClose: 2170, volume: 42_269, lastSize: 4_869, sizeUnit: "lot" };
-  assert.deepEqual(texts(activityCells(mis, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "單量 4,869 張"]);
+  assert.deepEqual(texts(activityCells(mis, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "最後一筆 4,869 張"]);
   assert.deepEqual(activityCells({ symbol: "2330.TW", price: 2175 }, "zh-TW", say("zh-TW")), []);
 });
 
 test("A future", () => {
-  assert.deepEqual(texts(activityCells(YTW_WTX, "zh-TW", say("zh-TW"))), ["成交量 82,587 口", "昨量 170,139 口", "單量 3 口"]);
+  assert.deepEqual(texts(activityCells(YTW_WTX, "zh-TW", say("zh-TW"))), ["成交量 82,587 口", "昨日成交量 170,139 口", "最後一筆 3 口"]);
   const row = secondRow(YTW_WTX, true, "zh-TW", say("zh-TW"));
   assert.equal(row[0], null);
   assert.equal(row.length, 4);
