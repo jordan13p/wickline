@@ -1,6 +1,6 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
-import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade } from "./quotes.js";
+import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade, withoutActivity } from "./quotes.js";
 import {
   HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
@@ -121,17 +121,20 @@ export function pickOverlay(byProvider, order, now, base = null, flagged = false
  * source's price is `chartCached`, so a fresh overlay never reads as cached for the base's failed fetch, and only
  * when that line has points: an empty one shows no chart to call cached. The base's line under an overlay price from
  * another trading period (yesterday's line under today's first price) is no line: none, no `chartSource`, no
- * `chartCached`.
+ * `chartCached`. The activity (quotes.js ACTIVITY_FIELDS) is the price source's: an overlay over another source's base
+ * starts from the base without its own, except that an overlay with no volume of its own keeps a real-time base's
+ * (Finnhub's price beside Yahoo Finance's live volume); a delayed base never lends any.
  */
 export function mergeOverlay(base, overlay, line) {
   if (!overlay) return base;
-  const merged = { ...base };
+  // The price is the base's own: a quote over itself.
+  const ownPrice = base?.source === overlay.source;
+  const lendsActivity = ownPrice || ((overlay.volume ?? null) === null && Boolean(base) && isRealtime(base));
+  const merged = { ...(lendsActivity ? base : withoutActivity(base)) };
   for (const [key, value] of Object.entries(overlay)) if (value !== null && value !== undefined) merged[key] = value;
   const previousClose = merged.previousClose ?? null;
   // A copy hidden overnight may hold yesterday's line next to today's first price.
   const own = line?.series.length && line.day === overlay.day ? line.series : null;
-  // The price is the base's own: a quote over itself.
-  const ownPrice = base?.source === overlay.source;
   // The base's own line, never a quote's over itself, and only from the overlay's period: both times before, or both
   // at or after, the start of the base's regular period (epoch ms, no time zone needed).
   const start = base?.periods?.regular?.[0];
@@ -401,7 +404,8 @@ export class Watchlist {
    * nextEdge wakes the row at the deadline); for a Taiwan stock, `twRealtime: true` while MIS or Yahoo 奇摩股市 is on,
    * and MIS's flagged snapshot as `auctionAt` while the quote's price traded before it (`tradeTime`, else its time):
    * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
-   * closure and call auction.
+   * closure and call auction. A Taiwan stock priced by Yahoo Finance while a real-time source is on loses its
+   * activity, so a 20-minute-late volume never stands beside a real-time price.
    */
   marked(symbol, quote, now) {
     if (!quote || this.marketFor(symbol) !== "tw") return quote;
@@ -409,7 +413,7 @@ export class Watchlist {
     const twRealtime = reading.twRealtime && kindOf(symbol) === "stock";
     const flaggedAt = this.auctionAt[symbol];
     const held = (quote.tradeTime ?? quote.timestamp) < flaggedAt;
-    const closed = withClosure(quote, reading);
+    const closed = withClosure(twRealtime && quote.source === "yahoo" ? withoutActivity(quote) : quote, reading);
     if (!twRealtime && !held) return closed;
     return { ...closed, ...(twRealtime && { twRealtime: true }), ...(held && { auctionAt: flaggedAt }) };
   }

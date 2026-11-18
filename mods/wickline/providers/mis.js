@@ -2,7 +2,7 @@
 // Taiwan quotes. Off until the person turns it on and consents. This file holds
 // the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
 // dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, hasLimits, limitPair, positive, positiveOrNull, withinLimits } from "../quotes.js";
+import { HEADERS, QuoteError, cleanText, hasLimits, limitPair, positive, positiveOrNull, sized, withinLimits } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 import { fastPace } from "../markets.js";
 
@@ -87,6 +87,7 @@ export function decodeMis(symbols, response, now) {
       high: positiveOrNull(row.h),
       low: positiveOrNull(row.l),
       ...limits,
+      ...sized(positiveOrNull(row.v), "lot"),
       timestamp: time,
       fetchedAt: now,
       ...(!traded && { fromBook: true }),

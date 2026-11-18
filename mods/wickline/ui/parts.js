@@ -1,7 +1,7 @@
 // Stateless drawing helpers shared by the panel and the dialogs: each takes the theme and what it
 // draws, and returns an element, except failureText, which returns the failure note's words. No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
-import { h_flex, Checkbox, Switch } from "gpui-base";
+import { h_flex, v_flex, Checkbox, Switch } from "gpui-base";
 import { chartGeometry, failureNote } from "../format.js";
 import { chartLayout } from "../freshness.js";
 import { SPIN_MS } from "../motion.js";
@@ -46,6 +46,16 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
     .when(g.dot !== null, (el) => el.child(div().absolute().top(0).bottom(0).left(half).right(half)
       .child(div().absolute().left(`${g.dot[0]}%`).top(`${g.dot[1]}%`).ml(-half).mt(-half).w(dot).h(dot).rounded_full()
         .bg(color))));
+}
+
+// One place of the detail's second row of price levels: the stat look (a 10.5 px `dim` label over a semibold value) with
+// the unit 3 px after the value in 10.5 px `dim`; a place without a cell stays empty and keeps its column.
+export function statCell(t, cell) {
+  if (!cell) return div().flex_1();
+  return v_flex().flex_1().gap(2)
+    .child(div().text_size(10.5).text_color(t.dim).child(cell.label))
+    .child(h_flex().items_end().child(div().font_semibold().child(cell.value))
+      .when(Boolean(cell.unit), (el) => el.child(div().ml(3).text_size(10.5).text_color(t.dim).child(cell.unit))));
 }
 
 // 6px: filled for a live quote, a 1px ring when the price may not be current, none for a session.

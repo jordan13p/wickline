@@ -2,9 +2,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, failureNote, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
+import { compact, formatAmount, formatCount, formatSize, secondRow } from "../mods/wickline/format.js";
 import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
-import { CLOSE_1224, at, day, withTZ } from "./helpers.mjs";
+import { CLOSE_1224, at, day, say, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
 
 test("formats without Intl", () => {
@@ -340,4 +341,81 @@ test("nextDayTurn: Taipei midnight for a Taiwan row, the local one for others, o
     assert.equal(nextDayTurn(aapl, time), at("2026-11-11T00:00:00Z"));
     assert.equal(nextDayTurn({ symbol: "2330.TW" }, time), at("2026-11-10T16:00:00Z"));
   });
+});
+
+const AAPL_Q = { symbol: "AAPL", price: 230, previousClose: 225, currency: "USD", volume: 48_213_500, sizeUnit: "share" };
+const BTC_Q = { symbol: "BTC/USDT", price: 65_000, previousClose: 64_000, currency: "USDT", volume: 1234.5, sizeUnit: "BTC" };
+const text = (cell) => [cell.label, cell.value, cell.unit].filter(Boolean).join(" ");
+
+test("counts and amounts are grouped by hand", () => {
+  assert.equal(formatCount(42269), "42,269");
+  assert.equal(formatCount(41999.6), "42,000");
+  assert.equal(formatCount(0), "0");
+  assert.equal(formatAmount(1234.5), "1,234.5");
+  assert.equal(formatAmount(1234), "1,234");
+  assert.equal(formatAmount(0.125), "0.13");
+  assert.equal(formatAmount(1234.004), "1,234");
+});
+
+test("Another market", () => {
+  assert.equal(text(secondRow(AAPL_Q, false, "en", say("en"))[0]), "Volume 48.2M");
+  assert.deepEqual(secondRow(BTC_Q, false, "en", say("en")).map((c) => c && text(c)), ["24h volume 1,234.5 BTC", null, null]);
+  assert.deepEqual(secondRow(AAPL_Q, false, "en", say("en")).map((c) => c && text(c)), ["Volume 48.2M", null, null, null]);
+});
+
+test("Detail at limit-up", () => {
+  const q = { symbol: "6488.TWO", price: 563, previousClose: 512, limitUp: 563, limitDown: 461 };
+  assert.deepEqual(secondRow(q, false, "zh-TW", say("zh-TW")).map((c) => c && text(c)), [null, "漲停價 563.00", "跌停價 461.00", null]);
+});
+
+test("Limits without the limit", () => {
+  const q = { symbol: "2330.TW", price: 2240, previousClose: 2170, limitUp: 2345, limitDown: 1925 };
+  const row = secondRow(q, false, "zh-TW", say("zh-TW"));
+  assert.equal(text(row[1]), "漲停價 2,345.00");
+  assert.equal(text(row[2]), "跌停價 1,925.00");
+  // A stock without daily limits (MIS's 9999.95) has none to show.
+  assert.equal(secondRow({ ...q, limitUp: 9999.95, limitDown: null }, false, "zh-TW", say("zh-TW")), null);
+});
+
+test("Layout unchanged", () => {
+  assert.equal(secondRow({ symbol: "^GSPC", price: 6000, previousClose: 5990 }, false, "en", say("en")), null);
+});
+
+test("The change amount beside the change", () => {
+  const q = { price: 2175, previousClose: 2170 };
+  assert.equal(signed(q), "+5.00");
+  assert.equal(formatChange(5 / 2170 * 100), "+0.23%");
+  assert.equal(changeTone(5 / 2170 * 100), "up");
+});
+
+test("compact promotes at a unit's edge", () => {
+  assert.deepEqual(compact(999_950, "en"), { value: "1.0M", unit: "" });
+  assert.deepEqual(compact(99_999_999, "zh-TW", 2), { value: "1.00", unit: "億" });
+  assert.deepEqual(compact(48_213_500, "zh-TW"), { value: "4,821.35", unit: "萬" });
+  assert.deepEqual(compact(9_999, "zh-TW"), { value: "9,999", unit: "" });
+});
+
+test("compact by language", () => {
+  assert.deepEqual(compact(48_213_500, "en"), { value: "48.2M", unit: "" });
+  assert.deepEqual(compact(1_500, "en"), { value: "1.5K", unit: "" });
+  assert.deepEqual(compact(999, "en"), { value: "999", unit: "" });
+  assert.deepEqual(compact(2_345_000_000, "en"), { value: "2.3B", unit: "" });
+  assert.deepEqual(compact(1_500_000_000_000, "en"), { value: "1,500.0B", unit: "" });
+  assert.deepEqual(compact(48_213_500, "zh-CN"), { value: "4,821.35", unit: "万" });
+  assert.deepEqual(compact(48_213_500, "ja"), { value: "4,821.35", unit: "万" });
+  assert.deepEqual(compact(48_213_500, "ko"), { value: "4,821.35", unit: "만" });
+  assert.deepEqual(compact(1_234_567_890, "zh-TW"), { value: "12.35", unit: "億" });
+  assert.deepEqual(compact(1_234_567_890, "ja"), { value: "12.35", unit: "億" });
+  assert.deepEqual(compact(1_234_567_890, "ko"), { value: "12.35", unit: "억" });
+  assert.deepEqual(compact(1_234_567_890, "zh-CN"), { value: "12.35", unit: "亿" });
+});
+
+test("sizes by unit and language", () => {
+  assert.deepEqual(formatSize(42269, "lot", "zh-TW", say("zh-TW")), { value: "42,269", unit: "張" });
+  assert.deepEqual(formatSize(42269, "lot", "en", say("en")), { value: "42,269", unit: "lots" });
+  assert.equal(formatSize(1, "lot", "en", say("en")).unit, "lot");
+  assert.deepEqual(formatSize(82587, "contract", "zh-TW", say("zh-TW")), { value: "82,587", unit: "口" });
+  assert.equal(formatSize(1, "contract", "en", say("en")).unit, "contract");
+  assert.deepEqual(formatSize(1234.5, "BTC", "en", say("en")), { value: "1,234.5", unit: "BTC" });
+  assert.deepEqual(formatSize(48_213_500, "share", "en", say("en")), { value: "48.2M", unit: "" });
 });

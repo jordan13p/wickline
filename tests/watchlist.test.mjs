@@ -3142,3 +3142,69 @@ test("A failure without the source's own line: a real-time price without its Yah
   assert.equal(failureNote(row, { code: "network" }), "reason");
   assert.equal(zhLabel(row, now), "即時");
 });
+
+// A Watchlist with the settings `prefs` on and `symbols` listed, its records set by hand (no round has run).
+function watchHolding(prefs, symbols, { quotes = {}, overlays = {} }) {
+  const host = fakeHost(() => ok({}));
+  host.prefs = prefs;
+  host.store = { version: 1, symbols, paused: false };
+  const w = new Watchlist(host);
+  Object.assign(w.quotes, quotes);
+  Object.assign(w.overlays, overlays);
+  return w;
+}
+
+// Tuesday 2026-11-17, mid-session: Yahoo Finance's 20-minute-late 2330.TW with a volume, and a MIS price over it.
+const TW_SESSION = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+const TW_AT = taipei("10:00:00");
+const delayedTw = { ...yq("2330.TW", "TAI", taipei("09:40:00"), TW_SESSION), price: 2180, series: [2190, 2180], fetchedAt: TW_AT, volume: 41_000, sizeUnit: "lot" };
+const misOver = (fields = {}) => ({ symbol: "2330.TW", source: "mis", price: 2185, previousClose: 2170, timestamp: taipei("09:59:55"), fetchedAt: TW_AT, ...fields });
+
+test("MIS price, Yahoo Finance volume", () => {
+  const withMis = (overlay) => watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw }, overlays: { "2330.TW": { mis: overlay } } });
+  const own = withMis(misOver({ volume: 42_269, sizeUnit: "lot" })).shown("2330.TW", TW_AT);
+  assert.equal(own.source, "mis");
+  assert.equal(own.volume, 42_269);
+  // MIS sent none: nothing of Yahoo Finance's 20-minute-late quote stands among the row's activity.
+  const without = withMis(misOver()).shown("2330.TW", TW_AT);
+  assert.equal(without.source, "mis");
+  assert.equal("volume" in without, false);
+  assert.equal("sizeUnit" in without, false);
+});
+
+test("a Taiwan row on Yahoo Finance's price carries no activity while a real-time source is on", () => {
+  const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw } });
+  const row = w.shown("2330.TW", TW_AT);
+  assert.equal(row.source, "yahoo");
+  assert.equal("volume" in row, false);
+  assert.equal("sizeUnit" in row, false);
+  assert.equal("volume" in w.baseQuote("2330.TW", TW_AT), false);
+});
+
+test("a Taiwan row with no real-time source keeps Yahoo Finance's volume", () => {
+  const w = watchHolding(undefined, ["2330.TW"], { quotes: { "2330.TW": { ...delayedTw, volume: 42_269 } } });
+  const row = w.shown("2330.TW", TW_AT);
+  assert.equal(row.volume, 42_269);
+  assert.equal(row.sizeUnit, "lot");
+});
+
+test("AAPL keeps its Yahoo Finance volume", () => {
+  const live = { symbol: "AAPL", source: "yahoo", exchange: "NMS", price: 230, timestamp: 1_000_000, fetchedAt: 1_000_000, volume: 48_213_500, sizeUnit: "share" };
+  const w = watchHolding(undefined, ["AAPL"], { quotes: { AAPL: live } });
+  assert.equal(w.shown("AAPL", 1_000_000).volume, 48_213_500);
+});
+
+test("AAPL priced by Finnhub shows Yahoo Finance's live volume, and never a delayed one", () => {
+  const finnhubQuote = { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: 1_000_000, fetchedAt: 1_000_000 };
+  const base = { symbol: "AAPL", source: "yahoo", exchange: "NMS", price: 230, timestamp: 990_000, fetchedAt: 990_000, volume: 48_213_500, sizeUnit: "share" };
+  const merged = mergeOverlay(base, finnhubQuote, null);
+  assert.equal(merged.volume, 48_213_500);
+  assert.equal(merged.sizeUnit, "share");
+  // A base that is not real time lends none.
+  const delayed = mergeOverlay({ ...base, symbol: "0700.HK", exchange: "HKG" }, { ...finnhubQuote, symbol: "0700.HK" }, null);
+  assert.equal("volume" in delayed, false);
+  assert.equal("sizeUnit" in delayed, false);
+  // An overlay's own volume replaces the base's, unit with it.
+  const own = mergeOverlay(base, { ...finnhubQuote, volume: 1_000, sizeUnit: "share" }, null);
+  assert.equal(own.volume, 1_000);
+});

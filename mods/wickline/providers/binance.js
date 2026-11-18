@@ -1,6 +1,6 @@
 // Binance Spot market data: pairs written BASE/QUOTE, in batches, plus a 24-hour line per pair.
 // No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanSeries, positive } from "../quotes.js";
+import { HEADERS, QuoteError, cleanSeries, positive, positiveOrNull, sized } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the default Binance host (a public market-data mirror).
@@ -52,6 +52,8 @@ export function decodeBinance(pairs, response, now) {
       low: positive(Number(ticker.lowPrice)) ? Number(ticker.lowPrice) : null,
       previousClose: positive(close) ? close : null,
       periods: null,
+      // The 24-hour volume in the pair's base asset.
+      ...sized(positiveOrNull(ticker.volume), pair.split("/")[0]),
     };
   }
   return quotes;

@@ -621,3 +621,37 @@ test("a stock trade timed on a later Taipei day is no trade either", () => {
   // An earlier day's trade still counts (an answer of yesterday's prices tells a session without trades).
   assert.deepEqual(decodeStockList(["2330.TW"], timed(now - 86_400_000), now).newestTrade, { stock: now - 86_400_000 });
 });
+
+// 2026-11-18 14:05 in Taipei, after the close: recorded rows of the day (see their keys for the volumes).
+const DETAIL_NOW = at("2026-11-18T06:05:00Z");
+const detailDecode = (name, symbols) =>
+  decodeStockList(symbols, ok(jsonFixture(name)), DETAIL_NOW).quotes;
+
+test("Yahoo 奇摩股市's volume in lots and contracts", () => {
+  const close = detailDecode("ytw-detail-close", ["2330.TW"]);
+  assert.equal(close["2330.TW"].volume, 42_269);
+  assert.equal(close["2330.TW"].sizeUnit, "lot");
+  const mixed = detailDecode("ytw-detail-mixed", ["0050.TW", "6488.TWO", "WTX&"]);
+  assert.equal(mixed["0050.TW"].volume, 288_160);
+  assert.equal(mixed["6488.TWO"].volume, 9_110);
+  assert.equal(mixed["WTX&"].volume, 82_587);
+  assert.equal(mixed["WTX&"].sizeUnit, "contract");
+});
+
+test("an index row carries no volume", () => {
+  const rows = ROWS.filter((row) => row.symbol === "^TWII").map((row) => ({ ...row, volumeK: 5_000_000 }));
+  const { quotes } = decodeStockList(["^TWII"], ok(rows), NOW, ["^TWII"]);
+  assert.ok(quotes["^TWII"]);
+  assert.equal("volume" in quotes["^TWII"], false);
+  assert.equal("sizeUnit" in quotes["^TWII"], false);
+});
+
+test("a volume of 0 or none is absent", () => {
+  for (const volumeK of [0, "-", undefined, null]) {
+    const rows = jsonFixture("ytw-detail-close").map((row) => ({ ...row, volumeK }));
+    const quote = decodeStockList(["2330.TW"], ok(rows), DETAIL_NOW).quotes["2330.TW"];
+    assert.ok(quote, String(volumeK));
+    assert.equal("volume" in quote, false, String(volumeK));
+    assert.equal("sizeUnit" in quote, false, String(volumeK));
+  }
+});

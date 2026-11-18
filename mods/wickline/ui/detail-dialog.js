@@ -2,11 +2,11 @@
 // quotes (main.js adoptDetail), and it redraws at its quote's own moments (freshness.js followDetail).
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { hasLimits, isCryptoPair } from "../quotes.js";
-import { displayName, detailTimes, formatChange, number, sessionTimesParts } from "../format.js";
+import { isCryptoPair } from "../quotes.js";
+import { displayName, detailTimes, formatChange, number, secondRow, sessionTimesParts, signed } from "../format.js";
 import { detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
-import { chart, chartShape, failureText, priceBox, priceInk, segments } from "./parts.js";
+import { chart, chartShape, failureText, priceBox, priceInk, segments, statCell } from "./parts.js";
 
 // The dialog a row opens: the day's chart, its range and the session.
 export function detailView(view, t) {
@@ -21,6 +21,8 @@ export function detailView(view, t) {
   const source = detailSource(q, session, now, tx);
   const times = detailTimes(q, now, view.lang, tx);
   const hours = sessionTimesParts(sessionTimes(q, now), view.lang, tx);
+  const second = secondRow(q, false, view.lang, tx);
+  const amount = signed(q);
   const stat = (label, price) => v_flex().flex_1().gap(2)
     .child(div().text_size(10.5).text_color(t.dim).child(view.tx(label)))
     .child(div().font_semibold().child(number(q, price)));
@@ -39,6 +41,7 @@ export function detailView(view, t) {
       .child(priceBox("bw-detail-price", number(q), priceInk(t, q), mark, { pad: 6 }).text_size(26).font_semibold())
       // Outside the price, as in the rows: a lit price's 6px block keeps 4px clear of it.
       .when(Boolean(q.currency), (el) => el.child(div().pb(4).text_size(13).text_color(t.dim).child(q.currency)))
+      .when(amount !== "—", (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(color).child(amount)))
       .child(div().pb(4).text_size(13).font_semibold().text_color(color).child(formatChange(q.changePercent)))
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown")))))
@@ -50,10 +53,8 @@ export function detailView(view, t) {
         .child(stat("detail.low24h", q.low))
       : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
         .child(stat("detail.prevClose", q.previousClose)))
-    // The day's limits on the same four-column grid, whenever the source sent both, at a limit or not.
-    .when(hasLimits(q.limitUp, q.limitDown), (el) => el.child(h_flex().gap(12)
-      .child(stat("detail.limitUpPrice", q.limitUp)).child(stat("detail.limitDownPrice", q.limitDown))
-      .child(div().flex_1()).child(div().flex_1())))
+    // The second row on the same grid: the volume under open, the day's limits under high and low (at a limit or not).
+    .when(second !== null, (el) => el.child(h_flex().gap(12).children(second.map((cell) => statCell(t, cell)))))
     .child(v_flex().gap(2).children([...source, ...(hours.length ? [hours] : []), times].map((parts) => segments(t, parts))))
     .when(Boolean(note), (el) => el.child(div().text_size(11).text_color(t.blocked).child(note)))
     .when(Boolean(q.fallback), (el) => el.child(div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback))));

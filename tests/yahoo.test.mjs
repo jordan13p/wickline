@@ -59,3 +59,35 @@ test("errors carry codes and the old English text", () => {
   assert.throws(() => decodeYahoo("AAPL", { status: 429, ok: false, text: "" }, 1), (e) =>
     e.code === "yahoo.rateLimited" && e.message === "Yahoo rate limited requests." && e.retryAfterMs === 60_000);
 });
+
+test("Another market's volume: AAPL", () => {
+  const q = decodeYahoo("AAPL", chart({ ...AAPL, regularMarketVolume: 48_213_500 }), 1);
+  assert.equal(q.volume, 48_213_500);
+  assert.equal(q.sizeUnit, "share");
+  assert.equal("book" in q, false);
+});
+
+test("A Taiwan stock from Yahoo Finance", () => {
+  const q = decodeYahoo("2330.TW", chart({ ...AAPL, symbol: "2330.TW", regularMarketVolume: 42_269_000 }), 1);
+  assert.equal(q.volume, 42_269);
+  assert.equal(q.sizeUnit, "lot");
+});
+
+test("An index carries no volume", () => {
+  for (const symbol of ["^GSPC", "^TWII"]) {
+    const q = decodeYahoo(symbol, chart({ ...AAPL, symbol, regularMarketVolume: 1_000_000 }), 1);
+    assert.equal("volume" in q, false, symbol);
+    assert.equal("sizeUnit" in q, false, symbol);
+  }
+});
+
+test("a volume of 0 or none is absent", () => {
+  for (const regularMarketVolume of [0, undefined, null, "48"]) {
+    const q = decodeYahoo("AAPL", chart({ ...AAPL, regularMarketVolume }), 1);
+    assert.equal("volume" in q, false, String(regularMarketVolume));
+    assert.equal("sizeUnit" in q, false, String(regularMarketVolume));
+  }
+  // Under half a lot rounds to none.
+  const tiny = decodeYahoo("2330.TW", chart({ ...AAPL, symbol: "2330.TW", regularMarketVolume: 400 }), 1);
+  assert.equal("volume" in tiny, false);
+});

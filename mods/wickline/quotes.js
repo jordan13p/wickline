@@ -93,6 +93,20 @@ export const positiveOrNull = (value) => {
   return positive(n) ? n : null;
 };
 
+/** A volume with its unit, the two together or neither: a volume that is not positive is none. */
+export const sized = (volume, sizeUnit) => (positive(volume) ? { volume, sizeUnit } : {});
+
+// What a quote carries about the day's trading, which only the source that gives its price may speak for.
+export const ACTIVITY_FIELDS = ["volume", "previousVolume", "turnover", "avgPrice", "lastSize", "inner", "outer", "book", "sizeUnit"];
+
+/** `quote` without its activity (ACTIVITY_FIELDS); null stays null. */
+export function withoutActivity(quote) {
+  if (!quote) return quote;
+  const rest = { ...quote };
+  for (const field of ACTIVITY_FIELDS) delete rest[field];
+  return rest;
+}
+
 // MIS sends limit-up 9999.95 (and no limit-down) for a stock without daily limits. It is off the tick grid
 // (ticks of 5 from 1000), so a real limit-up past 9999 still counts.
 const NO_LIMIT_UP = 9999.95;

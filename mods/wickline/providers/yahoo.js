@@ -1,6 +1,7 @@
 // Yahoo Finance: stocks, ETFs, indices and currencies, one ticker per request.
 // No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanSeries, cleanText, currencyCode, exchangeCode, normalizeSymbol, positive } from "../quotes.js";
+import { HEADERS, QuoteError, cleanSeries, cleanText, currencyCode, exchangeCode, normalizeSymbol, positive, sized } from "../quotes.js";
+import { kindOf, marketOf } from "../markets.js";
 import { failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the only Yahoo host.
@@ -18,6 +19,14 @@ const finite = (value) => typeof value === "number" && Number.isFinite(value);
 /** A trading period, `{ start, end }` in seconds, as `[start, end]` in ms; null when missing or empty. */
 export const period = (value) => finite(value?.start) && finite(value?.end) && value.end > value.start
   ? [value.start * 1000, value.end * 1000] : null;
+
+// The day's volume: none for an index, lots for a Taiwan stock (Yahoo Finance counts shares), else shares.
+function volumeOf(symbol, meta) {
+  if (kindOf(symbol) === "index" || !positive(meta.regularMarketVolume)) return {};
+  return marketOf(symbol) === "tw"
+    ? sized(Math.round(meta.regularMarketVolume / 1000), "lot")
+    : sized(meta.regularMarketVolume, "share");
+}
 
 /** `response` is `{ status, ok, text }` with the body already read. */
 export function decodeYahoo(symbol, response, now) {
@@ -59,6 +68,7 @@ export function decodeYahoo(symbol, response, now) {
     low: positive(meta.regularMarketDayLow) ? meta.regularMarketDayLow : lows.length ? Math.min(...lows) : null,
     previousClose: positive(close) ? close : null,
     periods: { pre: period(periods.pre), regular: period(periods.regular), post: period(periods.post) },
+    ...volumeOf(symbol, meta),
   };
 }
 

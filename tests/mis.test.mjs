@@ -74,7 +74,7 @@ test("decodes the recorded answer", () => {
   assert.equal(etf.timestamp, Number(row.tlong));
   assert.deepEqual(etf, {
     symbol: "0050.TW", source: "mis", name: row.n, price: 98.7, previousClose: 99.85,
-    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, timestamp: Number(row.tlong), fetchedAt: 42,
+    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, volume: Number(row.v), sizeUnit: "lot", timestamp: Number(row.tlong), fetchedAt: 42,
   });
   // No trade in the last snapshot: the best bid/ask midpoint.
   assert.equal(result.quotes["2330.TW"].price, (2265 + 2270) / 2);
@@ -615,4 +615,37 @@ test("the shown quote's limits are the overlay's own, never the base's", () => {
   assert.equal(merged.limitUp, null);
   assert.equal(merged.limitDown, null);
   assert.equal(mergeOverlay(YAHOO_2330, { ...MIS_2330, limitUp: 2485, limitDown: 2035 }).limitUp, 2485);
+});
+
+// 2026-11-18, the closing auction: 13:24 before it, 13:26 inside it, 13:30 after the match (rows t00, 2330 and 6488).
+const detailAnswer = (name) => answer(fixture(`mis-detail-${name}`));
+
+test("MIS volume on a priced row", () => {
+  const { quotes } = decode(["2330.TW"], detailAnswer("1330"));
+  assert.equal(quotes["2330.TW"].volume, 42_269);
+  assert.equal(quotes["2330.TW"].sizeUnit, "lot");
+});
+
+test("a flagged row's volume is not read", () => {
+  const result = decode(["2330.TW"], detailAnswer("1326"));
+  assert.deepEqual(result.quotes, {});
+  assert.ok(result.auction["2330.TW"]);
+  assert.equal(JSON.stringify(result).includes("37400"), false);
+});
+
+test("MIS v of 0 is absent", () => {
+  const body = jsonFixture("mis-detail-1330");
+  for (const v of ["0", "-", undefined]) {
+    const rows = body.msgArray.map((row) => ({ ...row, v }));
+    const { quotes } = decode(["2330.TW"], answer(JSON.stringify({ ...body, msgArray: rows })));
+    assert.ok(quotes["2330.TW"], String(v));
+    assert.equal("volume" in quotes["2330.TW"], false, String(v));
+    assert.equal("sizeUnit" in quotes["2330.TW"], false, String(v));
+  }
+});
+
+test("a price taken from the book carries the row's volume", () => {
+  const { quotes } = decode(["2330.TW"], detailAnswer("1324"));
+  assert.equal(quotes["2330.TW"].fromBook, true);
+  assert.equal(quotes["2330.TW"].volume, 36_918);
 });

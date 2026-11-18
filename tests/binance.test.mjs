@@ -58,3 +58,15 @@ test("binance uses the configured base for tickers and lines", () => {
   assert.ok(binanceUrl("https://mirror.test/", ["BTC/USDT"]).startsWith("https://mirror.test/api/v3/ticker/24hr?"));
   assert.ok(binanceKlinesUrl("https://mirror.test/proxy//", "BTC/USDT").startsWith("https://mirror.test/proxy/api/v3/klines?"));
 });
+
+test("Another market's volume: BTC/USDT", () => {
+  const ticker = { symbol: "BTCUSDT", lastPrice: "65000.5", prevClosePrice: "64000", closeTime: 1_760_000_000_000 };
+  const q = decodeBinance(["BTC/USDT"], ok([{ ...ticker, volume: "1234.50000000" }]), 1)["BTC/USDT"];
+  assert.equal(q.volume, 1234.5);
+  assert.equal(q.sizeUnit, "BTC");
+  for (const volume of ["0.00000000", undefined]) {
+    const none = decodeBinance(["BTC/USDT"], ok([{ ...ticker, volume }]), 1)["BTC/USDT"];
+    assert.equal("volume" in none, false, String(volume));
+    assert.equal("sizeUnit" in none, false, String(volume));
+  }
+});

@@ -3,7 +3,7 @@
 // This file holds the host, limits and decoder; the switch and consent live in settings.js and the
 // settings dialog. No Herdr imports, so tests run it under Node.
 import {
-  HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, withinLimits,
+  HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, sized, withinLimits,
 } from "../quotes.js";
 import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
 import { MINUTE_MS, fastPace, kindOf } from "../markets.js";
@@ -51,6 +51,13 @@ export function ownPeriods(quote, periods, now) {
 
 // `{ raw: "2240" }` → 2240; `"-"` (no value yet) or anything not positive → null.
 const number = (field) => positiveOrNull(field?.raw);
+
+// A shown count: `volumeK` is in thousands of shares (a stock's lots) or of contracts (a future's, so 82.587 is 82,587).
+// None when it is not a positive number.
+const count = (value, future) => {
+  const n = Number(value);
+  return positive(n) ? Math.round(future ? n * 1000 : n) : null;
+};
 
 const time = (value) => {
   const ms = typeof value === "string" ? Date.parse(value) : NaN;
@@ -146,6 +153,8 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       // An instrument only this source prices takes its market and currency from here.
       exchange: exchangeCode(row.exchange),
       currency: currencyCode(row.currency),
+      // An index's volume is not read.
+      ...(kindOf(symbol) !== "index" && sized(count(row.volumeK, future), future ? "contract" : "lot")),
       tradeTime,
       day,
       fetchedAt: now,

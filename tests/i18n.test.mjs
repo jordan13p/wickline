@@ -346,3 +346,16 @@ test("the cached-chart note in five languages, with its reason", () => {
 test("no language words a missing line: the detail draws its box instead", () => {
   for (const lang of LANGUAGES) assert.ok(!("detail.noLine" in STRINGS[lang]), lang);
 });
+
+test("the volume labels and units are in every language", () => {
+  const expected = {
+    en: { "detail.volume": "Volume", "detail.volume24h": "24h volume", "unit.lot.one": "lot", "unit.lot.other": "lots", "unit.contract.one": "contract", "unit.contract.other": "contracts" },
+    "zh-TW": { "detail.volume": "成交量", "detail.volume24h": "24 小時成交量", "unit.lot.one": "張", "unit.lot.other": "張", "unit.contract.one": "口", "unit.contract.other": "口" },
+    "zh-CN": { "detail.volume": "成交量", "detail.volume24h": "24 小时成交量", "unit.lot.one": "张", "unit.lot.other": "张", "unit.contract.one": "口", "unit.contract.other": "口" },
+    ja: { "detail.volume": "出来高", "detail.volume24h": "24時間出来高", "unit.lot.one": "張", "unit.lot.other": "張", "unit.contract.one": "枚", "unit.contract.other": "枚" },
+    ko: { "detail.volume": "거래량", "detail.volume24h": "24시간 거래량", "unit.lot.one": "장", "unit.lot.other": "장", "unit.contract.one": "계약", "unit.contract.other": "계약" },
+  };
+  for (const [lang, keys] of Object.entries(expected)) {
+    for (const [key, text] of Object.entries(keys)) assert.equal(STRINGS[lang][key], text, `${lang} ${key}`);
+  }
+});

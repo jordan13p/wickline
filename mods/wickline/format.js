@@ -1,6 +1,6 @@
 // How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
 // No Herdr imports, so tests run it under Node.
-import { isCryptoPair, positive, timedByTrade } from "./quotes.js";
+import { hasLimits, isCryptoPair, positive, timedByTrade } from "./quotes.js";
 import { nextTaipeiMidnight, taipeiDay } from "./calendar.js";
 import { HOUR_MS, resolvedMarket } from "./markets.js";
 
@@ -89,6 +89,70 @@ export function changeTone(percent) {
   if (percent === null || percent === undefined) return "none";
   if (isFlat(percent)) return "flat";
   return percent >= 0 ? "up" : "down";
+}
+
+/** A count rounded to a whole number and grouped: `42269` is `42,269`. */
+export const formatCount = (n) => group(String(Math.round(n)));
+
+/** An amount grouped, at most 2 decimals, without trailing zeros: `1234.5` is `1,234.5`. */
+export function formatAmount(n) {
+  const [whole, fraction] = n.toFixed(2).split(".");
+  const kept = fraction.replace(/0+$/, "");
+  return group(whole) + (kept ? `.${kept}` : "");
+}
+
+// Large numbers by language, largest unit first: English counts by thousands (inline), the others by 10,000.
+const COMPACT_UNITS = {
+  en: { step: 1_000, units: [["B", 1e9], ["M", 1e6], ["K", 1e3]] },
+  "zh-TW": { step: 10_000, units: [["億", 1e8], ["萬", 1e4]] },
+  "zh-CN": { step: 10_000, units: [["亿", 1e8], ["万", 1e4]] },
+  ja: { step: 10_000, units: [["億", 1e8], ["万", 1e4]] },
+  ko: { step: 10_000, units: [["억", 1e8], ["만", 1e4]] },
+};
+
+/**
+ * A large number in its language's units: English `48.2M` (`places` decimals, the unit inline, so `unit` is ""), the
+ * others `4,821.35` with `萬`/`万`/`만` or `億`/`亿`/`억` as `unit`, always 2 decimals. Below 1,000 (English) or 10,000
+ * it is a plain count. A value that rounds up to 1,000 (English) or 10,000 of its unit moves up one unit.
+ */
+export function compact(n, lang, places = 1) {
+  const rule = COMPACT_UNITS[lang] ?? COMPACT_UNITS.en;
+  const { step, units } = rule;
+  const inline = rule === COMPACT_UNITS.en;
+  const digits = inline ? places : 2;
+  let i = units.findIndex(([, size]) => n >= size);
+  if (i === -1) return { value: formatCount(n), unit: "" };
+  // The unit just above, when this one's rounded value reaches a full step of it.
+  if (i > 0 && Number((n / units[i][1]).toFixed(digits)) >= step) i -= 1;
+  const [name, size] = units[i];
+  const [whole, fraction] = (n / size).toFixed(digits).split(".");
+  const value = group(whole) + (fraction === undefined ? "" : `.${fraction}`);
+  return inline ? { value: value + name, unit: "" } : { value, unit: name };
+}
+
+/**
+ * A size with its unit as `{ value, unit }`: lots and contracts as counts in the language's own unit (singular for 1),
+ * shares compact, anything else a base asset's amount with its code.
+ */
+export function formatSize(n, sizeUnit, lang, tx) {
+  if (sizeUnit === "lot" || sizeUnit === "contract") {
+    return { value: formatCount(n), unit: tx(`unit.${sizeUnit}.${n === 1 ? "one" : "other"}`) };
+  }
+  return sizeUnit === "share" ? compact(n, lang) : { value: formatAmount(n), unit: sizeUnit };
+}
+
+/**
+ * The detail's second row of price levels, a cell per column of the first row (3 for a pair, else 4), or null when
+ * every place is empty: the volume under open, the limits under high and low. A cell is `{ label, value, unit }`; a
+ * place without a value is null, so it keeps its column. `wide` is a two-column detail, whose places are not drawn here.
+ */
+export function secondRow(quote, wide, lang, tx) {
+  const pair = isCryptoPair(quote.symbol);
+  const volume = positive(quote.volume) ? { label: tx(pair ? "detail.volume24h" : "detail.volume"), ...formatSize(quote.volume, quote.sizeUnit, lang, tx) } : null;
+  const limit = (label, value) => (hasLimits(quote.limitUp, quote.limitDown) ? { label: tx(label), value: number(quote, value), unit: "" } : null);
+  const places = [volume, limit("detail.limitUpPrice", quote.limitUp), limit("detail.limitDownPrice", quote.limitDown)];
+  if (!pair) places.push(null);
+  return places.some(Boolean) ? places : null;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
