@@ -600,15 +600,20 @@ export function detailWakeAt(detail, now) {
  * The open detail's one task: a data timer, not animation. It fetches nothing; one wake at a time, it sleeps to the
  * quote's next reading change (detailWakeAt, from its marks as held then), at most DETAIL_WAKE_CAP_MS per sleep before
  * it rereads the clock, and calls `changed()` (a redraw) only once a wake is reached, so a wake hours away costs one
- * redraw. It returns when nothing is ahead. The copy's `cx` ends it: a cancelled sleep rejects, and so does this.
+ * redraw. `detail` is a getter, read at each wake; `woken()` gives a promise that settles when the quote was replaced,
+ * and a wake recomputes at once (a quote handed in). Every real quote has an edge ahead (a day edge at
+ * least), so the `null` branch is a guard: it waits for `woken()` rather than ending. Each wake leaves the abandoned
+ * `sleep` pending (at most DETAIL_WAKE_CAP_MS, so about 60 at a 10 s pace); they cost little and end with the
+ * dialog's `cx`, not a leak. The copy's `cx` ends it: a cancelled sleep rejects, and so does this.
  */
-export async function followDetail(detail, { now, sleep, changed }) {
+export async function followDetail(detail, { now, sleep, changed, woken }) {
   for (;;) {
     const time = now();
-    const wake = detailWakeAt(detail, time);
-    if (wake === null) return;
-    await sleep(Math.min(wake - time, DETAIL_WAKE_CAP_MS));
-    if (now() >= wake) changed();
+    const wake = detailWakeAt(detail(), time);
+    const signal = woken();
+    if (wake === null) { await signal; continue; }
+    const reached = await Promise.race([sleep(Math.min(wake - time, DETAIL_WAKE_CAP_MS)).then(() => true), signal.then(() => false)]);
+    if (reached && now() >= wake) changed();
   }
 }
 

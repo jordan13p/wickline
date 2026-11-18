@@ -1058,14 +1058,18 @@ const shownAt = (detail, time) => {
   return { session, source: detailSource(q, session, time, say("zh-TW")), label: zhLabel(q, time) };
 };
 // Runs followDetail on a fake clock from `from` until `until`, returning the redraw times and each sleep asked. A sleep
-// that would end past `until` rejects, as cx.sleep does once the dialog closes, which ends the loop.
+// that would end past `until` rejects, as cx.sleep does once the dialog closes, which ends the loop; so does the wake
+// promise at `until`, and it is never woken before.
 async function wakes(detail, from, until) {
   const host = fakeHost(() => ok({}));
   host.clock = from;
   const redraws = [];
   const asked = [];
   const sleep = (ms) => { asked.push(ms); return host.clock + ms > until ? Promise.reject(new Error("closed")) : host.sleep(ms); };
-  const run = followDetail(detail, { now: host.now, sleep, changed: () => redraws.push(host.clock) }).catch(() => {});
+  const closed = new Promise((_, reject) => host.sleeps.push({ at: until, resolve: () => reject(new Error("closed")) }));
+  closed.catch(() => {});
+  const run = followDetail(() => detail, { now: host.now, sleep, changed: () => redraws.push(host.clock), woken: () => closed })
+    .catch(() => {});
   await advance(host, until);
   await run;
   return { redraws, asked };
@@ -1218,17 +1222,39 @@ test("followDetail after a system sleep past its wake redraws once and computes 
     if (asked.length === 1) { clock = MIDNIGHT_TPE + 3_600_000; return Promise.resolve(); }
     return Promise.reject(new Error("closed"));
   };
-  await followDetail(CLOSED_2330, { now: () => clock, sleep, changed: () => redraws.push(clock) }).catch(() => {});
+  await followDetail(() => CLOSED_2330, { now: () => clock, sleep, changed: () => redraws.push(clock),
+    woken: () => new Promise(() => {}) }).catch(() => {});
   assert.deepEqual(redraws, [MIDNIGHT_TPE + 3_600_000]);
   assert.equal(asked[1], DETAIL_WAKE_CAP_MS);
 });
 
 test("followDetail ends when its sleep rejects, with no later redraw", async () => {
   const redraws = [];
-  const done = followDetail(CLOSED_2330, { now: () => NINE_PM, sleep: () => Promise.reject(new Error("closed")),
-    changed: () => redraws.push(1) });
+  const done = followDetail(() => CLOSED_2330, { now: () => NINE_PM, sleep: () => Promise.reject(new Error("closed")),
+    changed: () => redraws.push(1), woken: () => new Promise(() => {}) });
   await assert.rejects(done);
   assert.deepEqual(redraws, []);
+});
+
+test("a wake recomputes from the quote the getter gives now", async () => {
+  // CLOSED_2330 at 21:00 sleeps toward 00:00. After one tick the getter gives a live night WTX& traded at 21:00, which
+  // turns stale at 21:02:00.001, and the wake fires: the pending sleep is abandoned and the redraw comes at 21:02.
+  const live = wtxDetail({ timestamp: NINE_PM, tradeTime: NINE_PM });
+  assert.equal(detailWakeAt(CLOSED_2330, NINE_PM), MIDNIGHT_TPE);
+  assert.equal(detailWakeAt(live, NINE_PM + 1_000), NINE_PM + 120_001);
+  const host = fakeHost(() => ok({}));
+  host.clock = NINE_PM;
+  const redraws = [];
+  let detail = CLOSED_2330;
+  let wake;
+  const run = followDetail(() => detail, { now: host.now, sleep: host.sleep, changed: () => redraws.push(host.clock),
+    woken: () => new Promise((resolve) => { wake = resolve; }) });
+  run.catch(() => {});
+  await new Promise((r) => setImmediate(r));
+  detail = live;
+  wake();
+  await advance(host, NINE_PM + 130_000);
+  assert.deepEqual(redraws, [NINE_PM + 120_001]);
 });
 
 test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", () => {

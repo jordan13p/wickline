@@ -59,7 +59,12 @@ export default class Wickline extends View {
       this.overlay = given.overlay;
       // Redraws at the quote's own moments (a stale price, a session's edge, a mark's end); it fetches nothing.
       cx.spawn(async (cx) => {
-        await followDetail(this.detail, { now: () => Date.now(), sleep: (ms) => cx.sleep(ms), changed: () => cx.notify() });
+        await followDetail(() => this.detail, {
+          now: () => Date.now(),
+          sleep: (ms) => cx.sleep(ms),
+          changed: () => cx.notify(),
+          woken: () => new Promise((resolve) => { this.wakeDetail = resolve; }),
+        });
       });
       return;
     }
