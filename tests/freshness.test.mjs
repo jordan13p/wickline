@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, chartLayout, chartQuote, detailSource, freshness, futuresSegment, inTaiwanAuction, isRealtime,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, auctionWindowStart, chartLayout, chartQuote, detailSource, freshness, futuresSegment, inTaiwanAuction, isRealtime,
   msUntilStale, sessionName, sessionOf, sessionProgress, shownLimit, staleAt,
 } from "../mods/wickline/freshness.js";
 import {
@@ -1795,4 +1795,12 @@ test("Stalled", () => {
   assert.equal(sessionOf(close, evening), "closed");
   assert.equal(dimmedAt(close, evening), false);
   assert.equal(dimmedAt({ ...close, cached: true }, evening), true);
+});
+
+test("auctionWindowStart gives the start of the Taiwan auction window around now", () => {
+  assert.equal(auctionWindowStart(taipei("13:26:00")), taipei("13:25:00"));
+  assert.equal(auctionWindowStart(taipei("08:40:00")), taipei("08:30:00"));
+  assert.equal(auctionWindowStart(taipei("10:00:00")), null);
+  // Saturday 2026-11-21 holds no session.
+  assert.equal(auctionWindowStart(taipei("13:26:00", "2026-11-21")), null);
 });

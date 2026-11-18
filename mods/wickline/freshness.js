@@ -152,6 +152,19 @@ export function inTaiwanAuction(now) {
 }
 
 /**
+ * The start in ms of the Taiwan call auction (TW_AUCTIONS) whose window holds `now`, on a TWSE trading weekday; else
+ * null. A Yahoo 奇摩股市 book fetched at or after it is the auction's (Watchlist#marked).
+ */
+export function auctionWindowStart(now) {
+  if (!tradesOn(TWSE_HOURS, taipeiDay(now))) return null;
+  for (const window of TW_AUCTIONS) {
+    const [start, end] = auctionWindow(window, now);
+    if (now >= start && now < end) return start;
+  }
+  return null;
+}
+
+/**
  * Whether MIS still flags a symbol as in a call auction: its flagged snapshot's time (`auctionAt`, set on a quote by
  * Watchlist#marked while the shown price traded before it) is younger than a live MIS price. The only reading of that
  * record.

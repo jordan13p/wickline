@@ -5,7 +5,7 @@ import {
   HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay, twMarket, withClosure,
 } from "./calendar.js";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TW_TRIAL_MATCH, auctionFlagged, isRealtime, nextEdge, sessionOf, staleAt,
+  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TW_TRIAL_MATCH, auctionFlagged, auctionWindowStart, isRealtime, nextEdge, sessionOf, staleAt,
 } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
@@ -211,6 +211,12 @@ export class Watchlist {
     // By symbol: the time of the snapshot in which MIS last flagged it as in a call auction (decodeMis), while MIS
     // still flags it; kept with MIS's held price, which the flag leaves in place.
     this.auctionAt = {};
+    // By symbol: the levels of MIS's newest flag for it (decodeMis `auctionBook`), kept and dropped with `auctionAt`;
+    // none when that flag carried none.
+    this.auctionBooks = {};
+    // By symbol: true while MIS's latest answer for it named it with neither a price, a flag nor a level (decodeMis
+    // `noLevels`): it answered before any order, so the row's book is empty rather than unknown.
+    this.noLevels = {};
     // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its trading
     // day), kept only while that source's price for the symbol is.
     this.lines = {};
@@ -405,7 +411,7 @@ export class Watchlist {
    * and MIS's flagged snapshot as `auctionAt` while the quote's price traded before it (`tradeTime`, else its time):
    * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
    * closure and call auction. A Taiwan stock priced by Yahoo Finance while a real-time source is on loses its
-   * activity, so a 20-minute-late volume never stands beside a real-time price.
+   * activity, so a 20-minute-late volume never stands beside a real-time price. Its book is then rowBook's.
    */
   marked(symbol, quote, now) {
     if (!quote || this.marketFor(symbol) !== "tw") return quote;
@@ -413,9 +419,27 @@ export class Watchlist {
     const twRealtime = reading.twRealtime && kindOf(symbol) === "stock";
     const flaggedAt = this.auctionAt[symbol];
     const held = (quote.tradeTime ?? quote.timestamp) < flaggedAt;
-    const closed = withClosure(twRealtime && quote.source === "yahoo" ? withoutActivity(quote) : quote, reading);
+    const own = twRealtime && quote.source === "yahoo" ? withoutActivity(quote) : quote;
+    const book = this.rowBook(symbol, own, held, now);
+    const closed = withClosure(book ? { ...own, book } : own, reading);
     if (!twRealtime && !held) return closed;
     return { ...closed, ...(twRealtime && { twRealtime: true }), ...(held && { auctionAt: flaggedAt }) };
+  }
+
+  /**
+   * The book a Taiwan row shows (see marked), its price and activity untouched: while MIS's flag holds the price
+   * (`held`) and that flag carried levels, its auction book; else the quote's own, marked as the auction's (`auction:
+   * true`) when it is a Taiwan stock's from Yahoo 奇摩股市 fetched inside the call auction around `now`
+   * (auctionWindowStart), so one fetched before it never shows as the auction's; else, without one, an empty book
+   * while MIS's latest answer had no level (`noLevels`); else none (undefined).
+   */
+  rowBook(symbol, quote, held, now) {
+    if (held && this.auctionBooks[symbol]) return this.auctionBooks[symbol];
+    if (quote.book) {
+      const start = quote.source === yahootw.id && kindOf(symbol) === "stock" ? auctionWindowStart(now) : null;
+      return start !== null && quote.fetchedAt >= start ? { ...quote.book, auction: true } : quote.book;
+    }
+    return this.noLevels[symbol] ? { bids: [], asks: [] } : undefined;
   }
 
   /**
@@ -780,10 +804,11 @@ export class Watchlist {
       const symbols = new Set(this.symbolsFor(provider, config));
       for (const symbol of symbols) covered.add(symbol);
       const held = [this.overlays, this.overlayErrors, this.lines[provider.id] ?? {}, this.lineTrades[provider.id] ?? {},
-        ...(provider === mis ? [this.auctionAt] : [])];
+        ...(provider === mis ? [this.auctionAt, this.auctionBooks, this.noLevels] : [])];
       for (const symbol of held.flatMap(Object.keys)) {
         if (symbols.has(symbol)) continue;
         this.dropOverlay(provider, symbol);
+        if (provider === mis) delete this.noLevels[symbol];
         if (this.lineTrades[provider.id]) delete this.lineTrades[provider.id][symbol];
         this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
       }
@@ -1145,6 +1170,11 @@ export class Watchlist {
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         const had = this.overlays[symbol]?.[provider.id];
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
+        // Whether MIS's latest answer named it with no level, answer by answer.
+        if (provider === mis) {
+          if (result.noLevels?.[symbol]) this.noLevels[symbol] = true;
+          else delete this.noLevels[symbol];
+        }
         if (this.soleSource(symbol) === provider) {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
           // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
@@ -1156,12 +1186,18 @@ export class Watchlist {
           continue;
         }
         // A symbol in a call auction (MIS's flag) keeps the price held from before it. A flag from a snapshot older
-        // than that price is an answer MIS's cache served late: ignored.
+        // than that price is an answer MIS's cache served late: ignored. The auction book is the newest flag's: one
+        // older than the flag held changes nothing, and a newer one without levels drops it.
         const flaggedAt = result.auction?.[symbol];
         if (flaggedAt === undefined) {
           if (!overlay) this.dropOverlay(provider, symbol);
-          else if (provider === mis) delete this.auctionAt[symbol];
+          else if (provider === mis) this.dropAuction(symbol);
         } else if (!(had?.timestamp > flaggedAt)) {
+          if (flaggedAt >= (this.auctionAt[symbol] ?? 0)) {
+            const book = result.auctionBook?.[symbol];
+            if (book) this.auctionBooks[symbol] = book;
+            else delete this.auctionBooks[symbol];
+          }
           this.auctionAt[symbol] = Math.max(this.auctionAt[symbol] ?? 0, flaggedAt);
         }
         this.setEntry(this.overlayErrors, symbol, provider.id, overlay ? undefined : error);
@@ -1276,6 +1312,7 @@ export class Watchlist {
   fail(provider, symbol, error) {
     if (!provider.overlay || this.soleSource(symbol) === provider) { this.errors[symbol] = error; return; }
     this.dropOverlay(provider, symbol);
+    if (provider === mis) delete this.noLevels[symbol];
     this.setEntry(this.overlayErrors, symbol, provider.id, error);
   }
 
@@ -1284,7 +1321,13 @@ export class Watchlist {
   dropOverlay(provider, symbol) {
     this.setEntry(this.overlays, symbol, provider.id, undefined);
     if (this.lines[provider.id]) delete this.lines[provider.id][symbol];
-    if (provider === mis) delete this.auctionAt[symbol];
+    if (provider === mis) this.dropAuction(symbol);
+  }
+
+  // MIS's auction flag for `symbol` and its auction book, together.
+  dropAuction(symbol) {
+    delete this.auctionAt[symbol];
+    delete this.auctionBooks[symbol];
   }
 
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */

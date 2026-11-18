@@ -23,6 +23,21 @@ export function misChannel(symbol) {
 // The best real bid or ask: "2265.0000_2260.0000_..." → 2265. Market orders show as 0.0000 and are skipped.
 const best = (value) => (typeof value === "string" ? value.split("_").map(positiveOrNull).find(Boolean) ?? null : null);
 
+// The levels at most a side of the book shows.
+const BOOK_LEVELS = 5;
+
+/**
+ * One side of the book, best first: `prices` ("2170.0000_2165.0000_…") zipped with `sizes` ("2280_208_…", in lots) as
+ * `{ price, size }`, a level whose price is not positive (a market order's 0.0000) or whose size is not skipped; at most
+ * BOOK_LEVELS. None for anything but a string.
+ */
+function levels(prices, sizes) {
+  if (typeof prices !== "string") return [];
+  const sized = typeof sizes === "string" ? sizes.split("_") : [];
+  return prices.split("_").map((price, i) => ({ price: positiveOrNull(price), size: positiveOrNull(sized[i]) }))
+    .filter((level) => level.price !== null && level.size !== null).slice(0, BOOK_LEVELS);
+}
+
 /**
  * The price from the order book when the snapshot had no trade: the midpoint of the best bid and ask; with
  * orders on one side only, the stock's limit when that side waits at it (asks only at limit-down, bids only
@@ -43,7 +58,10 @@ function bookPrice(bid, ask, up, down) {
  * not asked for is ignored. A row MIS flags as in a call auction (`ts` "1" with a snapshot time, as from 08:30 to
  * the open and from 13:25 to the close, whatever its trial price `pz` reads: an auction whose orders do not cross
  * has none) has no overlay and no error either: its book is the auction's, never a price. A name-only row carries
- * no `ts`. Its symbol goes in `auction`, mapped to the flagged snapshot's time; the key is there only when not empty.
+ * no `ts`. Its symbol goes in `auction`, mapped to the flagged snapshot's time, and its levels, when it has any, in
+ * `auctionBook` as `{ bids, asks, auction: true }`. A priced quote carries its own `book`, `{ bids, asks }` (levels,
+ * either side possibly empty). A named row neither flagged nor priced whose bids and asks give no level goes in
+ * `noLevels` (true): MIS answered, with no order yet. Each of the three keys is there only when not empty.
  */
 export function decodeMis(symbols, response, now) {
   // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
@@ -57,14 +75,19 @@ export function decodeMis(symbols, response, now) {
   // Before the open (or for a halted stock) MIS sends a row's name without any price: keep the name.
   const names = {};
   const auction = {};
+  const auctionBook = {};
+  const noLevels = {};
   for (const row of body.msgArray) {
     const symbol = typeof row?.ex === "string" && typeof row.c === "string" ? wanted.get(`${row.ex}_${row.c}.tw`) : undefined;
     if (!symbol) continue;
     const name = cleanText(row.n);
     if (name) names[symbol] = name;
     const time = Number(row.tlong);
+    const book = { bids: levels(row.b, row.g), asks: levels(row.a, row.f) };
+    const leveled = book.bids.length > 0 || book.asks.length > 0;
     if (row.ts === "1" && positive(time)) {
       auction[symbol] = time;
+      if (leveled) auctionBook[symbol] = { ...book, auction: true };
       continue;
     }
     const bid = best(row.b);
@@ -73,7 +96,10 @@ export function decodeMis(symbols, response, now) {
     const traded = positiveOrNull(row.z);
     const lastSize = positiveOrNull(row.tv);
     const price = traded ?? bookPrice(bid, ask, limits.limitUp, limits.limitDown);
-    if (!price || !positive(time)) continue;
+    if (!price || !positive(time)) {
+      if (name && !leveled) noLevels[symbol] = true;
+      continue;
+    }
     if (!withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("mis.outOfLimits");
       continue;
@@ -91,12 +117,17 @@ export function decodeMis(symbols, response, now) {
       ...sized(positiveOrNull(row.v), "lot"),
       // The last trade's size (`tv`), in lots too; a price from the book has none.
       ...(traded && lastSize && { lastSize, sizeUnit: "lot" }),
+      book,
       timestamp: time,
       fetchedAt: now,
       ...(!traded && { fromBook: true }),
     };
   }
-  return { quotes, errors, names, ...(Object.keys(auction).length && { auction }) };
+  const some = (record) => Object.keys(record).length > 0;
+  return {
+    quotes, errors, names,
+    ...(some(auction) && { auction }), ...(some(auctionBook) && { auctionBook }), ...(some(noLevels) && { noLevels }),
+  };
 }
 
 /** @type {Provider} */

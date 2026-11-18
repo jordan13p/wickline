@@ -10,13 +10,14 @@ import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } 
 import { t } from "../mods/wickline/i18n.js";
 import { LIVE_MAX_AGE_MS, chartLayout, detailSource, detailWakeAt, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { chartGeometry, collapsedRow, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts } from "../mods/wickline/format.js";
+import { detailBook } from "../mods/wickline/format.js";
 import {
   BOTH_ON, CLOSE_0509, CLOSE_1224, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, HOLIDAYS_2026, MIS_2330_1324,
   MIS_ON, NIGHT, SEGMENTS, advance, at, chart, chartSymbol, day, fakeHost, isHolidays, isLine, jsonFixture, lineSymbol, misFlagged, ok, start, stop,
   taipei, withTZ, yq, zhLabel,
 } from "./helpers.mjs";
 import { MIS_URL, mis } from "../mods/wickline/providers/mis.js";
-import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, yahootw } from "../mods/wickline/providers/yahootw.js";
+import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, decodeStockList, yahootw } from "../mods/wickline/providers/yahootw.js";
 import { taipeiDay } from "../mods/wickline/calendar.js";
 
 const BASE = "https://data-api.binance.vision";
@@ -3207,4 +3208,146 @@ test("AAPL priced by Finnhub shows Yahoo Finance's live volume, and never a dela
   // An overlay's own volume replaces the base's, unit with it.
   const own = mergeOverlay(base, { ...finnhubQuote, volume: 1_000, sizeUnit: "share" }, null);
   assert.equal(own.volume, 1_000);
+});
+
+// The best five levels on a row. MIS's answers laid over a watchlist at `time`, as a round would.
+const misAnswerAt = (w, time, ...rows) => {
+  w.host.clock = time;
+  misAnswer(w, w.host, misRows(...rows));
+};
+const ROW_1326 = jsonFixture("mis-detail-1326").msgArray.find((row) => row.c === "2330");
+const levelsOf = (pairs) => pairs.map(([price, size]) => ({ price, size }));
+const YTW_BOOK = { bids: levelsOf([[2170, 2280], [2165, 208]]), asks: levelsOf([[2175, 503], [2180, 1248]]) };
+// Yahoo Finance at Monday's close (2215 at 13:30 on 11/16) with its volume, under 11/17's periods.
+const yahooMondayClose = () => ({ ...yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_SESSION), price: 2215, series: [2200, 2215],
+  volume: 54_723, sizeUnit: "lot" });
+const ytwOver = (time, fields = {}) => ({ symbol: "2330.TW", source: "yahootw", price: 2175, previousClose: 2170, timestamp: time, tradeTime: time,
+  day: taipeiDay(time), fetchedAt: time, ...fields });
+
+test("The morning auction with MIS alone", () => {
+  const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": yahooMondayClose() } });
+  misAnswerAt(w, taipei("08:40:02"), { ...ROW_1326, tlong: String(taipei("08:40:00")) });
+  const q = w.shown("2330.TW", taipei("08:40:05"));
+  assert.deepEqual([q.book.auction, q.book.bids[0].price, q.price], [true, 2185, 2215]);
+  assert.equal("volume" in q, false);
+});
+
+test("The closing auction with both sources", () => {
+  const w = watchHolding(BOTH_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw },
+    overlays: { "2330.TW": { yahootw: ytwOver(taipei("13:24:50"), { volume: 42_000, sizeUnit: "lot", book: YTW_BOOK }) } } });
+  misAnswerAt(w, taipei("13:27:02"), { ...misFlagged(taipei("13:27:00")), v: "37400" });
+  const q = w.shown("2330.TW", taipei("13:27:05"));
+  assert.deepEqual([q.book.auction, q.book.bids[0].price, q.volume, q.price], [true, 2170, 42_000, 2175]);
+});
+
+test("the auction book goes with the flag", () => {
+  const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw } });
+  misAnswerAt(w, taipei("13:27:02"), misFlagged(taipei("13:27:00")));
+  assert.ok(w.auctionBooks["2330.TW"]);
+  misAnswerAt(w, taipei("13:30:02"), { ...misBook(taipei("13:30:00")), z: "2170.0000" });
+  assert.equal("2330.TW" in w.auctionBooks, false);
+  const q = w.shown("2330.TW", taipei("13:30:05"));
+  assert.equal(q.source, "mis");
+  assert.deepEqual(q.book, w.overlays["2330.TW"].mis.book);
+  assert.equal("auction" in q.book, false);
+  // Dropped with MIS's price too.
+  misAnswerAt(w, taipei("13:30:12"), misFlagged(taipei("13:30:10")));
+  w.dropOverlay(mis, "2330.TW");
+  assert.equal("2330.TW" in w.auctionBooks, false);
+});
+
+test("a late answer with an older flag keeps the newer auction book", () => {
+  const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw } });
+  misAnswerAt(w, taipei("13:27:02"), misFlagged(taipei("13:27:00")));
+  const kept = w.auctionBooks["2330.TW"];
+  assert.equal(kept.bids[0].price, 2170);
+  // MIS's cache serves an answer flagged earlier, with other levels.
+  misAnswerAt(w, taipei("13:27:12"), { ...misFlagged(taipei("13:26:30")), b: "2190.0000_", g: "5_" });
+  assert.deepEqual(w.auctionBooks["2330.TW"], kept);
+  assert.equal(w.auctionAt["2330.TW"], taipei("13:27:00"));
+});
+
+test("a newer flag without levels drops the older auction book", () => {
+  const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw } });
+  misAnswerAt(w, taipei("13:27:02"), misFlagged(taipei("13:27:00")));
+  misAnswerAt(w, taipei("13:27:12"), { ...misFlagged(taipei("13:27:10")), a: "-", b: "-" });
+  assert.equal("2330.TW" in w.auctionBooks, false);
+  assert.equal("book" in w.shown("2330.TW", taipei("13:27:15")), false);
+});
+
+test("Before any order (row)", () => {
+  // Wednesday 2026-11-18: MIS's recorded name-only answer, then its first flagged one.
+  const on18 = (time) => taipei(time, "2026-11-18");
+  const base = { ...yq("2330.TW", "TAI", taipei("13:30:00"), day("2026-11-18T01:00:00Z", "2026-11-18T05:30:00Z")), price: 2170, series: [2170] };
+  const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": base } });
+  const answer = (name) => {
+    const request = mis.requests(["2330.TW"], { misUrl: MIS_URL })[0];
+    w.apply(mis, request, mis.decode(request, ok(jsonFixture(name)), w.host.clock));
+  };
+  w.host.clock = on18("08:20:00");
+  answer("mis-auction-0825");
+  const before = w.shown("2330.TW", on18("08:20:05"));
+  assert.deepEqual(before.book, { bids: [], asks: [] });
+  assert.equal(detailBook(before, false).line, "detail.bookEmpty");
+  w.host.clock = on18("08:31:00");
+  answer("mis-auction-0831");
+  assert.equal("2330.TW" in w.noLevels, false);
+  const flagged = w.shown("2330.TW", on18("08:31:30"));
+  assert.deepEqual([flagged.book.auction, flagged.book.bids[0].price], [true, 2235]);
+  w.host.clock = on18("08:31:40");
+  answer("mis-auction-0825");
+  assert.equal(w.noLevels["2330.TW"], true);
+  // MIS turned off, Yahoo 奇摩股市 on: MIS's word on the levels goes with it.
+  w.host.prefs = ONLY_YAHOOTW;
+  w.adopt(w.preferences);
+  assert.equal("2330.TW" in w.noLevels, false);
+  assert.equal("book" in w.shown("2330.TW", on18("08:20:10")), false);
+});
+
+test("a failed MIS request forgets that it answered with no levels", () => {
+  const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw } });
+  misAnswerAt(w, taipei("08:20:00"), { ...MIS_2330_1324, z: "-", a: "-", b: "-", ts: "0" });
+  assert.equal(w.noLevels["2330.TW"], true);
+  w.fail(mis, "2330.TW", { code: "mis.timeout", params: {} });
+  assert.equal("2330.TW" in w.noLevels, false);
+});
+
+test("A Taiwan stock with a real-time source (book)", () => {
+  const w = watchHolding(BOTH_ON, ["2330.TW"], { quotes: { "2330.TW": delayedTw },
+    overlays: { "2330.TW": { yahootw: ytwOver(taipei("09:59:58"), { book: YTW_BOOK }) } } });
+  assert.deepEqual(w.shown("2330.TW", TW_AT).book, YTW_BOOK);
+});
+
+// The book in a call auction from Yahoo 奇摩股市: only an answer fetched inside the window is the auction's.
+const ytwAuction = (fetchedAt) => decodeStockList(["2330.TW"], ok(jsonFixture("ytw-auction-1326")), fetchedAt).quotes["2330.TW"];
+const ytwWatch = (prefs, quote) => watchHolding(prefs, ["2330.TW"], { quotes: { "2330.TW": yahooMondayClose() }, overlays: { "2330.TW": { yahootw: quote } } });
+
+test("The closing auction with Yahoo 奇摩股市 alone", () => {
+  const q = ytwWatch(ONLY_YAHOOTW, ytwAuction(taipei("13:26:00"))).shown("2330.TW", taipei("13:26:05"));
+  assert.equal(q.book.auction, true);
+  assert.deepEqual([q.book.bids[0].price, q.book.bids[0].size], [2150, 232]);
+  const shown = detailBook(q, true);
+  assert.deepEqual([shown.title, shown.book], ["detail.auctionBook", q.book]);
+});
+
+test("a Yahoo 奇摩股市 book fetched before the window never shows as the auction's", () => {
+  const q = ytwWatch(ONLY_YAHOOTW, ytwAuction(taipei("13:24:50"))).shown("2330.TW", taipei("13:26:05"));
+  assert.equal("auction" in q.book, false);
+  assert.deepEqual(detailBook(q, true), { title: "detail.book", book: null, line: "detail.bookNone" });
+});
+
+test("both on: MIS's flagged book wins over Yahoo 奇摩股市's", () => {
+  const w = ytwWatch(BOTH_ON, ytwAuction(taipei("13:26:00")));
+  misAnswerAt(w, taipei("13:26:32"), misFlagged(taipei("13:26:30")));
+  const q = w.shown("2330.TW", taipei("13:26:35"));
+  assert.deepEqual(q.book, { ...w.auctionBooks["2330.TW"], auction: true });
+  assert.equal(q.book.bids[0].price, 2170);
+});
+
+test("a future's book inside the morning auction window is not an auction book", () => {
+  const traded = taipei("08:50:00");
+  const own = { symbol: "WTX&", source: "yahootw", exchange: "TFE", price: 23_000, timestamp: traded, tradeTime: traded,
+    day: taipeiDay(traded), fetchedAt: traded, book: YTW_BOOK };
+  const w = watchHolding(BOTH_ON, ["WTX&"], { overlays: { "WTX&": { yahootw: own } } });
+  assert.deepEqual(w.shown("WTX&", traded + 5_000).book, YTW_BOOK);
 });

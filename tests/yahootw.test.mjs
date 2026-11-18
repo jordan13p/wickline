@@ -725,3 +725,67 @@ test("an index row carries no activity", () => {
   const q = decodeStockList(["^TWII"], ok(rows), NOW, ["^TWII"]).quotes["^TWII"];
   for (const field of ["previousVolume", "turnover", "avgPrice", "lastSize", "inner", "outer"]) assert.equal(field in q, false, field);
 });
+
+// The best five levels: a side is kept only when its sizes add up to the answer's own total for it.
+const levelPairs = (levels) => levels.map((level) => [level.price, level.size]);
+const sizeSum = (levels) => levels.reduce((sum, level) => sum + level.size, 0);
+
+test("A Taiwan stock from Yahoo 奇摩股市 (book)", () => {
+  const { book } = detailQuote(CLOSE_ROWS, "2330.TW");
+  assert.deepEqual(levelPairs(book.bids), [[2170, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]);
+  assert.deepEqual(levelPairs(book.asks), [[2175, 503], [2180, 1248], [2185, 571], [2190, 362], [2195, 361]]);
+});
+
+test("A future counts in contracts (book)", () => {
+  const { book } = detailQuote(jsonFixture("ytw-detail-mixed"), "WTX&");
+  assert.deepEqual(book.bids[0], { price: 40_023, size: 79 });
+  assert.deepEqual([sizeSum(book.bids), sizeSum(book.asks)], [86, 80]);
+});
+
+test("A book that does not add up", () => {
+  // Synthetic, edited from the close sample: the last bid level at 1,251 lots, so the five sum to 4,600 against 4,629.
+  const q = detailQuote(jsonFixture("ytw-detail-unbalanced"), "2330.TW");
+  assert.equal("book" in q, false);
+  assert.deepEqual([q.price, q.volume, q.inner], [2_175, 42_269, 15_147]);
+});
+
+test("an orderbook with no level gives an empty book", () => {
+  const q = detailQuote(withFields({ orderbook: [], sumBidVolK: "0", sumAskVolK: "0" }), "2330.TW");
+  assert.deepEqual(q.book, { bids: [], asks: [] });
+  // Without the field, no book at all.
+  const rows = CLOSE_ROWS.map(({ orderbook: _orderbook, ...row }) => row);
+  assert.equal("book" in detailQuote(rows, "2330.TW"), false);
+});
+
+// The close row with every level's ask replaced by `fields`.
+const askless = (fields) => CLOSE_ROWS[0].orderbook.map((level) => ({ ...level, ...fields }));
+
+test("a one-sided Yahoo 奇摩股市 book is kept", () => {
+  const q = detailQuote(withFields({ orderbook: askless({ ask: "-", askVol: 0, askVolK: 0 }), sumAskVolK: "0" }), "2330.TW");
+  assert.deepEqual(q.book.asks, []);
+  assert.equal(q.book.bids.length, 5);
+});
+
+test("an empty side with dash sizes is kept", () => {
+  const q = detailQuote(withFields({ orderbook: askless({ ask: "-", askVolK: "-" }), sumAskVolK: "0" }), "2330.TW");
+  assert.deepEqual(q.book.asks, []);
+  assert.equal(sizeSum(q.book.bids), 4_629);
+});
+
+test("a priced level without a readable size, or a total that is not a number, drops the book", () => {
+  const levels = CLOSE_ROWS[0].orderbook;
+  const unreadable = levels.map((level, i) => (i === 2 ? { ...level, bidVolK: "-" } : level));
+  assert.equal("book" in detailQuote(withFields({ orderbook: unreadable }), "2330.TW"), false);
+  for (const total of [" ", "-", null, undefined]) {
+    assert.equal("book" in detailQuote(withFields({ sumAskVolK: total }), "2330.TW"), false, JSON.stringify(total));
+  }
+  // A level priced at a size of 0 adds nothing and is not shown.
+  const empty = levels.map((level, i) => (i === 4 ? { ...level, askVolK: 0 } : level));
+  const q = detailQuote(withFields({ orderbook: empty, sumAskVolK: 3_045 - 361 }), "2330.TW");
+  assert.equal(q.book.asks.length, 4);
+});
+
+test("an index row carries no book", () => {
+  const rows = ROWS.filter((row) => row.symbol === "^TWII").map((row) => ({ ...row, orderbook: [], sumBidVolK: 0, sumAskVolK: 0 }));
+  assert.equal("book" in decodeStockList(["^TWII"], ok(rows), NOW, ["^TWII"]).quotes["^TWII"], false);
+});

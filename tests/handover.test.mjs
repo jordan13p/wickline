@@ -6,9 +6,9 @@ import { Watchlist } from "../mods/wickline/watchlist.js";
 import { detailSource, sessionOf } from "../mods/wickline/freshness.js";
 import { heldMarks, taipeiDay } from "../mods/wickline/calendar.js";
 import { failureNote } from "../mods/wickline/format.js";
-import { mis } from "../mods/wickline/providers/mis.js";
+import { MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { yahootw } from "../mods/wickline/providers/yahootw.js";
-import { BOTH_ON, LISTED_2026, MIS_ON, at, day, fakeHost, ok, say, taipei, withTZ, yq } from "./helpers.mjs";
+import { BOTH_ON, LISTED_2026, MIS_ON, at, day, fakeHost, jsonFixture, ok, say, taipei, withTZ, yq } from "./helpers.mjs";
 
 // Herdr's shared state: what is written is persisted, so a read gives a copy, never the object written.
 function memoryStore() {
@@ -358,4 +358,24 @@ test("a second open from the same copy replaces the first", () => {
   assert.equal(render(store, a), null);
   assert.equal(render(store, b).symbol, "0050.TW");
   assert.equal(clearsOnClose(store.read(), a.token), false);
+});
+
+test("A newer answer", () => {
+  // Wednesday 2026-11-18 at 13:30: MIS's recorded answer, then one whose best bid holds more.
+  const w = watchWith(MIS_ON);
+  const now = taipei("13:30:02", "2026-11-18");
+  const body = jsonFixture("mis-detail-1330");
+  const answer = (g) => {
+    const request = mis.requests(["2330.TW"], { misUrl: MIS_URL })[0];
+    const rows = body.msgArray.map((row) => (row.c === "2330" ? { ...row, g } : row));
+    w.apply(mis, request, mis.decode(request, ok({ ...body, msgArray: rows }), now));
+  };
+  w.host.clock = now;
+  answer("2280_208_394_467_1280_");
+  const store = memoryStore();
+  const x = glue(w, store);
+  const held = x.open("2330.TW", now);
+  answer("2300_208_394_467_1280_");
+  assert.equal(x.pass(now + 1_000).seq, 2);
+  assert.equal(render(store, held).book.bids[0].size, 2300);
 });

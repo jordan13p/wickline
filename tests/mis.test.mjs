@@ -74,7 +74,12 @@ test("decodes the recorded answer", () => {
   assert.equal(etf.timestamp, Number(row.tlong));
   assert.deepEqual(etf, {
     symbol: "0050.TW", source: "mis", name: row.n, price: 98.7, previousClose: 99.85,
-    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, volume: Number(row.v), sizeUnit: "lot", lastSize: Number(row.tv), timestamp: Number(row.tlong), fetchedAt: 42,
+    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, volume: Number(row.v), sizeUnit: "lot", lastSize: Number(row.tv),
+    book: {
+      bids: [[98.65, 170], [98.6, 235], [98.55, 150], [98.5, 1769], [98.45, 716]].map(([price, size]) => ({ price, size })),
+      asks: [[98.7, 294], [98.75, 2524], [98.8, 1828], [98.85, 489], [98.9, 472]].map(([price, size]) => ({ price, size })),
+    },
+    timestamp: Number(row.tlong), fetchedAt: 42,
   });
   // No trade in the last snapshot: the best bid/ask midpoint.
   assert.equal(result.quotes["2330.TW"].price, (2265 + 2270) / 2);
@@ -85,7 +90,8 @@ test("midpoint and no price", () => {
   const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000" }));
   // No price, but the name still comes through (see "a name without a price").
   const named = { "2330.TW": "台積電" };
-  assert.deepEqual(none, { quotes: {}, errors: {}, names: named });
+  // Nor any level: MIS answered with no order yet.
+  assert.deepEqual(none, { quotes: {}, errors: {}, names: named, noLevels: { "2330.TW": true } });
   // One side only is not a midpoint.
   assert.deepEqual(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2270.0000_" })), { quotes: {}, errors: {}, names: named });
   assert.deepEqual(decode(["2330.TW"], row2330({ tlong: "-" })), { quotes: {}, errors: {}, names: named });
@@ -126,7 +132,7 @@ test("the midpoint skips market orders on either side", () => {
 test("a name without a price: before the open MIS sends names only", () => {
   // As answered at 08:19 on a trading day: no last trade, no bid or ask.
   const preOpen = decode(["2330.TW"], row2330({ z: "-", b: null, a: null, tlong: "1793922600000" }));
-  assert.deepEqual(preOpen, { quotes: {}, errors: {}, names: { "2330.TW": "台積電" } });
+  assert.deepEqual(preOpen, { quotes: {}, errors: {}, names: { "2330.TW": "台積電" }, noLevels: { "2330.TW": true } });
   // Every requested row gives its name, priced or not; a row nobody asked for gives none.
   const all = decode(["2330.TW", "0050.TW"], answer(OPEN));
   assert.deepEqual(all.names, { "2330.TW": "台積電", "0050.TW": "元大台灣50" });
@@ -158,7 +164,8 @@ test("a flagged row without a trial price is still no price", () => {
 
 test("a name-only row is never a flag", () => {
   const result = decode(["2330.TW", "6488.TWO"], auctionAnswer("0825"));
-  assert.deepEqual(result, { quotes: {}, errors: {}, names: { "2330.TW": "台積電", "6488.TWO": "環球晶" } });
+  assert.deepEqual(result, { quotes: {}, errors: {}, names: { "2330.TW": "台積電", "6488.TWO": "環球晶" },
+    noLevels: { "2330.TW": true, "6488.TWO": true } });
 });
 
 test("in-session answers deep-equal as before", () => {
@@ -664,4 +671,49 @@ test("MIS last size", () => {
     const quote = decode(["2330.TW"], answer(JSON.stringify({ ...body, msgArray: rows }))).quotes["2330.TW"];
     assert.equal("lastSize" in quote, false, String(tv));
   }
+});
+
+// The best five levels, each `[price, size]`.
+const levelPairs = (levels) => levels.map((level) => [level.price, level.size]);
+// mis-detail-1330 with the 2330 row's fields replaced.
+const detail1330 = (fields) => {
+  const body = jsonFixture("mis-detail-1330");
+  return answer(JSON.stringify({ ...body, msgArray: body.msgArray.map((row) => (row.c === "2330" ? { ...row, ...fields } : row)) }));
+};
+
+test("MIS levels", () => {
+  const { book } = decode(["2330.TW"], detailAnswer("1330")).quotes["2330.TW"];
+  assert.deepEqual(levelPairs(book.bids), [[2170, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]);
+  assert.deepEqual(levelPairs(book.asks), [[2175, 503], [2180, 1248], [2185, 571], [2190, 362], [2195, 361]]);
+  assert.equal("auction" in book, false);
+  // A market order (0.0000) is no level.
+  const market = decode(["2330.TW"], detail1330({ b: "0.0000_2165.0000_2160.0000_2155.0000_2150.0000_" })).quotes["2330.TW"].book;
+  assert.equal(market.bids.length, 4);
+  assert.equal(market.bids[0].price, 2165);
+  // A side without levels is empty, the price still taken.
+  const oneSided = decode(["2330.TW"], detail1330({ a: "-", f: "-" })).quotes["2330.TW"];
+  assert.deepEqual([oneSided.price, oneSided.book.asks, oneSided.book.bids.length], [2175, [], 5]);
+});
+
+test("a flagged row's levels are its auction book, never a price", () => {
+  const result = decode(["2330.TW"], detailAnswer("1326"));
+  assert.deepEqual(result.quotes, {});
+  const book = result.auctionBook["2330.TW"];
+  assert.deepEqual([levelPairs(book.bids)[0], levelPairs(book.asks)[0], book.auction], [[2185, 1], [2200, 73], true]);
+  for (const name of ["0831", "0838", "0900", "1326", "1330"]) {
+    const each = decode(["2330.TW", "0050.TW", "6488.TWO"], auctionAnswer(name));
+    for (const symbol of Object.keys(each.auction)) assert.equal(symbol in each.quotes, false, `${name} ${symbol}`);
+    for (const symbol of Object.keys(each.auctionBook ?? {})) assert.ok(symbol in each.auction, `${name} ${symbol}`);
+  }
+  // A flagged row with no level has no auction book.
+  const bare = decode(["2330.TW"], answer(JSON.stringify({ msgArray: [{ ...auctionRow("0831", "2330"), a: "-", b: "-" }] })));
+  assert.ok(bare.auction["2330.TW"]);
+  assert.equal("auctionBook" in bare, false);
+});
+
+test("a named row with no levels marks noLevels", () => {
+  const result = decode(["2330.TW"], auctionAnswer("0825"));
+  assert.deepEqual([result.noLevels, result.quotes], [{ "2330.TW": true }, {}]);
+  // A priced or flagged row never does.
+  for (const name of ["0831", "1335"]) assert.equal("noLevels" in decode(["2330.TW"], auctionAnswer(name)), false, name);
 });

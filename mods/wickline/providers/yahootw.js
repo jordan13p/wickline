@@ -66,11 +66,43 @@ const amount = (value, future) => {
   return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(future ? n * 1000 : n) : null;
 };
 
+// The levels at most a side of the book shows.
+const BOOK_LEVELS = 5;
+
+/**
+ * One side (`side`: "bid" or "ask") of `orderbook`, best first, or null when it does not add up to the answer's own
+ * `total` for it: every level as sent counts, one without a positive price as 0 whatever its size says, a priced one by
+ * its size (`bidVolK` / `askVolK`, as `amount` reads it), and a priced level whose size is unreadable fails the side.
+ * Shown: at most BOOK_LEVELS levels `{ price, size }` (sizes as `count`), a level without a positive price or size
+ * skipped.
+ */
+function bookSide(orderbook, side, total, future) {
+  const size = `${side}VolK`;
+  let sum = 0;
+  for (const level of orderbook) {
+    if (positiveOrNull(level?.[side]) === null) continue;
+    const n = amount(level[size], future);
+    if (n === null) return null;
+    sum += n;
+  }
+  if (sum !== amount(total, future)) return null;
+  return orderbook.map((level) => ({ price: positiveOrNull(level?.[side]), size: count(level?.[size], future) }))
+    .filter((level) => level.price !== null && level.size !== null).slice(0, BOOK_LEVELS);
+}
+
+// The row's book, `{ bids, asks }`, only when both sides add up (bookSide); none without an `orderbook` list.
+function book(row, future) {
+  if (!Array.isArray(row.orderbook)) return null;
+  const bids = bookSide(row.orderbook, "bid", row.sumBidVolK, future);
+  const asks = bookSide(row.orderbook, "ask", row.sumAskVolK, future);
+  return bids && asks ? { bids, asks } : null;
+}
+
 /**
  * A stock's or future's activity (quotes.js ACTIVITY_FIELDS), each field absent when the row does not send it or sends
  * 0 or `-`: counts in lots or contracts, with their unit whenever one is there; turnover in the currency (`turnoverM`
  * is in millions); the average price; inner and outer volume only when, compared exactly, they add up to the
- * continuous-trading total (`totalMarketVolK`), else neither, the rest kept.
+ * continuous-trading total (`totalMarketVolK`), else neither, the rest kept; the book only when it adds up (book).
  */
 function activity(row, future) {
   const counts = {
@@ -88,6 +120,7 @@ function activity(row, future) {
     turnover: millions === null ? null : millions * 1e6,
     avgPrice: positiveOrNull(row.avgPrice),
     ...(inner !== null && outer !== null && total !== null && inner + outer === total && { inner, outer }),
+    book: book(row, future),
   };
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== null));
 }

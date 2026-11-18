@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { changeTone, chartGeometry, collapsedRow, dayFor, detailTimes, bandCurrency, failureNote, formatChange, formatPrice, formatStaleDate, formatTime, freshnessLabel, isFlat, number, rowName, signed } from "../mods/wickline/format.js";
 import { compact, formatAmount, formatCount, formatSize, secondRow } from "../mods/wickline/format.js";
 import { activityCells, amplitude, formatShare, innerOuter } from "../mods/wickline/format.js";
+import { bookTotals, detailBook, formatSignedCount, ladder } from "../mods/wickline/format.js";
 import { decodeStockList } from "../mods/wickline/providers/yahootw.js";
 import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
@@ -498,4 +499,72 @@ test("amplitude and shares", () => {
   assert.equal(formatShare(39.107), "39.1%");
   assert.equal(formatShare(2.76498, 2), "2.76%");
   assert.equal(formatShare(0), "0.0%");
+});
+
+// 2330.TW's best five levels at the close of 11/18, against a previous close of 2,170.
+const levels = (pairs) => pairs.map(([price, size]) => ({ price, size }));
+const SCENARIO_BOOK = {
+  bids: levels([[2170, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]),
+  asks: levels([[2175, 503], [2180, 1248], [2185, 571], [2190, 362], [2195, 361]]),
+};
+const AUCTION_BOOK = { bids: levels([[2185, 1]]), asks: levels([[2200, 73]]), auction: true };
+
+test("The ladder", () => {
+  const rows = ladder(SCENARIO_BOOK, 2170);
+  assert.equal(rows.length, 5);
+  assert.deepEqual(rows[0].bid, { price: 2170, size: 2280, depth: 1, change: 0 });
+  assert.deepEqual([rows[0].ask.price, rows[0].ask.size, rows[0].ask.depth], [2175, 503, 503 / 2280]);
+  assert.deepEqual([changeTone(rows[0].bid.change), changeTone(rows[1].bid.change), changeTone(rows[0].ask.change)], ["flat", "down", "up"]);
+  const totals = bookTotals(SCENARIO_BOOK);
+  assert.deepEqual([totals.bids, totals.asks, totals.diff], [4_629, 3_045, 1_584]);
+  assert.equal(totals.ratio.toFixed(2), "1.52");
+  assert.deepEqual([formatSignedCount(1_584), formatSignedCount(-12), formatSignedCount(0)], ["+1,584", "-12", "0"]);
+  // Without a previous close, no change to color by.
+  assert.equal(ladder(SCENARIO_BOOK, null)[0].bid.change, null);
+});
+
+test("In a call auction", () => {
+  const q = { symbol: "2330.TW", book: AUCTION_BOOK };
+  assert.deepEqual(detailBook(q, true), { title: "detail.auctionBook", book: AUCTION_BOOK, line: null });
+  assert.equal(detailBook(q, false).book, null);
+});
+
+test("Before any order", () => {
+  // MIS answered at 08:20 with the stock's name and no level: not an auction.
+  assert.deepEqual(detailBook({ symbol: "2330.TW", book: { bids: [], asks: [] } }, false), { title: "detail.book", book: null, line: "detail.bookEmpty" });
+});
+
+test("The auction ends in a paused detail", () => {
+  // At 09:01:57 the flag is 2 minutes old: the auction book no longer shows.
+  assert.deepEqual(detailBook({ symbol: "2330.TW", book: AUCTION_BOOK }, false), { title: "detail.book", book: null, line: "detail.bookNone" });
+});
+
+test("Yahoo 奇摩股市 alone before the open", () => {
+  assert.equal(detailBook({ symbol: "2330.TW" }, true).line, "detail.bookNone");
+  // A book from before the auction never shows in it.
+  assert.deepEqual(detailBook({ symbol: "2330.TW", book: SCENARIO_BOOK }, true), { title: "detail.book", book: null, line: "detail.bookNone" });
+});
+
+test("A failure without a book", () => {
+  const fallback = { code: "mis.timeout", params: {} };
+  assert.equal(detailBook({ symbol: "2330.TW", fallback, error: null }, false).line, "reason");
+  // A cached price's own failure says why too; an error under a current price does not.
+  assert.equal(detailBook({ symbol: "2330.TW", cached: true, error: fallback, fallback: null }, false).line, "reason");
+  assert.equal(detailBook({ symbol: "2330.TW", error: fallback, fallback: null }, false).line, "detail.bookNone");
+  // A book to show wins over the reason.
+  assert.equal(detailBook({ symbol: "2330.TW", fallback, book: SCENARIO_BOOK }, false).book, SCENARIO_BOOK);
+});
+
+test("a one-sided book", () => {
+  const book = { bids: SCENARIO_BOOK.bids, asks: [] };
+  const rows = ladder(book, 2170);
+  assert.equal(rows.length, 5);
+  assert.ok(rows.every((row) => row.ask === null && row.bid !== null));
+  assert.equal(rows[4].bid.depth, 1280 / 2280);
+  const totals = bookTotals(book);
+  assert.deepEqual(totals, { bids: 4_629, asks: 0, diff: 4_629, ratio: null });
+  const text = JSON.stringify(rows) + formatSignedCount(totals.diff);
+  assert.ok(!/NaN|Infinity/.test(text), text);
+  assert.deepEqual(ladder({ bids: [], asks: [] }, 2170), []);
+  assert.deepEqual(bookTotals({ bids: [], asks: [] }), { bids: 0, asks: 0, diff: 0, ratio: null });
 });

@@ -373,3 +373,18 @@ test("the activity labels are in every language", () => {
     keys.forEach((key, i) => assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`));
   }
 });
+
+test("the book's labels are in every language", () => {
+  const keys = ["detail.book", "detail.auctionBook", "detail.bookEmpty", "detail.bookNone", "detail.bidSize", "detail.bidPrice",
+    "detail.askPrice", "detail.askSize", "detail.bidTotal", "detail.askTotal", "detail.bookDiff", "detail.bookRatio"];
+  const expected = {
+    en: ["Best 5", "Trial match", "No orders yet", "No order book", "Bid size", "Bid", "Ask", "Ask size", "Bids", "Asks", "Bids − asks", "Bids / asks"],
+    "zh-TW": ["最佳五檔", "試撮五檔", "尚無委託資料", "無五檔資料", "買量", "買價", "賣價", "賣量", "委買", "委賣", "委買賣差", "委買賣比"],
+    "zh-CN": ["最佳五档", "试撮五档", "暂无委托数据", "无五档数据", "买量", "买价", "卖价", "卖量", "委买", "委卖", "委买卖差", "委买卖比"],
+    ja: ["気配5本", "板寄せ気配", "注文はまだありません", "気配情報なし", "買数量", "買気配", "売気配", "売数量", "買い合計", "売り合計", "買い−売り", "買い/売り"],
+    ko: ["5단계 호가", "단일가 호가", "아직 주문이 없습니다", "호가 정보 없음", "매수량", "매수호가", "매도호가", "매도량", "매수 잔량", "매도 잔량", "매수−매도", "매수/매도"],
+  };
+  for (const [lang, texts] of Object.entries(expected)) {
+    keys.forEach((key, i) => assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`));
+  }
+});

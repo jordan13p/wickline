@@ -4,17 +4,64 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import {
-  activityCells, displayName, detailTimes, formatChange, innerOuter, number, secondRow, sessionTimesParts, signed,
+  activityCells, bookTotals, detailBook, displayName, detailTimes, formatChange, formatCount, formatSignedCount, innerOuter, ladder,
+  number, secondRow, sessionTimesParts, signed,
 } from "../format.js";
 import { detailDimmed, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
 import { chart, chartShape, failureText, innerOuterBar, priceBox, segments, statCell, statGrid } from "./parts.js";
 
-// How far a stopped price dims, with the activity beside it.
+// How far a stopped price dims, with the activity and book beside it.
 const DIM_OPACITY = 0.5;
+// The ladder's digits: null keeps the interface font.
+const LADDER_FONT = null;
+// The ladder's bid sizes sit in a fixed column, so each bid price starts at the same place.
+const SIZE_W = 44;
+
+// The ladder's digits in LADDER_FONT.
+const digits = (el) => el.when(Boolean(LADDER_FONT), (d) => d.font_family(LADDER_FONT));
+
+// One side of a ladder row (format.js ladder): a 24 px band, a `hover` depth bar growing from the center outward behind it,
+// the bid's size in its fixed column then its price toward the center, the ask's price then its size. `rung` null: empty.
+function ladderSide(view, t, q, rung, bid) {
+  const side = h_flex().flex_1().relative().h(24).px(6).items_center().justify_between();
+  if (!rung) return side;
+  const bar = div().absolute().top(5).bottom(5).rounded(2).bg(t.hover).w(`${Math.round(rung.depth * 1000) / 10}%`);
+  const price = digits(div().relative().font_medium().text_color(view.changeColor(t, rung.change)).child(number(q, rung.price)));
+  const size = digits(div().relative().child(formatCount(rung.size)));
+  return bid ? side.child(bar.right(0)).child(size.w(SIZE_W).text_right()).child(price)
+    : side.child(bar.left(0)).child(price).child(size);
+}
+
+// The right column's book: the ladder with its totals and their difference and ratio (detailBook shown), or its title
+// over one line saying why there is none.
+function bookBlock(view, t, q, shown, tx) {
+  const title = div().text_size(11).text_color(t.dim).child(tx(shown.title));
+  if (!shown.book) {
+    const line = shown.line === "reason" ? view.say(q.fallback ?? q.error) : tx(shown.line);
+    return v_flex().gap(6).child(title).child(div().text_size(11).text_color(t.dim).child(line));
+  }
+  const half = (left, right) => h_flex().flex_1().px(6).justify_between().child(left).child(right);
+  const header = h_flex().gap(8).pb(4).border_b_1().border_color(t.border).text_size(10.5).text_color(t.dim)
+    .child(half(div().w(SIZE_W).text_right().child(tx("detail.bidSize")), div().child(tx("detail.bidPrice"))))
+    .child(half(div().child(tx("detail.askPrice")), div().child(tx("detail.askSize"))));
+  const rows = ladder(shown.book, q.previousClose).map((row) => h_flex().gap(8)
+    .child(ladderSide(view, t, q, row.bid, true)).child(ladderSide(view, t, q, row.ask, false)));
+  const totals = bookTotals(shown.book);
+  const total = (key, n) => h_flex().gap(4).child(div().child(tx(key)))
+    .child(digits(div().font_semibold().text_color(t.foreground).child(formatCount(n))));
+  const balance = [`${tx("detail.bookDiff")} ${formatSignedCount(totals.diff)}`,
+    ...(totals.ratio === null ? [] : [`${tx("detail.bookRatio")} ${totals.ratio.toFixed(2)}`])].join(" · ");
+  return v_flex().gap(6).child(title)
+    .child(v_flex().child(header).children(rows)
+      .child(h_flex().gap(8).pt(6).border_t_1().border_color(t.border).text_size(11).text_color(t.dim)
+        .child(half(total("detail.bidTotal", totals.bids), div())).child(half(div(), total("detail.askTotal", totals.asks)))))
+    .child(div().w_full().text_center().text_size(11).text_color(t.dim).child(balance));
+}
 
 // The dialog a row opens: the day's chart, its range and the session. A quote that can carry a book (main.js
-// openDetail) opens wide, in two columns: the price, chart, levels and source lines on the left, its activity on the right.
+// openDetail) opens wide, in two columns: the price, chart, levels and source lines on the left, its activity and book
+// on the right. The right column always holds the book or the line saying why there is none, so its width never moves.
 export function detailView(view, t) {
   const now = Date.now();
   // Never refetched: its row hands it newer quotes; a mark holds until its end or the next hand-over.
@@ -74,12 +121,14 @@ export function detailView(view, t) {
   if (!view.wide) return root.children(left);
   const cells = activityCells(q, view.lang, tx);
   const flow = innerOuter(q, tx);
+  const shown = detailBook(q, sessionName(q, session, now) === "auction");
+  const book = bookBlock(view, t, q, shown, tx);
   const right = [
     cells.length > 0 && dim(statGrid(t, cells)),
     flow !== null && dim(innerOuterBar(flow, view.changeColor(t, -1), view.changeColor(t, 1))),
+    shown.book ? dim(book) : book,
   ].filter(Boolean);
   return root.child(h_flex().items_start().gap(28)
     .child(v_flex().flex_1().min_w(0).gap(14).children(left))
-    // Only with something to show: an empty column would read as a gap.
-    .when(right.length > 0, (el) => el.child(v_flex().flex_none().w(268).gap(14).children(right))));
+    .child(v_flex().flex_none().w(268).gap(14).children(right)));
 }

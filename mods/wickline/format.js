@@ -176,6 +176,60 @@ export function innerOuter(quote, tx) {
   return { left: side("detail.inner", inner, innerShare), right: side("detail.outer", outer, outerShare), innerShare, outerShare };
 }
 
+const levelCount = (book) => book.bids.length + book.asks.length;
+
+/**
+ * What the two-column detail's book area shows, `{ title, book, line }` (title and line are string keys): the quote's
+ * book, when it has a level and is an auction book exactly when the detail reads `試撮中` (`auction`), under
+ * "detail.auctionBook" in an auction, else "detail.book"; otherwise no book, "detail.book", and one line: "reason" when
+ * the price has a failure to name (its fallback, else a cached price's error), else "detail.bookEmpty" when the source
+ * answered with no level, else "detail.bookNone".
+ */
+export function detailBook(quote, auction) {
+  const book = quote.book ?? null;
+  const matches = book !== null && Boolean(book.auction) === auction;
+  if (matches && levelCount(book) > 0) return { title: auction ? "detail.auctionBook" : "detail.book", book, line: null };
+  const reason = quote.fallback ?? (quote.cached ? quote.error : null);
+  return { title: "detail.book", book: null, line: reason ? "reason" : matches ? "detail.bookEmpty" : "detail.bookNone" };
+}
+
+// A level as a ladder rung: its depth against the largest size shown and its change % against `previousClose`.
+const rung = (level, largest, previousClose) => level && {
+  price: level.price,
+  size: level.size,
+  depth: level.size / largest,
+  change: positive(previousClose) ? (level.price - previousClose) / previousClose * 100 : null,
+};
+
+/**
+ * The ladder's rows, best first, at most 5: each `{ bid, ask }`, a side without a level at that row null. A rung is
+ * `{ price, size, depth, change }`: `depth` its size over the largest size on either side, `change` the % against
+ * `previousClose` (null without one).
+ */
+export function ladder(book, previousClose) {
+  const largest = Math.max(0, ...book.bids.map((level) => level.size), ...book.asks.map((level) => level.size));
+  const rows = [];
+  for (let i = 0; i < Math.min(5, Math.max(book.bids.length, book.asks.length)); i++) {
+    rows.push({ bid: rung(book.bids[i] ?? null, largest, previousClose), ask: rung(book.asks[i] ?? null, largest, previousClose) });
+  }
+  return rows;
+}
+
+const sizes = (levels) => levels.reduce((sum, level) => sum + level.size, 0);
+
+/** The book's totals: each side's sum, bids minus asks, and bids over asks (null without asks). */
+export function bookTotals(book) {
+  const bids = sizes(book.bids);
+  const asks = sizes(book.asks);
+  return { bids, asks, diff: bids - asks, ratio: asks > 0 ? bids / asks : null };
+}
+
+/** A count with its sign, grouped: `+1,584`, `-12`, `0`. */
+export function formatSignedCount(n) {
+  const text = formatCount(Math.abs(n));
+  return text === "0" ? text : `${n > 0 ? "+" : "-"}${text}`;
+}
+
 /**
  * The detail's second row of price levels, a cell per column of the first row (3 for a pair, else 4), or null when
  * every place is empty: the limits under high and low; in one column (`wide` false) the volume under open, in two the
