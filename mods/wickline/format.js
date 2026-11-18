@@ -193,24 +193,21 @@ export function detailBook(quote, auction) {
   return { title: "detail.book", book: null, line: reason ? "reason" : matches ? "detail.bookEmpty" : "detail.bookNone" };
 }
 
-// A level as a ladder rung: its depth against the largest size shown and its change % against `previousClose`.
-const rung = (level, largest, previousClose) => level && {
+// A level as a ladder rung, with its change % against `previousClose`.
+const rung = (level, previousClose) => level && {
   price: level.price,
   size: level.size,
-  depth: level.size / largest,
   change: positive(previousClose) ? (level.price - previousClose) / previousClose * 100 : null,
 };
 
 /**
  * The ladder's rows, best first, at most 5: each `{ bid, ask }`, a side without a level at that row null. A rung is
- * `{ price, size, depth, change }`: `depth` its size over the largest size on either side, `change` the % against
- * `previousClose` (null without one).
+ * `{ price, size, change }`, `change` the % against `previousClose` (null without one).
  */
 export function ladder(book, previousClose) {
-  const largest = Math.max(0, ...book.bids.map((level) => level.size), ...book.asks.map((level) => level.size));
   const rows = [];
   for (let i = 0; i < Math.min(5, Math.max(book.bids.length, book.asks.length)); i++) {
-    rows.push({ bid: rung(book.bids[i] ?? null, largest, previousClose), ask: rung(book.asks[i] ?? null, largest, previousClose) });
+    rows.push({ bid: rung(book.bids[i] ?? null, previousClose), ask: rung(book.asks[i] ?? null, previousClose) });
   }
   return rows;
 }

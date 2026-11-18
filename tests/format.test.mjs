@@ -512,8 +512,9 @@ const AUCTION_BOOK = { bids: levels([[2185, 1]]), asks: levels([[2200, 73]]), au
 test("The ladder", () => {
   const rows = ladder(SCENARIO_BOOK, 2170);
   assert.equal(rows.length, 5);
-  assert.deepEqual(rows[0].bid, { price: 2170, size: 2280, depth: 1, change: 0 });
-  assert.deepEqual([rows[0].ask.price, rows[0].ask.size, rows[0].ask.depth], [2175, 503, 503 / 2280]);
+  // A rung is its price, size and change: the ladder draws no depth bars.
+  assert.deepEqual(rows[0].bid, { price: 2170, size: 2280, change: 0 });
+  assert.deepEqual([rows[0].ask.price, rows[0].ask.size], [2175, 503]);
   assert.deepEqual([changeTone(rows[0].bid.change), changeTone(rows[1].bid.change), changeTone(rows[0].ask.change)], ["flat", "down", "up"]);
   const totals = bookTotals(SCENARIO_BOOK);
   assert.deepEqual([totals.bids, totals.asks, totals.diff], [4_629, 3_045, 1_584]);
@@ -560,7 +561,7 @@ test("a one-sided book", () => {
   const rows = ladder(book, 2170);
   assert.equal(rows.length, 5);
   assert.ok(rows.every((row) => row.ask === null && row.bid !== null));
-  assert.equal(rows[4].bid.depth, 1280 / 2280);
+  assert.deepEqual([rows[4].bid.price, rows[4].bid.size], [2150, 1280]);
   const totals = bookTotals(book);
   assert.deepEqual(totals, { bids: 4_629, asks: 0, diff: 4_629, ratio: null });
   const text = JSON.stringify(rows) + formatSignedCount(totals.diff);

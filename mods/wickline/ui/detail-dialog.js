@@ -17,30 +17,21 @@ const DIM_OPACITY = 0.5;
 const LADDER_FONT = null;
 // The ladder's bid sizes sit in a fixed column, so each bid price starts at the same place.
 const SIZE_W = 44;
-// A depth bar's strength over `hover`, and its inset in its 24 px band: a bar, never a highlighted row.
-const DEPTH_OPACITY = 0.6;
-const DEPTH_INSET_Y = 7;
-const DEPTH_INSET_X = 2;
 
 // The ladder's digits in LADDER_FONT.
 const digits = (el) => el.when(Boolean(LADDER_FONT), (d) => d.font_family(LADDER_FONT));
 
 // One side of a ladder row (format.js ladder): a 24 px band, the bid's size in its fixed column then its price toward the
-// center, the ask's price then its size. Behind it a thin `hover` depth bar from the band's outer edge inward, under the
-// size first, so a price stays clear unless the size is large. A price at the previous close (or without one) is plain
-// `foreground`; others take the change color. `rung` null: empty.
+// center, the ask's price then its size. A price at the previous close (or without one) is plain `foreground`; others
+// take the change color. `rung` null: empty.
 function ladderSide(view, t, q, rung, bid) {
-  const side = h_flex().flex_1().relative().h(24).px(6).items_center().justify_between();
+  const side = h_flex().flex_1().h(24).px(6).items_center().justify_between();
   if (!rung) return side;
-  const track = h_flex().absolute().top(DEPTH_INSET_Y).bottom(DEPTH_INSET_Y).left(DEPTH_INSET_X).right(DEPTH_INSET_X)
-    .when(!bid, (el) => el.justify_end())
-    .child(div().h_full().rounded(2).bg(t.hover).opacity(DEPTH_OPACITY).w(`${Math.round(rung.depth * 1000) / 10}%`));
   const plain = ["flat", "none"].includes(changeTone(rung.change));
-  const price = digits(div().relative().font_medium().text_color(plain ? t.foreground : view.changeColor(t, rung.change))
+  const price = digits(div().font_medium().text_color(plain ? t.foreground : view.changeColor(t, rung.change))
     .child(number(q, rung.price)));
-  const size = digits(div().relative().child(formatCount(rung.size)));
-  return bid ? side.child(track).child(size.w(SIZE_W).text_right()).child(price)
-    : side.child(track).child(price).child(size);
+  const size = digits(div().child(formatCount(rung.size)));
+  return bid ? side.child(size.w(SIZE_W).text_right()).child(price) : side.child(price).child(size);
 }
 
 // The right column's book: the ladder with its totals and their difference and ratio (detailBook shown), or its title
