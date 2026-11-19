@@ -160,14 +160,21 @@ export function amplitude(quote) {
 // A count the quote carries as a cell in its size unit, or null without one.
 const sizeCell = (quote, key, n, lang, tx) => (positive(n) ? { label: tx(key), ...formatSize(n, quote.sizeUnit, lang, tx) } : null);
 
+// A two-column detail's place with no value keeps its label and reads `—`.
+const emptyCell = (key, tx) => ({ label: tx(key), value: "—", unit: "" });
+
 /**
- * The two-column detail's activity, a cell per value the quote carries, in this order: volume, previous volume, turnover
- * (compact, 2 decimals: `920.47 億`, `92.05B`) and the last trade's size. A value it does not carry leaves no cell.
+ * The two-column detail's activity, always four cells in this order: volume, previous volume, turnover (compact, 2
+ * decimals: `920.47 億`, `92.05B`) and the last trade's size; a value the quote does not carry reads `—`.
  */
 export function activityCells(quote, lang, tx) {
   const turnover = positive(quote.turnover) ? { label: tx("detail.turnover"), ...compact(quote.turnover, lang, 2) } : null;
-  return [sizeCell(quote, "detail.volume", quote.volume, lang, tx), sizeCell(quote, "detail.previousVolume", quote.previousVolume, lang, tx),
-    turnover, sizeCell(quote, "detail.lastSize", quote.lastSize, lang, tx)].filter(Boolean);
+  return [
+    sizeCell(quote, "detail.volume", quote.volume, lang, tx) ?? emptyCell("detail.volume", tx),
+    sizeCell(quote, "detail.previousVolume", quote.previousVolume, lang, tx) ?? emptyCell("detail.previousVolume", tx),
+    turnover ?? emptyCell("detail.turnover", tx),
+    sizeCell(quote, "detail.lastSize", quote.lastSize, lang, tx) ?? emptyCell("detail.lastSize", tx),
+  ];
 }
 
 /**
@@ -235,10 +242,11 @@ export function formatSignedCount(n) {
 }
 
 /**
- * The detail's second row of price levels, a cell per column of the first row (3 for a pair, else 4), or null when
- * every place is empty: the limits under high and low; in one column (`wide` false) the volume under open, in two the
- * average price under open and the amplitude under previous close. A cell is `{ label, value, unit }`; a place without
- * a value is null, so it keeps its column.
+ * The detail's second row of price levels, a cell per column of the first row (3 for a pair, else 4): the limits under
+ * high and low; in one column (`wide` false) the volume under open, in two the average price under open and the
+ * amplitude under previous close. A cell is `{ label, value, unit }`. In two columns every place is drawn, one without a
+ * value reading `—` (emptyCell). In one, a place without a value is null, so it keeps its column, and the row is null
+ * when every place is empty.
  */
 export function secondRow(quote, wide, lang, tx) {
   const pair = isCryptoPair(quote.symbol);
@@ -250,6 +258,10 @@ export function secondRow(quote, wide, lang, tx) {
   const limit = (label, value) => (hasLimits(quote.limitUp, quote.limitDown) ? plain(label, number(quote, value)) : null);
   const places = [first, limit("detail.limitUpPrice", quote.limitUp), limit("detail.limitDownPrice", quote.limitDown)];
   if (!pair) places.push(wide && swing !== null ? plain("detail.amplitude", formatShare(swing, 2)) : null);
+  if (wide) {
+    const keys = ["detail.avgPrice", "detail.limitUpPrice", "detail.limitDownPrice", "detail.amplitude"];
+    return places.map((cell, i) => cell ?? emptyCell(keys[i], tx));
+  }
   return places.some(Boolean) ? places : null;
 }
 

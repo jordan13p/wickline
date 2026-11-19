@@ -105,7 +105,7 @@ export function detailView(view, t) {
       : h_flex().gap(12).child(stat("detail.open", q.open)).child(stat("detail.high", q.high)).child(stat("detail.low", q.low))
         .child(stat("detail.prevClose", q.previousClose)),
     // The second row on the same grid: the limits under high and low (at a limit or not); under open, one column's
-    // volume (its activity, dimmed with the price) or two columns' average price.
+    // volume (its activity, dimmed with the price) or two columns' average price; two columns draw every place.
     second !== null && h_flex().gap(12).children(second.map((cell, i) =>
       (i === 0 && !view.wide ? dim(statCell(t, cell)) : statCell(t, cell)))),
     v_flex().gap(2).children([...source, ...(hours.length ? [hours] : []), times].map((parts) => segments(t, parts))),
@@ -120,7 +120,7 @@ export function detailView(view, t) {
   const shown = detailBook(q, sessionName(q, session, now) === "auction");
   const book = bookBlock(view, t, q, shown, tx);
   const right = [
-    cells.length > 0 && dim(statGrid(t, cells)),
+    dim(statGrid(t, cells)),
     flow !== null && dim(innerOuterBar(flow, view.changeColor(t, -1), view.changeColor(t, 1))),
     shown.book ? dim(book) : book,
   ].filter(Boolean);

@@ -455,14 +455,24 @@ test("Other languages", () => {
 
 test("MIS alone", () => {
   const mis = { symbol: "2330.TW", source: "mis", price: 2175, previousClose: 2170, volume: 42_269, lastSize: 4_869, sizeUnit: "lot" };
-  assert.deepEqual(texts(activityCells(mis, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "最後一筆 4,869 張"]);
-  assert.deepEqual(activityCells({ symbol: "2330.TW", price: 2175 }, "zh-TW", say("zh-TW")), []);
+  assert.deepEqual(texts(activityCells(mis, "zh-TW", say("zh-TW"))), ["成交量 42,269 張", "昨日成交量 —", "成交值 —", "最後一筆 4,869 張"]);
+});
+
+test("Before the open", () => {
+  // Yahoo Finance's earlier-day quote, its activity stripped under MIS: every label stays, each value `—`.
+  const bare = { symbol: "2330.TW", source: "yahoo", price: 2215, previousClose: 2200, high: 2220, low: 2190 };
+  assert.deepEqual(texts(activityCells(bare, "zh-TW", say("zh-TW"))), ["成交量 —", "昨日成交量 —", "成交值 —", "最後一筆 —"]);
+  assert.deepEqual(texts(secondRow({ ...bare, high: null, low: null }, true, "zh-TW", say("zh-TW"))),
+    ["均價 —", "漲停價 —", "跌停價 —", "振幅 —"]);
+  assert.deepEqual(texts(activityCells(bare, "en", say("en"))), ["Volume —", "Prev volume —", "Turnover —", "Last size —"]);
+  // One column is unchanged: nothing to show, no row.
+  assert.equal(secondRow({ ...bare, high: null, low: null }, false, "zh-TW", say("zh-TW")), null);
 });
 
 test("A future", () => {
-  assert.deepEqual(texts(activityCells(YTW_WTX, "zh-TW", say("zh-TW"))), ["成交量 82,587 口", "昨日成交量 170,139 口", "最後一筆 3 口"]);
+  assert.deepEqual(texts(activityCells(YTW_WTX, "zh-TW", say("zh-TW"))), ["成交量 82,587 口", "昨日成交量 170,139 口", "成交值 —", "最後一筆 3 口"]);
   const row = secondRow(YTW_WTX, true, "zh-TW", say("zh-TW"));
-  assert.equal(row[0], null);
+  assert.equal(text(row[0]), "均價 —");
   assert.equal(row.length, 4);
 });
 
