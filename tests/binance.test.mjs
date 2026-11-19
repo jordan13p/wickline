@@ -24,6 +24,9 @@ test("reads Binance's 24-hour line", () => {
   assert.equal(binanceKlinesUrl(BASE, "BTC/USDT"), "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96");
   assert.deepEqual(decodeKlines(ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"], "junk"])), { series: [1.5, 1.75], times: [1, 2] });
   assert.throws(() => decodeKlines({ status: 400, ok: false, text: "" }));
+  // No bar kept: no line points, and no times key.
+  assert.deepEqual(decodeKlines(ok(["junk"])), { series: [] });
+  assert.deepEqual(decodeKlines(ok([])), { series: [] });
 });
 
 test("binance batches quotes and asks lines per pair", () => {

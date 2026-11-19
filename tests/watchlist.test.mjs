@@ -19,6 +19,7 @@ import {
 import { MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, decodeStockList, yahootw } from "../mods/wickline/providers/yahootw.js";
 import { taipeiDay } from "../mods/wickline/calendar.js";
+import { packTimes } from "../mods/wickline/handover.js";
 
 const BASE = "https://data-api.binance.vision";
 
@@ -431,6 +432,12 @@ const ytw0050 = (fields) => ({ symbol: "0050.TW", source: "yahootw", price: 189.
 test("mergeOverlay: the live price is appended at its own trade time", () => {
   assert.equal(mergeOverlay(undefined, ytw0050({ tradeTime: taipei("10:31:40") }), line0050).times.at(-1), taipei("10:31:40"));
   assert.equal(mergeOverlay(undefined, ytw0050({}), line0050).times.at(-1), taipei("10:32:05"));          // no trade time: the quote's
+});
+test("mergeOverlay: the appended time is a whole second, so the line's times are handed on", () => {
+  const traded = mergeOverlay(undefined, ytw0050({ tradeTime: taipei("10:31:40") + 250 }), line0050);
+  assert.equal(traded.times.at(-1), taipei("10:31:40"));
+  assert.deepEqual(packTimes(traded).timesPacked.d, [60, 60, 40]);
+  assert.equal(mergeOverlay(undefined, ytw0050({ timestamp: taipei("10:32:05") + 999 }), line0050).times.at(-1), taipei("10:32:05"));
 });
 test("mergeOverlay: a quiet stock's appended price is never before the line's last point", () => {
   const merged = mergeOverlay(undefined, ytw0050({ tradeTime: taipei("09:17:12") }), line0050);

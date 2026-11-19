@@ -115,3 +115,11 @@ test("a Yahoo answer without bar times keeps its line and no times", () => {
   assert.equal(q.series.length, 79);
   assert.equal("times" in q, false);
 });
+test("a Yahoo answer without a close gives no times either", () => {
+  const body = jsonFixture("yahoo-aapl-5m");
+  const bars = body.chart.result[0].indicators.quote[0];
+  bars.close = bars.close.map(() => null);
+  const q = decodeYahoo("AAPL", ok(body), Date.parse("2026-11-18T21:05:00Z"));
+  assert.deepEqual(q.series, []);
+  assert.equal("times" in q, false);
+});

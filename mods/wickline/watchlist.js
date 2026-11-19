@@ -113,8 +113,8 @@ export function pickOverlay(byProvider, order, now, base = null, flagged = false
  * A real-time overlay's fields over the Yahoo base quote. The trading periods, the currency and the
  * name stay the base's (the overlay's name is kept as `localName`); so does the line, unless the
  * overlay's source gave its own (`line`, `{ day, series, times }`) on the overlay's trading day (`overlay.day`):
- * then that line, ending at the shown price. That price's time is its trade time (else the quote's), never before the
- * line's last point; an own line without a time per value gives no times, and the base's times go with the base's line
+ * then that line, ending at the shown price. That price's time is its trade time (else the quote's) in whole seconds,
+ * never before the line's last point; an own line without a time per value gives no times, and the base's times go with the base's line
  * only. `chartSource` names where the line came from, and
  * `chartTimestamp` and `chartFetchedAt` keep that quote's times, so the line's state is judged by its own
  * quote. Works with no base yet. A quote over itself (a symbol's sole source, base and overlay from one source)
@@ -147,9 +147,10 @@ export function mergeOverlay(base, overlay, line) {
   // The base's own line, never a quote's over itself.
   const fallback = ownPrice || !samePeriod ? null : base;
   // A quiet stock's last trade can be older than the line's last (carried) minute: the appended point never goes back.
+  // Whole seconds, as the line's own, so the hand-over can pack them.
   const timed = own && Array.isArray(line.times) && line.times.length === line.series.length;
-  const times = timed ? [...line.times, Math.max(overlay.tradeTime ?? overlay.timestamp, line.times.at(-1))]
-    : own ? undefined : fallback?.times;
+  const appendedAt = timed && Math.max(overlay.tradeTime ?? overlay.timestamp, line.times.at(-1));
+  const times = timed ? [...line.times, Math.floor(appendedAt / 1000) * 1000] : own ? undefined : fallback?.times;
   const { cached, times: _times, ...price } = merged;
   return {
     ...price,

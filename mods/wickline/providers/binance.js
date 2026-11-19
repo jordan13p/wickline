@@ -65,7 +65,7 @@ export function binanceKlinesUrl(base, pair) {
 }
 
 /**
- * Closing prices, oldest first, with each bar's open time (`times`, absent when not every one is usable); throws when
+ * Closing prices, oldest first, with each bar's open time (`times`, absent when none is kept or not every one is usable); throws when
  * Binance answers with anything else.
  */
 export function decodeKlines(response) {
@@ -76,7 +76,7 @@ export function decodeKlines(response) {
   if (!Array.isArray(body)) throw new QuoteError("binance.unreadable");
   const { series, times } = cleanTimedSeries(body.map((bar) => (Array.isArray(bar) ? Number(bar[4]) : NaN)),
     body.map((bar) => (Array.isArray(bar) ? Number(bar[0]) : NaN)));
-  return { series, ...(times && { times }) };
+  return { series, ...(times?.length && { times }) };
 }
 
 /** @type {Provider} */
