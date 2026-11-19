@@ -3366,3 +3366,17 @@ test("a Yahoo 奇摩股市 auction book belongs to the window it was fetched in"
   assert.equal("book" in morning, false);
   assert.equal(detailBook(morning, true).line, "detail.bookNone");
 });
+
+test("an earlier day's Yahoo 奇摩股市 book never shows as the morning auction's", () => {
+  // A stock only Yahoo 奇摩股市 prices keeps yesterday's last trade, with its closing book, in the morning auction.
+  const traded = taipei("13:30:00", "2026-11-16");
+  const fetchedAt = taipei("08:40:00");
+  const own = { symbol: "6488.TWO", source: "yahootw", exchange: "TWO", price: 480, previousClose: 475, timestamp: traded,
+    tradeTime: traded, day: taipeiDay(traded), fetchedAt, book: YTW_BOOK };
+  const w = watchHolding(ONLY_YAHOOTW, ["6488.TWO"], { overlays: { "6488.TWO": { yahootw: own } } });
+  w.twOnly.add("6488.TWO");
+  const q = w.shown("6488.TWO", fetchedAt + 5_000);
+  assert.equal(q.source, "yahootw");
+  assert.equal("book" in q, false);
+  assert.deepEqual(detailBook(q, true), { title: "detail.book", book: null, line: "detail.bookNone" });
+});

@@ -431,8 +431,8 @@ export class Watchlist {
    * The book a Taiwan row shows (see marked), its price and activity untouched, or null: while MIS's flag holds the
    * price (`held`) and that flag carried levels, its auction book; else the quote's own. A Taiwan stock's book from
    * Yahoo 奇摩股市 fetched inside a call auction (auctionWindowStart) is that auction's: marked `auction: true` while
-   * `now` is still in the same window, and none once it is not, so it never shows as the market's book nor as another
-   * auction's. Without a book, an empty one while MIS's latest answer had no level (`noLevels`).
+   * `now` is still in the same window and the quote traded on the fetch's Taipei day, and none otherwise, so it never
+   * shows as the market's book, as another auction's, nor as an earlier day's last book. Without a book, an empty one while MIS's latest answer had no level (`noLevels`).
    */
   rowBook(symbol, quote, held, now) {
     if (held && this.auctionBooks[symbol]) return this.auctionBooks[symbol];
@@ -441,7 +441,9 @@ export class Watchlist {
       const fetchedIn = quote.source === yahootw.id && kindOf(symbol) === "stock"
         ? auctionWindowStart(quote.fetchedAt) : null;
       if (fetchedIn === null) return book;
-      return fetchedIn === auctionWindowStart(now) ? { ...book, auction: true } : null;
+      // An earlier day's last book, still sent before today's first trade, is never this auction's.
+      const tradedToday = taipeiDay(quote.tradeTime ?? quote.timestamp) === taipeiDay(quote.fetchedAt);
+      return tradedToday && fetchedIn === auctionWindowStart(now) ? { ...book, auction: true } : null;
     }
     return this.noLevels[symbol] ? { bids: [], asks: [] } : null;
   }
