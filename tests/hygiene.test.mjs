@@ -319,20 +319,35 @@ test("README and RECIPE show the preview and say how to open Wickline", () => {
   }
 });
 
-// herdr.dev/mods drops a repo whose recipe exceeds about 64 KiB; keep headroom below it.
+// herdr.dev/mods drops a repo whose recipe exceeds about 64 KiB; 57,000 keeps a margin below it.
 test("RECIPE.md stays under the gallery's size limit", () => {
-  assert.ok(statSync(new URL("RECIPE.md", ROOT)).size <= 60_000, "RECIPE.md over 60,000 bytes");
-});
-
-test("RECIPE-internals.md stays a short companion", () => {
-  assert.ok(statSync(new URL("RECIPE-internals.md", ROOT)).size <= 30_000, "RECIPE-internals.md over 30,000 bytes");
+  assert.ok(statSync(new URL("RECIPE.md", ROOT)).size <= 57_000, "RECIPE.md over 57,000 bytes");
 });
 
 // Field-level build details live beside the recipe, so the gallery's copy stays under its limit.
-test("RECIPE.md links to RECIPE-internals.md, which exists", () => {
-  assert.match(read(new URL("RECIPE.md", ROOT)), /\]\(RECIPE-internals\.md\)/);
-  assert.ok(statSync(new URL("RECIPE-internals.md", ROOT)).isFile(), "RECIPE-internals.md missing");
-  assert.match(read(new URL("RECIPE-internals.md", ROOT)), /^# Wickline — internals$/m);
+const COMPANIONS = { "RECIPE-internals.md": "# Wickline — internals", "RECIPE-sources.md": "# Wickline — sources" };
+test("each RECIPE companion stays short", () => {
+  for (const name of Object.keys(COMPANIONS)) assert.ok(statSync(new URL(name, ROOT)).size <= 30_000, `${name} over 30,000 bytes`);
+});
+
+test("RECIPE.md links to each companion, which exists", () => {
+  for (const [name, heading] of Object.entries(COMPANIONS)) {
+    assert.match(read(new URL("RECIPE.md", ROOT)), new RegExp(`\\]\\(${name.replace(".", "\\.")}[)#]`));
+    assert.ok(statSync(new URL(name, ROOT)).isFile(), `${name} missing`);
+    assert.match(read(new URL(name, ROOT)), new RegExp(`^${heading}$`, "m"));
+  }
+  assert.match(read(new URL("RECIPE-internals.md", ROOT)), /\]\(RECIPE-sources\.md[)#]/);
+});
+
+// Only ASCII anchors are checked (a `#yahoo-奇摩股市` anchor is skipped): companion headings stay ASCII ("Yahoo TW Stock").
+test("every link into a RECIPE companion lands on one of its headings", () => {
+  const slug = (h) => h.toLowerCase().replace(/[^a-z0-9 -]/g, "").trim().replace(/ /g, "-");
+  for (const doc of ["RECIPE.md", ...Object.keys(COMPANIONS), "README.md", "README.zh-TW.md"]) {
+    for (const [, target, anchor] of read(new URL(doc, ROOT)).matchAll(/\]\((RECIPE-[a-z]+\.md)#([a-z0-9-]+)\)/g)) {
+      const slugs = [...read(new URL(target, ROOT)).matchAll(/^#+ (.+)$/gm)].map(([, h]) => slug(h));
+      assert.ok(slugs.includes(anchor), `${doc} → ${target}#${anchor}`);
+    }
+  }
 });
 
 // The settings tab's disclaimer block and the READMEs carry the same sentences.
@@ -445,10 +460,9 @@ const NOTHING_ELSE = {
   en: /No other programs run/, "zh-TW": /不執行其他任何程式/, "zh-CN": /不运行其他任何程序/,
   ja: /それ以外のプログラムは実行しません/, ko: /그 밖의 프로그램은 실행하지 않습니다/,
 };
-// The companion holds build details, not the disclosure: it is only checked for what it must never claim.
-const COMPANION = "RECIPE-internals.md";
+// The companions hold build details, not the disclosure: they are only checked for what they must never claim.
 test("the disclosure names the chmod, the fixed Finnhub host and how to revoke the key", () => {
-  const docs = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"], [COMPANION, "en"]].map(([name, lang]) => [name, lang, read(new URL(name, ROOT))]);
+  const docs = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"], ...Object.keys(COMPANIONS).map((name) => [name, "en"])].map(([name, lang]) => [name, lang, read(new URL(name, ROOT))]);
   for (const lang of Object.keys(STRINGS)) {
     docs.push([`${lang} privacy`, lang, ["privacy.hosts", "privacy.programs", "privacy.storage"].map((key) => STRINGS[lang][key]).join(" ")]);
   }
@@ -463,10 +477,10 @@ test("the disclosure names the chmod, the fixed Finnhub host and how to revoke t
       assert.match(programs, /macOS/, `macOS in ${name}`);
       assert.match(programs, /Linux/, `Linux in ${name}`);
       assert.match(programs, NOTHING_ELSE[lang], `nothing else runs in ${name}`);
-    } else if (name !== COMPANION) {
+    } else if (!(name in COMPANIONS)) {
       assert.ok(text.includes("chmod 600"), `chmod 600 in ${name}`);
     }
-    if (name !== COMPANION) assert.match(text, revoke[lang], `revoke in ${name}`);
+    if (!(name in COMPANIONS)) assert.match(text, revoke[lang], `revoke in ${name}`);
     if (settable[lang]) assert.doesNotMatch(text, settable[lang], `a settable Finnhub host in ${name}`);
     assert.doesNotMatch(text, /Programs: none|No programs|(?<!除此之外)不執行任何程式|不執行程式|(?<!除此之外)不运行任何程序/, `"no programs" in ${name}`);
   }

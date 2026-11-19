@@ -184,4 +184,4 @@ node --test tests/
 herdr-app check "$PWD/mods/wickline"
 ```
 
-`RECIPE.md` is the full brief: what Wickline draws, how it behaves and what it is built from; `RECIPE-internals.md` holds the field-level build details and each source's detailed rules it links to.
+`RECIPE.md` is the full brief: what Wickline draws, how it behaves and what it is built from; `RECIPE-sources.md` holds each source's requests, the fields its decoder reads and its detailed rules, and `RECIPE-internals.md` the other field-level build details, both linked from it.
