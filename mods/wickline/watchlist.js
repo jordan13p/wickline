@@ -113,9 +113,9 @@ export function pickOverlay(byProvider, order, now, base = null, flagged = false
  * A real-time overlay's fields over the Yahoo base quote. The trading periods, the currency and the
  * name stay the base's (the overlay's name is kept as `localName`); so does the line, unless the
  * overlay's source gave its own (`line`, `{ day, series, times }`) on the overlay's trading day (`overlay.day`):
- * then that line, ending at the shown price. That price's time is its trade time (else the quote's) in whole seconds,
- * never before the line's last point; an own line without a time per value gives no times, and the base's times go with the base's line
- * only. `chartSource` names where the line came from, and
+ * then that line, ending at the shown price. That price's time is its trade time (else the quote's) in whole
+ * seconds, never before the line's last point; an own line without a time per value gives no times, and the base's
+ * times go with the base's line only. `chartSource` names where the line came from, and
  * `chartTimestamp` and `chartFetchedAt` keep that quote's times, so the line's state is judged by its own
  * quote. Works with no base yet. A quote over itself (a symbol's sole source, base and overlay from one source)
  * has no line but the overlay's own: without one, no line and no `chartSource`. `cached` is the shown price's

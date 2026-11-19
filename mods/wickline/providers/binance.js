@@ -65,8 +65,8 @@ export function binanceKlinesUrl(base, pair) {
 }
 
 /**
- * Closing prices, oldest first, with each bar's open time (`times`, absent when none is kept or not every one is usable); throws when
- * Binance answers with anything else.
+ * Closing prices, oldest first, with each bar's open time (`times`, absent when none is kept or not every one is
+ * usable); throws when Binance answers with anything else.
  */
 export function decodeKlines(response) {
   // Rate limited as the tickers are: the same backoff.
