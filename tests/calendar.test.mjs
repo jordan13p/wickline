@@ -108,7 +108,7 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
     ["stock", T.open + 599_999, stock(observation({ realtime: rt(T.open + 590_000) })), null],
     ["stock", T.open + 600_000, stock(observation({ realtime: rt(T.open + 480_000) })), quiet()],           // latest answer 09:08: counts
     ["stock", T.open + 600_000, stock(observation({ realtime: rt(T.open + 479_999) })), null],              // older than deadline − 2 min
-    ["stock", T.open + 720_000, stock(observation({ realtime: rt(T.open + 3_000) })), null],                // one answer at 09:00:03 (I1)
+    ["stock", T.open + 720_000, stock(observation({ realtime: rt(T.open + 3_000) })), null],                // one answer at 09:00:03, then an outage: never counts
     ["stock", T.open + 1_799_999, stock(observation({ delayed: yf(T.open + 1_790_000) })), null],
     ["stock", T.open + 1_800_000, stock(observation({ delayed: yf(T.open + 1_790_000) })), quiet("yahoo")],
     ["stock", T.open + 1_800_000, stock(observation({ traded: true, realtime: rt(T.open + 1_790_000) })), null],
@@ -132,7 +132,7 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
       [`stock ${T.open}`]: observation({ traded: true }) }), night],
     // After midnight (choice 4): Thu 11/12 02:00, the night of 11/11 without trades.
     ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), night],
-    // A futures day without trades (review 2, M4 and M5): carried from 15:00 to the night's deadline unless a stock
+    // A futures day without trades: carried from 15:00 to the night's deadline unless a stock
     // traded, kept after midnight, gone at 05:00.
     ["future", T.night + 30_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.night - 10_000) }) }), quiet()],
     ["future", T.night + 30_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.night - 10_000) }), [`stock ${T.open}`]: observation({ traded: true }) }), null],
@@ -143,7 +143,7 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
         [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 5_000) }) }), closure]),
     ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), quiet()],
     ["future", at("2026-11-11T21:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(at("2026-11-11T20:59:00Z")) }) }), null],
-    // The fixed source order names the closure (review 2, M3): both real-time sources recent, Yahoo 奇摩股市; only
+    // The fixed source order names the closure: both real-time sources recent, Yahoo 奇摩股市; only
     // MIS recent, MIS; a real-time answer before a delayed one.
     ["stock", T.open + 600_000, stock(observation({ realtime: [{ at: T.open + 590_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet()],
     ["stock", T.open + 600_000, stock(observation({ realtime: [{ at: T.open + 300_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet("mis")],

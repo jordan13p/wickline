@@ -401,7 +401,7 @@ test("the disclosure says Yahoo 奇摩股市 is asked for futures too", () => {
   }
 });
 
-// What the host is asked, per the spec's "Holiday schedule host named": while the list holds a Taiwan symbol, by GET,
+// What every disclosure says beside the holiday schedule's host: while the list holds a Taiwan symbol, by GET,
 // once a day per open copy and hourly after a failure, with no key, nothing stored.
 const SCHEDULE_WORDS = {
   en: [/once a day per open copy/, /retried hourly after a failure/, /Taiwan symbol/, /no key/, /nothing (from it )?(is )?stored/],

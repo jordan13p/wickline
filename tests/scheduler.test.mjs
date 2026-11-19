@@ -892,7 +892,7 @@ test("0700.HK on Yahoo reads 午休 within a second of 12:00", async () => {
   await stop(w, host, runs);
 });
 
-// A copy hidden from the start never fetches, so it has no periods and no 12:00 edge to skip (review 1, I3): it
+// A copy hidden from the start never fetches, so it has no periods and no 12:00 edge to skip: it
 // shows one round first. 11:58:30 keeps the quote's own stale wake (its time + 17 min = 12:00:30) and the next
 // round (11:59:30) out of [12:00, 12:00:01].
 test("a docked copy hidden after a round does not wake for a boundary", async () => {

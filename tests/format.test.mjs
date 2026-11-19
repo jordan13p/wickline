@@ -294,7 +294,7 @@ test("the 今日無成交 label, header and session times", () => {
     assert.equal(freshnessLabel(wtx, fresh, now, "en", en), "No trades today · Nov 11 04:59");
     assert.equal(t("zh-TW", `session.${sessionName(wtx, "noTrades", now)}`), "今日無成交");
     assert.deepEqual(detailSource(wtx, "noTrades", now, zh), [["價格：今日無成交 · Yahoo 奇摩股市"], ["走勢：今日無成交 · Yahoo 奇摩股市"]]);
-    // Yahoo Finance alone (spec "Delayed source on a closed day", review 2 I4): the header 今日無成交, never 休市, and
+    // Yahoo Finance alone, a delayed source on a closed day: the header 今日無成交, never 休市, and
     // the delayed line keeps its text.
     const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: at("2026-11-10T05:30:00Z"), closure: { kind: "noTrades", source: "yahoo" } };
     assert.equal(t("zh-TW", `session.${sessionName(base, "noTrades", now)}`), "今日無成交");
