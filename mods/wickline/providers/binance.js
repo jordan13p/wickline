@@ -64,7 +64,10 @@ export function binanceKlinesUrl(base, pair) {
   return `${endpoint(base, "klines")}?symbol=${encodeURIComponent(pair.replace("/", ""))}&interval=15m&limit=96`;
 }
 
-/** Closing prices, oldest first, with each bar's open time (`times`, absent when not every one is usable); throws when Binance answers with anything else. */
+/**
+ * Closing prices, oldest first, with each bar's open time (`times`, absent when not every one is usable); throws when
+ * Binance answers with anything else.
+ */
 export function decodeKlines(response) {
   // Rate limited as the tickers are: the same backoff.
   if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
