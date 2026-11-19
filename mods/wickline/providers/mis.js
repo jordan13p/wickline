@@ -65,7 +65,7 @@ function bookPrice(bid, ask, up, down) {
  * has none) has no overlay and no error either: its book is the auction's, never a price. A name-only row carries
  * no `ts`. Its symbol goes in `auction`, mapped to the flagged snapshot's time, and its levels, when it has any, in
  * `auctionBook` as `{ bids, asks, auction: true }`. A priced quote carries its own `book`, `{ bids, asks }` (levels,
- * either side possibly empty). A named row neither flagged nor priced whose bids and asks give no level goes in
+ * either side possibly empty). A named row neither flagged nor priced whose bids and asks give no priced level goes in
  * `noLevels` (true): MIS answered, with no order yet. Each of the three keys is there only when not empty.
  */
 export function decodeMis(symbols, response, now) {
@@ -90,6 +90,8 @@ export function decodeMis(symbols, response, now) {
     const time = Number(row.tlong);
     const book = { bids: levels(row.b, row.g), asks: levels(row.a, row.f) };
     const leveled = book.bids.length > 0 || book.asks.length > 0;
+    // A market order alone is no order book yet: a row without a priced level still reads as having none.
+    const priced = [...book.bids, ...book.asks].some((level) => level.price !== null);
     if (row.ts === "1" && positive(time)) {
       auction[symbol] = time;
       if (leveled) auctionBook[symbol] = { ...book, auction: true };
@@ -102,7 +104,7 @@ export function decodeMis(symbols, response, now) {
     const lastSize = positiveOrNull(row.tv);
     const price = traded ?? bookPrice(bid, ask, limits.limitUp, limits.limitDown);
     if (!price || !positive(time)) {
-      if (name && !leveled) noLevels[symbol] = true;
+      if (name && !priced) noLevels[symbol] = true;
       continue;
     }
     if (!withinLimits(price, limits.limitUp, limits.limitDown)) {

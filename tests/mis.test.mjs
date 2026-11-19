@@ -87,10 +87,10 @@ test("decodes the recorded answer", () => {
 
 test("midpoint and no price", () => {
   assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "100.5_100_", a: "101.5_102_", u: "-", w: "-" })).quotes["2330.TW"].price, 101);
-  const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000", f: "-" }));
+  const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000" }));
   // No price, but the name still comes through (see "a name without a price").
   const named = { "2330.TW": "台積電" };
-  // Nor any level: MIS answered with no order yet.
+  // Nor any priced level (a market order alone is no order book yet): MIS answered with no order yet.
   assert.deepEqual(none, { quotes: {}, errors: {}, names: named, noLevels: { "2330.TW": true } });
   // One side only is not a midpoint.
   assert.deepEqual(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2270.0000_" })), { quotes: {}, errors: {}, names: named });

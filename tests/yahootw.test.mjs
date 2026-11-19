@@ -829,4 +829,9 @@ test("A locked stock's market order", () => {
   const rows = jsonFixture("ytw-locked-1324").map((row) => (row.symbol !== "6488.TWO" ? row : { ...row,
     orderbook: [...row.orderbook, { ask: "-", askVolK: "-", bid: "-", bidVolK: "-" }] }));
   assert.equal(decodeStockList(["6488.TWO"], ok(rows), at("2026-11-19T05:24:00Z")).quotes["6488.TWO"].book.asks.length, 5);
+  // An unpriced level whose size the check cannot read counts 0, so it is never shown as a market order either.
+  const odd = jsonFixture("ytw-locked-1324").map((row) => (row.symbol !== "6488.TWO" ? row : { ...row,
+    orderbook: [{ ask: "-", askVolK: " 7", bid: "-", bidVolK: 0 }, ...row.orderbook] }));
+  const oddAsks = decodeStockList(["6488.TWO"], ok(odd), at("2026-11-19T05:24:00Z")).quotes["6488.TWO"].book.asks;
+  assert.deepEqual(levelPairs(oddAsks), [[null, 171], [490, 244], [490.5, 1], [491, 2], [491.5, 2]]);
 });
