@@ -3453,3 +3453,35 @@ test("the opening auction with both sources shows MIS's flagged book", () => {
   assert.deepEqual(q.book, { ...w.auctionBooks["2330.TW"], auction: true });
   assert.notEqual(q.book.bids[0].price, 2175);
 });
+
+test("the opening auction's Yahoo 奇摩股市 book goes with a priced answer, a failure or the source turned off", () => {
+  const trial = () => {
+    const w = watchHolding(ONLY_YAHOOTW, ["2330.TW"], { quotes: { "2330.TW": wedClose("2330.TW") } });
+    ytwAnswerAt(w, thu("08:46:19"));
+    assert.equal(w.shown("2330.TW", thu("08:46:25")).book.auction, true);
+    return w;
+  };
+  const gone = (w) => {
+    assert.equal("2330.TW" in w.ytwAuctionBooks, false);
+    const q = w.shown("2330.TW", thu("08:46:40"));
+    assert.ok(!q.book || q.book.bids[0]?.size !== 39, "not the trial book");
+  };
+  // A priced answer (a trade at 08:46:30, without a book of its own).
+  const priced = trial();
+  priced.host.clock = thu("08:46:35");
+  const rows = PREOPEN_ROWS.map((row) => (row.symbol !== "2330.TW" ? row : { ...row, marketStatus: "open", orderbook: undefined,
+    price: { raw: "2180", fmt: "2,180", sort: 2180 }, regularMarketTime: "2026-11-19T00:46:30.000Z" }));
+  const request = yahootw.requests(["2330.TW"], { anyDay: [] })[0];
+  priced.apply(yahootw, request, yahootw.decode(request, ok(rows), priced.host.clock));
+  assert.equal(priced.shown("2330.TW", thu("08:46:40")).price, 2180);
+  gone(priced);
+  // A failed request.
+  const failed = trial();
+  failed.fail(yahootw, "2330.TW", { code: "network" });
+  gone(failed);
+  // Yahoo 奇摩股市 turned off.
+  const off = trial();
+  off.host.prefs = { version: 1, sources: { tw: { yahootw: false } } };
+  off.sync();
+  gone(off);
+});
