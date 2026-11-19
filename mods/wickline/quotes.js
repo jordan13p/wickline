@@ -148,9 +148,25 @@ export const currencyCode = (value) => (typeof value === "string" && /^[A-Z]{3}$
 
 const MAX_POINTS = 400;
 
-/** Finite closes in order; gaps (null bars) are dropped. */
-export function cleanSeries(values) {
-  if (!Array.isArray(values)) return [];
-  const series = values.filter((value) => positive(value));
-  return series.length > MAX_POINTS ? series.slice(series.length - MAX_POINTS) : series;
+/**
+ * Finite closes in order with the time of each kept close; gaps (null bars) are dropped, each with its time. `times` is
+ * null when they cannot be matched to the values: not an array, another length than `values`, or a time that is not a positive
+ * number among those kept after the cap (a null time must never become 1970).
+ */
+export function cleanTimedSeries(values, times) {
+  if (!Array.isArray(values)) return { series: [], times: null };
+  const aligned = Array.isArray(times) && times.length === values.length;
+  const series = [];
+  const kept = [];
+  values.forEach((value, i) => {
+    if (!positive(value)) return;
+    series.push(value);
+    if (aligned) kept.push(times[i]);
+  });
+  const start = Math.max(0, series.length - MAX_POINTS);
+  const keptTimes = kept.slice(start);
+  return { series: series.slice(start), times: aligned && keptTimes.every(positive) ? keptTimes : null };
 }
+
+/** Finite closes in order; gaps (null bars) are dropped. */
+export const cleanSeries = (values) => cleanTimedSeries(values, null).series;

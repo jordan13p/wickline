@@ -1,6 +1,6 @@
 // Binance Spot market data: pairs written BASE/QUOTE, in batches, plus a 24-hour line per pair.
 // No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanSeries, positive, positiveOrNull, sized } from "../quotes.js";
+import { HEADERS, QuoteError, cleanTimedSeries, positive, positiveOrNull, sized } from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the default Binance host (a public market-data mirror).
@@ -71,7 +71,7 @@ export function decodeKlines(response) {
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
   const body = parseJson(response.text, "binance.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("binance.unreadable");
-  return cleanSeries(body.map((bar) => Array.isArray(bar) ? Number(bar[4]) : NaN));
+  return cleanTimedSeries(body.map((bar) => Array.isArray(bar) ? Number(bar[4]) : NaN), null).series;
 }
 
 /** @type {Provider} */

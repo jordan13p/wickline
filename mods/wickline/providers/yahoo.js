@@ -1,6 +1,6 @@
 // Yahoo Finance: stocks, ETFs, indices and currencies, one ticker per request.
 // No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanSeries, cleanText, currencyCode, exchangeCode, normalizeSymbol, positive, sized } from "../quotes.js";
+import { HEADERS, QuoteError, cleanSeries, cleanText, cleanTimedSeries, currencyCode, exchangeCode, normalizeSymbol, positive, sized } from "../quotes.js";
 import { kindOf, marketOf } from "../markets.js";
 import { failEach, parseJson } from "./provider.js";
 
@@ -47,7 +47,7 @@ export function decodeYahoo(symbol, response, now) {
   }
   const close = positive(meta.previousClose) ? meta.previousClose : meta.chartPreviousClose;
   const bars = body.chart.result[0].indicators?.quote?.[0] ?? {};
-  const series = cleanSeries(bars.close);
+  const series = cleanTimedSeries(bars.close, null).series;
   const opens = cleanSeries(bars.open);
   const highs = cleanSeries(bars.high);
   const lows = cleanSeries(bars.low);
