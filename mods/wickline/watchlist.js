@@ -123,22 +123,26 @@ export function pickOverlay(byProvider, order, now, base = null, flagged = false
  * another trading period (yesterday's line under today's first price) is no line: none, no `chartSource`, no
  * `chartCached`. The activity (quotes.js ACTIVITY_FIELDS) is the price source's: an overlay over another source's base
  * starts from the base without its own, except that an overlay with no volume of its own keeps a real-time base's
- * (Finnhub's price beside Yahoo Finance's live volume); a delayed base never lends any.
+ * (Finnhub's price beside Yahoo Finance's live volume) when that base is not cached and is from the overlay's period;
+ * a delayed base never lends any.
  */
 export function mergeOverlay(base, overlay, line) {
   if (!overlay) return base;
   // The price is the base's own: a quote over itself.
   const ownPrice = base?.source === overlay.source;
-  const lendsActivity = ownPrice || ((overlay.volume ?? null) === null && Boolean(base) && isRealtime(base));
+  // The base's line and activity come only from the overlay's period: both times before, or both at or after, the
+  // start of the base's regular period (epoch ms, no time zone needed).
+  const start = base?.periods?.regular?.[0];
+  const samePeriod = start === undefined || (base.timestamp < start) === (overlay.timestamp < start);
+  // A kept (cached) or another period's volume never stands beside a fresh price.
+  const lendsActivity = ownPrice
+    || ((overlay.volume ?? null) === null && Boolean(base) && isRealtime(base) && !base.cached && samePeriod);
   const merged = { ...(lendsActivity ? base : withoutActivity(base)) };
   for (const [key, value] of Object.entries(overlay)) if (value !== null && value !== undefined) merged[key] = value;
   const previousClose = merged.previousClose ?? null;
   // A copy hidden overnight may hold yesterday's line next to today's first price.
   const own = line?.series.length && line.day === overlay.day ? line.series : null;
-  // The base's own line, never a quote's over itself, and only from the overlay's period: both times before, or both
-  // at or after, the start of the base's regular period (epoch ms, no time zone needed).
-  const start = base?.periods?.regular?.[0];
-  const samePeriod = start === undefined || (base.timestamp < start) === (overlay.timestamp < start);
+  // The base's own line, never a quote's over itself.
   const fallback = ownPrice || !samePeriod ? null : base;
   const { cached, ...price } = merged;
   return {

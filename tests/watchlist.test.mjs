@@ -3380,3 +3380,23 @@ test("an earlier day's Yahoo 奇摩股市 book never shows as the morning auctio
   assert.equal("book" in q, false);
   assert.deepEqual(detailBook(q, true), { title: "detail.book", book: null, line: "detail.bookNone" });
 });
+
+test("a Finnhub price never shows a cached or an earlier session's Yahoo Finance volume", () => {
+  // Monday's close (11/16 21:00 UTC) with that day's whole volume; Tuesday's first Finnhub price.
+  const finnhubQuote = { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: at("2026-11-17T14:30:05Z"),
+    fetchedAt: at("2026-11-17T14:30:05Z") };
+  const monday = { symbol: "AAPL", source: "yahoo", exchange: "NMS", price: 230, timestamp: at("2026-11-16T21:00:00Z"),
+    fetchedAt: at("2026-11-16T21:00:00Z"), volume: 48_213_500, sizeUnit: "share", periods: day("2026-11-16T14:30:00Z", "2026-11-16T21:00:00Z") };
+  // Its last fetch failed: the volume is the kept one, whatever its periods.
+  const cached = mergeOverlay({ ...monday, cached: true }, finnhubQuote, null);
+  assert.equal("volume" in cached, false);
+  assert.equal("sizeUnit" in cached, false);
+  // Fetched before the open with Tuesday's periods: Monday's volume, not today's.
+  const tuesday = day("2026-11-17T14:30:00Z", "2026-11-17T21:00:00Z");
+  const before = mergeOverlay({ ...monday, fetchedAt: at("2026-11-17T14:00:00Z"), periods: tuesday }, finnhubQuote, null);
+  assert.equal("volume" in before, false);
+  // A live base in the price's own period still lends its volume.
+  const live = mergeOverlay({ ...monday, timestamp: at("2026-11-17T14:30:00Z"), fetchedAt: at("2026-11-17T14:30:00Z"), periods: tuesday },
+    finnhubQuote, null);
+  assert.equal(live.volume, 48_213_500);
+});
