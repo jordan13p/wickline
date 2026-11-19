@@ -156,7 +156,9 @@ function checkStatus(response) {
  * the open, every stock halted) does not. `newestTrade`, only when it has an entry: per market clock ("stock",
  * "future"), the newest trade time among the requested rows with a positive price, a trade time not further ahead
  * than the decoder accepts (a future's 5 minutes, a stock's today) and no delay, from any earlier day too, so a
- * session that has not traded yet can be told apart (Watchlist#noteTrade).
+ * session that has not traded yet can be told apart (Watchlist#noteTrade). `auctionBook`, only when it has an entry: by
+ * symbol, the book of a stock row in the opening auction (`marketStatus` `preopen`, no price, not delayed) whose sides add
+ * up (book), with at least one level, as `{ bids, asks, auction: true }`; such a row is never a price.
  */
 export function decodeStockList(symbols, response, now, anyDay = []) {
   checkStatus(response);
@@ -173,6 +175,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   const names = {};
   let anyPrice = false;
   const newestTrade = {};
+  const auctionBook = {};
   for (const row of body) {
     const symbol = typeof row?.symbol === "string" && wanted.has(row.symbol) ? row.symbol : null;
     if (!symbol) continue;
@@ -200,6 +203,11 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     // so the kept price reads cached rather than taken for a name-only answer. A price with no trade time is refused
     // the same way: there is no trade to date it by.
     if (price && soleHere && (delayed || !aheadOk || tradeTime === null)) errors[symbol] = new QuoteError("yahootw.noLiveRows");
+    // A stock in the opening auction (`preopen`, no price yet) sends the trial match's book: an auction book, never a price.
+    if (!price && !delayed && kindOf(symbol) === "stock" && row.marketStatus === "preopen") {
+      const levels = book(row, false);
+      if (levels && levels.bids.length + levels.asks.length > 0) auctionBook[symbol] = { ...levels, auction: true };
+    }
     if (!price || !dayOk || delayed) continue;
     const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
     if (!future && !withinLimits(price, limits.limitUp, limits.limitDown)) {
@@ -236,6 +244,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     quotes, errors, names,
     ...(anyPrice && !anyToday && { noLive: new QuoteError("yahootw.noLiveRows") }),
     ...(Object.keys(newestTrade).length && { newestTrade }),
+    ...(Object.keys(auctionBook).length && { auctionBook }),
   };
 }
 

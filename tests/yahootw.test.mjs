@@ -789,3 +789,30 @@ test("an index row carries no book", () => {
   const rows = ROWS.filter((row) => row.symbol === "^TWII").map((row) => ({ ...row, orderbook: [], sumBidVolK: 0, sumAskVolK: 0 }));
   assert.equal("book" in decodeStockList(["^TWII"], ok(rows), NOW, ["^TWII"]).quotes["^TWII"], false);
 });
+
+// Recorded 2026-11-19 08:46:19, in the opening auction: each stock `preopen`, no price or trade time, a live book.
+const PREOPEN = jsonFixture("ytw-preopen-0846");
+const PREOPEN_AT = at("2026-11-19T00:46:19Z");
+const PREOPEN_SYMBOLS = ["2330.TW", "0050.TW", "6488.TWO"];
+
+test("an opening-auction answer gives each stock's book as an auction book, never a price", () => {
+  const result = decodeStockList(PREOPEN_SYMBOLS, ok(PREOPEN), PREOPEN_AT, ["6488.TWO"]);
+  assert.deepEqual(result.quotes, {});
+  assert.deepEqual(result.errors, {});
+  assert.equal("noLive" in result, false);
+  const tsmc = result.auctionBook["2330.TW"];
+  assert.equal(tsmc.auction, true);
+  assert.deepEqual(tsmc.bids.map(({ price, size }) => [price, size]), [[2175, 39], [2170, 41], [2165, 21], [2160, 71], [2155, 36]]);
+  assert.deepEqual(tsmc.asks.map(({ price, size }) => [price, size]), [[2180, 10], [2185, 11], [2190, 10], [2195, 48], [2200, 166]]);
+  assert.deepEqual(Object.keys(result.auctionBook).sort(), ["0050.TW", "2330.TW", "6488.TWO"]);
+});
+
+test("an opening-auction book that does not add up, or a row not preopen, gives none", () => {
+  const rows = PREOPEN.map((row) => (row.symbol === "2330.TW" ? { ...row, sumBidVolK: 207 }
+    : row.symbol === "0050.TW" ? { ...row, marketStatus: "open" } : row));
+  const result = decodeStockList(PREOPEN_SYMBOLS, ok(rows), PREOPEN_AT);
+  assert.deepEqual(Object.keys(result.auctionBook), ["6488.TWO"]);
+  // A delayed row gives none either.
+  const delayed = decodeStockList(["6488.TWO"], ok(PREOPEN.map((row) => ({ ...row, exchangeDataDelayedBy: 20 }))), PREOPEN_AT);
+  assert.equal("auctionBook" in delayed, false);
+});

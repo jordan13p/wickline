@@ -1,0 +1,410 @@
+[
+  {
+    "ask": {
+      "raw": "2180",
+      "fmt": "2,180",
+      "sort": 2180
+    },
+    "bid": {
+      "raw": "2175",
+      "fmt": "2,175",
+      "sort": 2175
+    },
+    "change": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "changePercent": "-",
+    "changeStatus": "equal",
+    "exchange": "TAI",
+    "holdingType": "EQUITY",
+    "limitDown": false,
+    "limitDownPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "limitUp": false,
+    "limitUpPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "marketStatus": "preopen",
+    "openInterest": null,
+    "messageBoardId": "finmb_380075_lang_zh",
+    "optionType": null,
+    "previousVolume": "-",
+    "price": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "priceDiff": null,
+    "regularMarketDayHigh": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketDayLow": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketOpen": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketPreviousClose": {
+      "raw": "2175",
+      "fmt": "2,175",
+      "sort": 2175
+    },
+    "regularMarketTime": "-",
+    "relatedSymbol": null,
+    "relatedSymbolName": null,
+    "sectorId": "40",
+    "sectorName": "半導體",
+    "strikePrice": null,
+    "symbol": "2330.TW",
+    "symbolName": "台積電",
+    "systexId": "2330",
+    "turnoverM": "0",
+    "volume": "-",
+    "currency": "TWD",
+    "epsTrailingTwelveMonths": null,
+    "exchangeDataDelayedBy": 0,
+    "fiftyTwoWeekHigh": null,
+    "fiftyTwoWeekLow": null,
+    "marketCap": null,
+    "marketState": null,
+    "trailingPE": null,
+    "avgPrice": "-",
+    "inMarket": null,
+    "outMarket": null,
+    "orderbook": [
+      {
+        "ask": "2180",
+        "askVol": 10000,
+        "bid": "2175",
+        "bidVol": 39000,
+        "askVolK": 10,
+        "bidVolK": 39
+      },
+      {
+        "ask": "2185",
+        "askVol": 11000,
+        "bid": "2170",
+        "bidVol": 41000,
+        "askVolK": 11,
+        "bidVolK": 41
+      },
+      {
+        "ask": "2190",
+        "askVol": 10000,
+        "bid": "2165",
+        "bidVol": 21000,
+        "askVolK": 10,
+        "bidVolK": 21
+      },
+      {
+        "ask": "2195",
+        "askVol": 48000,
+        "bid": "2160",
+        "bidVol": 71000,
+        "askVolK": 48,
+        "bidVolK": 71
+      },
+      {
+        "ask": "2200",
+        "askVol": 166000,
+        "bid": "2155",
+        "bidVol": 36000,
+        "askVolK": 166,
+        "bidVolK": 36
+      }
+    ],
+    "indexMeta": null,
+    "singleVolume": "0",
+    "singleVolumeK": "0",
+    "previousVolumeK": null,
+    "volumeK": null,
+    "totalMarketVolK": 0,
+    "sumAskVolK": 245,
+    "sumBidVolK": 208
+  },
+  {
+    "ask": {
+      "raw": "94.2",
+      "fmt": "94.20",
+      "sort": 94.2
+    },
+    "bid": {
+      "raw": "94.15",
+      "fmt": "94.15",
+      "sort": 94.15
+    },
+    "change": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "changePercent": "-",
+    "changeStatus": "equal",
+    "exchange": "TAI",
+    "holdingType": "ETF",
+    "limitDown": false,
+    "limitDownPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "limitUp": false,
+    "limitUpPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "marketStatus": "preopen",
+    "openInterest": null,
+    "messageBoardId": "finmb_34513608_lang_zh",
+    "optionType": null,
+    "previousVolume": "-",
+    "price": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "priceDiff": null,
+    "regularMarketDayHigh": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketDayLow": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketOpen": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketPreviousClose": {
+      "raw": "94.1",
+      "fmt": "94.10",
+      "sort": 94.1
+    },
+    "regularMarketTime": "-",
+    "relatedSymbol": null,
+    "relatedSymbolName": null,
+    "sectorId": "26",
+    "sectorName": "ETF",
+    "strikePrice": null,
+    "symbol": "0050.TW",
+    "symbolName": "元大台灣50",
+    "systexId": "0050",
+    "turnoverM": "0",
+    "volume": "-",
+    "currency": "TWD",
+    "epsTrailingTwelveMonths": null,
+    "exchangeDataDelayedBy": 0,
+    "fiftyTwoWeekHigh": null,
+    "fiftyTwoWeekLow": null,
+    "marketCap": null,
+    "marketState": null,
+    "trailingPE": null,
+    "avgPrice": "-",
+    "inMarket": null,
+    "outMarket": null,
+    "orderbook": [
+      {
+        "ask": "94.20",
+        "askVol": 23000,
+        "bid": "94.15",
+        "bidVol": 59000,
+        "askVolK": 23,
+        "bidVolK": 59
+      },
+      {
+        "ask": "94.25",
+        "askVol": 1000,
+        "bid": "94.10",
+        "bidVol": 698000,
+        "askVolK": 1,
+        "bidVolK": 698
+      },
+      {
+        "ask": "94.30",
+        "askVol": 7000,
+        "bid": "94.05",
+        "bidVol": 12000,
+        "askVolK": 7,
+        "bidVolK": 12
+      },
+      {
+        "ask": "94.35",
+        "askVol": 6000,
+        "bid": "94.00",
+        "bidVol": 220000,
+        "askVolK": 6,
+        "bidVolK": 220
+      },
+      {
+        "ask": "94.40",
+        "askVol": 2000,
+        "bid": "93.95",
+        "bidVol": 40000,
+        "askVolK": 2,
+        "bidVolK": 40
+      }
+    ],
+    "indexMeta": null,
+    "singleVolume": "0",
+    "singleVolumeK": "0",
+    "previousVolumeK": null,
+    "volumeK": null,
+    "totalMarketVolK": 0,
+    "sumAskVolK": 39,
+    "sumBidVolK": 1029
+  },
+  {
+    "ask": {
+      "raw": "593",
+      "fmt": "593",
+      "sort": 593
+    },
+    "bid": {
+      "raw": "592",
+      "fmt": "592",
+      "sort": 592
+    },
+    "change": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "changePercent": "-",
+    "changeStatus": "equal",
+    "exchange": "TWO",
+    "holdingType": "EQUITY",
+    "limitDown": false,
+    "limitDownPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "limitUp": false,
+    "limitUpPrice": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "marketStatus": "preopen",
+    "openInterest": null,
+    "messageBoardId": "finmb_157525119_lang_zh",
+    "optionType": null,
+    "previousVolume": "-",
+    "price": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "priceDiff": null,
+    "regularMarketDayHigh": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketDayLow": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketOpen": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "regularMarketPreviousClose": {
+      "raw": "544",
+      "fmt": "544",
+      "sort": 544
+    },
+    "regularMarketTime": "-",
+    "relatedSymbol": null,
+    "relatedSymbolName": null,
+    "sectorId": "153",
+    "sectorName": "櫃半導體",
+    "strikePrice": null,
+    "symbol": "6488.TWO",
+    "symbolName": "環球晶",
+    "systexId": "6488",
+    "turnoverM": "0",
+    "volume": "-",
+    "currency": "TWD",
+    "epsTrailingTwelveMonths": null,
+    "exchangeDataDelayedBy": 0,
+    "fiftyTwoWeekHigh": null,
+    "fiftyTwoWeekLow": null,
+    "marketCap": null,
+    "marketState": null,
+    "trailingPE": null,
+    "avgPrice": "-",
+    "inMarket": null,
+    "outMarket": null,
+    "orderbook": [
+      {
+        "ask": "593",
+        "askVol": 5000,
+        "bid": "592",
+        "bidVol": 21000,
+        "askVolK": 5,
+        "bidVolK": 21
+      },
+      {
+        "ask": "595",
+        "askVol": 8000,
+        "bid": "590",
+        "bidVol": 8000,
+        "askVolK": 8,
+        "bidVolK": 8
+      },
+      {
+        "ask": "596",
+        "askVol": 1000,
+        "bid": "589",
+        "bidVol": 2000,
+        "askVolK": 1,
+        "bidVolK": 2
+      },
+      {
+        "ask": "597",
+        "askVol": 13000,
+        "bid": "578",
+        "bidVol": 1000,
+        "askVolK": 13,
+        "bidVolK": 1
+      },
+      {
+        "ask": "598",
+        "askVol": 121000,
+        "bid": "571",
+        "bidVol": 1000,
+        "askVolK": 121,
+        "bidVolK": 1
+      }
+    ],
+    "indexMeta": null,
+    "singleVolume": "0",
+    "singleVolumeK": "0",
+    "previousVolumeK": null,
+    "volumeK": null,
+    "totalMarketVolK": 0,
+    "sumAskVolK": 148,
+    "sumBidVolK": 33
+  }
+]

@@ -3400,3 +3400,56 @@ test("a Finnhub price never shows a cached or an earlier session's Yahoo Finance
     finnhubQuote, null);
   assert.equal(live.volume, 48_213_500);
 });
+
+// Thursday 2026-11-19's opening auction: Yahoo 奇摩股市 answers each stock `preopen` with its trial match's book
+// (recorded 08:46:19), over Yahoo Finance's Wednesday close.
+const PREOPEN_ROWS = jsonFixture("ytw-preopen-0846");
+const thu = (time) => taipei(time, "2026-11-19");
+const wedClose = (symbol) => ({ ...yq(symbol, "TAI", taipei("13:30:00", "2026-11-18"), day("2026-11-18T01:00:00Z", "2026-11-18T05:30:00Z")),
+  price: 2175, previousClose: 2170, volume: 30_000, sizeUnit: "lot" });
+const ytwAnswerAt = (w, time, symbols = ["2330.TW"]) => {
+  w.host.clock = time;
+  const request = yahootw.requests(symbols, { anyDay: [...w.twOnly] })[0];
+  w.apply(yahootw, request, yahootw.decode(request, ok(PREOPEN_ROWS), time));
+};
+
+test("The opening auction with Yahoo 奇摩股市 alone", () => {
+  const w = watchHolding(ONLY_YAHOOTW, ["2330.TW"], { quotes: { "2330.TW": wedClose("2330.TW") } });
+  ytwAnswerAt(w, thu("08:46:19"));
+  const q = w.shown("2330.TW", thu("08:46:25"));
+  assert.equal(q.price, 2175);
+  assert.equal(q.book.auction, true);
+  assert.deepEqual(q.book.bids.map(({ price, size }) => [price, size]), [[2175, 39], [2170, 41], [2165, 21], [2160, 71], [2155, 36]]);
+  assert.deepEqual(q.book.asks[0], { price: 2180, size: 10 });
+  const shown = detailBook(q, true);
+  assert.deepEqual([shown.title, shown.book], ["detail.auctionBook", q.book]);
+  // A stock only Yahoo 奇摩股市 prices, holding yesterday's priced row and its closing book: the trial match's book, not that.
+  const traded = taipei("13:30:00", "2026-11-18");
+  const own = { symbol: "6488.TWO", source: "yahootw", exchange: "TWO", price: 590, previousClose: 585, timestamp: traded,
+    tradeTime: traded, day: taipeiDay(traded), fetchedAt: thu("08:46:00"), book: YTW_BOOK };
+  const tw = watchHolding(ONLY_YAHOOTW, ["6488.TWO"], { overlays: { "6488.TWO": { yahootw: own } } });
+  tw.twOnly.add("6488.TWO");
+  ytwAnswerAt(tw, thu("08:46:19"), ["6488.TWO"]);
+  const sole = tw.shown("6488.TWO", thu("08:46:25"));
+  assert.equal(sole.price, 590);
+  assert.deepEqual([sole.book.auction, sole.book.bids[0].price, sole.book.asks[0].price], [true, 592, 593]);
+});
+
+test("the opening auction's Yahoo 奇摩股市 book ends with its window", () => {
+  const w = watchHolding(ONLY_YAHOOTW, ["2330.TW"], { quotes: { "2330.TW": wedClose("2330.TW") } });
+  ytwAnswerAt(w, thu("08:59:55"));
+  assert.equal(w.shown("2330.TW", thu("08:59:58")).book.auction, true);
+  // 09:00:30, no newer answer: never shown as the auction's, nor as the market's book.
+  const q = w.shown("2330.TW", thu("09:00:30"));
+  assert.equal("book" in q, false);
+  assert.deepEqual(detailBook(q, false), { title: "detail.book", book: null, line: "detail.bookNone" });
+});
+
+test("the opening auction with both sources shows MIS's flagged book", () => {
+  const w = watchHolding(BOTH_ON, ["2330.TW"], { quotes: { "2330.TW": wedClose("2330.TW") } });
+  ytwAnswerAt(w, thu("08:46:19"));
+  misAnswerAt(w, thu("08:46:22"), misFlagged(thu("08:46:20")));
+  const q = w.shown("2330.TW", thu("08:46:25"));
+  assert.deepEqual(q.book, { ...w.auctionBooks["2330.TW"], auction: true });
+  assert.notEqual(q.book.bids[0].price, 2175);
+});

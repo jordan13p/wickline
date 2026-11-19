@@ -221,6 +221,9 @@ export class Watchlist {
     // By symbol: true while MIS's latest answer for it named it with neither a price, a flag nor a level (decodeMis
     // `noLevels`): it answered before any order, so the row's book is empty rather than unknown.
     this.noLevels = {};
+    // By symbol: `{ book, fetchedAt }`, the opening auction's book from Yahoo 奇摩股市's latest answer (decodeStockList
+    // `auctionBook`), answer by answer; rowBook shows it only inside the auction window it was fetched in.
+    this.ytwAuctionBooks = {};
     // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its trading
     // day), kept only while that source's price for the symbol is.
     this.lines = {};
@@ -436,10 +439,15 @@ export class Watchlist {
    * price (`held`) and that flag carried levels, its auction book; else the quote's own. A Taiwan stock's book from
    * Yahoo 奇摩股市 fetched inside a call auction (auctionWindowStart) is that auction's: marked `auction: true` while
    * `now` is still in the same window and the quote traded on the fetch's Taipei day, and none otherwise, so it never
-   * shows as the market's book, as another auction's, nor as an earlier day's last book. Without a book, an empty one while MIS's latest answer had no level (`noLevels`).
+   * shows as the market's book, as another auction's, nor as an earlier day's last book. Before those, Yahoo 奇摩股市's
+   * opening-auction book (ytwAuctionBooks) while `now` is in the window it was fetched in. Without a book, an empty one
+   * while MIS's latest answer had no level (`noLevels`).
    */
   rowBook(symbol, quote, held, now) {
     if (held && this.auctionBooks[symbol]) return this.auctionBooks[symbol];
+    const opening = this.ytwAuctionBooks[symbol];
+    const auctionNow = auctionWindowStart(now);
+    if (opening && auctionNow !== null && auctionWindowStart(opening.fetchedAt) === auctionNow) return opening.book;
     const { book } = quote;
     if (book) {
       const fetchedIn = quote.source === yahootw.id && kindOf(symbol) === "stock"
@@ -814,11 +822,13 @@ export class Watchlist {
       const symbols = new Set(this.symbolsFor(provider, config));
       for (const symbol of symbols) covered.add(symbol);
       const held = [this.overlays, this.overlayErrors, this.lines[provider.id] ?? {}, this.lineTrades[provider.id] ?? {},
-        ...(provider === mis ? [this.auctionAt, this.auctionBooks, this.noLevels] : [])];
+        ...(provider === mis ? [this.auctionAt, this.auctionBooks, this.noLevels] : []),
+        ...(provider === yahootw ? [this.ytwAuctionBooks] : [])];
       for (const symbol of held.flatMap(Object.keys)) {
         if (symbols.has(symbol)) continue;
         this.dropOverlay(provider, symbol);
         if (provider === mis) delete this.noLevels[symbol];
+        if (provider === yahootw) delete this.ytwAuctionBooks[symbol];
         if (this.lineTrades[provider.id]) delete this.lineTrades[provider.id][symbol];
         this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
       }
@@ -1185,6 +1195,12 @@ export class Watchlist {
           if (result.noLevels?.[symbol]) this.noLevels[symbol] = true;
           else delete this.noLevels[symbol];
         }
+        // Yahoo 奇摩股市's opening-auction book, answer by answer: a priced answer, or one without it, drops it.
+        if (provider === yahootw) {
+          const book = result.auctionBook?.[symbol];
+          if (book) this.ytwAuctionBooks[symbol] = { book, fetchedAt: now };
+          else delete this.ytwAuctionBooks[symbol];
+        }
         if (this.soleSource(symbol) === provider) {
           // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
           // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
@@ -1320,6 +1336,7 @@ export class Watchlist {
   // A symbol whose request was not answered: a base quote stays, marked cached, and so does the quote of a symbol
   // this source prices alone, which has no base; an overlay goes.
   fail(provider, symbol, error) {
+    if (provider === yahootw) delete this.ytwAuctionBooks[symbol];
     if (!provider.overlay || this.soleSource(symbol) === provider) { this.errors[symbol] = error; return; }
     this.dropOverlay(provider, symbol);
     if (provider === mis) delete this.noLevels[symbol];
