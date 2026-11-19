@@ -451,6 +451,16 @@ test("mergeOverlay: no times without a timed line", () => {
   assert.equal("times" in mergeOverlay(undefined, ytw0050({}), null), false);
   assert.equal("times" in mergeOverlay(undefined, ytw0050({}), { ...line0050, times: [taipei("10:31:00")] }), false); // misaligned
 });
+test("mergeOverlay: the base's times never go with any line but the base's", () => {
+  const base = { ...yq("2330.TW", "TAI", taipei("10:30:00"), TW_TODAY), price: 2170, series: [1, 2], times: [taipei("10:20:00"), taipei("10:25:00")] };
+  const untimed = { day: DAY, series: [189.1, 189.2] };
+  const cases = {
+    "an own line without times": mergeOverlay(base, { ...ytw0050({ tradeTime: taipei("10:31:40") }), symbol: "2330.TW" }, untimed),
+    "a price from another period": mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 2175, timestamp: taipei("08:59:00") }),
+    "a quote over its own source": mergeOverlay(base, { ...base, price: 2175, timestamp: taipei("10:32:00") }, null),
+  };
+  for (const [name, merged] of Object.entries(cases)) assert.equal("times" in merged, false, name);
+});
 test("A ticker between kline answers keeps the line's times", async () => {
   // closeTime 5, as in the first refresh test: a 0 drops the first ticker, and the line would not be due before 15 s.
   const host = fakeHost((url) => url.includes("klines") ? ok(jsonFixture("binance-btc-15m"))
@@ -461,6 +471,7 @@ test("A ticker between kline answers keeps the line's times", async () => {
   await advance(host, 1_000);
   const times = w.quotes["BTC/USDT"].times;
   assert.deepEqual([times.length, times[0]], [96, 1794989700000]);
+  assert.equal(w.quotes["BTC/USDT"].series.length, times.length);
   await advance(host, 16_000);                                         // a second ticker, no new klines answer
   assert.deepEqual(w.quotes["BTC/USDT"].times, times);
   const sent = (part) => host.requests.filter((url) => url.includes(part)).length;
