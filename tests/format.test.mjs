@@ -542,6 +542,18 @@ test("The ladder", () => {
   assert.equal(ladder(SCENARIO_BOOK, null)[0].bid.change, null);
 });
 
+test("A market order", () => {
+  const book = { bids: [], asks: levels([[null, 171], [490, 244], [490.5, 1], [491, 2], [491.5, 2]]) };
+  const rows = ladder(book, 520);
+  // No price, so no change to color by: plain ink, and marked as a market order.
+  assert.deepEqual(rows[0].ask, { price: null, size: 171, change: null, market: true });
+  assert.equal(changeTone(rows[0].ask.change), "none");
+  assert.equal("market" in rows[1].ask, false);
+  assert.equal(bookTotals(book).asks, 420);
+  const texts = ["zh-TW", "en", "zh-CN", "ja", "ko"].map((lang) => say(lang)("detail.marketOrder"));
+  assert.deepEqual(texts, ["市價", "Market", "市价", "成行", "시장가"]);
+});
+
 test("In a call auction", () => {
   const q = { symbol: "2330.TW", book: AUCTION_BOOK };
   assert.deepEqual(detailBook(q, true), { title: "detail.auctionBook", book: AUCTION_BOOK, line: null });

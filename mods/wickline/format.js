@@ -207,16 +207,18 @@ export function detailBook(quote, auction) {
   return { title: "detail.book", book: null, line: reason ? "reason" : matches ? "detail.bookEmpty" : "detail.bookNone" };
 }
 
-// A level as a ladder rung, with its change % against `previousClose`.
+// A level as a ladder rung, with its change % against `previousClose`; a market order (no price) has none and is marked.
 const rung = (level, previousClose) => level && {
   price: level.price,
   size: level.size,
-  change: positive(previousClose) ? (level.price - previousClose) / previousClose * 100 : null,
+  change: level.price !== null && positive(previousClose) ? (level.price - previousClose) / previousClose * 100 : null,
+  ...(level.price === null && { market: true }),
 };
 
 /**
  * The ladder's rows, best first, at most 5: each `{ bid, ask }`, a side without a level at that row null. A rung is
- * `{ price, size, change }`, `change` the % against `previousClose` (null without one).
+ * `{ price, size, change }`, `change` the % against `previousClose` (null without one or for a market order, which
+ * also carries `market: true`).
  */
 export function ladder(book, previousClose) {
   const rows = [];

@@ -18,13 +18,13 @@ const SIZE_W = 44;
 
 // One side of a ladder row (format.js ladder): a 24 px band, the bid's size in its fixed column then its price toward the
 // center, the ask's price then its size. A price at the previous close (or without one) is plain `foreground`; others
-// take the change color. `rung` null: empty.
+// take the change color; a market order reads detail.marketOrder in plain ink. `rung` null: empty.
 function ladderSide(view, t, q, rung, bid) {
   const side = h_flex().flex_1().h(24).px(6).items_center().justify_between();
   if (!rung) return side;
   const plain = ["flat", "none"].includes(changeTone(rung.change));
   const price = div().font_medium().text_color(plain ? t.foreground : view.changeColor(t, rung.change))
-    .child(number(q, rung.price));
+    .child(rung.market ? view.tx("detail.marketOrder") : number(q, rung.price));
   const size = div().child(formatCount(rung.size));
   return bid ? side.child(size.w(SIZE_W).text_right()).child(price) : side.child(price).child(size);
 }

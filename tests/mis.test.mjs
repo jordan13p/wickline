@@ -87,7 +87,7 @@ test("decodes the recorded answer", () => {
 
 test("midpoint and no price", () => {
   assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "100.5_100_", a: "101.5_102_", u: "-", w: "-" })).quotes["2330.TW"].price, 101);
-  const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000" }));
+  const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000", f: "-" }));
   // No price, but the name still comes through (see "a name without a price").
   const named = { "2330.TW": "台積電" };
   // Nor any level: MIS answered with no order yet.
@@ -686,10 +686,9 @@ test("MIS levels", () => {
   assert.deepEqual(levelPairs(book.bids), [[2170, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]);
   assert.deepEqual(levelPairs(book.asks), [[2175, 503], [2180, 1248], [2185, 571], [2190, 362], [2195, 361]]);
   assert.equal("auction" in book, false);
-  // A market order (0.0000) is no level.
+  // A market order (0.0000 with a size) is a level without a price, kept first with its size.
   const market = decode(["2330.TW"], detail1330({ b: "0.0000_2165.0000_2160.0000_2155.0000_2150.0000_" })).quotes["2330.TW"].book;
-  assert.equal(market.bids.length, 4);
-  assert.equal(market.bids[0].price, 2165);
+  assert.deepEqual(levelPairs(market.bids), [[null, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]);
   // A side without levels is empty, the price still taken.
   const oneSided = decode(["2330.TW"], detail1330({ a: "-", f: "-" })).quotes["2330.TW"];
   assert.deepEqual([oneSided.price, oneSided.book.asks, oneSided.book.bids.length], [2175, [], 5]);
@@ -716,4 +715,12 @@ test("a named row with no levels marks noLevels", () => {
   assert.deepEqual([result.noLevels, result.quotes], [{ "2330.TW": true }, {}]);
   // A priced or flagged row never does.
   for (const name of ["0831", "1335"]) assert.equal("noLevels" in decode(["2330.TW"], auctionAnswer(name)), false, name);
+});
+
+test("A locked stock's market order (MIS)", () => {
+  // Recorded 2026-11-19 13:24:00: 6488 locked at limit-down 490, no bids, a market sell of 172 queued first.
+  const q = decode(["6488.TWO", "2330.TW"], answer(JSON.stringify(jsonFixture("mis-locked-1324")))).quotes["6488.TWO"];
+  assert.equal(q.price, 490);
+  assert.deepEqual(q.book.bids, []);
+  assert.deepEqual(levelPairs(q.book.asks), [[null, 172], [490, 241], [490.5, 1], [491, 1], [491.5, 1]]);
 });

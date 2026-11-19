@@ -26,16 +26,21 @@ const best = (value) => (typeof value === "string" ? value.split("_").map(positi
 // The levels at most a side of the book shows.
 const BOOK_LEVELS = 5;
 
+// MIS's price of a market order.
+const MARKET_PRICE = /^0(\.0+)?$/;
+
 /**
- * One side of the book, best first: `prices` ("2170.0000_2165.0000_…") zipped with `sizes` ("2280_208_…", in lots) as
- * `{ price, size }`, a level whose price is not positive (a market order's 0.0000) or whose size is not skipped; at most
- * BOOK_LEVELS. None for anything but a string.
+ * One side of the book, in the order sent: `prices` ("2170.0000_2165.0000_…") zipped with `sizes` ("2280_208_…", in
+ * lots) as `{ price, size }`, a level without a positive size or without a price (`-`) skipped; a market order
+ * (`0.0000` with a size) has `price` null and keeps its place (first, ahead of the limit orders). At most BOOK_LEVELS.
+ * None for anything but a string.
  */
 function levels(prices, sizes) {
   if (typeof prices !== "string") return [];
   const sized = typeof sizes === "string" ? sizes.split("_") : [];
-  return prices.split("_").map((price, i) => ({ price: positiveOrNull(price), size: positiveOrNull(sized[i]) }))
-    .filter((level) => level.price !== null && level.size !== null).slice(0, BOOK_LEVELS);
+  return prices.split("_").map((price, i) => ({ price: positiveOrNull(price), size: positiveOrNull(sized[i]), market: MARKET_PRICE.test(price) }))
+    .filter((level) => level.size !== null && (level.price !== null || level.market))
+    .map(({ price, size }) => ({ price, size })).slice(0, BOOK_LEVELS);
 }
 
 /**

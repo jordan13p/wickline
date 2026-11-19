@@ -816,3 +816,17 @@ test("an opening-auction book that does not add up, or a row not preopen, gives 
   const delayed = decodeStockList(["6488.TWO"], ok(PREOPEN.map((row) => ({ ...row, exchangeDataDelayedBy: 20 }))), PREOPEN_AT);
   assert.equal("auctionBook" in delayed, false);
 });
+
+test("A locked stock's market order", () => {
+  // Recorded 2026-11-19 13:24:00: 6488.TWO locked at limit-down 490, no bids, a market sell of 171 first, ask total 420.
+  const result = decodeStockList(["6488.TWO", "2330.TW"], ok(jsonFixture("ytw-locked-1324")), at("2026-11-19T05:24:00Z"));
+  const { book } = result.quotes["6488.TWO"];
+  assert.deepEqual(book.bids, []);
+  assert.deepEqual(levelPairs(book.asks), [[null, 171], [490, 244], [490.5, 1], [491, 2], [491.5, 2]]);
+  assert.equal(sizeSum(book.asks), 420);
+  assert.ok(result.quotes["2330.TW"].book.bids.length > 0);
+  // A level with no price and a size of 0 or `-` is empty: not shown, counts 0; a priced one without a size still fails.
+  const rows = jsonFixture("ytw-locked-1324").map((row) => (row.symbol !== "6488.TWO" ? row : { ...row,
+    orderbook: [...row.orderbook, { ask: "-", askVolK: "-", bid: "-", bidVolK: "-" }] }));
+  assert.equal(decodeStockList(["6488.TWO"], ok(rows), at("2026-11-19T05:24:00Z")).quotes["6488.TWO"].book.asks.length, 5);
+});

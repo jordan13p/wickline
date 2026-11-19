@@ -1,0 +1,278 @@
+[
+  {
+    "ask": {
+      "raw": "2105",
+      "fmt": "2,105",
+      "sort": 2105
+    },
+    "bid": {
+      "raw": "2100",
+      "fmt": "2,100",
+      "sort": 2100
+    },
+    "change": {
+      "raw": "-75",
+      "fmt": "-75.00",
+      "sort": -75
+    },
+    "changePercent": "-3.45%",
+    "changeStatus": "down",
+    "exchange": "TAI",
+    "holdingType": "EQUITY",
+    "limitDown": false,
+    "limitDownPrice": {
+      "raw": "1960",
+      "fmt": "1,960",
+      "sort": 1960
+    },
+    "limitUp": false,
+    "limitUpPrice": {
+      "raw": "2390",
+      "fmt": "2,390",
+      "sort": 2390
+    },
+    "marketStatus": "open",
+    "openInterest": null,
+    "messageBoardId": "finmb_380075_lang_zh",
+    "optionType": null,
+    "previousVolume": "42371000",
+    "price": {
+      "raw": "2100",
+      "fmt": "2,100",
+      "sort": 2100
+    },
+    "priceDiff": null,
+    "regularMarketDayHigh": {
+      "raw": "2190",
+      "fmt": "2,190",
+      "sort": 2190
+    },
+    "regularMarketDayLow": {
+      "raw": "2085",
+      "fmt": "2,085",
+      "sort": 2085
+    },
+    "regularMarketOpen": {
+      "raw": "2165",
+      "fmt": "2,165",
+      "sort": 2165
+    },
+    "regularMarketPreviousClose": {
+      "raw": "2175",
+      "fmt": "2,175",
+      "sort": 2175
+    },
+    "regularMarketTime": "2026-11-19T05:24:01Z",
+    "relatedSymbol": null,
+    "relatedSymbolName": null,
+    "sectorId": "40",
+    "sectorName": "半導體",
+    "strikePrice": null,
+    "symbol": "2330.TW",
+    "symbolName": "台積電",
+    "systexId": "2330",
+    "turnoverM": "90244.1",
+    "volume": "42248000",
+    "currency": "TWD",
+    "epsTrailingTwelveMonths": null,
+    "exchangeDataDelayedBy": 0,
+    "fiftyTwoWeekHigh": null,
+    "fiftyTwoWeekLow": null,
+    "marketCap": null,
+    "marketState": null,
+    "trailingPE": null,
+    "avgPrice": "2136",
+    "inMarket": 19125,
+    "outMarket": 20566,
+    "orderbook": [
+      {
+        "ask": "2105",
+        "askVol": 209000,
+        "bid": "2100",
+        "bidVol": 91000,
+        "askVolK": 209,
+        "bidVolK": 91
+      },
+      {
+        "ask": "2110",
+        "askVol": 159000,
+        "bid": "2095",
+        "bidVol": 196000,
+        "askVolK": 159,
+        "bidVolK": 196
+      },
+      {
+        "ask": "2115",
+        "askVol": 117000,
+        "bid": "2090",
+        "bidVol": 329000,
+        "askVolK": 117,
+        "bidVolK": 329
+      },
+      {
+        "ask": "2120",
+        "askVol": 471000,
+        "bid": "2085",
+        "bidVol": 282000,
+        "askVolK": 471,
+        "bidVolK": 282
+      },
+      {
+        "ask": "2125",
+        "askVol": 229000,
+        "bid": "2080",
+        "bidVol": 280000,
+        "askVolK": 229,
+        "bidVolK": 280
+      }
+    ],
+    "indexMeta": null,
+    "singleVolume": "2000",
+    "singleVolumeK": "2",
+    "previousVolumeK": 42371,
+    "volumeK": 42248,
+    "totalMarketVolK": 39691,
+    "inMarketPercentage": "48.18%",
+    "outMarketPercentage": "51.82%",
+    "sumAskVolK": 1185,
+    "sumBidVolK": 1178
+  },
+  {
+    "ask": {
+      "raw": "市價",
+      "fmt": "市價",
+      "sort": null
+    },
+    "bid": {
+      "raw": "-",
+      "fmt": "-",
+      "sort": null
+    },
+    "change": {
+      "raw": "-54",
+      "fmt": "-54.00",
+      "sort": -54
+    },
+    "changePercent": "-9.93%",
+    "changeStatus": "down",
+    "exchange": "TWO",
+    "holdingType": "EQUITY",
+    "limitDown": true,
+    "limitDownPrice": {
+      "raw": "490",
+      "fmt": "490.0",
+      "sort": 490
+    },
+    "limitUp": false,
+    "limitUpPrice": {
+      "raw": "598",
+      "fmt": "598",
+      "sort": 598
+    },
+    "marketStatus": "open",
+    "openInterest": null,
+    "messageBoardId": "finmb_157525119_lang_zh",
+    "optionType": null,
+    "previousVolume": "9118000",
+    "price": {
+      "raw": "490",
+      "fmt": "490.0",
+      "sort": 490
+    },
+    "priceDiff": null,
+    "regularMarketDayHigh": {
+      "raw": "551",
+      "fmt": "551",
+      "sort": 551
+    },
+    "regularMarketDayLow": {
+      "raw": "490",
+      "fmt": "490.0",
+      "sort": 490
+    },
+    "regularMarketOpen": {
+      "raw": "551",
+      "fmt": "551",
+      "sort": 551
+    },
+    "regularMarketPreviousClose": {
+      "raw": "544",
+      "fmt": "544",
+      "sort": 544
+    },
+    "regularMarketTime": "2026-11-19T05:23:31Z",
+    "relatedSymbol": null,
+    "relatedSymbolName": null,
+    "sectorId": "153",
+    "sectorName": "櫃半導體",
+    "strikePrice": null,
+    "symbol": "6488.TWO",
+    "symbolName": "環球晶",
+    "systexId": "6488",
+    "turnoverM": "4628.2",
+    "volume": "9179000",
+    "currency": "TWD",
+    "epsTrailingTwelveMonths": null,
+    "exchangeDataDelayedBy": 0,
+    "fiftyTwoWeekHigh": null,
+    "fiftyTwoWeekLow": null,
+    "marketCap": null,
+    "marketState": null,
+    "trailingPE": null,
+    "avgPrice": "504.0",
+    "inMarket": 6069,
+    "outMarket": 2980,
+    "orderbook": [
+      {
+        "ask": "-",
+        "askVol": 171000,
+        "bid": "-",
+        "bidVol": 0,
+        "askVolK": 171,
+        "bidVolK": 0
+      },
+      {
+        "ask": "490.0",
+        "askVol": 244000,
+        "bid": "-",
+        "bidVol": 0,
+        "askVolK": 244,
+        "bidVolK": 0
+      },
+      {
+        "ask": "490.5",
+        "askVol": 1000,
+        "bid": "-",
+        "bidVol": 0,
+        "askVolK": 1,
+        "bidVolK": 0
+      },
+      {
+        "ask": "491.0",
+        "askVol": 2000,
+        "bid": "-",
+        "bidVol": 0,
+        "askVolK": 2,
+        "bidVolK": 0
+      },
+      {
+        "ask": "491.5",
+        "askVol": 2000,
+        "bid": "-",
+        "bidVol": 0,
+        "askVolK": 2,
+        "bidVolK": 0
+      }
+    ],
+    "indexMeta": null,
+    "singleVolume": "1000",
+    "singleVolumeK": "1",
+    "previousVolumeK": 9118,
+    "volumeK": 9179,
+    "totalMarketVolK": 9049,
+    "inMarketPercentage": "67.07%",
+    "outMarketPercentage": "32.93%",
+    "sumAskVolK": 420,
+    "sumBidVolK": 0
+  }
+]
