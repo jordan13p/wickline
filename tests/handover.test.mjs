@@ -1,7 +1,7 @@
 // node --test tests/  (handover.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DETAIL_KEY, adopt, clearsOnClose, makeToken, nextWrite, startHandover } from "../mods/wickline/handover.js";
+import { DETAIL_KEY, adopt, clearsOnClose, makeToken, nextWrite, packTimes, startHandover, unpackTimes } from "../mods/wickline/handover.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { detailSource, sessionOf } from "../mods/wickline/freshness.js";
 import { heldMarks, taipeiDay } from "../mods/wickline/calendar.js";
@@ -343,6 +343,61 @@ test("a future's full trading day stays under 16 KB too", () => {
     chartSource: "yahootw", chartTimestamp: traded, chartFetchedAt: traded, closure: null, error: null, fallback: null };
   const size = JSON.stringify(startHandover("WTX&", makeToken(traded, 0.5), quote).value).length;
   assert.ok(size < 16_384, `${size}`);
+});
+
+// A night WTX&: 840 night minutes from 15:00, the 13,500 s break, 299 day minutes from 08:45 with 09:00 skipped, and the
+// appended live price at 13:44:20 — 1,140 points, `.5` prices.
+const NIGHT_TIMES = [
+  ...Array.from({ length: 840 }, (_, i) => taipei("15:00:00", "2026-11-16") + i * 60_000),
+  ...Array.from({ length: 300 }, (_, i) => taipei("08:45:00") + i * 60_000).filter((t) => t !== taipei("09:00:00")),
+  taipei("13:44:20"),
+];
+test("packTimes stores whole seconds and deltas; unpackTimes gives the same times back", () => {
+  const q = { ...Q, series: NIGHT_TIMES.map((_, i) => 40_000.5 + i), times: NIGHT_TIMES };
+  const packed = packTimes(q);
+  assert.equal("times" in packed, false);
+  assert.equal(packed.timesPacked.t0, NIGHT_TIMES[0] / 1000);
+  assert.deepEqual(new Set(packed.timesPacked.d), new Set([60, 13_560, 120, 20]));   // minute, 05:00→08:45 after 04:59, the skip, 13:44→13:44:20
+  assert.deepEqual(unpackTimes(JSON.parse(JSON.stringify(packed))), q);
+  assert.equal(packTimes(Q), Q);
+  assert.equal("timesPacked" in packTimes({ ...Q, series: [1], times: [1_500] }), false);  // not a whole second: no times at all
+});
+test("unpackTimes refuses what it cannot decode", () => {
+  const good = packTimes({ ...Q, series: [1, 2, 3], times: [60_000, 120_000, 180_000] });
+  for (const timesPacked of [null, "x", { t0: 60.5, d: [60, 60] }, { t0: 60, d: "60" }, { t0: 60, d: [60, "60"] }, { t0: 60, d: [60] }, { t0: 60, d: [60, 1.5] }]) {
+    const out = unpackTimes({ ...good, timesPacked });
+    assert.equal("times" in out || "timesPacked" in out, false, JSON.stringify(timesPacked));
+    assert.deepEqual(out.series, [1, 2, 3]);
+  }
+  assert.equal("times" in unpackTimes({ ...Q, series: [1, 2], times: [1, 2] }), false);   // a plain array is never read
+});
+test("a timed quote is handed packed, kept plain, adopted with its times and not written again", () => {
+  const timed = { ...yahooDelayed(taipei("10:00:00")), times: [taipei("09:55:00"), taipei("10:00:00")] };
+  const w = watchWith(undefined, { quotes: { "2330.TW": timed } });
+  const store = memoryStore();
+  const x = glue(w, store);
+  const held = x.open("2330.TW", taipei("10:00:10"));
+  assert.deepEqual(store.read().quote.timesPacked, { t0: taipei("09:55:00") / 1000, d: [300] });
+  assert.deepEqual(x.mine.quote.times, timed.times);
+  assert.equal(x.pass(taipei("10:00:20")), null);                       // the same quote: nothing written
+  w.quotes["2330.TW"] = { ...timed, price: 2185, series: [2190, 2185] };
+  assert.ok(x.pass(taipei("10:00:30")));
+  assert.deepEqual(render(store, held).times, timed.times);
+  assert.equal(x.pass(taipei("10:00:40")), null);
+});
+test("a future's full trading day with its times stays under 16 KB", () => {
+  const traded = taipei("13:44:20");
+  const series = NIGHT_TIMES.map((_, i) => 40_000.5 + ((i * 37) % 400) - 200);
+  const quote = { symbol: "WTX&", source: "yahootw", exchange: "TFE", price: 40_123.5, timestamp: traded, tradeTime: traded, fetchedAt: traded,
+    day: taipeiDay(traded), ...ACTIVITY, sizeUnit: "contract", book: BOOK, series, times: NIGHT_TIMES, name: "台指期近一", localName: "台指期近一",
+    previousClose: 39_900, changePercent: 0.56, open: 39_950, high: 40_210, low: 39_800, limitUp: 43_890, limitDown: 35_910,
+    periods: { pre: null, regular: [taipei("15:00:00", "2026-11-16"), taipei("13:45:00")], post: null,
+      segments: [[taipei("15:00:00", "2026-11-16"), taipei("05:00:00")], [taipei("08:45:00"), taipei("13:45:00")]] },
+    chartSource: "yahootw", chartTimestamp: traded, chartFetchedAt: traded, closure: null, error: null, fallback: null };
+  const { value } = startHandover("WTX&", makeToken(traded, 0.5), quote);
+  const size = JSON.stringify(value).length;
+  assert.ok(size < 16_384, `${size}`);                                // about 13,700 B (plain ms would be about 26,200)
+  assert.deepEqual(unpackTimes(JSON.parse(JSON.stringify(value.quote))).times, NIGHT_TIMES);
 });
 
 test("a second open from the same copy replaces the first", () => {

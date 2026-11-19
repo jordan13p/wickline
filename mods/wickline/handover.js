@@ -1,5 +1,6 @@
-// The open detail's quote, handed over through one shared key by the panel copy that opened it. The decisions only:
-// main.js reads and writes the key (its detailStore). No imports, so tests run it under Node.
+// The open detail's quote, handed over through one shared key by the panel copy that opened it. The key holds the quote
+// with its line's times packed (packTimes); the opening copy keeps it plain and the detail unpacks it on adoption. The
+// decisions only: main.js reads and writes the key (its detailStore). No imports, so tests run it under Node.
 
 export const DETAIL_KEY = "wickline.detail";
 
@@ -31,10 +32,31 @@ function contentKey(quote, paused) {
   return JSON.stringify(rest);
 }
 
-/** The first write, before the dialog opens: `value` for the key, `mine` what the opening copy keeps of it. */
+// The packed form, only in the written key: whole seconds, the first time then each step.
+export function packTimes(quote) {
+  if (!("times" in quote)) return quote;
+  const { times, ...rest } = quote;
+  if (!Array.isArray(times) || !times.length || !times.every((time) => Number.isInteger(time) && time % 1000 === 0)) return rest;
+  return { ...rest, timesPacked: { t0: times[0] / 1000, d: times.slice(1).map((time, i) => (time - times[i]) / 1000) } };
+}
+
+/**
+ * The adopted form: `times` in ms again, only from a packed value whose steps are whole seconds and that gives one time
+ * per value of the line. A plain `times` in the key, or anything that cannot be aligned, leaves the quote without times.
+ */
+export function unpackTimes(quote) {
+  const { timesPacked: packed, times: _times, ...rest } = quote;
+  const { t0, d } = packed !== null && typeof packed === "object" ? packed : {};
+  if (!Number.isInteger(t0) || !Array.isArray(d) || !d.every(Number.isInteger) || d.length + 1 !== rest.series?.length) return rest;
+  const times = [t0 * 1000];
+  let at = t0;
+  for (const step of d) times.push((at += step) * 1000);
+  return { ...rest, times };
+}
+
+/** The first write, before the dialog opens: `value` for the key, `mine` what the opening copy keeps of it (plain). */
 export function startHandover(symbol, token, quote) {
-  const value = { symbol, token, seq: 1, quote };
-  return { value, mine: value };
+  return { value: { symbol, token, seq: 1, quote: packTimes(quote) }, mine: { symbol, token, seq: 1, quote } };
 }
 
 /**
@@ -46,14 +68,17 @@ export function startHandover(symbol, token, quote) {
 export function nextWrite(stored, mine, quote, paused) {
   if (!mine || !handedOver(stored) || stored.token !== mine.token) return { write: null, mine: null };
   if (!quote || contentKey(mine.quote, paused) === contentKey(quote, paused)) return { write: null, mine };
-  const write = { symbol: mine.symbol, token: mine.token, seq: mine.seq + 1, quote };
-  return { write, mine: write };
+  const next = { symbol: mine.symbol, token: mine.token, seq: mine.seq + 1 };
+  return { write: { ...next, quote: packTimes(quote) }, mine: { ...next, quote } };
 }
 
-/** The detail's read: `{ quote, seq }` when the key holds its own token (`held`) with a newer `seq`, else null. */
+/**
+ * The detail's read: `{ quote, seq }` (the quote unpacked) when the key holds its own token (`held`) with a newer `seq`,
+ * else null.
+ */
 export function adopt(stored, held) {
   if (!held || !handedOver(stored) || stored.token !== held.token || stored.seq <= held.seq) return null;
-  return { quote: stored.quote, seq: stored.seq };
+  return { quote: unpackTimes(stored.quote), seq: stored.seq };
 }
 
 /** Whether the detail's close clears the key: only while it holds its own token, so a newer detail keeps its own. */
