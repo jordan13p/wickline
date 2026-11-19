@@ -210,25 +210,28 @@ const lineOf = (symbol, response) => yahootw.decode(yahootw.requests([symbol]).f
 
 test("keeps today's minutes, carrying the last close over quiet minutes", () => {
   assert.deepEqual(lineOf("2330.TW", tick("2330.TW", [null, 10.05, null, null, 10.10])).lines,
-    { "2330.TW": { day: taipeiDay(NOW), series: [10.05, 10.05, 10.05, 10.10], lastAt: (TODAY_0900 + 240) * 1000 } });
+    { "2330.TW": { day: taipeiDay(NOW), series: [10.05, 10.05, 10.05, 10.10], times: [1, 2, 3, 4].map((m) => (TODAY_0900 + m * 60) * 1000),
+      lastAt: (TODAY_0900 + 240) * 1000 } });
 });
 
 test("the liquid fixture", () => {
   const { quotes, errors, lines } = lineOf("2330.TW", ok(jsonFixture("yahootw-tick")));
   assert.deepEqual([quotes, errors], [{}, {}]);
-  const { day, series } = lines["2330.TW"];
+  const { day, series, times, lastAt } = lines["2330.TW"];
   assert.equal(day, taipeiDay(NOW));
   // 31 minutes, the first without a trade.
   assert.equal(series.length, 30);
   assert.equal(series[0], 2200);
   assert.equal(series.at(-1), 2210);
   // The last minute's time, 09:30 in Taipei.
-  assert.equal(lines["2330.TW"].lastAt, Date.parse("2026-11-09T01:30:00Z"));
+  assert.equal(lastAt, Date.parse("2026-11-09T01:30:00Z"));
+  // Each point at its own minute, from 09:01.
+  assert.deepEqual([times.length, times[0], times.at(-1)], [30, Date.parse("2026-11-09T01:01:00Z"), lastAt]);
 });
 
 test("the quiet fixture", () => {
   assert.deepEqual(lineOf("0050.TW", ok(jsonFixture("yahootw-tick-quiet"))).lines,
-    { "0050.TW": { day: taipeiDay(NOW), series: [10.05], lastAt: Date.parse("2026-11-09T01:18:00Z"),
+    { "0050.TW": { day: taipeiDay(NOW), series: [10.05], times: [Date.parse("2026-11-09T01:18:00Z")], lastAt: Date.parse("2026-11-09T01:18:00Z"),
       endAt: Date.parse("2026-11-09T05:30:00Z") } }); // its regular session ends at 13:30
 });
 
@@ -493,9 +496,12 @@ test("a night trade after midnight is the same trading day: priced live, no noLi
 
 test("a future's line keeps its trading day from 15:00, also after midnight", () => {
   const recorded = yahootw.decode(yahootw.requests(["WTX&"]).find((r) => r.kind === "line"), ok(FUTURES_TICK), FUT_NOW);
-  const { day, series, lastAt } = recorded.lines["WTX&"];
+  const { day, series, times, lastAt } = recorded.lines["WTX&"];
   assert.equal(day, tradingDay("WTX&", FUT_NOW));
   assert.deepEqual([series.length, series[0], series.at(-1), lastAt], [1132, 41235, 42599, 1794288960000]);
+  assert.equal(times.length, series.length);
+  // One minute apart, but for the night/day break.
+  assert.deepEqual([...new Set(times.slice(1).map((t, i) => t - times[i]))].sort((a, b) => a - b), [60_000, 13_500_000]);
   assert.deepEqual(recorded.periods["WTX&"].regular, LINE_PERIODS.regular);
   // 01:00: ten hours of night minutes since 15:00 the day before, none cut at midnight.
   const one = at("2026-11-09T17:00:00Z");
@@ -535,7 +541,7 @@ test("a line's last trade is its last close, not the minutes filled up to now", 
   const last = closes.findLastIndex((close) => close !== null);
   const lastClose = chart.timestamp[last] * 1000;
   const now = lastClose + 30 * 60_000 + 30_000; // 22:50:30
-  const { series, lastAt, endAt } = yahootw.decode(request, ok(FUTURES_NIGHT_TICK), now).lines["WTX&"];
+  const { series, times, lastAt, endAt } = yahootw.decode(request, ok(FUTURES_NIGHT_TICK), now).lines["WTX&"];
   assert.equal(lastAt, lastClose);
   // Its trading day's regular session ends at 13:45 the next day: no night trade is capped.
   assert.equal(endAt, at("2026-11-11T05:45:00Z"));
@@ -543,6 +549,9 @@ test("a line's last trade is its last close, not the minutes filled up to now", 
   const first = closes.findIndex((close) => close !== null);
   assert.equal(series.length, last + 30 - first + 1);
   assert.deepEqual(series.slice(-31), Array(31).fill(closes[last]));
+  // The carried minutes keep their own minute.
+  assert.deepEqual(times.slice(-31).slice(1).map((t, i) => t - times.at(-31 + i)), Array(30).fill(60_000));
+  assert.ok(times.at(-1) <= now);
 });
 
 test("a future's line gives its sessions from sourceTradingPeriods", () => {

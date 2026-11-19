@@ -64,14 +64,16 @@ export function binanceKlinesUrl(base, pair) {
   return `${endpoint(base, "klines")}?symbol=${encodeURIComponent(pair.replace("/", ""))}&interval=15m&limit=96`;
 }
 
-/** Closing prices, oldest first; throws when Binance answers with anything else. */
+/** Closing prices, oldest first, with each bar's open time (`times`, absent when not every one is usable); throws when Binance answers with anything else. */
 export function decodeKlines(response) {
   // Rate limited as the tickers are: the same backoff.
   if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
   const body = parseJson(response.text, "binance.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("binance.unreadable");
-  return cleanTimedSeries(body.map((bar) => Array.isArray(bar) ? Number(bar[4]) : NaN), null).series;
+  const { series, times } = cleanTimedSeries(body.map((bar) => (Array.isArray(bar) ? Number(bar[4]) : NaN)),
+    body.map((bar) => (Array.isArray(bar) ? Number(bar[0]) : NaN)));
+  return { series, ...(times && { times }) };
 }
 
 /** @type {Provider} */

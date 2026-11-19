@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { USER_AGENT } from "../mods/wickline/quotes.js";
 import { binance, binanceKlinesUrl, binanceUrl, decodeBinance, decodeKlines } from "../mods/wickline/providers/binance.js";
-import { ok } from "./helpers.mjs";
+import { jsonFixture, ok } from "./helpers.mjs";
 
 const BASE = "https://data-api.binance.vision";
 
@@ -22,7 +22,7 @@ test("decodes Binance tickers", () => {
 
 test("reads Binance's 24-hour line", () => {
   assert.equal(binanceKlinesUrl(BASE, "BTC/USDT"), "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96");
-  assert.deepEqual(decodeKlines(ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"], "junk"])), [1.5, 1.75]);
+  assert.deepEqual(decodeKlines(ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"], "junk"])), { series: [1.5, 1.75], times: [1, 2] });
   assert.throws(() => decodeKlines({ status: 400, ok: false, text: "" }));
 });
 
@@ -69,4 +69,11 @@ test("Another market's volume: BTC/USDT", () => {
     assert.equal("volume" in none, false, String(volume));
     assert.equal("sizeUnit" in none, false, String(volume));
   }
+});
+
+test("each kline keeps its open time", () => {
+  const line = decodeKlines(ok(jsonFixture("binance-btc-15m")));
+  assert.deepEqual([line.series.length, line.times.length], [96, 96]);
+  assert.deepEqual([line.times[0], line.times.at(-1)], [1794989700000, 1795075200000]);
+  assert.deepEqual(binance.decode({ kind: "line", symbols: ["BTC/USDT"] }, ok(jsonFixture("binance-btc-15m")), 0).lines["BTC/USDT"], line);
 });

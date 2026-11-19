@@ -47,7 +47,9 @@ export function decodeYahoo(symbol, response, now) {
   }
   const close = positive(meta.previousClose) ? meta.previousClose : meta.chartPreviousClose;
   const bars = body.chart.result[0].indicators?.quote?.[0] ?? {};
-  const series = cleanTimedSeries(bars.close, null).series;
+  // Each bar at its start; an answer without bar times keeps its line and no times.
+  const stamps = body.chart.result[0].timestamp;
+  const line = cleanTimedSeries(bars.close, Array.isArray(stamps) ? stamps.map((s) => s * 1000) : null);
   const opens = cleanSeries(bars.open);
   const highs = cleanSeries(bars.high);
   const lows = cleanSeries(bars.low);
@@ -63,7 +65,8 @@ export function decodeYahoo(symbol, response, now) {
     exchange: exchangeCode(meta.exchangeName),
     timestamp: meta.regularMarketTime * 1000,
     fetchedAt: now,
-    series,
+    series: line.series,
+    ...(line.times && { times: line.times }),
     open: opens[0] ?? null,
     high: positive(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : highs.length ? Math.max(...highs) : null,
     low: positive(meta.regularMarketDayLow) ? meta.regularMarketDayLow : lows.length ? Math.min(...lows) : null,

@@ -253,10 +253,10 @@ const futuresSegments = (periods) => (Array.isArray(periods) ? periods.flat(Infi
   .map(period).filter(Boolean).sort((a, b) => a[0] - b[0]);
 
 /**
- * One symbol's line, `{ day, series, lastAt, endAt }`: the one-minute closes of today's trading day (see tradingDay:
- * a future's from 15:00 the day before, so the night's minutes stay past midnight), oldest first, that day as
- * its day, and the time in ms of its last minute with a trade (to tell a frozen answer from a quiet stock: a
- * minute filled up to `now` never moves it). A minute without a trade carries the previous close; minutes
+ * One symbol's line, `{ day, series, times, lastAt, endAt }`: the one-minute closes of today's trading day (see
+ * tradingDay: a future's from 15:00 the day before, so the night's minutes stay past midnight), oldest first, each
+ * point's minute in ms (`times`: a carried minute at its own minute), that day as its day, and the time in ms of its
+ * last minute with a trade (to tell a frozen answer from a quiet stock: a minute filled up to `now` never moves it). A minute without a trade carries the previous close; minutes
  * before the first trade, and after `now`, are dropped. With no point from today, no line. `endAt`: when that
  * day's regular session ends, in ms (`meta.currentTradingPeriod`), so a later trade (a stock's 14:30 fixed-price
  * one) is never expected in the line; absent unless the answer's regular period belongs to today. `periods`:
@@ -270,20 +270,22 @@ export function decodeTick(symbol, response, now) {
   const chart = Array.isArray(body) ? body[0]?.chart : null;
   if (!chart) throw new QuoteError("yahootw.unreadable");
   if (chart.meta?.symbol !== symbol) throw new QuoteError("yahootw.otherTicker");
-  const times = Array.isArray(chart.timestamp) ? chart.timestamp : [];
+  const stamps = Array.isArray(chart.timestamp) ? chart.timestamp : [];
   const closes = chart.indicators?.quote?.[0]?.close;
   const dayAt = dayOf(symbol);
   const today = dayAt(now);
   const series = [];
+  const times = [];
   let last = null;
   let lastAt = null;
-  times.forEach((seconds, i) => {
+  stamps.forEach((seconds, i) => {
     // Checked before the close is taken, so yesterday's last close never fills today's first minutes. A minute
     // after `now` is still to come (a futures answer lists the whole trading day): never filled.
     if (seconds * 1000 > now || dayAt(seconds * 1000) !== today) return;
     if (positive(closes?.[i])) { last = closes[i]; lastAt = seconds * 1000; }
     if (last === null) return;
     series.push(last);
+    times.push(seconds * 1000);
   });
   const trading = chart.meta.currentTradingPeriod;
   const regular = period(trading?.regular);
@@ -291,7 +293,7 @@ export function decodeTick(symbol, response, now) {
   return {
     quotes: {}, errors: {},
     ...(series.length && { lines: { [symbol]: {
-      day: today, series, lastAt, ...(regular && dayAt(regular[1] - 1) === today && { endAt: regular[1] }),
+      day: today, series, times, lastAt, ...(regular && dayAt(regular[1] - 1) === today && { endAt: regular[1] }),
     } } }),
     ...(regular && { periods: { [symbol]: {
       pre: period(trading.pre), regular, post: period(trading.post), ...(segments.length && { segments }),

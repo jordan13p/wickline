@@ -423,6 +423,51 @@ test("mergeOverlay: a fresh overlay never inherits the base's cached flag; the l
   assert.ok(!("chartCached" in mergeOverlay(plain, mis, null)));
 });
 
+// Tuesday 2026-11-17 in Taipei: a Yahoo 奇摩股市 line of 0050.TW and a price laid over it.
+const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+const DAY = taipeiDay(taipei("10:00:00"));
+const line0050 = { day: DAY, series: [189.1, 189.2, 189.2], times: [taipei("10:29:00"), taipei("10:30:00"), taipei("10:31:00")], lastAt: taipei("10:30:00") };
+const ytw0050 = (fields) => ({ symbol: "0050.TW", source: "yahootw", price: 189.3, day: DAY, timestamp: taipei("10:32:05"), fetchedAt: taipei("10:32:06"), ...fields });
+test("mergeOverlay: the live price is appended at its own trade time", () => {
+  assert.equal(mergeOverlay(undefined, ytw0050({ tradeTime: taipei("10:31:40") }), line0050).times.at(-1), taipei("10:31:40"));
+  assert.equal(mergeOverlay(undefined, ytw0050({}), line0050).times.at(-1), taipei("10:32:05"));          // no trade time: the quote's
+});
+test("mergeOverlay: a quiet stock's appended price is never before the line's last point", () => {
+  const merged = mergeOverlay(undefined, ytw0050({ tradeTime: taipei("09:17:12") }), line0050);
+  assert.deepEqual(merged.times, [...line0050.times, taipei("10:31:00")]);
+  assert.equal(merged.times.length, merged.series.length);
+});
+test("mergeOverlay: a real-time price over Yahoo Finance's line keeps its bar times", () => {
+  const base = { ...yq("2330.TW", "TAI", taipei("10:30:00"), TW_TODAY), price: 2170, series: [2165, 2170], times: [taipei("10:20:00"), taipei("10:25:00")] };
+  const mis = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 2175, timestamp: taipei("10:32:00") });
+  assert.deepEqual([mis.series, mis.times], [base.series, base.times]);
+  const ytw = mergeOverlay(base, { ...ytw0050({ tradeTime: taipei("10:31:40") }), symbol: "2330.TW" }, { ...line0050 });
+  assert.equal(ytw.times.length, line0050.series.length + 1);
+  assert.ok(base.times.every((time) => !ytw.times.includes(time)));
+});
+test("mergeOverlay: no times without a timed line", () => {
+  const { times: _t, ...untimed } = line0050;
+  assert.equal("times" in mergeOverlay(undefined, ytw0050({ tradeTime: taipei("10:31:40") }), untimed), false);
+  assert.equal("times" in mergeOverlay(undefined, ytw0050({}), null), false);
+  assert.equal("times" in mergeOverlay(undefined, ytw0050({}), { ...line0050, times: [taipei("10:31:00")] }), false); // misaligned
+});
+test("A ticker between kline answers keeps the line's times", async () => {
+  // closeTime 5, as in the first refresh test: a 0 drops the first ticker, and the line would not be due before 15 s.
+  const host = fakeHost((url) => url.includes("klines") ? ok(jsonFixture("binance-btc-15m"))
+    : ok([{ symbol: "BTCUSDT", lastPrice: "63719.01", prevClosePrice: "64000", closeTime: 5 }]));
+  const w = new Watchlist(host);
+  w.add("BTC/USDT");
+  const runs = start(w, host);
+  await advance(host, 1_000);
+  const times = w.quotes["BTC/USDT"].times;
+  assert.deepEqual([times.length, times[0]], [96, 1794989700000]);
+  await advance(host, 16_000);                                         // a second ticker, no new klines answer
+  assert.deepEqual(w.quotes["BTC/USDT"].times, times);
+  const sent = (part) => host.requests.filter((url) => url.includes(part)).length;
+  assert.deepEqual([sent("klines"), sent("ticker/24hr")], [1, 2]);
+  await stop(w, host, runs);
+});
+
 // Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
 const TW_NOW = 1794188480000;
 const TW_ROWS = jsonFixture("yahootw-stocklist");

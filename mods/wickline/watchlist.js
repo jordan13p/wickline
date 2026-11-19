@@ -112,8 +112,10 @@ export function pickOverlay(byProvider, order, now, base = null, flagged = false
 /**
  * A real-time overlay's fields over the Yahoo base quote. The trading periods, the currency and the
  * name stay the base's (the overlay's name is kept as `localName`); so does the line, unless the
- * overlay's source gave its own (`line`, `{ day, series }`) on the overlay's trading day (`overlay.day`):
- * then that line, ending at the shown price. `chartSource` names where the line came from, and
+ * overlay's source gave its own (`line`, `{ day, series, times }`) on the overlay's trading day (`overlay.day`):
+ * then that line, ending at the shown price. That price's time is its trade time (else the quote's), never before the
+ * line's last point; an own line without a time per value gives no times, and the base's times go with the base's line
+ * only. `chartSource` names where the line came from, and
  * `chartTimestamp` and `chartFetchedAt` keep that quote's times, so the line's state is judged by its own
  * quote. Works with no base yet. A quote over itself (a symbol's sole source, base and overlay from one source)
  * has no line but the overlay's own: without one, no line and no `chartSource`. `cached` is the shown price's
@@ -144,7 +146,11 @@ export function mergeOverlay(base, overlay, line) {
   const own = line?.series.length && line.day === overlay.day ? line.series : null;
   // The base's own line, never a quote's over itself.
   const fallback = ownPrice || !samePeriod ? null : base;
-  const { cached, ...price } = merged;
+  // A quiet stock's last trade can be older than the line's last (carried) minute: the appended point never goes back.
+  const timed = own && Array.isArray(line.times) && line.times.length === line.series.length;
+  const times = timed ? [...line.times, Math.max(overlay.tradeTime ?? overlay.timestamp, line.times.at(-1))]
+    : own ? undefined : fallback?.times;
+  const { cached, times: _times, ...price } = merged;
   return {
     ...price,
     ...(ownPrice && cached ? { cached } : {}),
@@ -158,6 +164,7 @@ export function mergeOverlay(base, overlay, line) {
     limitDown: overlay.limitDown ?? null,
     currency: base?.currency ?? null,
     series: own ? [...own, overlay.price] : fallback?.series ?? [],
+    ...(times && { times }),
     periods: base?.periods ?? null,
     chartSource: own ? overlay.source : fallback?.source ?? null,
     chartTimestamp: own ? overlay.timestamp : fallback?.timestamp ?? null,
@@ -224,7 +231,7 @@ export class Watchlist {
     // By symbol: `{ book, fetchedAt }`, the opening auction's book from Yahoo 奇摩股市's latest answer (decodeStockList
     // `auctionBook`), answer by answer; rowBook shows it only inside the auction window it was fetched in.
     this.ytwAuctionBooks = {};
-    // By provider id, then symbol: an overlay source's own line, `{ day, series }` (`day`: its trading
+    // By provider id, then symbol: an overlay source's own line, `{ day, series, times }` (`day`: its trading
     // day), kept only while that source's price for the symbol is.
     this.lines = {};
     // By provider id, then symbol: the trade times seen at an overlay line's recent arrivals, oldest first, that
@@ -1235,8 +1242,12 @@ export class Watchlist {
     const routes = request.symbols.some((symbol) => kindOf(symbol) === "index");
     const before = routes ? this.overlaySymbols() : null;
     for (const [symbol, quote] of Object.entries(result.quotes)) {
-      // A source with its own line requests keeps the last line until a new one arrives.
-      if (provider.linesMs) quote.series = this.quotes[symbol]?.series ?? [];
+      // A source with its own line requests keeps the last line, and its times, until a new one arrives.
+      if (provider.linesMs) {
+        const previous = this.quotes[symbol];
+        quote.series = previous?.series ?? [];
+        if (previous?.times) quote.times = previous.times;
+      }
       this.quotes[symbol] = quote;
       delete this.errors[symbol];
     }
@@ -1395,7 +1406,12 @@ export class Watchlist {
     const frozen = kept && provider.overlay && line && this.lineFrozen(provider, symbol, line, kept.tradeTime, now);
     if (kept && provider.overlay && line && !frozen) (this.lines[provider.id] ??= {})[symbol] = line;
     else if (kept && provider.overlay) delete this.lines[provider.id]?.[symbol];
-    else if (kept && line) this.quotes[symbol].series = line;
+    else if (kept && line) {
+      const quote = this.quotes[symbol];
+      quote.series = line.series;
+      if (line.times) quote.times = line.times;
+      else delete quote.times;
+    }
     return result?.errors?.[symbol] ?? null;
   }
 

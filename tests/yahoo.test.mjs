@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { USER_AGENT } from "../mods/wickline/quotes.js";
 import { marketSession } from "../mods/wickline/freshness.js";
 import { decodeYahoo, yahoo, yahooUrl } from "../mods/wickline/providers/yahoo.js";
-import { ok, chart } from "./helpers.mjs";
+import { ok, chart, jsonFixture } from "./helpers.mjs";
 
 const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD", longName: "Apple Inc." };
 
@@ -98,4 +98,20 @@ test("a volume of 0 or none is absent", () => {
   // Under half a lot rounds to none.
   const tiny = decodeYahoo("2330.TW", chart({ ...AAPL, symbol: "2330.TW", regularMarketVolume: 400 }), 1);
   assert.equal("volume" in tiny, false);
+});
+
+// The recorded AAPL answer (5-minute bars stamped at their start), its 09:35 close removed.
+test("Yahoo Finance's bars keep their start times, and a missing bar drops its time", () => {
+  const body = jsonFixture("yahoo-aapl-5m");
+  body.chart.result[0].indicators.quote[0].close[1] = null;
+  const q = decodeYahoo("AAPL", ok(body), Date.parse("2026-11-18T21:05:00Z"));
+  assert.deepEqual([q.series.length, q.times.length], [78, 78]);
+  assert.deepEqual(q.times.slice(0, 2), [Date.parse("2026-11-18T14:30:00Z"), Date.parse("2026-11-18T14:40:00Z")]); // 09:30, 09:40 New York
+});
+test("a Yahoo answer without bar times keeps its line and no times", () => {
+  const body = jsonFixture("yahoo-aapl-5m");
+  delete body.chart.result[0].timestamp;
+  const q = decodeYahoo("AAPL", ok(body), Date.parse("2026-11-18T21:05:00Z"));
+  assert.equal(q.series.length, 79);
+  assert.equal("times" in q, false);
 });
