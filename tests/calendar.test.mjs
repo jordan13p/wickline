@@ -125,12 +125,12 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
     ["stock", T.night + 1_200_000, by({ [`stock ${T.open}`]: observation({ realtime: rt(T.night + 1_190_000) }),
       [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 1_190_000) }) }), quiet()],
     ["future", T.open + 60_000, by({ [`future ${T.day}`]: observation({ realtime: rt(T.open + 50_000) }), [`stock ${T.open}`]: observation({ traded: true }) }), null],
-    // The night: skipped after a traded day; the whole day when nothing traded, read from the answers' newest trade (choice 5).
+    // The night: skipped after a traded day; the whole day when nothing traded, read from the answers' newest trade.
     ["future", T.night + 600_000, by({ [`future ${T.night}`]: observation({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(T.night + 590_000) }) }), night],
     ["future", T.night + 600_000, by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 590_000) }) }), quiet()],
     ["future", T.night + 600_000, by({ [`future ${T.night}`]: observation({ newest: at("2026-11-10T20:59:00Z"), realtime: rt(T.night + 590_000) }),
       [`stock ${T.open}`]: observation({ traded: true }) }), night],
-    // After midnight (choice 4): Thu 11/12 02:00, the night of 11/11 without trades.
+    // After midnight the night's reading holds: Thu 11/12 02:00, the night of 11/11 without trades.
     ["future", at("2026-11-11T18:00:00Z"), by({ [`future ${T.night}`]: observation({ newest: at("2026-11-11T05:45:00Z"), realtime: rt(at("2026-11-11T17:59:00Z")) }) }), night],
     // A futures day without trades: carried from 15:00 to the night's deadline unless a stock
     // traded, kept after midnight, gone at 05:00.
@@ -148,7 +148,7 @@ test("closureOf infers per session from recent answers; a trade clears it; the o
     ["stock", T.open + 600_000, stock(observation({ realtime: [{ at: T.open + 590_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet()],
     ["stock", T.open + 600_000, stock(observation({ realtime: [{ at: T.open + 300_000, source: "yahootw" }, { at: T.open + 595_000, source: "mis" }] })), quiet("mis")],
     ["stock", T.open + 1_800_000, stock(observation({ realtime: rt(T.open + 1_790_000), delayed: yf(T.open + 1_790_000) })), quiet()],
-    // A night TAIFEX does not hold (Wed 2/11, a notice; choice 18's cost): the night form at 15:10, then the listed
+    // A night TAIFEX does not hold (Wed 2/11, known only from a notice, not the schedule): the night form at 15:10, then the listed
     // 2/12 from midnight.
     ["future", at("2026-02-11T07:10:00Z"), by({ [`future ${at("2026-02-11T07:00:00Z")}`]: observation({ newest: at("2026-02-11T05:45:00Z"), realtime: rt(at("2026-02-11T07:09:00Z")) }) }), night],
     ["future", at("2026-02-11T16:30:00Z"), by({ [`future ${at("2026-02-11T07:00:00Z")}`]: observation({ newest: at("2026-02-11T05:45:00Z"), realtime: rt(at("2026-02-11T16:29:00Z")) }) }),
