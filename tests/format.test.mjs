@@ -7,8 +7,10 @@ import { activityCells, amplitude, formatShare, innerOuter } from "../mods/wickl
 import { bookTotals, detailBook, formatSignedCount, ladder } from "../mods/wickline/format.js";
 import { decodeStockList } from "../mods/wickline/providers/yahootw.js";
 import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
+import { crosshairAt, crosshairLabel, crosshairSpot } from "../mods/wickline/format.js";
+import { decodeKlines } from "../mods/wickline/providers/binance.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
-import { CLOSE_1224, at, day, jsonFixture, ok, say, withTZ } from "./helpers.mjs";
+import { CLOSE_1224, at, day, jsonFixture, ok, say, taipei, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
 
 test("formats without Intl", () => {
@@ -598,4 +600,62 @@ test("a one-sided book", () => {
   assert.ok(!/NaN|Infinity/.test(text), text);
   assert.deepEqual(ladder({ bids: [], asks: [] }, 2170), []);
   assert.deepEqual(bookTotals({ bids: [], asks: [] }), { bids: 0, asks: 0, diff: 0, ratio: null });
+});
+
+test("crosshairAt picks the nearest drawn point, the later one on a tie", () => {
+  const g = chartGeometry([10, 20, 15], 15);                         // x 0, 50, 100
+  const at = (share) => crosshairAt(g, [1, 2, 3], share)?.index;
+  assert.deepEqual([at(0.24), at(0.25), at(0.26), at(0.9)], [0, 1, 1, 2]);
+  assert.deepEqual(crosshairAt(g, [1, 2, 3], 0.5), { index: 1, x: 50, y: g.points[1][1] });
+  assert.deepEqual([at(-0.2), at(1.3)], [0, 2]);                     // clamped
+  assert.equal(crosshairAt(chartGeometry([10, 20], 15, { extent: 0 }), [1, 2], 0.4).index, 1);
+});
+test("Past a line that ends early: the crosshair holds on its last point", () => {
+  const g = chartGeometry(Array.from({ length: 14 }, (_, i) => 2170 + i), 2170, { extent: 0.25 }); // 2330.TW 09:00…10:05
+  assert.equal(crosshairAt(g, Array.from({ length: 14 }, (_, i) => taipei("09:00:00") + i * 300_000), 0.6).index, 13);
+});
+test("crosshairAt refuses what it cannot place", () => {
+  const g = chartGeometry([10, 20], 15);
+  for (const [geometry, times, share] of [[null, [1, 2], 0.5], [chartGeometry([], 15), [], 0.5], [chartGeometry([], null, { dot: { x: 0, price: 15 } }), [], 0.5],
+    [g, undefined, 0.5], [g, [1], 0.5], [g, [1, 2, 3], 0.5], [g, [1, 2], NaN], [g, [1, 2], Infinity]]) {
+    assert.equal(crosshairAt(geometry, times, share), null);
+  }
+});
+test("crosshairAt reads the same share against a new line", () => {
+  const long = chartGeometry(Array.from({ length: 1_140 }, (_, i) => 40_000 + i), null);
+  const short = chartGeometry([40_000, 40_010, 40_005], null, { extent: 0.01 });
+  assert.equal(crosshairAt(long, Array(1_140).fill(0), 0.7).index, 797);
+  assert.equal(crosshairAt(short, [0, 0, 0], 0.7).index, 2);
+});
+test("Reading a point: time, price and change against the previous close", () => withTZ("Asia/Taipei", () => {
+  const q = { symbol: "2330.TW", exchange: "TAI", price: 2180, previousClose: 2170, timestamp: taipei("10:40:00"),
+    series: [2170, 2175, 2180], times: [taipei("10:31:00"), taipei("10:32:00"), taipei("10:40:00")] };
+  const label = crosshairLabel(q, 1, "zh-TW");
+  assert.deepEqual([label.head, label.change], ["10:32 · 2,175.00", "+0.23%"]);
+  assert.ok(Math.abs(label.percent - 5 / 2170 * 100) < 1e-12);
+  assert.deepEqual(crosshairLabel({ ...q, previousClose: null }, 1, "zh-TW"), { head: "10:32 · 2,175.00", change: null, percent: null });
+}));
+test("Another day's point carries its date", () => withTZ("Asia/Taipei", () => {
+  const line = decodeKlines(ok(jsonFixture("binance-btc-15m")));
+  const q = { symbol: "BTC/USDT", price: 63_719.01, previousClose: 63_500, timestamp: 1795076099999, ...line };
+  assert.deepEqual(crosshairLabel(q, 24, "en"), { head: "Nov 18 22:15 · 64,000.01", change: "+0.79%", percent: (64_000.01 - 63_500) / 63_500 * 100 });
+  const wtx = { symbol: "WTX&", exchange: "TFE", price: 40_000, previousClose: 40_000, timestamp: taipei("10:00:00", "2026-11-11"),
+    series: [40_000, 40_000], times: [taipei("22:00:00", "2026-11-10"), taipei("02:00:00", "2026-11-11")] };
+  assert.equal(crosshairLabel(wtx, 0, "zh-TW").head, "11/10 22:00 · 40,000.00");   // the Taipei day differs
+  assert.equal(crosshairLabel(wtx, 1, "zh-TW").head, "02:00 · 40,000.00");
+}));
+test("Near the right edge the label sits on the line's left", () => {
+  const label = { head: "10:32 · 2,175.00", change: "+0.23%" };      // 25 characters: 170.5 px
+  assert.deepEqual(crosshairSpot(50, label, 400), { left: 204 });   // right of the line at 200
+  assert.deepEqual(crosshairSpot(80, label, 400), { right: 84 });   // its right edge 4 px left of the line at 320, in any font
+  const longest = { head: "Nov 18 22:15 · 91,234.56", change: "+1.23%" }; // 33 characters: 222.5 px
+  assert.deepEqual(crosshairSpot(100, longest, 404), { right: 4 });  // the single-column chart's right edge
+  assert.deepEqual(crosshairSpot(75, longest, 388), { right: 101 }); // the two-column chart: fits only on the left
+});
+test("crosshairSpot holds a wide label inside the box", () => {
+  const wide = { head: "Nov 18 22:15 · 64,000.01", change: "+0.79%" }; // 33 characters: 222.5 px
+  assert.deepEqual(crosshairSpot(50, wide, 300), { left: 0 });      // fits neither side
+  assert.deepEqual(crosshairSpot(95, wide, 300), { right: 19 });
+  assert.deepEqual(crosshairSpot(50, wide, 200), { left: 0 });
+  assert.deepEqual(crosshairSpot(0, { head: "10:32 · 2,175.00", change: null }, 0), { left: 0 });
 });

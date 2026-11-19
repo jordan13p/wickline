@@ -19,8 +19,11 @@ export const chartShape = (quote) => chartGeometry(quote.series, quote.previousC
 // The day's line, scaled to its box and reaching only as far as its trading day has run (chartLayout); the previous
 // close is a dashed rule, drawn with any number of points; a price past its line is a filled dot in `color`, `dot` px
 // (4 in rows and the table, 6 in the detail), never joined to the line and no state dot. `stroke` defaults to 2 px with
-// the area and 1.25 px without.
-export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4 }) {
+// the area and 1.25 px without. `crosshair` (only the detail passes it) follows the pointer: the box takes its `id`,
+// hands `move` the pointer's x as a share of its width (0…1) with that width, and calls `leave` when the pointer goes;
+// its `mark`, when set, draws a 1 px `dim` vertical line and a 6 px dot at a line point and a label on a `background`
+// plate at the top, placed by `spot` ({ left } or { right }, px).
+export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, crosshair }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
   const g = chartShape(quote);
@@ -31,7 +34,14 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
   g.points.forEach(([x, y], i) => { line = i ? line.line_to(`${x}%`, `${y}%`) : line.move_to(`${x}%`, `${y}%`); });
   const end = lined ? g.points[g.points.length - 1][0] : 0;
   const half = dot / 2;
+  const mark = crosshair?.mark ?? null;
   return sized
+    .when(Boolean(crosshair), (el) => el.id(crosshair.id)
+      .on_mouse_move((event, cx) => {
+        if (!event.bounds || event.bounds.width <= 0) return;
+        crosshair.move(Math.min(1, Math.max(0, event.local_position.x / event.bounds.width)), event.bounds.width, cx);
+      })
+      .on_hover((hovered, cx) => { if (!hovered) crosshair.leave(cx); }))
     .when(g.reference !== null, (el) => el.child(layer(
       PathBuilder.stroke(1).dash_array([3, 3]).move_to("0%", `${g.reference}%`).line_to("100%", `${g.reference}%`).build(),
       t.border)))
@@ -45,7 +55,22 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
     // Inset by half the dot across, so a dot at either end stays whole inside the box.
     .when(g.dot !== null, (el) => el.child(div().absolute().top(0).bottom(0).left(half).right(half)
       .child(div().absolute().left(`${g.dot[0]}%`).top(`${g.dot[1]}%`).ml(-half).mt(-half).w(dot).h(dot).rounded_full()
-        .bg(color))));
+        .bg(color))))
+    .when(Boolean(mark), (el) => el.children(crosshairLayers(t, mark)));
+}
+
+// The crosshair's three layers over the full box (positioned, so none takes room): the vertical line and the dot
+// centred on the point (never the price dot's inset layer; at either end half the dot falls outside); the label at the top.
+function crosshairLayers(t, mark) {
+  const label = h_flex().absolute().top(0).px(4).rounded(3).bg(t.background).text_size(11).whitespace_nowrap()
+    .opacity(mark.opacity).text_color(t.foreground).child(div().child(mark.head))
+    .when(Boolean(mark.change), (el) => el.child(div().child(" · "))
+      .child(div().text_color(mark.changeColor).child(mark.change)));
+  return [
+    div().absolute().top(0).bottom(0).left(`${mark.x}%`).ml(-0.5).w(1).bg(t.dim),
+    div().absolute().left(`${mark.x}%`).top(`${mark.y}%`).ml(-3).mt(-3).w(6).h(6).rounded_full().bg(mark.dotColor),
+    "left" in mark.spot ? label.left(mark.spot.left) : label.right(mark.spot.right),
+  ];
 }
 
 // One place of the detail's second row of price levels: the stat look (a 10.5 px `dim` label over a semibold value) with

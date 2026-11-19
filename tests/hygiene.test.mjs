@@ -753,3 +753,17 @@ test("The detail's key", () => {
     assert.ok(parts.some((part) => DETAIL_KEY_WORDS[lang].every((word) => word.test(part))), name);
   }
 });
+
+test("only the detail's chart follows the pointer", () => {
+  const panel = code(read(new URL("ui/panel.js", MOD)));
+  assert.doesNotMatch(panel, /crosshair/);
+  const parts = code(read(new URL("ui/parts.js", MOD)));
+  assert.equal(parts.match(/on_mouse_move/g)?.length, 1);
+  assert.match(parts, /\.when\(Boolean\(crosshair\)[\s\S]*?on_mouse_move/);
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /crosshair: crosshairOption\(/);
+  assert.match(detail, /bw-detail-chart/);
+});
+test("the crosshair's label dims with the detail and with a cached line", () => {
+  assert.match(code(read(new URL("ui/detail-dialog.js", MOD))), /dimmed \|\| Boolean\(q\.chartCached\)/);
+});

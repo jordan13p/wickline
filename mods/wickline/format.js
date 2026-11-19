@@ -35,6 +35,57 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
   };
 }
 
+// The crosshair label's width, estimated at the detail's 11 px text: only to pick its side of the line and to catch a
+// label too wide for both. The gap to the line never depends on it (a label on the left is placed by its right edge).
+const CROSSHAIR_CHAR_PX = 6.5;
+const CROSSHAIR_PAD_PX = 8;
+const CROSSHAIR_GAP_PX = 4;
+
+/**
+ * The drawn line point (chartGeometry) nearest `xShare` of the box's width, clamped to 0…1, the later one on a tie:
+ * `{ index, x, y }` (x and y in % of the box), so past a line that ends early it holds on the last point. null when
+ * there is no line, `times` is not one time per point, or `xShare` is not a finite number.
+ */
+export function crosshairAt(geometry, times, xShare) {
+  const points = geometry?.points ?? [];
+  if (points.length < 2 || !Array.isArray(times) || times.length !== points.length || !Number.isFinite(xShare)) return null;
+  const target = Math.min(1, Math.max(0, xShare)) * 100;
+  let index = 0;
+  // x never decreases along the line, so `<=` keeps the later point on a tie.
+  const distance = (i) => Math.abs(points[i][0] - target);
+  for (let i = 1; i < points.length; i++) if (distance(i) <= distance(index)) index = i;
+  return { index, x: points[index][0], y: points[index][1] };
+}
+
+/**
+ * What the crosshair's label says of point `index` of `quote`'s line: `head`, its local time (dated when its day,
+ * dayFor, differs from the price's) and price, "10:32 · 2,175.00"; `change`, its change against the previous close
+ * ("+0.23%"), and `percent`, that change as a number, both null without a positive previous close.
+ */
+export function crosshairLabel(quote, index, lang) {
+  const time = quote.times[index];
+  const value = quote.series[index];
+  const day = dayFor(quote);
+  const date = day(time) === day(quote.timestamp) ? "" : formatDate(time, lang);
+  const percent = positive(quote.previousClose) ? (value - quote.previousClose) / quote.previousClose * 100 : null;
+  const change = percent === null ? null : formatChange(percent);
+  return { head: `${stamp(date, time)} · ${number(quote, value)}`, change, percent };
+}
+
+/**
+ * Where the crosshair's label sits in a box `widthPx` wide for a line at `x`% of it: `{ left }` 4 px right of the line
+ * when it fits there, else `{ right }` (its right edge 4 px left of the line) when it fits there, else `{ left: 0 }`,
+ * held at the box's left edge.
+ */
+export function crosshairSpot(x, label, widthPx) {
+  const chars = (label.head + (label.change ? ` · ${label.change}` : "")).length;
+  const w = chars * CROSSHAIR_CHAR_PX + CROSSHAIR_PAD_PX;
+  const px = x / 100 * widthPx;
+  if (px + CROSSHAIR_GAP_PX + w <= widthPx) return { left: px + CROSSHAIR_GAP_PX };
+  if (px - CROSSHAIR_GAP_PX - w >= 0) return { right: widthPx - px + CROSSHAIR_GAP_PX };
+  return { left: 0 };
+}
+
 const group = (digits) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 function significant(price) {

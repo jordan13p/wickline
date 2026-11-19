@@ -68,6 +68,9 @@ export default class Wickline extends View {
       this.wide = given.wide === true;
       // The token its opening copy writes under, and the last `seq` it adopted (none without a token: nothing to adopt).
       this.held = typeof given.token === "string" ? { token: given.token, seq: 1 } : null;
+      // The pointer's x over the detail's chart as a share of its width, and that width: `{ share, width }`, or null.
+      // Kept only while the chart is drawn.
+      this.chartPointer = null;
       // Redraws at its quote's own moments (a stale price, a session's edge, a mark's end) and at each quote its row
       // hands it; it fetches nothing.
       cx.spawn(async (cx) => {
