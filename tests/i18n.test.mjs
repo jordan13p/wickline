@@ -352,8 +352,8 @@ test("the volume labels and units are in every language", () => {
     en: { "detail.volume": "Volume", "detail.volume24h": "24h volume", "unit.lot.one": "lot", "unit.lot.other": "lots", "unit.contract.one": "contract", "unit.contract.other": "contracts" },
     "zh-TW": { "detail.volume": "成交量", "detail.volume24h": "24 小時成交量", "unit.lot.one": "張", "unit.lot.other": "張", "unit.contract.one": "口", "unit.contract.other": "口" },
     "zh-CN": { "detail.volume": "成交量", "detail.volume24h": "24 小时成交量", "unit.lot.one": "张", "unit.lot.other": "张", "unit.contract.one": "口", "unit.contract.other": "口" },
-    ja: { "detail.volume": "出来高", "detail.volume24h": "24時間出来高", "unit.lot.one": "張", "unit.lot.other": "張", "unit.contract.one": "枚", "unit.contract.other": "枚" },
-    ko: { "detail.volume": "거래량", "detail.volume24h": "24시간 거래량", "unit.lot.one": "장", "unit.lot.other": "장", "unit.contract.one": "계약", "unit.contract.other": "계약" },
+    ja: { "detail.volume": "出来高", "detail.volume24h": "24時間出来高", "unit.lot.one": "千株", "unit.lot.other": "千株", "unit.contract.one": "枚", "unit.contract.other": "枚" },
+    ko: { "detail.volume": "거래량", "detail.volume24h": "24시간 거래량", "unit.lot.one": "천주", "unit.lot.other": "천주", "unit.contract.one": "계약", "unit.contract.other": "계약" },
   };
   for (const [lang, keys] of Object.entries(expected)) {
     for (const [key, text] of Object.entries(keys)) assert.equal(STRINGS[lang][key], text, `${lang} ${key}`);
@@ -365,8 +365,8 @@ test("the activity labels are in every language", () => {
     en: ["Prev volume", "Turnover", "Last size", "Average", "Range", "At bid", "At ask"],
     "zh-TW": ["昨日成交量", "成交值", "最後一筆", "均價", "振幅", "內盤", "外盤"],
     "zh-CN": ["昨日成交量", "成交额", "最后一笔", "均价", "振幅", "内盘", "外盘"],
-    ja: ["前日出来高", "売買代金", "直近約定数量", "平均価格", "値幅率", "内盤", "外盤"],
-    ko: ["전일 거래량", "거래대금", "최근 체결량", "평균가", "진폭", "매도 체결", "매수 체결"],
+    ja: ["前日出来高", "売買代金", "直近約定数量", "平均価格", "値幅率", "売り約定", "買い約定"],
+    ko: ["전일 거래량", "거래대금", "최근 체결량", "평균가", "변동폭", "매도 체결", "매수 체결"],
   };
   const keys = ["detail.previousVolume", "detail.turnover", "detail.lastSize", "detail.avgPrice", "detail.amplitude", "detail.inner", "detail.outer"];
   for (const [lang, texts] of Object.entries(expected)) {
@@ -381,7 +381,7 @@ test("the book's labels are in every language", () => {
     en: ["Best 5", "Trial match", "No orders yet", "No order book", "Bid size", "Bid", "Ask", "Ask size", "Bids", "Asks", "Bids − asks", "Bids / asks"],
     "zh-TW": ["最佳五檔", "試撮五檔", "尚無委託資料", "無五檔資料", "買量", "買價", "賣價", "賣量", "委買", "委賣", "委買賣差", "委買賣比"],
     "zh-CN": ["最佳五档", "试撮五档", "暂无委托数据", "无五档数据", "买量", "买价", "卖价", "卖量", "委买", "委卖", "委买卖差", "委买卖比"],
-    ja: ["気配5本", "板寄せ気配", "注文はまだありません", "気配情報なし", "買数量", "買気配", "売気配", "売数量", "買い合計", "売り合計", "買い−売り", "買い/売り"],
+    ja: ["板（5本）", "板寄せ気配", "注文はまだありません", "気配情報なし", "買数量", "買気配", "売気配", "売数量", "買い合計", "売り合計", "買い−売り", "買い/売り"],
     ko: ["5단계 호가", "단일가 호가", "아직 주문이 없습니다", "호가 정보 없음", "매수량", "매수호가", "매도호가", "매도량", "매수 잔량", "매도 잔량", "매수−매도", "매수/매도"],
   };
   for (const [lang, texts] of Object.entries(expected)) {
