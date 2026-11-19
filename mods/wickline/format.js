@@ -130,15 +130,22 @@ export function compact(n, lang, places = 1) {
   return inline ? { value: value + name, unit: "" } : { value, unit: name };
 }
 
+// A base asset's amount from here up is compact: below it, a pair's volume keeps its decimals (`1,234.5 BTC`).
+const AMOUNT_COMPACT_FROM = 1e6;
+
 /**
  * A size with its unit as `{ value, unit }`: lots and contracts as counts in the language's own unit (singular for 1),
- * shares compact, anything else a base asset's amount with its code.
+ * shares compact, anything else a base asset's amount with its code, compact from AMOUNT_COMPACT_FROM (`1.0B DOGE`,
+ * `10.12 億 DOGE`).
  */
 export function formatSize(n, sizeUnit, lang, tx) {
   if (sizeUnit === "lot" || sizeUnit === "contract") {
     return { value: formatCount(n), unit: tx(`unit.${sizeUnit}.${n === 1 ? "one" : "other"}`) };
   }
-  return sizeUnit === "share" ? compact(n, lang) : { value: formatAmount(n), unit: sizeUnit };
+  if (sizeUnit === "share") return compact(n, lang);
+  if (n < AMOUNT_COMPACT_FROM) return { value: formatAmount(n), unit: sizeUnit };
+  const { value, unit } = compact(n, lang);
+  return { value, unit: unit ? `${unit} ${sizeUnit}` : sizeUnit };
 }
 
 /** A share as an unsigned percentage, `places` decimals: `39.1%`, `2.76%` (never formatChange's signed `+2.76%`). */

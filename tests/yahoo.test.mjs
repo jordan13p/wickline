@@ -81,6 +81,14 @@ test("An index carries no volume", () => {
   }
 });
 
+test("Yahoo Finance's crypto carries no volume", () => {
+  // Its volume is in the quote currency (dollars traded), not a count of units.
+  const q = decodeYahoo("BTC-USD", chart({ ...AAPL, symbol: "BTC-USD", exchangeName: "CCC", regularMarketVolume: 41_234_567_890 }), 1);
+  assert.equal(q.exchange, "CCC");
+  assert.equal("volume" in q, false);
+  assert.equal("sizeUnit" in q, false);
+});
+
 test("a volume of 0 or none is absent", () => {
   for (const regularMarketVolume of [0, undefined, null, "48"]) {
     const q = decodeYahoo("AAPL", chart({ ...AAPL, regularMarketVolume }), 1);

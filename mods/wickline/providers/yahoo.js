@@ -20,9 +20,10 @@ const finite = (value) => typeof value === "number" && Number.isFinite(value);
 export const period = (value) => finite(value?.start) && finite(value?.end) && value.end > value.start
   ? [value.start * 1000, value.end * 1000] : null;
 
-// The day's volume: none for an index, lots for a Taiwan stock (Yahoo Finance counts shares), else shares.
+// The day's volume: none for an index or a cryptocurrency (exchange `CCC`, whose volume is in the quote currency, not
+// units), lots for a Taiwan stock (Yahoo Finance counts shares), else shares.
 function volumeOf(symbol, meta) {
-  if (kindOf(symbol) === "index" || !positive(meta.regularMarketVolume)) return {};
+  if (kindOf(symbol) === "index" || meta.exchangeName === "CCC" || !positive(meta.regularMarketVolume)) return {};
   return marketOf(symbol) === "tw"
     ? sized(Math.round(meta.regularMarketVolume / 1000), "lot")
     : sized(meta.regularMarketVolume, "share");

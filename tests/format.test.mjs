@@ -423,6 +423,14 @@ test("sizes by unit and language", () => {
   assert.deepEqual(formatSize(48_213_500, "share", "en", say("en")), { value: "48.2M", unit: "" });
 });
 
+test("a pair's large volume is compact, with its base asset", () => {
+  assert.deepEqual(formatSize(1_012_345_678.9, "DOGE", "en", say("en")), { value: "1.0B", unit: "DOGE" });
+  assert.deepEqual(formatSize(1_012_345_678.9, "DOGE", "zh-TW", say("zh-TW")), { value: "10.12", unit: "億 DOGE" });
+  assert.deepEqual(formatSize(48_213_500, "DOGE", "ja", say("ja")), { value: "4,821.35", unit: "万 DOGE" });
+  // Below a million it stays in full, decimals and all.
+  assert.deepEqual(formatSize(999_999.5, "DOGE", "zh-TW", say("zh-TW")), { value: "999,999.5", unit: "DOGE" });
+});
+
 // The recorded 2026-11-18 rows (2330.TW after the close, WTX& in the day session) as Yahoo 奇摩股市's decoder gives them.
 const DETAIL_NOW = at("2026-11-18T06:05:00Z");
 const ytw = (name, symbol) => decodeStockList([symbol], ok(jsonFixture(name)), DETAIL_NOW).quotes[symbol];
