@@ -1,3 +1,5 @@
 # MIS answers carry a public channel id in a field named "key" (market_code.tw_date), not a secret.
 a49f50cbbe9a5723d2e4ada947c4a67e5b3753b5:tests/fixtures/mis-open.json:generic-api-key:22
 tests/fixtures/mis-open.json:generic-api-key:22
+fbd42860b41d8aff856ae294f7519419d843941e:tests/fixtures/mis-locked-1324.json:generic-api-key:58
+tests/fixtures/mis-locked-1324.json:generic-api-key:58
