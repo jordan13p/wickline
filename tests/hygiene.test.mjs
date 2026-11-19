@@ -668,6 +668,17 @@ const method = (source, head) => {
   return source.slice(start, source.indexOf("\n  }\n", start));
 };
 
+// The first write is a boundary like handOver's: a failed one opens the detail on its quote, with no token (the
+// detail then keeps the quote it opened with), never blocks it.
+test("a failed first write never keeps the detail from opening", () => {
+  const open = method(code(read(new URL("main.js", MOD))), "openDetail(symbol) {");
+  const guarded = open.match(/try \{\s*detailStore\.write\(value\);[^}]*\} catch \{([^}]*)\}/);
+  assert.ok(guarded, "the write is guarded");
+  assert.match(guarded[1], /token = null/);
+  assert.ok(open.indexOf("openOverlay(") > open.indexOf(guarded[0]) + guarded[0].length, "the dialog opens after the guard");
+  assert.match(open, /props: \{ detail, token, wide \}/);
+});
+
 // The detail copy only reads what its row hands it (handover.js): no request, no list of its own.
 test("the detail copy sends no request and owns no Watchlist", () => {
   const main = code(read(new URL("main.js", MOD)));

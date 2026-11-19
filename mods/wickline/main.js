@@ -505,14 +505,20 @@ export default class Wickline extends View {
   }
 
   // Written before the dialog opens, so its first render finds its own hand-over; a second open replaces the first.
+  // The write is a boundary: when it fails, the detail still opens, without a token, and keeps the quote it opened with.
   openDetail(symbol) {
     const now = Date.now();
     const detail = this.watch.detailQuote(symbol, now);
     if (!detail) return;
-    const token = makeToken(now, Math.random());
+    let token = makeToken(now, Math.random());
     const { value, mine } = startHandover(symbol, token, detail);
-    detailStore.write(value);
-    this.handover = mine;
+    try {
+      detailStore.write(value);
+      this.handover = mine;
+    } catch {
+      this.handover = null;
+      token = null;
+    }
     const wide = canCarryBook(detail, this.settings);
     openOverlay({ mod: MOD_ID, kind: "dialog", width: wide ? DETAIL_WIDE_WIDTH : DETAIL_WIDTH, props: { detail, token, wide } });
   }
