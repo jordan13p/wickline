@@ -86,6 +86,12 @@ export function crosshairSpot(x, label, widthPx) {
   return { left: 0 };
 }
 
+/**
+ * The box's edge the crosshair's label sits at for a point `y`% down: "bottom" for one in the upper half, so the label
+ * never covers it, else "top".
+ */
+export const crosshairEdge = (y) => (y < 50 ? "bottom" : "top");
+
 const group = (digits) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 function significant(price) {

@@ -7,7 +7,7 @@ import { activityCells, amplitude, formatShare, innerOuter } from "../mods/wickl
 import { bookTotals, detailBook, formatSignedCount, ladder } from "../mods/wickline/format.js";
 import { decodeStockList } from "../mods/wickline/providers/yahootw.js";
 import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
-import { crosshairAt, crosshairLabel, crosshairSpot } from "../mods/wickline/format.js";
+import { crosshairAt, crosshairEdge, crosshairLabel, crosshairSpot } from "../mods/wickline/format.js";
 import { decodeKlines } from "../mods/wickline/providers/binance.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { CLOSE_1224, at, day, jsonFixture, ok, say, taipei, withTZ } from "./helpers.mjs";
@@ -658,4 +658,12 @@ test("crosshairSpot holds a wide label inside the box", () => {
   assert.deepEqual(crosshairSpot(95, wide, 300), { right: 19 });
   assert.deepEqual(crosshairSpot(50, wide, 200), { left: 0 });
   assert.deepEqual(crosshairSpot(0, { head: "10:32 · 2,175.00", change: null }, 0), { left: 0 });
+});
+test("A point in the upper half puts the label at the bottom", () => {
+  const g = chartGeometry([10, 20, 15], 15);
+  const peak = crosshairAt(g, [1, 2, 3], 0.5);
+  assert.ok(peak.y < 50);
+  assert.equal(crosshairEdge(peak.y), "bottom");
+  assert.equal(crosshairEdge(crosshairAt(g, [1, 2, 3], 0).y), "top");  // the low
+  assert.deepEqual([0, 49.99, 50, 100].map(crosshairEdge), ["bottom", "bottom", "top", "top"]);
 });

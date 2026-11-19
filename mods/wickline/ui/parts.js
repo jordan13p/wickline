@@ -22,7 +22,7 @@ export const chartShape = (quote) => chartGeometry(quote.series, quote.previousC
 // the area and 1.25 px without. `crosshair` (only the detail passes it) follows the pointer: the box takes its `id`,
 // hands `move` the pointer's x as a share of its width (0…1) with that width, and calls `leave` when the pointer goes;
 // its `mark`, when set, draws a 1 px `dim` vertical line and a 6 px dot at a line point and a label on a `background`
-// plate at the top, placed by `spot` ({ left } or { right }, px).
+// plate at the top or bottom (`edge`), placed by `spot` ({ left } or { right }, px).
 export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, crosshair }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
@@ -60,16 +60,19 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
 }
 
 // The crosshair's three layers over the full box (positioned, so none takes room): the vertical line and the dot
-// centred on the point (never the price dot's inset layer; at either end half the dot falls outside); the label at the top.
+// centred on the point (never the price dot's inset layer; at either end half the dot falls outside); the label at the
+// box's top, or its bottom for a point in the upper half (`edge`). The plate stays opaque, so the line never shows
+// through; only its text dims.
 function crosshairLayers(t, mark) {
-  const label = h_flex().absolute().top(0).px(4).rounded(3).bg(t.background).text_size(11).whitespace_nowrap()
-    .opacity(mark.opacity).text_color(t.foreground).child(div().child(mark.head))
-    .when(Boolean(mark.change), (el) => el.child(div().child(" · "))
-      .child(div().text_color(mark.changeColor).child(mark.change)));
+  const ink = (text, color) => div().opacity(mark.opacity).text_color(color).child(text);
+  const plate = h_flex().absolute().px(4).rounded(3).bg(t.background).text_size(11).whitespace_nowrap()
+    .child(ink(mark.head, t.foreground))
+    .when(Boolean(mark.change), (el) => el.child(ink(" · ", t.foreground)).child(ink(mark.change, mark.changeColor)));
+  const placed = "left" in mark.spot ? plate.left(mark.spot.left) : plate.right(mark.spot.right);
   return [
     div().absolute().top(0).bottom(0).left(`${mark.x}%`).ml(-0.5).w(1).bg(t.dim),
     div().absolute().left(`${mark.x}%`).top(`${mark.y}%`).ml(-3).mt(-3).w(6).h(6).rounded_full().bg(mark.dotColor),
-    "left" in mark.spot ? label.left(mark.spot.left) : label.right(mark.spot.right),
+    mark.edge === "bottom" ? placed.bottom(0) : placed.top(0),
   ];
 }
 

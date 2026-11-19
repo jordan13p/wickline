@@ -4,8 +4,9 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import {
-  activityCells, bookTotals, changeTone, crosshairAt, crosshairLabel, crosshairSpot, detailBook, displayName, detailTimes,
-  formatChange, formatCount, formatSignedCount, innerOuter, ladder, number, secondRow, sessionTimesParts, signed,
+  activityCells, bookTotals, changeTone, crosshairAt, crosshairEdge, crosshairLabel, crosshairSpot, detailBook,
+  displayName, detailTimes, formatChange, formatCount, formatSignedCount, innerOuter, ladder, number, secondRow,
+  sessionTimesParts, signed,
 } from "../format.js";
 import { detailDimmed, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
@@ -56,8 +57,8 @@ function bookBlock(view, t, q, shown, tx) {
 }
 
 // The chart's crosshair (parts.js chart): the line point nearest the pointer (view.chartPointer) of `shape`, its label
-// and its place, the label at the detail's dim opacity when `dimmed`. A move redraws only when the nearest point or the
-// box's width changes; a leave clears the pointer.
+// and its place, the label's text at the detail's dim opacity when `dimmed`. A move redraws only when the nearest point
+// or the box's width changes; a leave clears the pointer.
 function crosshairOption(view, t, q, shape, dimmed) {
   const pointer = view.chartPointer;
   const at = pointer && crosshairAt(shape, q.times, pointer.share);
@@ -67,7 +68,7 @@ function crosshairOption(view, t, q, shape, dimmed) {
     const changeColor = view.changeColor(t, label.percent);
     mark = {
       x: at.x, y: at.y, dotColor: changeColor, head: label.head, change: label.change, changeColor,
-      spot: crosshairSpot(at.x, label, pointer.width), opacity: dimmed ? DIM_OPACITY : 1,
+      spot: crosshairSpot(at.x, label, pointer.width), edge: crosshairEdge(at.y), opacity: dimmed ? DIM_OPACITY : 1,
     };
   }
   return {
@@ -106,8 +107,10 @@ export function detailView(view, t) {
   const dimmed = detailDimmed(q, session, now);
   const dim = (el) => (dimmed ? el.opacity(DIM_OPACITY) : el);
   const shape = chartShape(q);
-  // A pointer kept while the chart is gone would bring the crosshair back at its old place when the chart returns.
-  if (!shape) view.chartPointer = null;
+  // A crosshair needs a line with one time per point (crosshairAt places one at any share then). A pointer kept while
+  // there is none would bring it back at its old place when one returns.
+  const traced = crosshairAt(shape, q.times, 0) !== null;
+  if (!traced) view.chartPointer = null;
   const stat = (label, price) => v_flex().flex_1().gap(2)
     .child(div().text_size(10.5).text_color(t.dim).child(view.tx(label)))
     .child(div().font_semibold().child(number(q, price)));
@@ -131,10 +134,10 @@ export function detailView(view, t) {
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown"))))),
     // The box only when its chart draws something (chartShape: a rule, a line or the price's dot), else nothing. The
-    // crosshair's label dims with the detail, and over a cached line, which is not current.
+    // crosshair's label text dims with the detail, and over a cached line, which is not current.
     shape !== null && chart(q, color, t, {
       width: "full", height: 140, fill: true, dot: 6,
-      crosshair: crosshairOption(view, t, q, shape, dimmed || Boolean(q.chartCached)),
+      crosshair: traced ? crosshairOption(view, t, q, shape, dimmed || Boolean(q.chartCached)) : null,
     }),
     isCryptoPair(q.symbol)
       ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
