@@ -43,7 +43,7 @@ const filterStorage = {
   setItem: (key, value) => localStorage.setItem(key, value),
 };
 // The open detail's hand-over (handover.js), in the shared state, saved to disk: the only code that touches its key,
-// so a proof copy swaps this object for one held in memory.
+// so a copy that must not touch the person's shared state can hold it in memory instead.
 const detailStore = {
   read: () => shared(DETAIL_KEY),
   write: (value) => setShared(DETAIL_KEY, value),
