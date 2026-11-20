@@ -704,4 +704,11 @@ test("An earlier day's line carries its date on the detail's chart", () => withT
   const pair = { symbol: "BTC/USDT", price: 91_000, previousClose: 90_000, timestamp: auction,
     series: [90_500, 91_000], times: [taipei("08:45:00", "2026-11-19"), taipei("23:45:00", "2026-11-19")] };
   assert.equal(lineDate(pair, auction, "en"), "");                                  // a pair's 24-hour line
+  // Yahoo Finance's cryptocurrencies (exchange CCC) trade around the clock as a pair does; FX keeps the date, so a
+  // weekend's line from Friday is dated.
+  assert.equal(lineDate({ ...pair, symbol: "BTC-USD", exchange: "CCC" }, auction, "en"), "");
+  const friday = taipei("05:55:00", "2026-11-14");
+  const fx = { symbol: "TWD=X", exchange: "CCY", price: 32, previousClose: 32.1, timestamp: friday,
+    series: [32.1, 32], times: [taipei("08:00:00", "2026-11-13"), friday] };
+  assert.equal(lineDate(fx, taipei("12:00:00", "2026-11-15"), "en"), "Nov 14");
 }));
