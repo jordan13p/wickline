@@ -65,15 +65,16 @@ export function crosshairAt(geometry, times, xShare) {
 }
 
 /**
- * What the crosshair's card says of point `index` of `quote`'s line: `time`, its local time, dated when its day
- * (dayFor) differs from the price's ("10:32", "Nov 18 22:15"); `price` ("2,175.00"); `change`, its change against the
- * previous close ("+0.23%"), and `percent`, that change as a number, both null without a positive previous close.
+ * What the crosshair's card says of point `index` of `quote`'s line at `now`: `time`, its local time, dated when its
+ * day is not `now`'s by the rows' day rule (dayFor), so yesterday's line shown before the open never reads as today's
+ * ("10:32", "Nov 19 11:55"); `price` ("2,175.00"); `change`, its change against the previous close ("+0.23%"), and
+ * `percent`, that change as a number, both null without a positive previous close.
  */
-export function crosshairLabel(quote, index, lang) {
+export function crosshairLabel(quote, index, now, lang) {
   const time = quote.times[index];
   const value = quote.series[index];
   const day = dayFor(quote);
-  const date = day(time) === day(quote.timestamp) ? "" : formatDate(time, lang);
+  const date = day(time) === day(now) ? "" : formatDate(time, lang);
   const percent = positive(quote.previousClose) ? (value - quote.previousClose) / quote.previousClose * 100 : null;
   const change = percent === null ? null : formatChange(percent);
   return { time: stamp(date, time), price: number(quote, value), change, percent };

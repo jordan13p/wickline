@@ -59,14 +59,14 @@ function bookBlock(view, t, q, shown, tx) {
 }
 
 // The chart's crosshair (parts.js chart): the line point nearest the pointer (view.chartPointer) of `shape`, its card
-// and its place, the card's text at the detail's dim opacity when `dimmed`. A move redraws only when the nearest point
-// or the box's width changes; a leave clears the pointer.
-function crosshairOption(view, t, q, shape, dimmed) {
+// as of `now` (the detail's clock) and its place, the card's text at the detail's dim opacity when `dimmed`. A move
+// redraws only when the nearest point or the box's width changes; a leave clears the pointer.
+function crosshairOption(view, t, q, shape, now, dimmed) {
   const pointer = view.chartPointer;
   const at = pointer && crosshairAt(shape, q.times, pointer.share);
   let mark = null;
   if (at) {
-    const label = crosshairLabel(q, at.index, view.lang);
+    const label = crosshairLabel(q, at.index, now, view.lang);
     const changeColor = view.changeColor(t, label.percent);
     mark = {
       x: at.x, y: at.y, dotColor: changeColor, time: label.time, price: label.price, change: label.change, changeColor,
@@ -140,7 +140,7 @@ export function detailView(view, t) {
     // crosshair's card text dims with the detail, and over a cached line, which is not current.
     shape !== null && chart(q, color, t, {
       width: "full", height: CHART_H, fill: true, dot: 6,
-      crosshair: traced ? crosshairOption(view, t, q, shape, dimmed || Boolean(q.chartCached)) : null,
+      crosshair: traced ? crosshairOption(view, t, q, shape, now, dimmed || Boolean(q.chartCached)) : null,
     }),
     isCryptoPair(q.symbol)
       ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))

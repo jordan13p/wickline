@@ -630,20 +630,32 @@ test("crosshairAt reads the same share against a new line", () => {
 test("Reading a point: time, price and change against the previous close", () => withTZ("Asia/Taipei", () => {
   const q = { symbol: "2330.TW", exchange: "TAI", price: 2180, previousClose: 2170, timestamp: taipei("10:40:00"),
     series: [2170, 2175, 2180], times: [taipei("10:31:00"), taipei("10:32:00"), taipei("10:40:00")] };
-  const label = crosshairLabel(q, 1, "zh-TW");
+  const label = crosshairLabel(q, 1, taipei("10:41:00"), "zh-TW");
   assert.deepEqual([label.time, label.price, label.change], ["10:32", "2,175.00", "+0.23%"]);
   assert.ok(Math.abs(label.percent - 5 / 2170 * 100) < 1e-12);
-  assert.deepEqual(crosshairLabel({ ...q, previousClose: null }, 1, "zh-TW"), { time: "10:32", price: "2,175.00", change: null, percent: null });
+  assert.deepEqual(crosshairLabel({ ...q, previousClose: null }, 1, taipei("10:41:00"), "zh-TW"), { time: "10:32", price: "2,175.00", change: null, percent: null });
 }));
 test("Another day's point carries its date", () => withTZ("Asia/Taipei", () => {
   const line = decodeKlines(ok(jsonFixture("binance-btc-15m")));
   const q = { symbol: "BTC/USDT", price: 63_719.01, previousClose: 63_500, timestamp: 1795076099999, ...line };
-  assert.deepEqual(crosshairLabel(q, 24, "en"),
+  assert.deepEqual(crosshairLabel(q, 24, q.timestamp, "en"),
     { time: "Nov 18 22:15", price: "64,000.01", change: "+0.79%", percent: (64_000.01 - 63_500) / 63_500 * 100 });
   const wtx = { symbol: "WTX&", exchange: "TFE", price: 40_000, previousClose: 40_000, timestamp: taipei("10:00:00", "2026-11-11"),
     series: [40_000, 40_000], times: [taipei("22:00:00", "2026-11-10"), taipei("02:00:00", "2026-11-11")] };
-  assert.equal(crosshairLabel(wtx, 0, "zh-TW").time, "11/10 22:00");   // the Taipei day differs
-  assert.equal(crosshairLabel(wtx, 1, "zh-TW").time, "02:00");
+  assert.equal(crosshairLabel(wtx, 0, wtx.timestamp, "zh-TW").time, "11/10 22:00");   // not the Taipei day of now
+  assert.equal(crosshairLabel(wtx, 1, wtx.timestamp, "zh-TW").time, "02:00");
+}));
+test("Yesterday's line before the open: its points carry their date", () => withTZ("Asia/Taipei", () => {
+  const q = { symbol: "0050.TW", exchange: "TAI", price: 60, previousClose: 59.5, timestamp: taipei("13:30:00", "2026-11-19"),
+    series: [59.8, 60], times: [taipei("11:55:00", "2026-11-19"), taipei("13:30:00", "2026-11-19")] };
+  const opening = taipei("08:36:00", "2026-11-20");
+  assert.equal(crosshairLabel(q, 0, opening, "zh-TW").time, "11/19 11:55");   // the price is also 11/19's: still dated
+  assert.equal(crosshairLabel(q, 0, opening, "en").time, "Nov 19 11:55");
+  assert.equal(crosshairLabel(q, 0, taipei("13:40:00", "2026-11-19"), "zh-TW").time, "11:55"); // today's point: no date
+  const pair = { symbol: "BTC/USDT", price: 91_000, previousClose: 90_000, timestamp: opening,
+    series: [90_500, 91_000], times: [taipei("23:00:00", "2026-11-19"), taipei("00:15:00", "2026-11-20")] };
+  assert.equal(crosshairLabel(pair, 0, opening, "en").time, "Nov 19 23:00");
+  assert.equal(crosshairLabel(pair, 1, opening, "en").time, "00:15");
 }));
 // A card's width: the wider of its time (6.5 px a character) and its price and change (7.5 px a character, 6 px
 // between them), plus 12 px of padding.
