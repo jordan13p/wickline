@@ -406,15 +406,15 @@ export default class Wickline extends View {
     this.statementOpen = new Set();
     this.advancedOpen = new Set();
     this.initFinnhubDraft(cx);
-    this.urlInput = InputState.new({ placeholder: BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
+    this.binanceUrlInput = InputState.new({ placeholder: BINANCE_URL, value: this.draft.sources.crypto.binanceUrl });
     // Redraw on every keystroke: the field's error and the Save button follow the draft. A field typed in
     // keeps its page's Advanced open, also once an error that opened it is fixed.
-    this.urlInput.on("change", (_e, cx) => {
-      this.draft.sources.crypto.binanceUrl = this.urlInput.value();
+    this.binanceUrlInput.on("change", (_e, cx) => {
+      this.draft.sources.crypto.binanceUrl = this.binanceUrlInput.value();
       this.advancedOpen.add("crypto");
       cx.notify();
     });
-    this.trackFocus(this.urlInput, "urlFocused");
+    this.trackFocus(this.binanceUrlInput, "binanceUrlFocused");
     this.misUrlInput = InputState.new({ placeholder: MIS_URL, value: this.draft.sources.tw.misUrl });
     this.misUrlInput.on("change", (_e, cx) => {
       this.draft.sources.tw.misUrl = this.misUrlInput.value();

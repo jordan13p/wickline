@@ -33,7 +33,7 @@ export function finnhubCap(budgetPerMinute) {
   return Math.floor(budgetPerMinute / 4);
 }
 
-const number = (value) => (positive(value) ? value : null);
+const positiveValue = (value) => (positive(value) ? value : null);
 
 /** The overlay for `symbol`; a zero price or time (Finnhub's answer for an unknown symbol) is no quote and no error. */
 function decodeFinnhub(symbol, response, now) {
@@ -58,10 +58,10 @@ function decodeFinnhub(symbol, response, now) {
       symbol,
       source: "finnhub",
       price: body.c,
-      previousClose: number(body.pc),
-      open: number(body.o),
-      high: number(body.h),
-      low: number(body.l),
+      previousClose: positiveValue(body.pc),
+      open: positiveValue(body.o),
+      high: positiveValue(body.h),
+      low: positiveValue(body.l),
       timestamp: body.t * 1000,
       fetchedAt: now,
     },

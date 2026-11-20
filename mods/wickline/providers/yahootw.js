@@ -58,7 +58,7 @@ export function ownPeriods(quote, periods, now) {
 }
 
 // `{ raw: "2240" }` → 2240; `"-"` (no value yet) or anything not positive → null.
-const number = (field) => positiveOrNull(field?.raw);
+const rawNumber = (field) => positiveOrNull(field?.raw);
 
 // A shown count: `volumeK` is in thousands of shares (a stock's lots) or of contracts (a future's, so 82.587 is 82,587).
 // None when it is not a positive number.
@@ -195,7 +195,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     if (future && exchangeCode(row.exchange) !== "TFE") continue;
     const name = cleanText(row.symbolName);
     if (name) names[symbol] = name;
-    const price = number(row.price);
+    const price = rawNumber(row.price);
     if (price) anyPrice = true;
     const tradeTime = time(row.regularMarketTime);
     const day = tradeTime === null ? null : (future ? futuresDay : taipeiDay)(tradeTime);
@@ -221,7 +221,7 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       if (levels && levels.bids.length + levels.asks.length > 0) auctionBook[symbol] = { ...levels, auction: true };
     }
     if (!price || !dayOk || delayed) continue;
-    const limits = limitPair(number(row.limitUpPrice), number(row.limitDownPrice));
+    const limits = limitPair(rawNumber(row.limitUpPrice), rawNumber(row.limitDownPrice));
     if (!future && !withinLimits(price, limits.limitUp, limits.limitDown)) {
       errors[symbol] = new QuoteError("yahootw.outOfLimits");
       continue;
@@ -233,10 +233,10 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
         source: "yahootw",
         name,
         price,
-        previousClose: number(row.regularMarketPreviousClose),
-        open: number(row.regularMarketOpen),
-        high: number(row.regularMarketDayHigh),
-        low: number(row.regularMarketDayLow),
+        previousClose: rawNumber(row.regularMarketPreviousClose),
+        open: rawNumber(row.regularMarketOpen),
+        high: rawNumber(row.regularMarketDayHigh),
+        low: rawNumber(row.regularMarketDayLow),
         ...limits,
         // An instrument only this source prices takes its market and currency from here.
         exchange: exchangeCode(row.exchange),

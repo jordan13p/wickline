@@ -24,7 +24,7 @@ import {
   sessionOf,
   staleAt,
 } from "./freshness.js";
-import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import { DAY_MS, HOUR_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
@@ -98,8 +98,13 @@ const TIMED_OUT = {};
 const LINE_LAG_MS = 120_000;
 // How many trade times a line is judged by: the newest settled one and the ones still settling (see lineFrozen).
 const LINE_TRADES = 4;
+// A provider's backoff after a rate limit: at least BACKOFF_BASE_MS, doubling for up to BACKOFF_MAX_DOUBLINGS
+// failures after the first, never over BACKOFF_MAX_MS (see backOff).
+const BACKOFF_BASE_MS = 60_000;
+const BACKOFF_MAX_MS = 900_000;
+const BACKOFF_MAX_DOUBLINGS = 4;
 // After a failed holiday schedule fetch, how long until it is asked again.
-const HOLIDAY_RETRY_MS = 3_600_000;
+const HOLIDAY_RETRY_MS = HOUR_MS;
 // How long a session's trade observation is kept (Watchlist#seen): a session is never open longer.
 const SEEN_KEEP_MS = 2 * DAY_MS;
 
@@ -1281,7 +1286,10 @@ export class Watchlist {
   // prices, sent or not, so its rows fall to the next source (one it prices alone keeps its price, cached).
   backOff(provider, state, requests, index, limited) {
     state.failures++;
-    const backoff = Math.min(900_000, 60_000 * 2 ** Math.min(state.failures - 1, 4));
+    const backoff = Math.min(
+      BACKOFF_MAX_MS,
+      BACKOFF_BASE_MS * 2 ** Math.min(state.failures - 1, BACKOFF_MAX_DOUBLINGS),
+    );
     state.retryAt = this.host.now() + Math.max(backoff, limited.retryAfterMs);
     state.problem = coded(limited);
     const from = provider.overlay && requests[index].kind === "line" ? -1 : index;

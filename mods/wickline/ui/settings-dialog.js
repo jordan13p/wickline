@@ -232,12 +232,12 @@ function heading(view, t, key) {
 }
 
 // One source: its place in the order (none for the fallback), its name and kind, and its switch on the right.
-function sourceRow(view, t, number, source, kind, control) {
+function sourceRow(view, t, position, source, kind, control) {
   return h_flex()
     .gap(8)
     .items_center()
     .min_h(24)
-    .child(div().flex_none().w(10).text_size(11).text_color(t.dim).child(number))
+    .child(div().flex_none().w(10).text_size(11).text_color(t.dim).child(position))
     .child(
       div()
         .flex_none()
@@ -598,7 +598,7 @@ function cryptoPage(view, t, errors, status) {
       view,
       t,
       "crypto",
-      field(view, t, view.tx("sources.crypto.url"), view.urlInput, view.urlFocused, urlError),
+      field(view, t, view.tx("sources.crypto.url"), view.binanceUrlInput, view.binanceUrlFocused, urlError),
       urlError,
     ),
   );
