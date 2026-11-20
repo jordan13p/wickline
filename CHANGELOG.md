@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-20
+
 ### Added
 
 - Hover the detail dialog's chart to read the nearest point's date, time, price and change on a card beside it.
@@ -147,7 +149,8 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
   open with `ctrl-alt-b`.
 - A settings dialog, five interface languages, and red-up or green-up colors.
 
-[Unreleased]: https://github.com/jordan13p/wickline/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/jordan13p/wickline/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/jordan13p/wickline/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jordan13p/wickline/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jordan13p/wickline/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/jordan13p/wickline/compare/v0.6.0...v0.6.1
