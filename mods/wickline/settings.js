@@ -236,7 +236,7 @@ const KEY_MAX_LENGTH = 128;
 const KEY_BAD_CHARACTER = /[\s\x00-\x1f\x7f]/;
 
 /**
- * What stops a save: `{}` is valid. The text for each code is in i18n.js. `finnhubKey` is the key
+ * What stops a save: `{}` is valid. The text for each code is in i18n/. `finnhubKey` is the key
  * typed in the dialog (it is never in the settings; without it the key is not checked) and `keySaved`
  * says a saved key stays after Save, so an empty field keeps it.
  */
