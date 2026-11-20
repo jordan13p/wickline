@@ -10,7 +10,7 @@ import {
   crosshairSpot,
   sessionProgress,
 } from "../mods/wickline/chart.js";
-import { LINE_PERIODS, TW_TODAY, at, day, line, taipei, withTZ, yq } from "./helpers.mjs";
+import { LINE_PERIODS, TW_TODAY, at, day, lineQuote, taipei, withTZ, yq } from "./helpers.mjs";
 
 // A line needs two points: a lone one with no rule and no dot draws nothing, so the detail shows no empty box.
 test("a lone point is drawn only with a rule or a dot", () => {
@@ -262,7 +262,7 @@ test("sessionProgress: a zero-length period gives 1", () => {
 
 test("A line in its session: mid-morning", () => {
   const { layout, g } = drawn(
-    line({ ...yq("2330.TW", "TAI", taipei("10:07:30"), TW_TODAY), series: [2190, 2185, 2180, 2182, 2180] }),
+    lineQuote({ ...yq("2330.TW", "TAI", taipei("10:07:30"), TW_TODAY), series: [2190, 2185, 2180, 2182, 2180] }),
   );
   assert.deepEqual(layout, { extent: 0.25, dot: null });
   assert.equal(lastX(g), 25);
@@ -273,7 +273,7 @@ test("A line in its session: mid-morning", () => {
 
 test("A line in its session: a future's night opens", () => {
   const time = at("2026-11-09T07:02:00Z");
-  const q = line({
+  const q = lineQuote({
     symbol: "WTX&",
     source: "yahootw",
     timestamp: time,
@@ -288,17 +288,17 @@ test("A line in its session: a future's night opens", () => {
 });
 
 test("A line in its session: a lunch break takes no room", () => {
-  const { layout, g } = drawn(line(yq("0700.HK", "HKG", taipei("14:00:00"), HK_TODAY)));
+  const { layout, g } = drawn(lineQuote(yq("0700.HK", "HKG", taipei("14:00:00"), HK_TODAY)));
   assert.equal(layout.extent, 210 / 330);
   assert.equal(lastX(g), 63.64);
 });
 
 test("A line in its session: a finished day", () => {
   // After the close, and at 08:38 the next morning, the line quote's time is the close: the box is full.
-  const yahoo = line(yq("2330.TW", "TAI", taipei("13:30:00"), TW_TODAY));
+  const yahoo = lineQuote(yq("2330.TW", "TAI", taipei("13:30:00"), TW_TODAY));
   assert.equal(drawn(yahoo).layout.extent, 1);
   assert.equal(lastX(drawn(yahoo).g), 100);
-  const mis = line({
+  const mis = lineQuote({
     ...yahoo,
     source: "mis",
     timestamp: taipei("13:30:00"),
@@ -307,12 +307,12 @@ test("A line in its session: a finished day", () => {
   });
   assert.deepEqual(drawn(mis).layout, { extent: 1, dot: null });
   // Hours only: yesterday's close read the next morning.
-  const hoursOnly = line({ symbol: "2330.TW", source: "yahootw", timestamp: taipei("13:30:00", "2026-11-16") });
+  const hoursOnly = lineQuote({ symbol: "2330.TW", source: "yahootw", timestamp: taipei("13:30:00", "2026-11-16") });
   assert.equal(drawn(hoursOnly).layout.extent, 1);
 });
 
 test("A line in its session: one point", () => {
-  const { g } = drawn(line({ ...yq("2330.TW", "TAI", taipei("09:01:00"), TW_TODAY), series: [2190] }));
+  const { g } = drawn(lineQuote({ ...yq("2330.TW", "TAI", taipei("09:01:00"), TW_TODAY), series: [2190] }));
   assert.equal(g.points.length, 1);
   assert.equal(g.points[0][0], 0);
   assert.notEqual(g.reference, null);
@@ -333,7 +333,7 @@ test("A line in its session: crypto", () => {
 });
 
 test("A price after its line: MIS over a late Yahoo Finance line", () => {
-  const q = line({
+  const q = lineQuote({
     ...yq("2330.TW", "TAI", taipei("10:00:05"), TW_TODAY),
     source: "mis",
     price: 2200,
@@ -351,7 +351,7 @@ test("A price after its line: MIS over a late Yahoo Finance line", () => {
 });
 
 test("A price after its line: before Yahoo Finance's first bar", () => {
-  const q = line({
+  const q = lineQuote({
     ...yq("2330.TW", "TAI", taipei("09:05:00"), TW_TODAY),
     source: "mis",
     series: [],
@@ -366,7 +366,7 @@ test("A price after its line: before Yahoo Finance's first bar", () => {
 });
 
 test("A price after its line: a line one bar behind", () => {
-  const q = line({
+  const q = lineQuote({
     ...yq("AAPL", "NMS", ny("10:03:00"), NY_DAY),
     source: "finnhub",
     chartSource: "yahoo",
@@ -380,7 +380,7 @@ test("A price after its line: a line one bar behind", () => {
 
 test("A price after its line: a future without its day's line", () => {
   const time = at("2026-11-09T07:00:40Z"); // 15:00:40 Taipei
-  const q = line({
+  const q = lineQuote({
     symbol: "WTX&",
     source: "yahootw",
     timestamp: time,
@@ -397,7 +397,7 @@ test("A price after its line: a future without its day's line", () => {
 
 test("A price after its line: Yahoo 奇摩股市's own line", () => {
   const time = taipei("10:30:00");
-  const q = line({
+  const q = lineQuote({
     ...yq("0050.TW", "TAI", time, TW_TODAY),
     source: "yahootw",
     chartSource: "yahootw",

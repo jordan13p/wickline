@@ -47,7 +47,7 @@ import {
   at,
   day,
   fakeHost,
-  line,
+  lineQuote,
   listed2026,
   observation,
   ok,
@@ -754,7 +754,7 @@ test("a future's session: inside a segment open, between segments closed, the TA
 });
 
 test("a future reads Live in both sessions, closed with its last trade in a break, and never stale there", () => {
-  const tx = (key, params) => t("zh-TW", key, params);
+  const tx = say("zh-TW");
   const night = at("2026-11-09T17:00:00Z"); // 01:00
   assert.equal(freshness(future(night - 20_000), "open", night).state, "live");
   assert.equal(sessionName(future(night - 20_000), "open", night), "night");
@@ -2149,7 +2149,7 @@ test("the detail names 試撮中", () => {
 test("A price dot in an auction", () => {
   // 13:27: 試撮中, the price held from 13:24:50, past the Yahoo Finance line's 13:05 end. The price's dot is no state dot.
   const now = taipei("13:27:00");
-  const q = line({
+  const q = lineQuote({
     ...yq("2330.TW", "TAI", taipei("13:24:50"), TW_TODAY),
     source: "mis",
     twRealtime: true,

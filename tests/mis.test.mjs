@@ -6,10 +6,9 @@ import { USER_AGENT, priceLimit, withinLimits } from "../mods/wickline/quotes.js
 import { displayName } from "../mods/wickline/format.js";
 import { freshness, msUntilStale } from "../mods/wickline/freshness.js";
 import { detailSource } from "../mods/wickline/detail.js";
-import { t } from "../mods/wickline/i18n.js";
 import { mergeOverlay } from "../mods/wickline/overlay.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
-import { advance, at, chart, chartSymbol, fakeHost, jsonFixture, start, stop } from "./helpers.mjs";
+import { advance, at, chart, chartSymbol, fakeHost, jsonFixture, say, start, stop } from "./helpers.mjs";
 import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel } from "../mods/wickline/providers/mis.js";
 
 // Recorded answers from MIS during trading hours (2026-11-05), only these symbols' rows.
@@ -671,7 +670,6 @@ test("a Taiwan name follows the interface language", () => {
 });
 
 test("the detail line puts the chart's delay on the chart", () => {
-  const say = (lang) => (key, params) => t(lang, key, params);
   const merged = mergeOverlay(YAHOO_2330, MIS_2330);
   assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), [
     ["價格：即時 · 證交所 MIS"],

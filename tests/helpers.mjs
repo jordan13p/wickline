@@ -32,9 +32,9 @@ export const yq = (symbol, exchange, timestamp, periods = null) => ({
 // A clock time on the Taipei clock (UTC+8), on Tuesday 2026-11-17 (the call-auction recordings' day) unless `date` says.
 export const taipei = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
 // Tuesday 2026-11-17 in Taipei: a Yahoo 奇摩股市 line of 0050.TW and a price laid over it.
-export const DAY = taipeiDay(taipei("10:00:00"));
+export const TAIPEI_DAY_1117 = taipeiDay(taipei("10:00:00"));
 export const line0050 = {
-  day: DAY,
+  day: TAIPEI_DAY_1117,
   series: [189.1, 189.2, 189.2],
   times: [taipei("10:29:00"), taipei("10:30:00"), taipei("10:31:00")],
   lastAt: taipei("10:30:00"),
@@ -43,7 +43,7 @@ export const ytw0050 = (fields) => ({
   symbol: "0050.TW",
   source: "yahootw",
   price: 189.3,
-  day: DAY,
+  day: TAIPEI_DAY_1117,
   timestamp: taipei("10:32:05"),
   fetchedAt: taipei("10:32:06"),
   ...fields,
@@ -293,4 +293,4 @@ export const wtxDetail = (overrides) => ({
 
 export const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 
-export const line = (fields) => ({ price: 2180, previousClose: 2200, series: [2190, 2185, 2180], ...fields });
+export const lineQuote = (fields) => ({ price: 2180, previousClose: 2200, series: [2190, 2185, 2180], ...fields });

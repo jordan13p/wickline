@@ -9,7 +9,7 @@ import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { detailSource } from "../mods/wickline/detail.js";
 import { formatTime } from "../mods/wickline/format.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
-import { advance, at, chart, chartSymbol, day, fakeHost, ok, start, stop, yq } from "./helpers.mjs";
+import { advance, at, chart, chartSymbol, day, fakeHost, ok, say, start, stop, yq } from "./helpers.mjs";
 import { FINNHUB_URL, finnhub, finnhubCap, finnhubSymbol } from "../mods/wickline/providers/finnhub.js";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { MIS_CONSENT_VERSION, mis } from "../mods/wickline/providers/mis.js";
@@ -675,9 +675,8 @@ test("the detail's line under a live Finnhub price takes its state from the Yaho
     timestamp: now - 10_000,
     fetchedAt: now - 9_000,
   });
-  const say = (key, params) => t("en", key, params);
   const stopped = t("en", "freshness.stalled", { time: formatTime(base.timestamp) });
-  assert.deepEqual(detailSource(merged, "open", now, say), [
+  assert.deepEqual(detailSource(merged, "open", now, say("en")), [
     ["Price: Live · Finnhub"],
     [`Line: ${stopped} · Yahoo Finance`],
   ]);
@@ -686,7 +685,10 @@ test("the detail's line under a live Finnhub price takes its state from the Yaho
     { ...base, timestamp: now - 70_000, fetchedAt: now - 60_000 },
     { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 10_000, fetchedAt: now - 9_000 },
   );
-  assert.deepEqual(detailSource(fresh, "open", now, say), [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(fresh, "open", now, say("en")), [
+    ["Price: Live · Finnhub"],
+    ["Line: Live · Yahoo Finance"],
+  ]);
 });
 
 test("a Finnhub round starts at 09:30 New York", async () => {

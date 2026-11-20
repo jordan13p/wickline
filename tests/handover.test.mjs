@@ -23,6 +23,7 @@ import {
   BOTH_ON,
   LISTED_2026,
   MIS_ON,
+  TW_TODAY,
   at,
   day,
   fakeHost,
@@ -91,7 +92,6 @@ const close = (store, held) => {
 };
 
 // Tuesday 2026-11-17 in Taipei: Yahoo Finance's delayed 2330.TW under today's periods, and a MIS or Yahoo 奇摩股市 price.
-const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 const yahooDelayed = (time, symbol = "2330.TW") => ({
   ...yq(symbol, "TAI", time, TW_TODAY),
   price: 2180,

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mergeOverlay, pickOverlay } from "../mods/wickline/overlay.js";
-import { DAY, at, day, line0050, taipei, withTZ, ytw0050, yq } from "./helpers.mjs";
+import { TAIPEI_DAY_1117, TW_TODAY, at, day, line0050, taipei, withTZ, ytw0050, yq } from "./helpers.mjs";
 
 test("pickOverlay: first live in order, else newest, ties keep order, none → null", () => {
   const NOW = 1_000_000;
@@ -75,7 +75,6 @@ test("mergeOverlay: a fresh overlay never inherits the base's cached flag; the l
   assert.ok(!("chartCached" in mergeOverlay(plain, mis, null)));
 });
 
-const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 test("mergeOverlay: the live price is appended at its own trade time", () => {
   assert.equal(
     mergeOverlay(undefined, ytw0050({ tradeTime: taipei("10:31:40") }), line0050).times.at(-1),
@@ -114,7 +113,7 @@ test("mergeOverlay: the base's times never go with any line but the base's", () 
     series: [1, 2],
     times: [taipei("10:20:00"), taipei("10:25:00")],
   };
-  const untimed = { day: DAY, series: [189.1, 189.2] };
+  const untimed = { day: TAIPEI_DAY_1117, series: [189.1, 189.2] };
   const cases = {
     "an own line without times": mergeOverlay(
       base,

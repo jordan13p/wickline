@@ -42,6 +42,7 @@ import {
   lineSymbol,
   misFlagged,
   ok,
+  say,
   start,
   stop,
   taipei,
@@ -1205,7 +1206,7 @@ test("^TWOII, unknown to Yahoo Finance, is priced by Yahoo 奇摩股市 alone", 
 });
 
 test("overnight, a TW-only symbol shows its last close and polls gently", async () => {
-  const tx = (key, params) => t("en", key, params);
+  const tx = say("en");
   // The recorded line (the day before's periods and minutes), and one with no point from today and no periods.
   for (const line of [() => ok(EARLIER_TICK), (symbol) => tickAt(symbol, CLOSE_0509, [321.97])]) {
     const host = twOnlyHost(["^TWOII"], { yahootw: () => ok(EARLIER_ROWS), line });
@@ -1971,7 +1972,7 @@ test("at 20:00 a stock beside a trading future still reads closed at 13:30", asy
       ]),
     yahoo: (symbol) => twYahoo(symbol, { exchangeName: "TAI", currentTradingPeriod: open }),
   });
-  const tx = (key, params) => t("zh-TW", key, params);
+  const tx = say("zh-TW");
   await soleRun(
     host,
     (w) => {
@@ -2323,7 +2324,7 @@ test("on Sunday, Friday night's last price reads closed with its date, polled ge
     yahootw: () => futuresAt(last),
     line: (symbol) => futuresLine(symbol, FRI_1500, at("2026-11-13T20:59:00Z"), FRI_SEGMENTS),
   });
-  const tx = (key, params) => t("zh-TW", key, params);
+  const tx = say("zh-TW");
   await soleRun(
     host,
     async (w) => {
@@ -2562,7 +2563,7 @@ test("TAIFEX holds no night session: 已收盤 · 13:45 from 15:10, polled every
       );
       assert.equal(t("zh-TW", `session.${sessionName(quote, session, after)}`), t("zh-TW", "session.closed"));
       assert.deepEqual(
-        withTZ("Asia/Taipei", () => sessionTimesParts(sessionTimes(quote, after), "zh-TW", (k, p) => t("zh-TW", k, p))),
+        withTZ("Asia/Taipei", () => sessionTimesParts(sessionTimes(quote, after), "zh-TW", say("zh-TW"))),
         ["交易時段：日盤 08:45–13:45", "夜盤尚無成交"],
       );
       assert.deepEqual(w.notes(), [{ code: "closure.noTradesNight", params: { source: "yahootw" } }]);
@@ -2584,7 +2585,7 @@ test("a skipped night after midnight: 已收盤 · 11/10 13:45, 夜盤尚無成�
     yahootw: () => futuresAt(last),
     line: (symbol) => futuresLine(symbol, MON_1500, at("2026-11-10T05:44:00Z"), SEGMENTS),
   });
-  const zh = (k, p) => t("zh-TW", k, p);
+  const zh = say("zh-TW");
   const night = [{ code: "closure.noTradesNight", params: { source: "yahootw" } }];
   await soleRun(
     host,
@@ -3177,9 +3178,7 @@ test("今日無成交 over a MIS book price prints no time", async () => {
       const quote = w.shown("2330.TW", host.clock);
       assert.equal(quote.source, "mis");
       assert.equal(quietLabel(quote, host.clock), "今日無成交");
-      const times = withTZ("Asia/Taipei", () =>
-        detailTimes(quote, host.clock, "zh-TW", (key, params) => t("zh-TW", key, params)),
-      );
+      const times = withTZ("Asia/Taipei", () => detailTimes(quote, host.clock, "zh-TW", say("zh-TW")));
       assert.equal(
         times.some((part) => part.startsWith("最後成交")),
         false,
@@ -4002,10 +4001,7 @@ test("A line only under its own session's price: yesterday's line under today's 
   assert.notEqual(g.reference, null);
   // The detail names no line source.
   const now = taipei("09:00:30");
-  assert.deepEqual(
-    detailSource(row, sessionOf(row, now), now, (key, params) => t("zh-TW", key, params)),
-    [["價格：即時 · 證交所 MIS"]],
-  );
+  assert.deepEqual(detailSource(row, sessionOf(row, now), now, say("zh-TW")), [["價格：即時 · 證交所 MIS"]]);
 });
 
 test("A line only under its own session's price: both from the last session", () => {

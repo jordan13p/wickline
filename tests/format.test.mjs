@@ -188,7 +188,7 @@ test("the live label names the state, not the source", () => {
   const now = new Date(2026, 10, 9, 9, 41, 20).getTime();
   const at = (source, symbol) => ({ symbol, source, timestamp: now - 10_000 });
   for (const lang of ["en", "zh-TW", "zh-CN", "ja", "ko"]) {
-    const tx = (key, params) => t(lang, key, params);
+    const tx = say(lang);
     const label = (quote, session) => freshnessLabel(quote, freshness(quote, session, now), now, lang, tx);
     for (const [source, symbol, session] of [
       ["mis", "2330.TW", "open"],
@@ -209,7 +209,7 @@ test("the live label names the state, not the source", () => {
 });
 
 test("the detail times: quoted, the last trade when it differs, fetched", () => {
-  const tx = (key, params) => t("en", key, params);
+  const tx = say("en");
   const at = (h, m, s) => new Date(2026, 10, 9, h, m, s).getTime();
   const now = at(9, 41, 20);
   // 0050.TW from Yahoo 奇摩股市: quoted at the feed's time, its own last trade earlier.
@@ -246,7 +246,7 @@ test("a row collapses only when it has no price and its fetch failed", () => {
 // A Taiwan quote's day is Taipei's (dayFor), not the local date: on a London clock, 23:30 on 11/1 is the same Taipei day
 // as 12:00 on 11/2, and 10:00 on 11/2 an earlier Taipei day than 18:00 (11/3 02:00 in Taipei).
 test("formatStaleDate and detailTimes compare by the quote's own day", () => {
-  const tx = (key, params) => t("en", key, params);
+  const tx = say("en");
   withTZ("Europe/London", () => {
     const now = at("2026-11-02T12:00:00Z");
     const earlier = at("2026-11-01T23:30:00Z");
@@ -276,8 +276,8 @@ test("an unconfirmed state has no word of its own", () => {
 });
 
 test("the session times line, per market kind, in local time", () => {
-  const zh = (key, params) => t("zh-TW", key, params);
-  const en = (key, params) => t("en", key, params);
+  const zh = say("zh-TW");
+  const en = say("en");
   const line = (quote, now, tx = zh) => sessionTimesParts(sessionTimes(quote, now), tx === en ? "en" : "zh-TW", tx);
   const nov = at("2026-11-10T02:00:00Z");
   const tw = { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") };
@@ -335,7 +335,7 @@ test("the session times line, per market kind, in local time", () => {
 });
 
 test('a Taiwan row\'s "today" is the Taipei date, printed in local time', () => {
-  const zh = (key, params) => t("zh-TW", key, params);
+  const zh = say("zh-TW");
   const closed = { state: "closed", delayMinutes: null, stoppedAt: null };
   const friday = at("2026-11-13T05:30:00Z"); // 13:30 Taipei Friday
   const tw = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: friday, fetchedAt: friday };
@@ -356,8 +356,8 @@ test('a Taiwan row\'s "today" is the Taipei date, printed in local time', () => 
 
 test("the 休市 label and the closed day's session times", () => {
   withTZ("Asia/Taipei", () => {
-    const zh = (key, params) => t("zh-TW", key, params);
-    const en = (key, params) => t("en", key, params);
+    const zh = say("zh-TW");
+    const en = say("en");
     const holiday = { state: "holiday", delayMinutes: null, stoppedAt: null };
     const q = {
       symbol: "2330.TW",
@@ -388,8 +388,8 @@ test("the 休市 label and the closed day's session times", () => {
 
 test("the 今日無成交 label, header and session times", () => {
   withTZ("Asia/Taipei", () => {
-    const zh = (key, params) => t("zh-TW", key, params);
-    const en = (key, params) => t("en", key, params);
+    const zh = say("zh-TW");
+    const en = say("en");
     const now = at("2026-11-11T01:00:00Z"); // 09:00 on a normal Wednesday
     const wtx = {
       symbol: "WTX&",
