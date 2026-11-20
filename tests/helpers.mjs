@@ -217,3 +217,19 @@ export async function advance(host, until) {
   host.clock = Math.max(host.clock, until);
   await new Promise((r) => setImmediate(r));
 }
+
+// 5 Taiwan, 4 US and 3 crypto symbols, Taiwan first.
+export const TWELVE = [
+  "2330.TW",
+  "0050.TW",
+  "AAPL",
+  "00632R.TW",
+  "NVDA",
+  "BTC/USDT",
+  "2317.TW",
+  "MSFT",
+  "ETH/USDT",
+  "2454.TW",
+  "AMZN",
+  "SOL/USDT",
+];
