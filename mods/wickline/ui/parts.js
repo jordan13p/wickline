@@ -61,12 +61,13 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
 
 // The crosshair's three layers over the full box (positioned, so none takes room): the vertical line and the dot
 // centred on the point (never the price dot's inset layer; at either end half the dot falls outside); the card beside
-// them, two lines: the time (11 px, `dim`) over the price (semibold) and its change in the change color. The plate
-// stays opaque, so the line never shows through; only its text dims.
+// them, two lines: the date and time (11 px on a 14 px line, `dim`) over the price (semibold) and its change in the
+// change color (12 px on a 16 px line); the fixed line heights make the card exactly as tall as crosshairLevel
+// assumes. The plate stays opaque, so the line never shows through; only its text dims.
 function crosshairLayers(t, mark) {
   const card = v_flex().absolute().gap(2).px(6).py(4).rounded(3).bg(t.background).whitespace_nowrap()
-    .child(div().opacity(mark.opacity).text_size(11).text_color(t.dim).child(mark.time))
-    .child(h_flex().opacity(mark.opacity).gap(6).text_size(12)
+    .child(div().opacity(mark.opacity).line_height("14px").text_size(11).text_color(t.dim).child(mark.time))
+    .child(h_flex().opacity(mark.opacity).line_height("16px").gap(6).text_size(12)
       .child(div().font_semibold().text_color(t.foreground).child(mark.price))
       .when(Boolean(mark.change), (el) => el.child(div().text_color(mark.changeColor).child(mark.change))));
   const across = "left" in mark.spot ? card.left(mark.spot.left) : card.right(mark.spot.right);

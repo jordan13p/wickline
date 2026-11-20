@@ -776,6 +776,14 @@ test("the crosshair's card stays opaque: only its text dims", () => {
   assert.match(layers, /mark\.level/);
   assert.doesNotMatch(layers, / · /);
 });
+test("the crosshair card's lines carry fixed line heights that sum to the height crosshairLevel assumes", () => {
+  const layers = code(read(new URL("ui/parts.js", MOD))).match(/function crosshairLayers[\s\S]*?\n}/)?.[0] ?? "";
+  assert.match(layers, /div\(\)\.opacity\(mark\.opacity\)\.line_height\("14px"\)/);
+  assert.match(layers, /h_flex\(\)\.opacity\(mark\.opacity\)\.line_height\("16px"\)/);
+  // 14 + 2 (gap) + 16 + 4 + 4 (py) = crosshairLevel's CROSSHAIR_CARD_PX
+  assert.match(layers, /\.gap\(2\)\.px\(6\)\.py\(4\)/);
+  assert.match(code(read(new URL("format.js", MOD))), /const CROSSHAIR_CARD_PX = 40;/);
+});
 test("the chart's date stands below the detail's chart, never over its line", () => {
   const parts = code(read(new URL("ui/parts.js", MOD)));
   assert.doesNotMatch(parts.match(/export function chart\([^)]*\)/)?.[0] ?? "", /\bdate\b/);

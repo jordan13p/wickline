@@ -36,10 +36,10 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
 }
 
 // The crosshair card's size, estimated: its time at 11 px (6.5 px a character) over its price and change at 12 px
-// semibold (7.5 px a character, 6 px between them), 6 px padding each side and 4 px above and below; about 40 px tall
-// for the two lines and the 2 px between them. Only to pick its side and height and to catch a card too wide for both
-// sides: a card on the line's left is placed by its right edge and one at the bottom by its bottom edge, so the gaps
-// never depend on the font.
+// semibold (7.5 px a character, 6 px between them), 6 px padding each side and 4 px above and below; exactly 40 px
+// tall: a 14 px and a 16 px line (ui/parts.js sets both line heights) and the 2 px between them. Only to pick its side
+// and height and to catch a card too wide for both sides: a card on the line's left is placed by its right edge and
+// one at the bottom by its bottom edge, so the gaps never depend on the font.
 const CROSSHAIR_TIME_CHAR_PX = 6.5;
 const CROSSHAIR_VALUE_CHAR_PX = 7.5;
 const CROSSHAIR_VALUE_GAP_PX = 6;
