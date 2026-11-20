@@ -636,7 +636,7 @@ test("Reading a point: date, time, price and change against the previous close",
   assert.equal(crosshairLabel(q, 1, "en").time, "Nov 20 10:32");
   assert.deepEqual(crosshairLabel({ ...q, previousClose: null }, 1, "zh-TW"), { time: "11/20 10:32", price: "2,175.00", change: null, percent: null });
 }));
-test("Another day's point carries its date", () => withTZ("Asia/Taipei", () => {
+test("A pair's and a night future's points carry their dates", () => withTZ("Asia/Taipei", () => {
   const line = decodeKlines(ok(jsonFixture("binance-btc-15m")));
   const q = { symbol: "BTC/USDT", price: 63_719.01, previousClose: 63_500, timestamp: 1795076099999, ...line };
   assert.deepEqual(crosshairLabel(q, 24, "en"),

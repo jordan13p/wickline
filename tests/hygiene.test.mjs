@@ -769,7 +769,7 @@ test("the crosshair's label dims with the detail and with a cached line", () => 
 });
 test("the crosshair's card stays opaque: only its text dims", () => {
   const layers = code(read(new URL("ui/parts.js", MOD))).match(/function crosshairLayers[\s\S]*?\n}/)?.[0] ?? "";
-  const plate = layers.match(/\.bg\(t\.background\)[\s\S]*?\.child\(/)?.[0];
+  const plate = layers.match(/const card = [\s\S]*?\.bg\(t\.background\)[\s\S]*?\.child\(/)?.[0];
   assert.ok(plate);
   assert.doesNotMatch(plate, /opacity/);
   assert.match(layers, /\.opacity\(mark\.opacity\)/);
@@ -789,5 +789,10 @@ test("the chart's date stands below the detail's chart, never over its line", ()
   assert.doesNotMatch(parts.match(/export function chart\([^)]*\)/)?.[0] ?? "", /\bdate\b/);
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
   assert.match(detail, /lineDate\(q, view\.lang\)/);
-  assert.doesNotMatch(detail, /date: lineDate/);
+  // The date line wraps the chart from outside, and the chart's own options never see the date.
+  assert.match(detail, /shape !== null && dated\(chart\(q, color, t, \{/);
+  assert.match(detail, /child\(box\)\.child\(div\(\)[^;]*child\(lineDay\)/);
+  const options = detail.match(/dated\(chart\(q, color, t, \{[\s\S]*?\}\)\),/)?.[0] ?? "";
+  assert.ok(options);
+  assert.doesNotMatch(options, /lineDay|lineDate/);
 });

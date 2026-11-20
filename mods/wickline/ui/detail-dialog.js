@@ -59,8 +59,8 @@ function bookBlock(view, t, q, shown, tx) {
 }
 
 // The chart's crosshair (parts.js chart): the line point nearest the pointer (view.chartPointer) of `shape`, its card
-// and its place, the card's text at the detail's dim opacity when `dimmed`. A move
-// redraws only when the nearest point or the box's width changes; a leave clears the pointer.
+// and its place, the card's text at the detail's dim opacity when `dimmed`. A move redraws only when the nearest point
+// or the box's width changes; a leave clears the pointer.
 function crosshairOption(view, t, q, shape, dimmed) {
   const pointer = view.chartPointer;
   const at = pointer && crosshairAt(shape, q.times, pointer.share);
