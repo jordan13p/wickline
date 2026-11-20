@@ -154,8 +154,8 @@ function tradingSpans(quote, t) {
 /**
  * The share of `quote`'s trading day elapsed at `t`, in [0, 1], counting trading time only: a lunch break and the gap
  * between a future's sessions take none. null for a pair, FX or a Yahoo future (`=F`), or without periods or hours.
- * A finished earlier day gives 1. So does a quote timed before its period's start: yesterday's bars under today's
- * periods.
+ * A finished earlier day gives 1. So does a quote timed before its period's start (yesterday's bars under today's
+ * periods), and a trading day with no trading time (also a regular period that ends at or before its start).
  */
 export function sessionProgress(quote, t) {
   const kind = kindOf(quote.symbol);

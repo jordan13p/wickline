@@ -260,9 +260,11 @@ export function hoursWindow(quote, now) {
 }
 
 /**
- * The session `quote` reads at `now`. A Taiwan closure wins over the periods, and a call auction over all but a
- * delayed price from today. A future whose night is closed reads "closed" then. FX reads only its week, as its
- * regular period is the UTC day.
+ * The session `quote` reads at `now`: "24h" (a crypto pair), "holiday" or "noTrades" (a Taiwan closure), "auction",
+ * "open", "lunch", "pre", "post" or "closed"; "unknown" without periods or exchange hours.
+ * A Taiwan closure wins over the periods, and a call auction over all but a delayed price from today. A future reads
+ * "closed" between its segments, and through its night session while that night is closed (nightClosed). FX reads
+ * only its week, as its regular period is the UTC day.
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";

@@ -398,7 +398,8 @@ export class Watchlist {
   /**
    * The book a Taiwan row shows, or null. A Yahoo 奇摩股市 stock book fetched inside a call auction is that auction's.
    * It shows only while `now` is in the same window and the stock traded that day, so it never passes for the
-   * market's book, another auction's or an earlier day's.
+   * market's book, another auction's or an earlier day's. A quote without a book shows an empty one while MIS's
+   * latest answer named the stock before any order (noLevels), else none.
    */
   rowBook(symbol, quote, held, now) {
     if (held && this.auctionBooks[symbol]) return this.auctionBooks[symbol];
@@ -1388,8 +1389,8 @@ export class Watchlist {
    * Whether an overlay line arriving at `now` has stopped: its last traded minute ends over LINE_LAG_MS before a
    * trade it must already hold.
    * - A trade counts once settled: its minute has ended and LINE_LAG_MS has passed. Until one has, the line stays,
-   *   so a quiet line is never dropped for a trade it cannot hold yet. A line first asked after the close is judged
-   *   at once.
+   *   so a quiet line is never dropped for a trade it cannot hold yet. A line first asked after the close finds
+   *   the price's last trade already settled, so it is judged on its first arrival.
    * - The trades seen at recent arrivals are kept (LINE_TRADES at most). The line is judged against the newest settled
    *   one, capped at its regular session's end: a stock's 14:30 fixed-price trade is never in its line.
    * With lines 2 min apart, a line frozen from its first arrival was dropped at its third, and one that stopped
