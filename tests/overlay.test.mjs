@@ -218,3 +218,12 @@ test("a Finnhub price never shows a cached or an earlier session's Yahoo Finance
   );
   assert.equal(live.volume, 48_213_500);
 });
+
+test("mergeOverlay: the change % is null unless the previous close is a finite number above zero", () => {
+  const finnhubQuote = { symbol: "AAPL", source: "finnhub", price: 231, timestamp: 1_000_000, fetchedAt: 1_000_000 };
+  const changeOver = (previousClose) =>
+    mergeOverlay({ ...yq("AAPL", "NMS", 990_000), previousClose }, finnhubQuote, null).changePercent;
+  assert.equal(changeOver(220), 5);
+  assert.equal(changeOver(0), null);
+  assert.equal(changeOver(Number.POSITIVE_INFINITY), null);
+});
