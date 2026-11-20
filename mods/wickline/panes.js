@@ -108,8 +108,9 @@ function pathTo(node, match) {
  * Where a docked Wickline block sits in layout()'s tree, as `{ block, stack, collapse }`, or null when there is none.
  * - `block`: the first block that runs `modId` and asks for the card (wantsCard).
  * - `stack`: its nearest stack, or null.
- * - `collapse`: the node to hide, so the rest of the layout stays: the stack, or the lone-child wrapper above it that
- *   has a sibling (the side panel). Null without a stack, or when every node up to the root is a lone child.
+ * - `collapse`: the node to hide, so the rest of the layout stays: the stack, or the highest wrapper above it that
+ *   holds only it, up to the first node with a sibling (the side panel). Null without a stack, or when every node up
+ *   to the root is a lone child.
  */
 export function dockOf(tree, modId) {
   const path = pathTo(tree, (n) => n.type === "block" && n.content?.mod === modId && wantsCard(n.content.props));

@@ -75,8 +75,9 @@ function bookPrice(bid, ask, up, down) {
  * - `quotes`: the last trade (`z`), or, when the 5-second snapshot had none, the book's price (bookPrice), marked
  *   `fromBook` and timed by the snapshot. Each carries its own `book`, `{ bids, asks }`.
  * - `auction`: each symbol MIS flags as in a call auction (`ts` "1" with a snapshot time, 08:30 to the open and
- *   13:25 to the close), mapped to the snapshot's time. Its book is the auction's, never a price, whatever its trial
- *   price `pz` reads; its levels, if any, go in `auctionBook` as `{ bids, asks, auction: true }`.
+ *   13:25 to the close), mapped to the snapshot's time. Its book is the auction's, never a price. Its trial price `pz`
+ *   is ignored, as an auction whose orders do not cross has none. Its levels, if any, go in `auctionBook` as
+ *   `{ bids, asks, auction: true }`.
  * - `noLevels`: a named row neither flagged nor priced, with no priced level: MIS answered before any order.
  * A row with no price or no time gets no quote and no error. Each optional key is there only when not empty.
  */

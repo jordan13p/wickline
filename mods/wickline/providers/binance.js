@@ -23,7 +23,7 @@ export function binanceUrl(base, pairs) {
 export function decodeBinance(pairs, response, now) {
   // -1121 Invalid symbol: one unknown or delisted pair fails the whole batch.
   if (response.status === 400) throw new QuoteError("binance.invalidPair", {}, { invalidSymbol: true });
-  // 418 is Binance's ban for requests sent on after a 429.
+  // 418 is the IP ban Binance sends when requests continue after a 429.
   if (response.status === 429 || response.status === 418)
     throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   // Unavailable for legal reasons: Binance refuses this region.

@@ -280,7 +280,7 @@ function lineReading(quote) {
 export const DETAIL_WAKE_CAP_MS = 600_000;
 
 // The moment the open detail's quote turns stale (staleAt), or null when it already reads stalled; it stays so until
-// an edge.
+// an edge. A cached price reads stalled at once; an unconfirmed one still at the previous close still turns.
 const readStaleAt = (quote, session, now) =>
   freshness(quote, session, now).state === "stalled" ? null : staleAt(quote, session, now);
 
@@ -288,7 +288,7 @@ const readStaleAt = (quote, session, now) =>
  * The next moment after `now` at which the open detail can read differently, or null. It is the earliest of:
  * - its row's next edge (nextEdge);
  * - its mark's end (`closureUntil`), with marks as held at `now` (heldMarks);
- * - the stale moment of a real-time price that is not a pair;
+ * - the stale moment of a real-time price that is not a pair (a delayed stock prints its delay, a pair no state);
  * - the stale moment of a line that is another source's real-time quote (lineReading).
  * Each counts only when strictly later than `now`, so a wait cut at it is never zero.
  */

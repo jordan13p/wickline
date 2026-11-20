@@ -338,7 +338,8 @@ const PAUSED = new Set(["closed", "holiday", "noTrades", "pre", "post", "lunch",
  * How long until a quote turns stale in `session`, in ms: at least 1 while it has not, 0 or less once it has (too old,
  * or a Yahoo Finance quote not fetched for FETCH_MAX_AGE_MS).
  * null when it never will this session: a delayed quote or a future outside the open session, a Yahoo future (`=F`),
- * or an exchange without a delay.
+ * or an exchange without a delay. Outside the open session neither of the first two reads stalled: a delayed quote is
+ * a Yahoo base, never handed over, and a future has one source, so there is nothing to wake for.
  * A real-time quote counts in every session: its moment is also when pickOverlay hands the row to another source, so
  * the idle wake must still land on it.
  */
@@ -403,7 +404,7 @@ export function rowDate(quote, fresh, now, lang) {
 /**
  * The state the band's dot is drawn for at `now`: the row's freshness, except that an inferred day without trades
  * ("noTrades", which may be a stuck feed) draws the hollow stalled dot. The band shows no label, so no dot there would
- * pass for a closed market.
+ * pass for a closed market. A listed closed day ("holiday") draws none, as closed does.
  */
 export function bandState(quote, now) {
   const { state } = freshness(quote, sessionOf(quote, now), now);
@@ -421,7 +422,8 @@ const AFTER_CLOSE_MS = 90 * MINUTE_MS;
  *   through the after-close window.
  * - Lit in a call auction for a price from today; not for one from an earlier day (the morning's trial match).
  * - Never while stalled (the lock may have opened since), unconfirmed, or before the open. Yahoo gives Taiwan no
- *   pre-market period, so only the price's time tells a price at 08:45 apart.
+ *   pre-market period, so without a real-time source a price at 08:45 reads closed; only its time, before the
+ *   regular period, keeps it unlit.
  * - Never for a cached price: nothing confirms the lock still holds.
  */
 export function shownLimit(quote, session, now) {

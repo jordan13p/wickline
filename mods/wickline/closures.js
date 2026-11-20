@@ -112,7 +112,8 @@ export function heldMarks(quote, now) {
  * 8. A future from 15:00 on a weekday T, its night session quiet: the night's reading of T.
  * 8b. Otherwise, before the cap and while T has not traded, the day session's reading carries on: noTrades. The cap
  *    (15:10) is the night's deadline, its open + INFER_REALTIME_MS, as only real-time sources price futures. With no
- *    night answer at all the reading ends at the cap; a night source that went quiet leaves the reading as it is.
+ *    night answer at all the reading ends at the cap; after the cap, a night source that went quiet leaves the reading
+ *    as it is.
  * 9. Otherwise none.
  *
  * When each reading ends:

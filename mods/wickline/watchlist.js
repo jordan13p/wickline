@@ -864,8 +864,9 @@ export class Watchlist {
 
   /**
    * How long until the first of `symbols`' shown quotes turns stale; at most LIVE_MAX_AGE_MS, also when none ever
-   * does. A quote that cannot turn stale in its session (inside a lunch window, say) is skipped; the cap still wakes
-   * the loop for the reopening.
+   * does. A quote that cannot turn stale in its session is skipped: inside a lunch window its age stands still, also
+   * after a half day's close. The cap still wakes the loop for the reopening, or for the trading hours a delayed
+   * quote has not been given yet.
    */
   staleInMs(symbols, now) {
     let wait = LIVE_MAX_AGE_MS;
@@ -1149,8 +1150,8 @@ export class Watchlist {
   }
 
   // Backs off this provider only: BACKOFF_BASE_MS, doubling with each further failure, never over BACKOFF_MAX_MS.
-  // The rest of the round's requests are deferred. A rate-limited line of an overlay source defers all its prices,
-  // sent or not, so its rows fall to the next source; a sole-source row keeps its price, cached.
+  // The rest of the round's quote requests are deferred. A rate-limited line of an overlay source defers all its
+  // prices, sent or not, so its rows fall to the next source; a sole-source row keeps its price, cached.
   backOff(provider, state, requests, index, limited) {
     state.failures++;
     const backoff = Math.min(
@@ -1410,7 +1411,8 @@ export class Watchlist {
    * Whether an overlay line arriving at `now` has stopped: its last traded minute ends over LINE_LAG_MS before a
    * trade it must already hold.
    * - A trade counts once settled: its minute has ended and LINE_LAG_MS has passed. Until one has, the line stays,
-   *   so a quiet line is never dropped for a trade it cannot hold yet.
+   *   so a quiet line is never dropped for a trade it cannot hold yet. A line first asked after the close is judged
+   *   at once.
    * - The trades seen at recent arrivals are kept (LINE_TRADES at most). The line is judged against the newest settled
    *   one, capped at its regular session's end: a stock's 14:30 fixed-price trade is never in its line.
    * With lines 2 min apart, a line frozen from its first arrival was dropped at its third, and one that stopped

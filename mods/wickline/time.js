@@ -1,4 +1,5 @@
 // Time on fixed-offset clocks: day numbers, weekdays, day starts, local windows, New York's offset.
+// By hand, as QuickJS has no Intl.
 
 // The UTC instant of the `nth` Sunday (1-based) of `month` (0-based, as Date.UTC) at `hourUtc`.
 function nthSundayUtc(year, month, nth, hourUtc) {
