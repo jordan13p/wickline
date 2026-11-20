@@ -24,7 +24,7 @@ import {
   staleAt,
 } from "./freshness.js";
 import { DAY_SESSION, NIGHT_SESSION, TAIFEX_HOURS, exchangeRule, kindOf, resolvedMarket } from "./markets.js";
-import { BOOK_LEVELS, hasLimits, isCryptoPair, positive } from "./quotes.js";
+import { BOOK_LEVELS, changePercent, hasLimits, isCryptoPair, positive } from "./quotes.js";
 import { localWindow } from "./time.js";
 
 /** The day's amplitude in percent; null without high, low and previous close. */
@@ -101,8 +101,7 @@ const rung = (level, previousClose) =>
   level && {
     price: level.price,
     size: level.size,
-    change:
-      level.price !== null && positive(previousClose) ? ((level.price - previousClose) / previousClose) * 100 : null,
+    change: level.price !== null ? changePercent(level.price, previousClose) : null,
     ...(level.price === null && { market: true }),
   };
 
