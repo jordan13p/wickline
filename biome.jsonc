@@ -78,17 +78,6 @@
           }
         }
       }
-    },
-    {
-      "includes": ["tests/watchlist.test.mjs"],
-      "linter": {
-        "rules": {
-          "complexity": {
-            // `!q.book || q.book.bids…` tests truthiness; an optional chain tests only null and undefined.
-            "useOptionalChain": "off"
-          }
-        }
-      }
     }
   ]
 }

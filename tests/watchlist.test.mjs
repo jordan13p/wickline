@@ -4440,7 +4440,7 @@ test("the opening auction's Yahoo 奇摩股市 book goes with a priced answer, a
   const gone = (w) => {
     assert.equal("2330.TW" in w.ytwAuctionBooks, false);
     const q = w.shown("2330.TW", thu("08:46:40"));
-    assert.ok(!q.book || q.book.bids[0]?.size !== 39, "not the trial book");
+    assert.ok(q.book?.bids[0]?.size !== 39, "not the trial book");
   };
   // A priced answer (a trade at 08:46:30, without a book of its own).
   const priced = trial();
