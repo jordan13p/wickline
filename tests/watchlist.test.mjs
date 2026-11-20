@@ -29,6 +29,7 @@ import {
   MIS_ON,
   NIGHT,
   SEGMENTS,
+  TW_TODAY,
   advance,
   at,
   chart,
@@ -38,6 +39,7 @@ import {
   isHolidays,
   isLine,
   jsonFixture,
+  levels,
   line0050,
   lineSymbol,
   misFlagged,
@@ -3979,9 +3981,8 @@ test("the close from Yahoo 奇摩股市 ends the flag", async () => {
 
 // A line only under its own session's price: the base's line under another source's price only when both are from the
 // same period, before or at and after the start of the base's regular period.
-const TPE_DAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 const twBase = (time, fields = {}) => ({
-  ...yq("2330.TW", "TAI", time, TPE_DAY),
+  ...yq("2330.TW", "TAI", time, TW_TODAY),
   price: 2215,
   previousClose: 2200,
   series: [2200, 2215],
@@ -4051,10 +4052,9 @@ function watchHolding(prefs, symbols, { quotes = {}, overlays = {} }) {
 }
 
 // Tuesday 2026-11-17, mid-session: Yahoo Finance's 20-minute-late 2330.TW with a volume, and a MIS price over it.
-const TW_SESSION = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 const TW_AT = taipei("10:00:00");
 const delayedTw = {
-  ...yq("2330.TW", "TAI", taipei("09:40:00"), TW_SESSION),
+  ...yq("2330.TW", "TAI", taipei("09:40:00"), TW_TODAY),
   price: 2180,
   series: [2190, 2180],
   fetchedAt: TW_AT,
@@ -4121,20 +4121,19 @@ const misAnswerAt = (w, time, ...rows) => {
   misAnswer(w, w.host, misRows(...rows));
 };
 const ROW_1326 = jsonFixture("mis-detail-1326").msgArray.find((row) => row.c === "2330");
-const levelsOf = (pairs) => pairs.map(([price, size]) => ({ price, size }));
 const YTW_BOOK = {
-  bids: levelsOf([
+  bids: levels([
     [2170, 2280],
     [2165, 208],
   ]),
-  asks: levelsOf([
+  asks: levels([
     [2175, 503],
     [2180, 1248],
   ]),
 };
 // Yahoo Finance at Monday's close (2215 at 13:30 on 11/16) with its volume, under 11/17's periods.
 const yahooMondayClose = () => ({
-  ...yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_SESSION),
+  ...yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY),
   price: 2215,
   series: [2200, 2215],
   volume: 54_723,
