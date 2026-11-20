@@ -58,6 +58,7 @@ import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION, decodeStockList, yahootw } from 
 import { taipeiDay } from "../mods/wickline/calendar.js";
 import { packTimes } from "../mods/wickline/handover.js";
 
+// Builders, hosts and recorded answers that two or more of the tests below use, in the order they build on each other.
 const BASE = "https://data-api.binance.vision";
 
 const AAPL = {
@@ -67,6 +68,429 @@ const AAPL = {
   previousClose: 225,
   currency: "USD",
   longName: "Apple Inc.",
+};
+
+function listed(symbols) {
+  const host = fakeHost(() => chart(AAPL));
+  host.store = { version: 1, symbols, paused: false };
+  return host;
+}
+
+// Quiet loops: nothing marked for a new round, so a restart shows as `dirty` and a new revision.
+function settle(w) {
+  for (const state of Object.values(w.sources)) state.dirty = false;
+  return w.revision;
+}
+const restarted = (w) => Object.values(w.sources).some((state) => state.dirty);
+
+// Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
+const TW_NOW = 1794188480000;
+const TW_ROWS = jsonFixture("yahootw-stocklist");
+const MIS_ROW = jsonFixture("mis-open").msgArray[0];
+const ONLY_YAHOOTW = {
+  version: 1,
+  sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } },
+};
+// Yahoo 奇摩股市 on with a consent to an older text: awaiting re-confirmation.
+const STALE_YAHOOTW = {
+  version: 1,
+  sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } },
+};
+// The recorded Yahoo 奇摩股市 rows (`rows`, the stock ones by default), each one that has a trade traded at `time`, with
+// some rows' fields replaced.
+const stockList = (time, bySymbol = {}, rows = TW_ROWS) =>
+  ok(
+    rows.map((row) => ({
+      ...row,
+      ...(row.regularMarketTime &&
+        row.regularMarketTime !== "-" && { regularMarketTime: new Date(time).toISOString() }),
+      ...bySymbol[row.symbol],
+    })),
+  );
+// The recorded MIS row for 2330, traded at `time`.
+const misAt = (time) => ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(time) }] });
+const offline = () => {
+  throw new Error("offline");
+};
+const isYahootw = (url) => url.startsWith(YAHOOTW_BASE);
+
+// A Yahoo 奇摩股市 line answer for `symbol`: one close a minute, the last at `time` (ms), and `periods` (if any) as
+// its meta's currentTradingPeriod.
+const tickAt = (symbol, time, closes, periods) =>
+  ok([
+    {
+      symbol,
+      chart: {
+        meta: { symbol, ...(periods && { currentTradingPeriod: periods }) },
+        timestamp: closes.map((_, i) => Math.floor(time / 1000) - (closes.length - 1 - i) * 60),
+        indicators: { quote: [{ close: closes }] },
+      },
+    },
+  ]);
+// Yahoo Finance's line under every Taiwan row.
+const BASE_SERIES = [2190, 2195];
+// Yahoo Finance's answer for a Taiwan row today, with `fields` added to its meta.
+const twYahoo = (symbol, fields = {}) =>
+  ok({
+    chart: {
+      result: [
+        {
+          meta: {
+            symbol,
+            regularMarketPrice: 2200,
+            regularMarketTime: 1_794_187_000,
+            previousClose: 2135,
+            currency: "TWD",
+            ...fields,
+          },
+          indicators: { quote: [{ close: BASE_SERIES }] },
+        },
+      ],
+      error: null,
+    },
+  });
+
+// `yahoo` answers Yahoo Finance per symbol; `holidays` TWSE's holiday schedule.
+function taiwanHost(
+  prefs,
+  {
+    yahootw = () => stockList(TW_NOW - 5_000),
+    mis = () => misAt(TW_NOW - 5_000),
+    line = (symbol) => tickAt(symbol, TW_NOW - 60_000, [2200, 2205]),
+    yahoo = (symbol) => twYahoo(symbol),
+    holidays = () => ok(HOLIDAYS_2026),
+  } = {},
+) {
+  const host = fakeHost((url) =>
+    isHolidays(url)
+      ? host.holidays()
+      : isLine(url)
+        ? host.line(lineSymbol(url))
+        : isYahootw(url)
+          ? host.yahootw(url)
+          : url.startsWith(MIS_URL)
+            ? host.mis(url)
+            : host.yahoo(chartSymbol(url)),
+  );
+  Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis, line, yahoo, holidays });
+  host.store = { version: 1, symbols: ["2330.TW"], paused: false };
+  return host;
+}
+
+// One round of every source, then `check(w, host)`.
+async function firstRound(host, check) {
+  const w = new Watchlist(host);
+  const runs = start(w, host);
+  await advance(host, TW_NOW + 1);
+  await check(w, host);
+  await stop(w, host, runs);
+}
+
+// Yahoo 奇摩股市's 2330 line recorded at 08:53 in Taipei on 2026-11-11, before the open, trimmed to the fields Wickline
+// reads: every minute of the day listed in advance (09:00 to 13:28, closes all null), and currentTradingPeriod's
+// regular session 09:00 to 13:30.
+const STOCK_DAY = jsonFixture("yahootw-tick-2330-0853")[0];
+const STOCK_PERIODS = STOCK_DAY.chart.meta.currentTradingPeriod;
+const on1111 = (time) => Date.parse(`2026-11-11T${time}Z`);
+// That answer later in the day: a close on each listed minute up to `closesTo` (ms); its minutes listed on to
+// `listedTo` when given (13:30, the closing match's minute); without its meta's periods when `periods` is false.
+function stockDay({ closesTo, listedTo = null, periods = true }) {
+  const stamps = STOCK_DAY.chart.timestamp.slice();
+  while (listedTo !== null && stamps[stamps.length - 1] * 1000 < listedTo) stamps.push(stamps[stamps.length - 1] + 60);
+  return ok([
+    {
+      ...STOCK_DAY,
+      chart: {
+        meta: { symbol: "2330.TW", ...(periods && { currentTradingPeriod: STOCK_PERIODS }) },
+        timestamp: stamps,
+        indicators: { quote: [{ close: stamps.map((seconds) => (seconds * 1000 <= closesTo ? 2200 : null)) }] },
+      },
+    },
+  ]);
+}
+// Yahoo Finance's 2330 that day: its 13:30 close and the same regular session.
+const yahoo1111 = (symbol) =>
+  twYahoo(symbol, { regularMarketTime: on1111("05:30:00") / 1000, currentTradingPeriod: STOCK_PERIODS });
+
+// Yahoo Finance names ^TWII's exchange (TAI): from then on it is a Taiwan index, priced live by Yahoo 奇摩股市.
+const atTai = (symbol) => twYahoo(symbol, { exchangeName: "TAI" });
+const stockLists = (host) => host.requests.filter((url) => isYahootw(url) && url.includes("StockServices"));
+const chartCount = (host) => host.requests.filter((url) => url.includes("/chart/")).length;
+
+const NOT_FOUND = { status: 404, ok: false, text: "" };
+
+// ^TWOII's line on the trading morning, with a regular session around the clock.
+const OPEN_NOW = { regular: { start: TW_NOW / 1000 - 3600, end: TW_NOW / 1000 + 3600 } };
+const charts = (host, symbol) =>
+  host.requests.filter((url) => url.includes(`/chart/${encodeURIComponent(symbol)}?`)).length;
+
+function twOnlyHost(symbols = ["^TWOII"], options = {}) {
+  const host = taiwanHost(ONLY_YAHOOTW, {
+    yahoo: (symbol) => (symbol.startsWith("^TW") || symbol === "APPL" ? NOT_FOUND : twYahoo(symbol)),
+    line: (symbol) => tickAt(symbol, host.clock - 60_000, [321.5, 321.97], OPEN_NOW),
+    ...options,
+  });
+  host.store = { version: 1, symbols, paused: false };
+  return host;
+}
+
+// Every source from `from`, then `check(w, host)` once the clock is at `from + 5 s`. Each redraw renders, and a
+// render calls sync(), as in main.js. With `redraws`, each redraw's clock is pushed to it first.
+async function soleRun(host, check, from = TW_NOW, redraws = null) {
+  host.clock = from;
+  const w = new Watchlist(host);
+  host.changed = () => {
+    redraws?.push(host.clock);
+    w.sync();
+  };
+  const runs = start(w, host);
+  await advance(host, from + 5_000);
+  await check(w, host);
+  await stop(w, host, runs);
+}
+
+// The recorded futures rows, as stockList gives them.
+const futuresAt = (time, bySymbol = {}) => stockList(time, bySymbol, FUTURES_ROWS);
+// Yahoo 奇摩股市 on and consented, the futures rows as recorded, no line unless given; run with soleRun(host, check, FUT_NOW).
+function futuresHost(symbols = ["WTX&"], options = {}) {
+  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => ok(FUTURES_ROWS), line: offline, ...options });
+  host.store = { version: 1, symbols, paused: false };
+  return host;
+}
+
+const iso = (time) => new Date(time).toISOString();
+// Every source from `from`, then `check(w, now)` every 10 s up to `until`. Lines arrive at `from` and every 2 min.
+async function walk(host, from, until, check) {
+  host.clock = from;
+  const w = new Watchlist(host);
+  host.changed = () => w.sync();
+  const runs = start(w, host);
+  for (let now = from + 5_000; now <= until; now += 10_000) {
+    await advance(host, now);
+    await check(w, now);
+  }
+  await stop(w, host, runs);
+}
+const NIGHT_CHART = FUTURES_NIGHT_TICK[0].chart;
+// The recorded night line (every minute of the trading day listed), with a close only on the minutes `traded` picks
+// (by their time in ms).
+const nightLine = (traded) =>
+  ok([
+    {
+      ...FUTURES_NIGHT_TICK[0],
+      chart: {
+        ...NIGHT_CHART,
+        indicators: {
+          quote: [
+            {
+              close: NIGHT_CHART.timestamp.map((seconds) => (traded(seconds * 1000) ? 42255 : null)),
+            },
+          ],
+        },
+      },
+    },
+  ]);
+
+// The time from `freeze`, when a line stops, to its first arrival judged frozen (null if never), and whether it came
+// back after that.
+async function dropAfter(host, from, until, symbol, freeze) {
+  let dropped = null;
+  let back = false;
+  await walk(host, from, until, (w, now) => {
+    const kept = Boolean(w.lines.yahootw?.[symbol]);
+    if (!kept && now > freeze && dropped === null) dropped = now - freeze;
+    else if (kept && dropped !== null) back = true;
+  });
+  return { dropped, back };
+}
+// The worst time from a line stopping to its drop, over every arrival phase, while open with lines 2 min apart
+// (measured 485-595 s).
+const FROZEN_WITHIN_MS = 600_000;
+
+// A futures line answer: one close a minute over each of `spans` ([[from, to]] in ms, both ends included), 42 000 rising
+// by one a point, with `segments` as its sourceTradingPeriods and their span as its currentTradingPeriod.
+const futuresLineOf = (symbol, spans, segments) => {
+  const timestamp = spans.flatMap(([from, to]) =>
+    Array.from({ length: Math.round((to - from) / 60_000) + 1 }, (_, i) => from / 1000 + i * 60),
+  );
+  return ok([
+    {
+      symbol,
+      chart: {
+        meta: {
+          symbol,
+          currentTradingPeriod: { regular: { start: segments[0][0] / 1000, end: segments.at(-1)[1] / 1000 } },
+          sourceTradingPeriods: [segments.map(([start, end]) => ({ start: start / 1000, end: end / 1000 }))],
+        },
+        timestamp,
+        indicators: { quote: [{ close: timestamp.map((_, i) => 42000 + i) }] },
+      },
+    },
+  ]);
+};
+const futuresLine = (symbol, from, to, segments) => futuresLineOf(symbol, [[from, to]], segments);
+const NEXT_SEGMENTS = [
+  [at("2026-11-10T07:00:00Z"), at("2026-11-10T21:00:00Z")],
+  [at("2026-11-11T00:45:00Z"), at("2026-11-11T05:45:00Z")],
+]; // Wed's
+const MON_1500 = at("2026-11-09T07:00:00Z");
+// Monday 2026-11-16's trading day, as its line would give it: Friday 15:00 → Saturday 05:00, Monday 08:45 → 13:45.
+const FRI_1500 = at("2026-11-13T07:00:00Z");
+const FRI_SEGMENTS = [
+  [FRI_1500, at("2026-11-13T21:00:00Z")],
+  [at("2026-11-16T00:45:00Z"), at("2026-11-16T05:45:00Z")],
+];
+
+const twDay = (date) => ({ regular: { start: at(`${date}T01:00:00Z`) / 1000, end: at(`${date}T05:30:00Z`) / 1000 } });
+// Yahoo Finance's 2330.TW still at `time` (ms) with `date`'s periods.
+const twYahooAt = (symbol, time, date) =>
+  twYahoo(symbol, { exchangeName: "TAI", regularMarketTime: time / 1000, currentTradingPeriod: twDay(date) });
+
+const schedules = (host) => host.requests.filter(isHolidays).length;
+
+const CLOSE_1110 = at("2026-11-10T05:30:00Z"); // 13:30 Taipei
+const NIGHT_0459 = at("2026-11-10T20:59:00Z"); // 04:59 on 11/11
+const quietLabel = (quote, now) => withTZ("Asia/Taipei", () => zhLabel(quote, now));
+const noTradesToday = (source) => [{ code: "closure.noTradesToday", params: { source } }];
+
+// MIS times a row by its snapshot (`tlong`), fresh even when the snapshot had no trade (`z` is "-") and the price is
+// the book's midpoint: only a price from a trade counts as one.
+const misBookNow = (host) => () =>
+  ok({ msgArray: [{ ...MIS_ROW, z: "-", b: "2245.0000_", a: "2250.0000_", tlong: String(host.clock) }] });
+
+// A clock time in UTC on 2026-11-17 (Taipei is 8 hours ahead).
+const utc1117 = (time) => at(`2026-11-17T${time}Z`);
+// The 13:24 row's book (bid 2170, ask 2175) as a snapshot at `time` without a trade (misFlagged: flagged in the auction).
+const misBook = (time) => ({ ...MIS_2330_1324, tlong: String(time) });
+const misRows = (...rows) => ok({ msgArray: rows });
+// One MIS answer laid over a watchlist at the host's clock, as a round would.
+const misAnswer = (w, host, response, symbols = ["2330.TW"]) => {
+  const request = mis.requests(symbols, { misUrl: MIS_URL })[0];
+  w.apply(mis, request, mis.decode(request, response, host.clock));
+};
+// Yahoo Finance's 2330.TW at 13:04, 20 minutes behind, on 11/17's periods.
+const yahoo1117 = (symbol) => twYahooAt(symbol, utc1117("05:04:00"), "2026-11-17");
+
+// MIS's answers through the closing auction as recorded: priced from the book at 13:23:55, flagged from 13:25:55 to
+// 13:29:58, closed at 13:30:00.
+async function closingAuction(check) {
+  const host = taiwanHost(MIS_ON, { yahoo: yahoo1117 });
+  host.mis = () =>
+    ok(
+      jsonFixture(
+        host.clock < utc1117("05:26:04")
+          ? "mis-auction-1324"
+          : host.clock < utc1117("05:30:03")
+            ? "mis-auction-1326"
+            : host.clock < utc1117("05:35:01")
+              ? "mis-auction-1330"
+              : "mis-auction-1335",
+      ),
+    );
+  await soleRun(host, (w) => check(w, host), utc1117("05:24:01"));
+}
+
+const reading1117 = (w, symbol, now) => {
+  const quote = w.shown(symbol, now);
+  const session = sessionOf(quote, now);
+  return { quote, session, state: freshness(quote, session, now).state };
+};
+const MONDAY_CLOSE = at("2026-11-16T05:30:00Z");
+// Yahoo Finance at Monday's close under 11/17's periods, as it answers before the open.
+const yahooMonday = (symbol) => twYahooAt(symbol, MONDAY_CLOSE, "2026-11-17");
+
+const twBase = (time, fields = {}) => ({
+  ...yq("2330.TW", "TAI", time, TW_TODAY),
+  price: 2215,
+  previousClose: 2200,
+  series: [2200, 2215],
+  fetchedAt: time,
+  ...fields,
+});
+const misQuote = (time) => ({ symbol: "2330.TW", source: "mis", price: 2230, timestamp: time });
+
+// A Watchlist with the settings `prefs` on and `symbols` listed, its records set by hand (no round has run).
+function watchHolding(prefs, symbols, { quotes = {}, overlays = {} }) {
+  const host = fakeHost(() => ok({}));
+  host.prefs = prefs;
+  host.store = { version: 1, symbols, paused: false };
+  const w = new Watchlist(host);
+  Object.assign(w.quotes, quotes);
+  Object.assign(w.overlays, overlays);
+  return w;
+}
+
+// Tuesday 2026-11-17, mid-session: Yahoo Finance's 20-minute-late 2330.TW with a volume, and a MIS price over it.
+const TW_AT = taipei("10:00:00");
+const delayedTw = {
+  ...yq("2330.TW", "TAI", taipei("09:40:00"), TW_TODAY),
+  price: 2180,
+  series: [2190, 2180],
+  fetchedAt: TW_AT,
+  volume: 41_000,
+  sizeUnit: "lot",
+};
+
+// MIS's answers laid over a watchlist at `time`, as a round would.
+const misAnswerAt = (w, time, ...rows) => {
+  w.host.clock = time;
+  misAnswer(w, w.host, misRows(...rows));
+};
+
+const YTW_BOOK = {
+  bids: levels([
+    [2170, 2280],
+    [2165, 208],
+  ]),
+  asks: levels([
+    [2175, 503],
+    [2180, 1248],
+  ]),
+};
+// Yahoo Finance at Monday's close (2215 at 13:30 on 11/16) with its volume, under 11/17's periods.
+const yahooMondayClose = () => ({
+  ...yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY),
+  price: 2215,
+  series: [2200, 2215],
+  volume: 54_723,
+  sizeUnit: "lot",
+});
+const ytwOver = (time, fields = {}) => ({
+  symbol: "2330.TW",
+  source: "yahootw",
+  price: 2175,
+  previousClose: 2170,
+  timestamp: time,
+  tradeTime: time,
+  day: taipeiDay(time),
+  fetchedAt: time,
+  ...fields,
+});
+
+// The book in a call auction from Yahoo 奇摩股市: only an answer fetched inside the window is the auction's.
+const ytwAuction = (fetchedAt) =>
+  decodeStockList(["2330.TW"], ok(jsonFixture("ytw-auction-1326")), fetchedAt).quotes["2330.TW"];
+const ytwWatch = (prefs, quote) =>
+  watchHolding(prefs, ["2330.TW"], {
+    quotes: { "2330.TW": yahooMondayClose() },
+    overlays: { "2330.TW": { yahootw: quote } },
+  });
+
+// Thursday 2026-11-19's opening auction: Yahoo 奇摩股市 answers each stock `preopen` with its trial match's book
+// (recorded 08:46:19), over Yahoo Finance's Wednesday close.
+const PREOPEN_ROWS = jsonFixture("ytw-preopen-0846");
+const thu = (time) => taipei(time, "2026-11-19");
+const wedClose = (symbol) => ({
+  ...yq(symbol, "TAI", taipei("13:30:00", "2026-11-18"), day("2026-11-18T01:00:00Z", "2026-11-18T05:30:00Z")),
+  price: 2175,
+  previousClose: 2170,
+  volume: 30_000,
+  sizeUnit: "lot",
+});
+const ytwAnswerAt = (w, time, symbols = ["2330.TW"]) => {
+  w.host.clock = time;
+  const request = yahootw.requests(symbols, { anyDay: [...w.twOnly] })[0];
+  w.apply(yahootw, request, yahootw.decode(request, ok(PREOPEN_ROWS), time));
 };
 
 test("reads saved preferences defensively", () => {
@@ -304,12 +728,6 @@ test("another copy's edit is picked up at once", async () => {
   assert.equal(b.quotes.AAPL, undefined);
 });
 
-function listed(symbols) {
-  const host = fakeHost(() => chart(AAPL));
-  host.store = { version: 1, symbols, paused: false };
-  return host;
-}
-
 test("move before another", () => {
   const host = listed(["AAPL", "NVDA", "2330.TW"]);
   const w = new Watchlist(host);
@@ -386,13 +804,6 @@ test("removing an unlisted symbol offers no Undo", () => {
   assert.equal(removed.code, "notice.notListed");
   assert.equal("undo" in removed, false);
 });
-
-// Quiet loops: nothing marked for a new round, so a restart shows as `dirty` and a new revision.
-function settle(w) {
-  for (const state of Object.values(w.sources)) state.dirty = false;
-  return w.revision;
-}
-const restarted = (w) => Object.values(w.sources).some((state) => state.dirty);
 
 test("a reorder leaves the rounds alone, here and in other copies", () => {
   const host = listed(["AAPL", "NVDA", "2330.TW", "BTC/USDT"]);
@@ -510,109 +921,6 @@ test("A ticker between kline answers keeps the line's times", async () => {
   assert.deepEqual([sent("klines"), sent("ticker/24hr")], [1, 2]);
   await stop(w, host, runs);
 });
-
-// Taiwan's two real-time sources over Yahoo Finance, on a clock set to a trading morning in Taipei.
-const TW_NOW = 1794188480000;
-const TW_ROWS = jsonFixture("yahootw-stocklist");
-const MIS_ROW = jsonFixture("mis-open").msgArray[0];
-const ONLY_YAHOOTW = {
-  version: 1,
-  sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } },
-};
-// Yahoo 奇摩股市 on with a consent to an older text: awaiting re-confirmation.
-const STALE_YAHOOTW = {
-  version: 1,
-  sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION - 1 } } },
-};
-// The recorded Yahoo 奇摩股市 rows (`rows`, the stock ones by default), each one that has a trade traded at `time`, with
-// some rows' fields replaced.
-const stockList = (time, bySymbol = {}, rows = TW_ROWS) =>
-  ok(
-    rows.map((row) => ({
-      ...row,
-      ...(row.regularMarketTime &&
-        row.regularMarketTime !== "-" && { regularMarketTime: new Date(time).toISOString() }),
-      ...bySymbol[row.symbol],
-    })),
-  );
-// The recorded MIS row for 2330, traded at `time`.
-const misAt = (time) => ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(time) }] });
-const offline = () => {
-  throw new Error("offline");
-};
-const isYahootw = (url) => url.startsWith(YAHOOTW_BASE);
-
-// A Yahoo 奇摩股市 line answer for `symbol`: one close a minute, the last at `time` (ms), and `periods` (if any) as
-// its meta's currentTradingPeriod.
-const tickAt = (symbol, time, closes, periods) =>
-  ok([
-    {
-      symbol,
-      chart: {
-        meta: { symbol, ...(periods && { currentTradingPeriod: periods }) },
-        timestamp: closes.map((_, i) => Math.floor(time / 1000) - (closes.length - 1 - i) * 60),
-        indicators: { quote: [{ close: closes }] },
-      },
-    },
-  ]);
-// Yahoo Finance's line under every Taiwan row.
-const BASE_SERIES = [2190, 2195];
-// Yahoo Finance's answer for a Taiwan row today, with `fields` added to its meta.
-const twYahoo = (symbol, fields = {}) =>
-  ok({
-    chart: {
-      result: [
-        {
-          meta: {
-            symbol,
-            regularMarketPrice: 2200,
-            regularMarketTime: 1_794_187_000,
-            previousClose: 2135,
-            currency: "TWD",
-            ...fields,
-          },
-          indicators: { quote: [{ close: BASE_SERIES }] },
-        },
-      ],
-      error: null,
-    },
-  });
-
-// `yahoo` answers Yahoo Finance per symbol; `holidays` TWSE's holiday schedule.
-function taiwanHost(
-  prefs,
-  {
-    yahootw = () => stockList(TW_NOW - 5_000),
-    mis = () => misAt(TW_NOW - 5_000),
-    line = (symbol) => tickAt(symbol, TW_NOW - 60_000, [2200, 2205]),
-    yahoo = (symbol) => twYahoo(symbol),
-    holidays = () => ok(HOLIDAYS_2026),
-  } = {},
-) {
-  const host = fakeHost((url) =>
-    isHolidays(url)
-      ? host.holidays()
-      : isLine(url)
-        ? host.line(lineSymbol(url))
-        : isYahootw(url)
-          ? host.yahootw(url)
-          : url.startsWith(MIS_URL)
-            ? host.mis(url)
-            : host.yahoo(chartSymbol(url)),
-  );
-  Object.assign(host, { clock: TW_NOW, prefs, yahootw, mis, line, yahoo, holidays });
-  host.store = { version: 1, symbols: ["2330.TW"], paused: false };
-  return host;
-}
-
-// One round of every source, then `check(w, host)`.
-async function firstRound(host, check) {
-  const w = new Watchlist(host);
-  const runs = start(w, host);
-  await advance(host, TW_NOW + 1);
-  await check(w, host);
-  await stop(w, host, runs);
-}
 
 test("both live: Yahoo 奇摩股市 is shown", async () => {
   await firstRound(taiwanHost(BOTH_ON), (w) => {
@@ -827,32 +1135,6 @@ test("a frozen stock line stays off when its price drops and comes back every fe
   }
 });
 
-// Yahoo 奇摩股市's 2330 line recorded at 08:53 in Taipei on 2026-11-11, before the open, trimmed to the fields Wickline
-// reads: every minute of the day listed in advance (09:00 to 13:28, closes all null), and currentTradingPeriod's
-// regular session 09:00 to 13:30.
-const STOCK_DAY = jsonFixture("yahootw-tick-2330-0853")[0];
-const STOCK_PERIODS = STOCK_DAY.chart.meta.currentTradingPeriod;
-const on1111 = (time) => Date.parse(`2026-11-11T${time}Z`);
-// That answer later in the day: a close on each listed minute up to `closesTo` (ms); its minutes listed on to
-// `listedTo` when given (13:30, the closing match's minute); without its meta's periods when `periods` is false.
-function stockDay({ closesTo, listedTo = null, periods = true }) {
-  const stamps = STOCK_DAY.chart.timestamp.slice();
-  while (listedTo !== null && stamps[stamps.length - 1] * 1000 < listedTo) stamps.push(stamps[stamps.length - 1] + 60);
-  return ok([
-    {
-      ...STOCK_DAY,
-      chart: {
-        meta: { symbol: "2330.TW", ...(periods && { currentTradingPeriod: STOCK_PERIODS }) },
-        timestamp: stamps,
-        indicators: { quote: [{ close: stamps.map((seconds) => (seconds * 1000 <= closesTo ? 2200 : null)) }] },
-      },
-    },
-  ]);
-}
-// Yahoo Finance's 2330 that day: its 13:30 close and the same regular session.
-const yahoo1111 = (symbol) =>
-  twYahoo(symbol, { regularMarketTime: on1111("05:30:00") / 1000, currentTradingPeriod: STOCK_PERIODS });
-
 test("after its 14:30 fixed-price trade, a Taiwan stock's line that ends with the regular session is kept all evening", async () => {
   // Yahoo 奇摩股市 gives 2330's trade time as 14:30:00 after the close; no line minute can hold it.
   for (const listedTo of [null, on1111("05:30:00")]) {
@@ -1039,11 +1321,6 @@ test("identity", () => {
   assert.equal(WATCHLIST_KEY, "wickline.watchlist.v1");
 });
 
-// Yahoo Finance names ^TWII's exchange (TAI): from then on it is a Taiwan index, priced live by Yahoo 奇摩股市.
-const atTai = (symbol) => twYahoo(symbol, { exchangeName: "TAI" });
-const stockLists = (host) => host.requests.filter((url) => isYahootw(url) && url.includes("StockServices"));
-const chartCount = (host) => host.requests.filter((url) => url.includes("/chart/")).length;
-
 test("a Taiwan index reaches Yahoo 奇摩股市 as soon as Yahoo Finance names its exchange", async () => {
   const host = taiwanHost(BOTH_ON, { yahoo: atTai });
   host.store = { version: 1, symbols: ["^TWII"], paused: false };
@@ -1090,7 +1367,6 @@ test("a wake during an overlay round adds a round, it aborts none", async () => 
 });
 
 // A ^TW… index Yahoo Finance does not know (404) is priced by Yahoo 奇摩股市 alone, while it is on: TW-only.
-const NOT_FOUND = { status: 404, ok: false, text: "" };
 test("after the statement changes, a consent to the old one leaves Taiwan on its fallback, and indices and futures say why", async () => {
   const host = twOnlyHost(["2330.TW", "^TWOII", "WTX&"]);
   host.prefs = STALE_YAHOOTW;
@@ -1124,45 +1400,6 @@ test("turning Yahoo 奇摩股市 off while its consent awaits re-confirmation, w
     assert.equal(w.errors["WTX&"].code, "yahootw.futuresNeedSource");
   });
 });
-
-// ^TWOII's line on the trading morning, with a regular session around the clock.
-const OPEN_NOW = { regular: { start: TW_NOW / 1000 - 3600, end: TW_NOW / 1000 + 3600 } };
-const charts = (host, symbol) =>
-  host.requests.filter((url) => url.includes(`/chart/${encodeURIComponent(symbol)}?`)).length;
-
-function twOnlyHost(symbols = ["^TWOII"], options = {}) {
-  const host = taiwanHost(ONLY_YAHOOTW, {
-    yahoo: (symbol) => (symbol.startsWith("^TW") || symbol === "APPL" ? NOT_FOUND : twYahoo(symbol)),
-    line: (symbol) => tickAt(symbol, host.clock - 60_000, [321.5, 321.97], OPEN_NOW),
-    ...options,
-  });
-  host.store = { version: 1, symbols, paused: false };
-  return host;
-}
-
-// Every source from `from`, then `check(w, host)` once the clock is at `from + 5 s`. Each redraw renders, and a
-// render calls sync(), as in main.js. With `redraws`, each redraw's clock is pushed to it first.
-async function soleRun(host, check, from = TW_NOW, redraws = null) {
-  host.clock = from;
-  const w = new Watchlist(host);
-  host.changed = () => {
-    redraws?.push(host.clock);
-    w.sync();
-  };
-  const runs = start(w, host);
-  await advance(host, from + 5_000);
-  await check(w, host);
-  await stop(w, host, runs);
-}
-
-// The recorded futures rows, as stockList gives them.
-const futuresAt = (time, bySymbol = {}) => stockList(time, bySymbol, FUTURES_ROWS);
-// Yahoo 奇摩股市 on and consented, the futures rows as recorded, no line unless given; run with soleRun(host, check, FUT_NOW).
-function futuresHost(symbols = ["WTX&"], options = {}) {
-  const host = taiwanHost(ONLY_YAHOOTW, { yahootw: () => ok(FUTURES_ROWS), line: offline, ...options });
-  host.store = { version: 1, symbols, paused: false };
-  return host;
-}
 
 // An index holds the chosen market on a remove only while it waits for its first quote (filterAfterRemove).
 test("an index is pending until its first quote, overlay or error", async () => {
@@ -1766,39 +2003,6 @@ test("WTX& is priced by Yahoo 奇摩股市 alone: name, price, change, line and 
 
 // A line is judged frozen only against a trade seen at an earlier line arrival whose minute has ended and whose lag has
 // passed (a minute shows in the line once it ends), so it takes up to the third arrival, two line intervals, to drop one.
-const iso = (time) => new Date(time).toISOString();
-// Every source from `from`, then `check(w, now)` every 10 s up to `until`. Lines arrive at `from` and every 2 min.
-async function walk(host, from, until, check) {
-  host.clock = from;
-  const w = new Watchlist(host);
-  host.changed = () => w.sync();
-  const runs = start(w, host);
-  for (let now = from + 5_000; now <= until; now += 10_000) {
-    await advance(host, now);
-    await check(w, now);
-  }
-  await stop(w, host, runs);
-}
-const NIGHT_CHART = FUTURES_NIGHT_TICK[0].chart;
-// The recorded night line (every minute of the trading day listed), with a close only on the minutes `traded` picks
-// (by their time in ms).
-const nightLine = (traded) =>
-  ok([
-    {
-      ...FUTURES_NIGHT_TICK[0],
-      chart: {
-        ...NIGHT_CHART,
-        indicators: {
-          quote: [
-            {
-              close: NIGHT_CHART.timestamp.map((seconds) => (traded(seconds * 1000) ? 42255 : null)),
-            },
-          ],
-        },
-      },
-    },
-  ]);
-
 test("a future's night line that stopped while the price trades on is dropped once a settled trade shows it", async () => {
   // Half an hour after the recorded line's last close (22:20), the price traded 10 s before each round.
   const from = at("2026-11-10T14:50:30Z");
@@ -1852,22 +2056,6 @@ test("a thin future keeps its line after a fresh trade its line cannot hold yet,
     );
   }
 });
-
-// The time from `freeze`, when a line stops, to its first arrival judged frozen (null if never), and whether it came
-// back after that.
-async function dropAfter(host, from, until, symbol, freeze) {
-  let dropped = null;
-  let back = false;
-  await walk(host, from, until, (w, now) => {
-    const kept = Boolean(w.lines.yahootw?.[symbol]);
-    if (!kept && now > freeze && dropped === null) dropped = now - freeze;
-    else if (kept && dropped !== null) back = true;
-  });
-  return { dropped, back };
-}
-// The worst time from a line stopping to its drop, over every arrival phase, while open with lines 2 min apart
-// (measured 485-595 s).
-const FROZEN_WITHIN_MS = 600_000;
 
 test("a busy future's line that stops mid-session is dropped within the bound, and stays dropped", async () => {
   const from = at("2026-11-10T14:00:00Z");
@@ -2138,40 +2326,6 @@ test("a JPX quote from before lunch wakes the loop at most at the cap, and its s
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:29:00Z")), 60_001);
   assert.equal(w.staleInMs(["7203.T"], at("2026-11-10T02:30:00Z") + 1), 120_000);
 });
-
-// A futures line answer: one close a minute over each of `spans` ([[from, to]] in ms, both ends included), 42 000 rising
-// by one a point, with `segments` as its sourceTradingPeriods and their span as its currentTradingPeriod.
-const futuresLineOf = (symbol, spans, segments) => {
-  const timestamp = spans.flatMap(([from, to]) =>
-    Array.from({ length: Math.round((to - from) / 60_000) + 1 }, (_, i) => from / 1000 + i * 60),
-  );
-  return ok([
-    {
-      symbol,
-      chart: {
-        meta: {
-          symbol,
-          currentTradingPeriod: { regular: { start: segments[0][0] / 1000, end: segments.at(-1)[1] / 1000 } },
-          sourceTradingPeriods: [segments.map(([start, end]) => ({ start: start / 1000, end: end / 1000 }))],
-        },
-        timestamp,
-        indicators: { quote: [{ close: timestamp.map((_, i) => 42000 + i) }] },
-      },
-    },
-  ]);
-};
-const futuresLine = (symbol, from, to, segments) => futuresLineOf(symbol, [[from, to]], segments);
-const NEXT_SEGMENTS = [
-  [at("2026-11-10T07:00:00Z"), at("2026-11-10T21:00:00Z")],
-  [at("2026-11-11T00:45:00Z"), at("2026-11-11T05:45:00Z")],
-]; // Wed's
-const MON_1500 = at("2026-11-09T07:00:00Z");
-// Monday 2026-11-16's trading day, as its line would give it: Friday 15:00 → Saturday 05:00, Monday 08:45 → 13:45.
-const FRI_1500 = at("2026-11-13T07:00:00Z");
-const FRI_SEGMENTS = [
-  [FRI_1500, at("2026-11-13T21:00:00Z")],
-  [at("2026-11-16T00:45:00Z"), at("2026-11-16T05:45:00Z")],
-];
 
 test("22:00 in the night session: Live, and the detail names the night session", async () => {
   const from = at("2026-11-10T14:00:00Z");
@@ -2649,10 +2803,7 @@ test("at 08:45 a priced future from the night is asked again and reads Live", as
 // Listed Taiwan closures (TWSE's holiday schedule). Closed-day answers stand in for probes still owed: a Yahoo 奇摩股市
 // or MIS answer on a closed day is the recorded rows with an earlier day's trade time. Yahoo Finance's periods on a
 // listed holiday are not known yet: the tests give it the day before's, which the listed closure overrides either way.
-const twDay = (date) => ({ regular: { start: at(`${date}T01:00:00Z`) / 1000, end: at(`${date}T05:30:00Z`) / 1000 } });
-// Yahoo Finance's 2330.TW still at `time` (ms) with `date`'s periods.
-const twYahooAt = (symbol, time, date) =>
-  twYahoo(symbol, { exchangeName: "TAI", regularMarketTime: time / 1000, currentTradingPeriod: twDay(date) });
+
 // 12/24's futures trading day (12/23 15:00 → 12/24 13:45), for a line that answers.
 const DEC23_1500 = at("2026-12-23T07:00:00Z");
 const DEC24_SEGMENTS = [
@@ -2900,8 +3051,6 @@ test("on a London clock a listed day begins at Taipei midnight, within a second"
   });
 });
 
-const schedules = (host) => host.requests.filter(isHolidays).length;
-
 test("the schedule: never without a Taiwan symbol", async () => {
   const host = fakeHost(() => ok({}));
   host.store = { version: 1, symbols: ["AAPL", "NVDA", "^GSPC", "BTC/USDT"], paused: false };
@@ -3073,11 +3222,6 @@ test("a hidden copy asks for the schedule only once shown", async () => {
 
 // Taiwan days without trades that TWSE does not list (a typhoon): Wednesday 2026-11-11 stands in for one. The answers
 // carry 11/10's close (stocks) or the night's 04:59 trade (futures).
-const CLOSE_1110 = at("2026-11-10T05:30:00Z"); // 13:30 Taipei
-const NIGHT_0459 = at("2026-11-10T20:59:00Z"); // 04:59 on 11/11
-const quietLabel = (quote, now) => withTZ("Asia/Taipei", () => zhLabel(quote, now));
-const noTradesToday = (source) => [{ code: "closure.noTradesToday", params: { source } }];
-
 test("a typhoon day with Yahoo 奇摩股市: the existing rules at 09:05, 今日無成交 · 11/10 13:30 from 09:10, polled every 60 s, with its note", async () => {
   const from = at("2026-11-11T01:04:30Z"); // 09:04:30
   const deadline = at("2026-11-11T01:10:00Z");
@@ -3136,11 +3280,6 @@ test("a typhoon day with MIS: stopped at 09:05, 今日無成交 from 09:10", asy
     at("2026-11-11T01:04:30Z"),
   );
 });
-
-// MIS times a row by its snapshot (`tlong`), fresh even when the snapshot had no trade (`z` is "-") and the price is
-// the book's midpoint: only a price from a trade counts as one.
-const misBookNow = (host) => () =>
-  ok({ msgArray: [{ ...MIS_ROW, z: "-", b: "2245.0000_", a: "2250.0000_", tlong: String(host.clock) }] });
 
 test("a fresh MIS snapshot without a trade is no trade: it keeps an inferred and a listed closure", async () => {
   const typhoon = taiwanHost(MIS_ON, { yahoo: (s) => twYahooAt(s, CLOSE_1110, "2026-11-11") });
@@ -3620,19 +3759,6 @@ test("the open detail leaves out the row's inference deadline: on a listed day i
 
 // MIS's call-auction flag (`ts` "1", here with a trial price `pz`), on Tuesday 2026-11-17 in Taipei: the answers recorded that
 // day, or hand-built from its 13:24 row for 2330. A flagged row is no price: the held MIS price stays, else Yahoo's.
-// A clock time in UTC on 2026-11-17 (Taipei is 8 hours ahead).
-const utc1117 = (time) => at(`2026-11-17T${time}Z`);
-// The 13:24 row's book (bid 2170, ask 2175) as a snapshot at `time` without a trade (misFlagged: flagged in the auction).
-const misBook = (time) => ({ ...MIS_2330_1324, tlong: String(time) });
-const misRows = (...rows) => ok({ msgArray: rows });
-// One MIS answer laid over a watchlist at the host's clock, as a round would.
-const misAnswer = (w, host, response, symbols = ["2330.TW"]) => {
-  const request = mis.requests(symbols, { misUrl: MIS_URL })[0];
-  w.apply(mis, request, mis.decode(request, response, host.clock));
-};
-// Yahoo Finance's 2330.TW at 13:04, 20 minutes behind, on 11/17's periods.
-const yahoo1117 = (symbol) => twYahooAt(symbol, utc1117("05:04:00"), "2026-11-17");
-
 test("the morning trial match shows Yahoo's close", async () => {
   // Yahoo Finance holds Monday's close, 2215.
   const close = at("2026-11-16T05:30:00Z");
@@ -3657,25 +3783,6 @@ test("the morning trial match shows Yahoo's close", async () => {
     utc1117("00:38:31"),
   );
 });
-
-// MIS's answers through the closing auction as recorded: priced from the book at 13:23:55, flagged from 13:25:55 to
-// 13:29:58, closed at 13:30:00.
-async function closingAuction(check) {
-  const host = taiwanHost(MIS_ON, { yahoo: yahoo1117 });
-  host.mis = () =>
-    ok(
-      jsonFixture(
-        host.clock < utc1117("05:26:04")
-          ? "mis-auction-1324"
-          : host.clock < utc1117("05:30:03")
-            ? "mis-auction-1326"
-            : host.clock < utc1117("05:35:01")
-              ? "mis-auction-1330"
-              : "mis-auction-1335",
-      ),
-    );
-  await soleRun(host, (w) => check(w, host), utc1117("05:24:01"));
-}
 
 test("the closing auction keeps the held MIS price", async () => {
   await closingAuction(async (w, host) => {
@@ -3774,15 +3881,6 @@ test("auctionAt goes with MIS", () => {
 });
 
 // Taiwan's call auctions (試撮中): what marked() gives a row, how sessionFor paces it, and the recorded answers of 11/17.
-const reading1117 = (w, symbol, now) => {
-  const quote = w.shown(symbol, now);
-  const session = sessionOf(quote, now);
-  return { quote, session, state: freshness(quote, session, now).state };
-};
-const MONDAY_CLOSE = at("2026-11-16T05:30:00Z");
-// Yahoo Finance at Monday's close under 11/17's periods, as it answers before the open.
-const yahooMonday = (symbol) => twYahooAt(symbol, MONDAY_CLOSE, "2026-11-17");
-
 test("marked() gives twRealtime only with a real-time source on", () => {
   const now = utc1117("05:27:00");
   const watch = (prefs) => {
@@ -3981,15 +4079,6 @@ test("the close from Yahoo 奇摩股市 ends the flag", async () => {
 
 // A line only under its own session's price: the base's line under another source's price only when both are from the
 // same period, before or at and after the start of the base's regular period.
-const twBase = (time, fields = {}) => ({
-  ...yq("2330.TW", "TAI", time, TW_TODAY),
-  price: 2215,
-  previousClose: 2200,
-  series: [2200, 2215],
-  fetchedAt: time,
-  ...fields,
-});
-const misQuote = (time) => ({ symbol: "2330.TW", source: "mis", price: 2230, timestamp: time });
 
 test("A line only under its own session's price: yesterday's line under today's price", () => {
   const row = mergeOverlay(twBase(taipei("13:30:00", "2026-11-16")), misQuote(taipei("09:00:30")), null);
@@ -4040,27 +4129,6 @@ test("A failure without the source's own line: a real-time price without its Yah
   assert.equal(zhLabel(row, now), "即時");
 });
 
-// A Watchlist with the settings `prefs` on and `symbols` listed, its records set by hand (no round has run).
-function watchHolding(prefs, symbols, { quotes = {}, overlays = {} }) {
-  const host = fakeHost(() => ok({}));
-  host.prefs = prefs;
-  host.store = { version: 1, symbols, paused: false };
-  const w = new Watchlist(host);
-  Object.assign(w.quotes, quotes);
-  Object.assign(w.overlays, overlays);
-  return w;
-}
-
-// Tuesday 2026-11-17, mid-session: Yahoo Finance's 20-minute-late 2330.TW with a volume, and a MIS price over it.
-const TW_AT = taipei("10:00:00");
-const delayedTw = {
-  ...yq("2330.TW", "TAI", taipei("09:40:00"), TW_TODAY),
-  price: 2180,
-  series: [2190, 2180],
-  fetchedAt: TW_AT,
-  volume: 41_000,
-  sizeUnit: "lot",
-};
 const misOver = (fields = {}) => ({
   symbol: "2330.TW",
   source: "mis",
@@ -4115,41 +4183,8 @@ test("AAPL keeps its Yahoo Finance volume", () => {
   assert.equal(w.shown("AAPL", 1_000_000).volume, 48_213_500);
 });
 
-// The best five levels on a row. MIS's answers laid over a watchlist at `time`, as a round would.
-const misAnswerAt = (w, time, ...rows) => {
-  w.host.clock = time;
-  misAnswer(w, w.host, misRows(...rows));
-};
+// The best five levels on a row.
 const ROW_1326 = jsonFixture("mis-detail-1326").msgArray.find((row) => row.c === "2330");
-const YTW_BOOK = {
-  bids: levels([
-    [2170, 2280],
-    [2165, 208],
-  ]),
-  asks: levels([
-    [2175, 503],
-    [2180, 1248],
-  ]),
-};
-// Yahoo Finance at Monday's close (2215 at 13:30 on 11/16) with its volume, under 11/17's periods.
-const yahooMondayClose = () => ({
-  ...yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY),
-  price: 2215,
-  series: [2200, 2215],
-  volume: 54_723,
-  sizeUnit: "lot",
-});
-const ytwOver = (time, fields = {}) => ({
-  symbol: "2330.TW",
-  source: "yahootw",
-  price: 2175,
-  previousClose: 2170,
-  timestamp: time,
-  tradeTime: time,
-  day: taipeiDay(time),
-  fetchedAt: time,
-  ...fields,
-});
 
 test("The morning auction with MIS alone", () => {
   const w = watchHolding(MIS_ON, ["2330.TW"], { quotes: { "2330.TW": yahooMondayClose() } });
@@ -4255,15 +4290,6 @@ test("A Taiwan stock with a real-time source (book)", () => {
   assert.deepEqual(w.shown("2330.TW", TW_AT).book, YTW_BOOK);
 });
 
-// The book in a call auction from Yahoo 奇摩股市: only an answer fetched inside the window is the auction's.
-const ytwAuction = (fetchedAt) =>
-  decodeStockList(["2330.TW"], ok(jsonFixture("ytw-auction-1326")), fetchedAt).quotes["2330.TW"];
-const ytwWatch = (prefs, quote) =>
-  watchHolding(prefs, ["2330.TW"], {
-    quotes: { "2330.TW": yahooMondayClose() },
-    overlays: { "2330.TW": { yahootw: quote } },
-  });
-
 test("The closing auction with Yahoo 奇摩股市 alone", () => {
   const q = ytwWatch(ONLY_YAHOOTW, ytwAuction(taipei("13:26:00"))).shown("2330.TW", taipei("13:26:05"));
   assert.equal(q.book.auction, true);
@@ -4343,23 +4369,6 @@ test("an earlier day's Yahoo 奇摩股市 book never shows as the morning auctio
   assert.equal("book" in q, false);
   assert.deepEqual(detailBook(q, true), { title: "detail.book", book: null, line: "detail.bookNone" });
 });
-
-// Thursday 2026-11-19's opening auction: Yahoo 奇摩股市 answers each stock `preopen` with its trial match's book
-// (recorded 08:46:19), over Yahoo Finance's Wednesday close.
-const PREOPEN_ROWS = jsonFixture("ytw-preopen-0846");
-const thu = (time) => taipei(time, "2026-11-19");
-const wedClose = (symbol) => ({
-  ...yq(symbol, "TAI", taipei("13:30:00", "2026-11-18"), day("2026-11-18T01:00:00Z", "2026-11-18T05:30:00Z")),
-  price: 2175,
-  previousClose: 2170,
-  volume: 30_000,
-  sizeUnit: "lot",
-});
-const ytwAnswerAt = (w, time, symbols = ["2330.TW"]) => {
-  w.host.clock = time;
-  const request = yahootw.requests(symbols, { anyDay: [...w.twOnly] })[0];
-  w.apply(yahootw, request, yahootw.decode(request, ok(PREOPEN_ROWS), time));
-};
 
 test("The opening auction with Yahoo 奇摩股市 alone", () => {
   const w = watchHolding(ONLY_YAHOOTW, ["2330.TW"], { quotes: { "2330.TW": wedClose("2330.TW") } });
