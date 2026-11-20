@@ -2,3 +2,6 @@
 # Written into mod folders by Herdr itself, beside any module that imports gpui-kit
 mods/**/jsconfig.json
 mods/**/gpui-kit.d.ts
+
+# Development only: Biome, installed by npm
+node_modules/

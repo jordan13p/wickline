@@ -180,8 +180,12 @@ Holiday data: Taiwan Stock Exchange OpenAPI (Open Government Data License, versi
 ## Development
 
 ```sh
-node --test tests/
+npm ci            # Biome, the formatter and linter
+npm run lint
+npm test          # node --test tests/
 herdr-app check "$PWD/mods/wickline"
 ```
+
+`package.json`, `package-lock.json` and `biome.jsonc` are for development only; they are not part of the mod, and Wickline itself has no dependencies. `npm run format` formats the code.
 
 `RECIPE.md` is the full brief: what Wickline draws, how it behaves and what it is built from; `RECIPE-sources.md` holds each source's requests, the fields its decoder reads and its detailed rules, and `RECIPE-internals.md` the other field-level build details, both linked from it.
