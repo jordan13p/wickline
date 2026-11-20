@@ -44,11 +44,23 @@ function fakeHost({ tree = office(), panes = [] } = {}) {
   const host = { tree, list: panes, store: {}, ran: [], looks: 0, pending: [] };
   const look = () => {
     host.looks++;
-    host.pending = host.pending.filter(({ at, change }) => (host.looks >= at ? (change(), false) : true));
+    host.pending = host.pending.filter(({ at, change }) => {
+      if (host.looks >= at) {
+        change();
+        return false;
+      }
+      return true;
+    });
   };
   host.later = (n, change) => host.pending.push({ at: host.looks + n, change });
-  host.layout = () => (look(), host.tree);
-  host.panes = () => (look(), host.list);
+  host.layout = () => {
+    look();
+    return host.tree;
+  };
+  host.panes = () => {
+    look();
+    return host.list;
+  };
   host.shared = (key) => host.store[key];
   host.setShared = (key, value) => {
     host.ran.push(["setShared", key, value]);

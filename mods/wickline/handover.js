@@ -63,7 +63,10 @@ export function unpackTimes(quote) {
     return rest;
   const times = [t0 * 1000];
   let at = t0;
-  for (const step of d) times.push((at += step) * 1000);
+  for (const step of d) {
+    at += step;
+    times.push(at * 1000);
+  }
   return { ...rest, times };
 }
 

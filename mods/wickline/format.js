@@ -126,7 +126,7 @@ function significant(price) {
 
 export function formatPrice(quote) {
   const [whole, fraction] = (quote.price < 1 ? significant(quote.price) : quote.price.toFixed(2)).split(".");
-  const price = group(whole) + (fraction === undefined ? "" : "." + fraction);
+  const price = group(whole) + (fraction === undefined ? "" : `.${fraction}`);
   return quote.currency ? `${price} ${quote.currency}` : price;
 }
 

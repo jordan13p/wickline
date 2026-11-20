@@ -16,7 +16,7 @@ const BASE = "https://data-api.binance.vision";
 test("builds the ticker URL", () => {
   assert.equal(
     binanceUrl(BASE, ["BTC/USDT", "ETH/USDT"]),
-    "https://data-api.binance.vision/api/v3/ticker/24hr?symbols=" + encodeURIComponent('["BTCUSDT","ETHUSDT"]'),
+    `https://data-api.binance.vision/api/v3/ticker/24hr?symbols=${encodeURIComponent('["BTCUSDT","ETHUSDT"]')}`,
   );
 });
 

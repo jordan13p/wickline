@@ -544,7 +544,9 @@ test("the activity labels are in every language", () => {
     "detail.outer",
   ];
   for (const [lang, texts] of Object.entries(expected)) {
-    keys.forEach((key, i) => assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`));
+    keys.forEach((key, i) => {
+      assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`);
+    });
   }
 });
 
@@ -636,6 +638,8 @@ test("the book's labels are in every language", () => {
     ],
   };
   for (const [lang, texts] of Object.entries(expected)) {
-    keys.forEach((key, i) => assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`));
+    keys.forEach((key, i) => {
+      assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`);
+    });
   }
 });

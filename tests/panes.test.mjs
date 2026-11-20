@@ -86,7 +86,10 @@ test("the old copy closes only once the new one is seen", () => {
 // new copy only from its `shownAt`-th call on (never, when null), and records sleeps and closes.
 function fakeHost(before, opened, shownAt) {
   const host = { reads: 0, sleeps: [], closed: [] };
-  host.panes = () => (++host.reads, shownAt !== null && host.reads >= shownAt ? [...before, opened] : before);
+  host.panes = () => {
+    ++host.reads;
+    return shownAt !== null && host.reads >= shownAt ? [...before, opened] : before;
+  };
   host.sleep = async (ms) => {
     host.sleeps.push(ms);
   };

@@ -52,7 +52,6 @@ import {
   LINE_PERIODS,
   LISTED_2026,
   MIS_ON,
-  SEGMENTS,
   advance,
   at,
   day,
@@ -199,7 +198,7 @@ test("detailSource reads a cached Yahoo line under a Finnhub price as before the
   const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: now - 10_000 }, null);
   assert.deepEqual(detailSource(row, "open", now, say("en")), [
     ["Price: Live · Finnhub"],
-    ["Line: quote stopped at " + formatTime(base.timestamp) + " · Yahoo Finance"],
+    [`Line: quote stopped at ${formatTime(base.timestamp)} · Yahoo Finance`],
   ]);
 });
 
@@ -964,8 +963,8 @@ const quietDelayed = (time) => () => answeredAt(time, "delayed", "yahoo");
 const isNightOpen = (open) => taipeiMinute(open) === NIGHT_SESSION.from;
 // `quietDay`: only the day sessions (08:45 and 09:00) answer, so a quiet day's 今日無成交 carries past 15:00 with no night
 // answer at all and ends at the night's 15:10 cap.
-const quietDay = (time) => (market, open) => (isNightOpen(open) ? undefined : answeredAt(time, "realtime", "yahootw"));
-const quietNight = (time) => (market, open) =>
+const quietDay = (time) => (_market, open) => (isNightOpen(open) ? undefined : answeredAt(time, "realtime", "yahootw"));
+const quietNight = (time) => (_market, open) =>
   isNightOpen(open) ? { ...answeredAt(time, "realtime", "yahootw"), newest: open - 1 } : undefined;
 
 // The instants in [from, to), stepped by `step`, where what `quote` reads changes without an edge at or before it.

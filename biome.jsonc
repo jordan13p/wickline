@@ -45,6 +45,50 @@
           }
         }
       }
+    },
+    {
+      "includes": ["mods/wickline/quotes.js", "mods/wickline/settings.js"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            // The regexes match control characters on purpose: to strip them from what sources send and keys typed.
+            "noControlCharactersInRegex": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["mods/wickline/watchlist.js"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            // `(record[key] ??= {})` creates a per-symbol entry where it is first used; unrolled it reads the map twice.
+            "noAssignInExpressions": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["tests/hygiene.test.mjs"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            // Its strings are sample source text with `${...}` for the scanner to read, never templates.
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["tests/watchlist.test.mjs"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            // `!q.book || q.book.bids…` tests truthiness; an optional chain tests only null and undefined.
+            "useOptionalChain": "off"
+          }
+        }
+      }
     }
   ]
 }

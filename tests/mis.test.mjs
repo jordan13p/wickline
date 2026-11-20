@@ -55,7 +55,7 @@ test("batches of 50 and none when empty", () => {
     [50, 1],
   );
   for (const request of requests) {
-    assert.ok(request.url.startsWith(cfg.misUrl + "?"), request.url);
+    assert.ok(request.url.startsWith(`${cfg.misUrl}?`), request.url);
     assert.equal(request.kind, "quote");
     assert.equal(request.headers["User-Agent"], USER_AGENT);
   }
@@ -442,8 +442,11 @@ test("MIS overlays Yahoo every 10 s, even while Yahoo hangs", async () => {
 
   const hung = twHost(CONSENTED);
   const fetch = hung.fetch;
-  hung.fetch = (url, headers) =>
-    url.startsWith(MIS_URL) ? fetch(url, headers) : (hung.requests.push(url), new Promise(() => {}));
+  hung.fetch = (url, headers) => {
+    if (url.startsWith(MIS_URL)) return fetch(url, headers);
+    hung.requests.push(url);
+    return new Promise(() => {});
+  };
   const v = new Watchlist(hung);
   v.add("2330.TW");
   const hungRuns = start(v, hung);
@@ -579,8 +582,13 @@ test("a MIS timeout drops the overlay", async () => {
   assert.equal(w.shown("2330.TW").source, "mis");
   host.mis = () => new Promise(() => {});
   const fetch = host.fetch;
-  host.fetch = (url, headers) =>
-    url.startsWith(MIS_URL) ? (host.requests.push(url), host.mis(url)) : fetch(url, headers);
+  host.fetch = (url, headers) => {
+    if (url.startsWith(MIS_URL)) {
+      host.requests.push(url);
+      return host.mis(url);
+    }
+    return fetch(url, headers);
+  };
   // The next round starts at 10 s and times out 10 s later.
   await advance(host, 20_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");

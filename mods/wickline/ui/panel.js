@@ -150,7 +150,7 @@ function statusText(view, now) {
 
 // The mark and the name in the text color, the mark's middle candle in the accent: two single-color
 // layers, since an svg takes one tint. Otherwise the accent is kept for focus, the drop line and links.
-function brand(view, t) {
+function brand(t) {
   return h_flex()
     .flex_none()
     .items_center()
@@ -213,7 +213,7 @@ export function yieldView(view, root, t, inBand) {
       .py(10)
       .gap(10)
       .items_start()
-      .child(brand(view, t))
+      .child(brand(t))
       .child(notice.text_size(11))
       .child(back),
   );
@@ -558,7 +558,7 @@ export function sidebar(view, root, t) {
         .h(28)
         .items_center()
         .gap(8)
-        .child(brand(view, t))
+        .child(brand(t))
         .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(countText(view)))
         .child(headerIcons(view, t)),
     )
@@ -664,7 +664,7 @@ export function table(view, root, t) {
     .pt(10)
     .gap(12)
     .items_center()
-    .child(brand(view, t))
+    .child(brand(t))
     .child(
       div()
         .flex_1()

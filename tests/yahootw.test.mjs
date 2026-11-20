@@ -87,10 +87,10 @@ test("requests: batches of 50 to the fixed host, then one line request per symbo
   );
   assert.equal(
     lines[0].url,
-    YAHOOTW_BASE + "FinanceChartService.ApacLibraCharts;type=tick;symbols=%5B%221101.TW%22%5D",
+    `${YAHOOTW_BASE}FinanceChartService.ApacLibraCharts;type=tick;symbols=%5B%221101.TW%22%5D`,
   );
   for (const request of lines) assert.equal(request.headers["User-Agent"], USER_AGENT);
-  assert.equal(requests[0].url, YAHOOTW_BASE + "StockServices.stockList;symbols=" + symbols.slice(0, 50).join(","));
+  assert.equal(requests[0].url, `${YAHOOTW_BASE}StockServices.stockList;symbols=${symbols.slice(0, 50).join(",")}`);
   for (const request of requests) {
     assert.equal(request.kind, "quote");
     assert.equal(request.headers["User-Agent"], USER_AGENT);

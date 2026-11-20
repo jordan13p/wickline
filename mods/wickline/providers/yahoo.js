@@ -22,7 +22,7 @@ const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
 
 /** Today's 5-minute bars: the quote metadata and the intraday line in one request. */
 export function yahooUrl(symbol) {
-  return YAHOO_CHART + encodeURIComponent(normalizeSymbol(symbol)) + "?interval=5m&range=1d&includePrePost=false";
+  return `${YAHOO_CHART}${encodeURIComponent(normalizeSymbol(symbol))}?interval=5m&range=1d&includePrePost=false`;
 }
 
 const finite = (value) => typeof value === "number" && Number.isFinite(value);

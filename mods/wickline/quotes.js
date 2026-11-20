@@ -81,12 +81,12 @@ export function normalizeSymbol(input) {
     .trim()
     .toUpperCase();
   if (isCryptoPair(symbol) || isFutureForm(symbol)) return symbol;
-  if (!/^[A-Z0-9^][A-Z0-9.^=\-]{0,31}$/.test(symbol)) {
+  if (!/^[A-Z0-9^][A-Z0-9.^=-]{0,31}$/.test(symbol)) {
     throw new QuoteError("symbol.invalid");
   }
   if (/^\d{6}\.SH$/.test(symbol)) symbol = symbol.replace(/\.SH$/, ".SS");
   const hk = symbol.match(/^(\d{1,5})\.HK$/);
-  if (hk) symbol = String(Number(hk[1])).padStart(4, "0") + ".HK";
+  if (hk) symbol = `${String(Number(hk[1])).padStart(4, "0")}.HK`;
   return symbol;
 }
 
