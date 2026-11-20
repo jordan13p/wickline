@@ -91,40 +91,46 @@ export default class Wickline extends View {
   init(_props, cx) {
     const given = props() ?? {};
     this.readSettings();
-    if (given.detail) {
-      this.detail = given.detail;
-      this.overlay = given.overlay;
-      // Two columns or one, chosen when it opened and kept while it is open.
-      this.wide = given.wide === true;
-      // The token its opening copy writes under, and the last `seq` it adopted (none without a token: nothing to adopt).
-      this.held = typeof given.token === "string" ? { token: given.token, seq: 1 } : null;
-      // The pointer's x over the detail's chart as a share of its width, and that width: `{ share, width }`, or null.
-      // Kept only while the chart is drawn.
-      this.chartPointer = null;
-      // Redraws at its quote's own moments (a stale price, a session's edge, a mark's end) and at each quote its row
-      // hands it; it fetches nothing.
-      cx.spawn(async (cx) => {
-        await followDetail(() => this.detail, {
-          now: () => Date.now(),
-          sleep: (ms) => cx.sleep(ms),
-          changed: () => cx.notify(),
-          woken: () =>
-            new Promise((resolve) => {
-              this.wakeDetail = resolve;
-            }),
-        });
+    if (given.detail) return this.initDetail(given, cx);
+    if (given.settings) return this.initSettings(given, cx);
+    this.initPanel(given, cx);
+  }
+
+  initDetail(given, cx) {
+    this.detail = given.detail;
+    this.overlay = given.overlay;
+    // Two columns or one, chosen when it opened and kept while it is open.
+    this.wide = given.wide === true;
+    // The token its opening copy writes under, and the last `seq` it adopted (none without a token: nothing to adopt).
+    this.held = typeof given.token === "string" ? { token: given.token, seq: 1 } : null;
+    // The pointer's x over the detail's chart as a share of its width, and that width: `{ share, width }`, or null.
+    // Kept only while the chart is drawn.
+    this.chartPointer = null;
+    // Redraws at its quote's own moments (a stale price, a session's edge, a mark's end) and at each quote its row
+    // hands it; it fetches nothing.
+    cx.spawn(async (cx) => {
+      await followDetail(() => this.detail, {
+        now: () => Date.now(),
+        sleep: (ms) => cx.sleep(ms),
+        changed: () => cx.notify(),
+        woken: () =>
+          new Promise((resolve) => {
+            this.wakeDetail = resolve;
+          }),
       });
-      return;
-    }
-    if (given.settings) {
-      this.overlay = given.overlay;
-      // No tab (the settings button) opens the first market page in the person's language.
-      this.tab = SETTINGS_TABS.includes(given.settings.tab) ? given.settings.tab : settingsMarkets(this.lang)[0];
-      // Each source's problem as the panel saw it when it opened the dialog.
-      this.health = Array.isArray(given.settings.health) ? given.settings.health : [];
-      this.initDraft(cx);
-      return;
-    }
+    });
+  }
+
+  initSettings(given, cx) {
+    this.overlay = given.overlay;
+    // No tab (the settings button) opens the first market page in the person's language.
+    this.tab = SETTINGS_TABS.includes(given.settings.tab) ? given.settings.tab : settingsMarkets(this.lang)[0];
+    // Each source's problem as the panel saw it when it opened the dialog.
+    this.health = Array.isArray(given.settings.health) ? given.settings.health : [];
+    this.initDraft(cx);
+  }
+
+  initPanel(given, cx) {
     this.size = null;
     // The row under the pointer (shows its drag handle) and a drag in progress: `{ symbol, before }`,
     // `before` being the symbol the dragged one would land in front of (null: at the end).

@@ -934,7 +934,7 @@ test("a failed first write never keeps the detail from opening", () => {
 
 // The detail copy only reads what its row hands it (handover.js): no request, no list of its own.
 test("the detail copy sends no request and owns no Watchlist", () => {
-  const branch = flat(block(read(new URL("main.js", MOD)), "if (given.detail)"));
+  const branch = flat(body(read(new URL("main.js", MOD)), "initDetail"));
   assert.ok(branch.includes("this.held="), "the detail branch");
   for (const word of ["newWatchlist", "fetch", "runProvider"]) assert.ok(!branch.includes(word), word);
 });
