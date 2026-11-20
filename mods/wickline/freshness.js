@@ -183,8 +183,7 @@ function nextDayStart(offsetMin, weekday, now) {
 }
 
 /**
- * The moments around `now` at which sessionOf can change for `quote`, along its own branches. An opening is a moment
- * the market starts trading again.
+ * The moments around `now` at which sessionOf can change for `quote`; an opening is when trading starts again.
  * - A pair: none.
  * - A future: each segment's start (an opening) and end, from its periods and from TAIFEX's hours both, since the row
  *   moves from the first to the second at 15:00.
@@ -368,9 +367,8 @@ export function staleAt(quote, session, now) {
  *   today's open, until today's first trade or the fetch guard;
  * - "stalled": past its msUntilStale, real time or delayed; a cached real-time price at once;
  * - "delayed": any other quote, with its exchange's minutes when known;
- * - the session itself while the market is not trading (closed, holiday, noTrades, pre, post, lunch, auction). A
- *   "closed" read from the hours is "stalled" when the price had stalled before the close, or is a MIS price that
- *   never reached it.
+ * - the session while the market is not trading (closed, holiday, noTrades, pre, post, lunch, auction). A "closed"
+ *   read from the hours is "stalled" when the price stopped before the close, or is a MIS price that missed it.
  */
 export function freshness(quote, session, now) {
   if (session === "closed") {
