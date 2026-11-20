@@ -767,11 +767,12 @@ test("only the detail's chart follows the pointer", () => {
 test("the crosshair's label dims with the detail and with a cached line", () => {
   assert.match(code(read(new URL("ui/detail-dialog.js", MOD))), /dimmed \|\| Boolean\(q\.chartCached\)/);
 });
-test("the crosshair's plate stays opaque: only its text dims, and it moves to the bottom", () => {
+test("the crosshair's card stays opaque: only its text dims", () => {
   const layers = code(read(new URL("ui/parts.js", MOD))).match(/function crosshairLayers[\s\S]*?\n}/)?.[0] ?? "";
   const plate = layers.match(/\.bg\(t\.background\)[\s\S]*?\.child\(/)?.[0];
   assert.ok(plate);
   assert.doesNotMatch(plate, /opacity/);
   assert.match(layers, /\.opacity\(mark\.opacity\)/);
-  assert.match(layers, /\.bottom\(0\)/);
+  assert.match(layers, /mark\.level/);
+  assert.doesNotMatch(layers, / · /);
 });

@@ -35,11 +35,18 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
   };
 }
 
-// The crosshair label's width, estimated at the detail's 11 px text: only to pick its side of the line and to catch a
-// label too wide for both. The gap to the line never depends on it (a label on the left is placed by its right edge).
-const CROSSHAIR_CHAR_PX = 6.5;
-const CROSSHAIR_PAD_PX = 8;
-const CROSSHAIR_GAP_PX = 4;
+// The crosshair card's size, estimated: its time at 11 px (6.5 px a character) over its price and change at 12 px
+// semibold (7.5 px a character, 6 px between them), 6 px padding each side and 4 px above and below; about 40 px tall
+// for the two lines and the 2 px between them. Only to pick its side and height and to catch a card too wide for both
+// sides: a card on the line's left is placed by its right edge and one at the bottom by its bottom edge, so the gaps
+// never depend on the font.
+const CROSSHAIR_TIME_CHAR_PX = 6.5;
+const CROSSHAIR_VALUE_CHAR_PX = 7.5;
+const CROSSHAIR_VALUE_GAP_PX = 6;
+const CROSSHAIR_PAD_PX = 12;
+const CROSSHAIR_CARD_PX = 40;
+// Between the vertical line and the card.
+const CROSSHAIR_GAP_PX = 6;
 
 /**
  * The drawn line point (chartGeometry) nearest `xShare` of the box's width, clamped to 0…1, the later one on a tie:
@@ -58,9 +65,9 @@ export function crosshairAt(geometry, times, xShare) {
 }
 
 /**
- * What the crosshair's label says of point `index` of `quote`'s line: `head`, its local time (dated when its day,
- * dayFor, differs from the price's) and price, "10:32 · 2,175.00"; `change`, its change against the previous close
- * ("+0.23%"), and `percent`, that change as a number, both null without a positive previous close.
+ * What the crosshair's card says of point `index` of `quote`'s line: `time`, its local time, dated when its day
+ * (dayFor) differs from the price's ("10:32", "Nov 18 22:15"); `price` ("2,175.00"); `change`, its change against the
+ * previous close ("+0.23%"), and `percent`, that change as a number, both null without a positive previous close.
  */
 export function crosshairLabel(quote, index, lang) {
   const time = quote.times[index];
@@ -69,17 +76,19 @@ export function crosshairLabel(quote, index, lang) {
   const date = day(time) === day(quote.timestamp) ? "" : formatDate(time, lang);
   const percent = positive(quote.previousClose) ? (value - quote.previousClose) / quote.previousClose * 100 : null;
   const change = percent === null ? null : formatChange(percent);
-  return { head: `${stamp(date, time)} · ${number(quote, value)}`, change, percent };
+  return { time: stamp(date, time), price: number(quote, value), change, percent };
 }
 
 /**
- * Where the crosshair's label sits in a box `widthPx` wide for a line at `x`% of it: `{ left }` 4 px right of the line
- * when it fits there, else `{ right }` (its right edge 4 px left of the line) when it fits there, else `{ left: 0 }`,
- * held at the box's left edge.
+ * Where the crosshair's card (crosshairLabel) sits across a box `widthPx` wide for a line at `x`% of it: `{ left }`
+ * 6 px right of the line when it fits there, else `{ right }` (its right edge 6 px left of the line) when it fits
+ * there, else `{ left: 0 }`, held at the box's left edge. Its width is its wider line's.
  */
 export function crosshairSpot(x, label, widthPx) {
-  const chars = (label.head + (label.change ? ` · ${label.change}` : "")).length;
-  const w = chars * CROSSHAIR_CHAR_PX + CROSSHAIR_PAD_PX;
+  const time = label.time.length * CROSSHAIR_TIME_CHAR_PX;
+  const value = (label.price.length + (label.change?.length ?? 0)) * CROSSHAIR_VALUE_CHAR_PX
+    + (label.change ? CROSSHAIR_VALUE_GAP_PX : 0);
+  const w = Math.max(time, value) + CROSSHAIR_PAD_PX;
   const px = x / 100 * widthPx;
   if (px + CROSSHAIR_GAP_PX + w <= widthPx) return { left: px + CROSSHAIR_GAP_PX };
   if (px - CROSSHAIR_GAP_PX - w >= 0) return { right: widthPx - px + CROSSHAIR_GAP_PX };
@@ -87,10 +96,14 @@ export function crosshairSpot(x, label, widthPx) {
 }
 
 /**
- * The box's edge the crosshair's label sits at for a point `y`% down: "bottom" for one in the upper half, so the label
- * never covers it, else "top".
+ * Where the crosshair's card sits down a box `heightPx` tall for a point `y`% down it: its middle at the point,
+ * `{ top }` in px, held at the top (`{ top: 0 }`) and at the bottom by its own bottom edge (`{ bottom: 0 }`).
  */
-export const crosshairEdge = (y) => (y < 50 ? "bottom" : "top");
+export function crosshairLevel(y, heightPx) {
+  const top = y * heightPx / 100 - CROSSHAIR_CARD_PX / 2;
+  if (top <= 0 || heightPx <= CROSSHAIR_CARD_PX) return { top: 0 };
+  return top + CROSSHAIR_CARD_PX >= heightPx ? { bottom: 0 } : { top };
+}
 
 const group = (digits) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 

@@ -4,7 +4,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import {
-  activityCells, bookTotals, changeTone, crosshairAt, crosshairEdge, crosshairLabel, crosshairSpot, detailBook,
+  activityCells, bookTotals, changeTone, crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot, detailBook,
   displayName, detailTimes, formatChange, formatCount, formatSignedCount, innerOuter, ladder, number, secondRow,
   sessionTimesParts, signed,
 } from "../format.js";
@@ -14,6 +14,8 @@ import { chart, chartShape, failureText, innerOuterBar, priceBox, segments, stat
 
 // How far a stopped price dims, with the activity and book beside it.
 const DIM_OPACITY = 0.5;
+// The detail's chart's height, px.
+const CHART_H = 140;
 // The ladder's bid sizes sit in a fixed column, so each bid price starts at the same place.
 const SIZE_W = 44;
 
@@ -56,8 +58,8 @@ function bookBlock(view, t, q, shown, tx) {
     .child(div().w_full().text_center().text_size(11).text_color(t.dim).child(balance));
 }
 
-// The chart's crosshair (parts.js chart): the line point nearest the pointer (view.chartPointer) of `shape`, its label
-// and its place, the label's text at the detail's dim opacity when `dimmed`. A move redraws only when the nearest point
+// The chart's crosshair (parts.js chart): the line point nearest the pointer (view.chartPointer) of `shape`, its card
+// and its place, the card's text at the detail's dim opacity when `dimmed`. A move redraws only when the nearest point
 // or the box's width changes; a leave clears the pointer.
 function crosshairOption(view, t, q, shape, dimmed) {
   const pointer = view.chartPointer;
@@ -67,8 +69,9 @@ function crosshairOption(view, t, q, shape, dimmed) {
     const label = crosshairLabel(q, at.index, view.lang);
     const changeColor = view.changeColor(t, label.percent);
     mark = {
-      x: at.x, y: at.y, dotColor: changeColor, head: label.head, change: label.change, changeColor,
-      spot: crosshairSpot(at.x, label, pointer.width), edge: crosshairEdge(at.y), opacity: dimmed ? DIM_OPACITY : 1,
+      x: at.x, y: at.y, dotColor: changeColor, time: label.time, price: label.price, change: label.change, changeColor,
+      spot: crosshairSpot(at.x, label, pointer.width), level: crosshairLevel(at.y, CHART_H),
+      opacity: dimmed ? DIM_OPACITY : 1,
     };
   }
   return {
@@ -134,9 +137,9 @@ export function detailView(view, t) {
       .when(Boolean(mark), (el) => el.child(div().pb(4).text_size(13).font_semibold().text_color(mark.color)
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown"))))),
     // The box only when its chart draws something (chartShape: a rule, a line or the price's dot), else nothing. The
-    // crosshair's label text dims with the detail, and over a cached line, which is not current.
+    // crosshair's card text dims with the detail, and over a cached line, which is not current.
     shape !== null && chart(q, color, t, {
-      width: "full", height: 140, fill: true, dot: 6,
+      width: "full", height: CHART_H, fill: true, dot: 6,
       crosshair: traced ? crosshairOption(view, t, q, shape, dimmed || Boolean(q.chartCached)) : null,
     }),
     isCryptoPair(q.symbol)

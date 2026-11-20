@@ -21,8 +21,8 @@ export const chartShape = (quote) => chartGeometry(quote.series, quote.previousC
 // (4 in rows and the table, 6 in the detail), never joined to the line and no state dot. `stroke` defaults to 2 px with
 // the area and 1.25 px without. `crosshair` (only the detail passes it) follows the pointer: the box takes its `id`,
 // hands `move` the pointer's x as a share of its width (0…1) with that width, and calls `leave` when the pointer goes;
-// its `mark`, when set, draws a 1 px `dim` vertical line and a 6 px dot at a line point and a label on a `background`
-// plate at the top or bottom (`edge`), placed by `spot` ({ left } or { right }, px).
+// its `mark`, when set, draws a 1 px `dim` vertical line and a 6 px dot at a line point and beside it a card on a
+// `background` plate, placed across by `spot` ({ left } or { right }, px) and down by `level` ({ top } or { bottom }).
 export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, crosshair }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
@@ -60,19 +60,20 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
 }
 
 // The crosshair's three layers over the full box (positioned, so none takes room): the vertical line and the dot
-// centred on the point (never the price dot's inset layer; at either end half the dot falls outside); the label at the
-// box's top, or its bottom for a point in the upper half (`edge`). The plate stays opaque, so the line never shows
-// through; only its text dims.
+// centred on the point (never the price dot's inset layer; at either end half the dot falls outside); the card beside
+// them, two lines: the time (11 px, `dim`) over the price (semibold) and its change in the change color. The plate
+// stays opaque, so the line never shows through; only its text dims.
 function crosshairLayers(t, mark) {
-  const ink = (text, color) => div().opacity(mark.opacity).text_color(color).child(text);
-  const plate = h_flex().absolute().px(4).rounded(3).bg(t.background).text_size(11).whitespace_nowrap()
-    .child(ink(mark.head, t.foreground))
-    .when(Boolean(mark.change), (el) => el.child(ink(" · ", t.foreground)).child(ink(mark.change, mark.changeColor)));
-  const placed = "left" in mark.spot ? plate.left(mark.spot.left) : plate.right(mark.spot.right);
+  const card = v_flex().absolute().gap(2).px(6).py(4).rounded(3).bg(t.background).whitespace_nowrap()
+    .child(div().opacity(mark.opacity).text_size(11).text_color(t.dim).child(mark.time))
+    .child(h_flex().opacity(mark.opacity).gap(6).text_size(12)
+      .child(div().font_semibold().text_color(t.foreground).child(mark.price))
+      .when(Boolean(mark.change), (el) => el.child(div().text_color(mark.changeColor).child(mark.change))));
+  const across = "left" in mark.spot ? card.left(mark.spot.left) : card.right(mark.spot.right);
   return [
     div().absolute().top(0).bottom(0).left(`${mark.x}%`).ml(-0.5).w(1).bg(t.dim),
     div().absolute().left(`${mark.x}%`).top(`${mark.y}%`).ml(-3).mt(-3).w(6).h(6).rounded_full().bg(mark.dotColor),
-    mark.edge === "bottom" ? placed.bottom(0) : placed.top(0),
+    "top" in mark.level ? across.top(mark.level.top) : across.bottom(mark.level.bottom),
   ];
 }
 
