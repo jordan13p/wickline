@@ -393,6 +393,21 @@ export function nextDayTurn(quote, now) {
   return turn;
 }
 
+/**
+ * The date the detail writes on its chart when the line is from another day than `now`'s, by the rows' day rule
+ * (dayFor), as before the open: "Nov 19" in English, "11/19" in the other languages. The line's day is its last
+ * point's time, else its own quote's (`chartTimestamp`), else the quote's. "" with no line (fewer than two points),
+ * for a pair's 24-hour line, or for a line from today.
+ */
+export function lineDate(quote, now, lang) {
+  const series = Array.isArray(quote.series) ? quote.series : [];
+  if (series.length < 2 || isCryptoPair(quote.symbol)) return "";
+  const timed = Array.isArray(quote.times) && quote.times.length === series.length;
+  const end = timed ? quote.times[series.length - 1] : quote.chartTimestamp ?? quote.timestamp;
+  const day = dayFor(quote);
+  return day(end) === day(now) ? "" : formatDate(end, lang);
+}
+
 /** A local date as a row prints it: "Oct 31" in English, "10/31" in the other languages. */
 export function formatDate(timestamp, lang = "en") {
   const date = new Date(timestamp);

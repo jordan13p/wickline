@@ -7,7 +7,7 @@ import { activityCells, amplitude, formatShare, innerOuter } from "../mods/wickl
 import { bookTotals, detailBook, formatSignedCount, ladder } from "../mods/wickline/format.js";
 import { decodeStockList } from "../mods/wickline/providers/yahootw.js";
 import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
-import { crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot } from "../mods/wickline/format.js";
+import { crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot, lineDate } from "../mods/wickline/format.js";
 import { decodeKlines } from "../mods/wickline/providers/binance.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { CLOSE_1224, at, day, jsonFixture, ok, say, taipei, withTZ } from "./helpers.mjs";
@@ -686,3 +686,22 @@ test("The card's middle follows the point, held inside the box", () => {
   const g = chartGeometry([10, 20, 15], 15);
   assert.deepEqual(crosshairLevel(crosshairAt(g, [1, 2, 3], 0.5).y, 140), { top: 0 });
 });
+test("An earlier day's line carries its date on the detail's chart", () => withTZ("Asia/Taipei", () => {
+  const q = { symbol: "0050.TW", exchange: "TAI", price: 60, previousClose: 59.5, timestamp: taipei("13:30:00", "2026-11-19"),
+    series: [59.8, 60], times: [taipei("11:55:00", "2026-11-19"), taipei("13:30:00", "2026-11-19")] };
+  const auction = taipei("08:36:00", "2026-11-20");                               // the morning call auction
+  assert.equal(lineDate(q, auction, "zh-TW"), "11/19");
+  assert.equal(lineDate(q, auction, "en"), "Nov 19");
+  assert.equal(lineDate(q, taipei("13:40:00", "2026-11-19"), "zh-TW"), "");         // today's line
+  // Its own last point decides, not the price's time: today's first price over yesterday's line.
+  assert.equal(lineDate({ ...q, timestamp: taipei("09:00:05", "2026-11-20") }, taipei("09:00:10", "2026-11-20"), "en"), "Nov 19");
+  // Without times, the line's own quote time (`chartTimestamp`), else the quote's.
+  const { times: _times, ...untimed } = q;
+  assert.equal(lineDate(untimed, auction, "zh-TW"), "11/19");
+  assert.equal(lineDate({ ...untimed, timestamp: taipei("09:00:05", "2026-11-20"), chartTimestamp: taipei("13:30:00", "2026-11-19") },
+    auction, "zh-TW"), "11/19");
+  assert.equal(lineDate({ ...q, series: [], times: [] }, auction, "zh-TW"), "");    // no line
+  const pair = { symbol: "BTC/USDT", price: 91_000, previousClose: 90_000, timestamp: auction,
+    series: [90_500, 91_000], times: [taipei("08:45:00", "2026-11-19"), taipei("23:45:00", "2026-11-19")] };
+  assert.equal(lineDate(pair, auction, "en"), "");                                  // a pair's 24-hour line
+}));

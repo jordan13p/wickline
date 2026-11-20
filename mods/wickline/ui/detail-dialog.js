@@ -5,8 +5,8 @@ import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
 import {
   activityCells, bookTotals, changeTone, crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot, detailBook,
-  displayName, detailTimes, formatChange, formatCount, formatSignedCount, innerOuter, ladder, number, secondRow,
-  sessionTimesParts, signed,
+  displayName, detailTimes, formatChange, formatCount, formatSignedCount, innerOuter, ladder, lineDate, number,
+  secondRow, sessionTimesParts, signed,
 } from "../format.js";
 import { detailDimmed, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
@@ -139,7 +139,7 @@ export function detailView(view, t) {
     // The box only when its chart draws something (chartShape: a rule, a line or the price's dot), else nothing. The
     // crosshair's card text dims with the detail, and over a cached line, which is not current.
     shape !== null && chart(q, color, t, {
-      width: "full", height: CHART_H, fill: true, dot: 6,
+      width: "full", height: CHART_H, fill: true, dot: 6, date: lineDate(q, now, view.lang),
       crosshair: traced ? crosshairOption(view, t, q, shape, now, dimmed || Boolean(q.chartCached)) : null,
     }),
     isCryptoPair(q.symbol)
