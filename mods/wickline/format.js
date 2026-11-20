@@ -1,6 +1,6 @@
 // How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
 // No Herdr imports, so tests run it under Node.
-import { BOOK_LEVELS, hasLimits, isCryptoPair, positive, timedByTrade } from "./quotes.js";
+import { isCryptoPair, timedByTrade } from "./quotes.js";
 import { nextTaipeiMidnight, taipeiDay } from "./calendar.js";
 import { resolvedMarket } from "./markets.js";
 import { HOUR_MS } from "./time.js";
@@ -154,139 +154,10 @@ export function formatSize(n, sizeUnit, lang, tx) {
 /** A share as an unsigned percentage, `places` decimals: `39.1%`, `2.76%` (never formatChange's signed `+2.76%`). */
 export const formatShare = (percent, places = 1) => `${percent.toFixed(places)}%`;
 
-/** The day's amplitude in percent, (high − low) / previous close × 100; null without all three. */
-export function amplitude(quote) {
-  return positive(quote.high) && positive(quote.low) && positive(quote.previousClose)
-    ? ((quote.high - quote.low) / quote.previousClose) * 100
-    : null;
-}
-
-// A count the quote carries as a cell in its size unit, or null without one.
-const sizeCell = (quote, key, n, lang, tx) =>
-  positive(n) ? { label: tx(key), ...formatSize(n, quote.sizeUnit, lang, tx) } : null;
-
-// A two-column detail's place with no value keeps its label and reads `—`.
-const emptyCell = (key, tx) => ({ label: tx(key), value: "—", unit: "" });
-
-/**
- * The two-column detail's activity, always four cells in this order: volume, previous volume, turnover (compact, 2
- * decimals: `920.47 億`, `92.05B`) and the last trade's size; a value the quote does not carry reads `—`.
- */
-export function activityCells(quote, lang, tx) {
-  const turnover = positive(quote.turnover)
-    ? { label: tx("detail.turnover"), ...compact(quote.turnover, lang, 2) }
-    : null;
-  return [
-    sizeCell(quote, "detail.volume", quote.volume, lang, tx) ?? emptyCell("detail.volume", tx),
-    sizeCell(quote, "detail.previousVolume", quote.previousVolume, lang, tx) ?? emptyCell("detail.previousVolume", tx),
-    turnover ?? emptyCell("detail.turnover", tx),
-    sizeCell(quote, "detail.lastSize", quote.lastSize, lang, tx) ?? emptyCell("detail.lastSize", tx),
-  ];
-}
-
-/**
- * The inner/outer line: `{ left, right }` texts (`內盤 39.1% 15,147`, `外盤 60.9% 23,585`) and each side's share of their
- * sum as a fraction, for the bar. null when the quote does not carry both, or both are 0.
- */
-export function innerOuter(quote, tx) {
-  const { inner, outer } = quote;
-  if (typeof inner !== "number" || typeof outer !== "number" || !(inner + outer > 0)) return null;
-  const innerShare = inner / (inner + outer);
-  const outerShare = outer / (inner + outer);
-  const side = (key, n, share) => `${tx(key)} ${formatShare(share * 100)} ${formatCount(n)}`;
-  return {
-    left: side("detail.inner", inner, innerShare),
-    right: side("detail.outer", outer, outerShare),
-    innerShare,
-    outerShare,
-  };
-}
-
-const levelCount = (book) => book.bids.length + book.asks.length;
-
-/**
- * What the two-column detail's book area shows, `{ title, book, line }` (title and line are string keys): the quote's
- * book, when it has a level and is an auction book exactly when the detail reads `試撮中` (`auction`), under
- * "detail.auctionBook" in an auction, else "detail.book"; otherwise no book, "detail.book", and one line: "reason" when
- * the price has a failure to name (its fallback, else a cached price's error), else "detail.bookEmpty" when the source
- * answered with no level, else "detail.bookNone".
- */
-export function detailBook(quote, auction) {
-  const book = quote.book ?? null;
-  const matches = book !== null && Boolean(book.auction) === auction;
-  if (matches && levelCount(book) > 0)
-    return { title: auction ? "detail.auctionBook" : "detail.book", book, line: null };
-  const reason = quote.fallback ?? (quote.cached ? quote.error : null);
-  return {
-    title: "detail.book",
-    book: null,
-    line: reason ? "reason" : matches ? "detail.bookEmpty" : "detail.bookNone",
-  };
-}
-
-// A level as a ladder rung, with its change % against `previousClose`; a market order (no price) has none and is marked.
-const rung = (level, previousClose) =>
-  level && {
-    price: level.price,
-    size: level.size,
-    change:
-      level.price !== null && positive(previousClose) ? ((level.price - previousClose) / previousClose) * 100 : null,
-    ...(level.price === null && { market: true }),
-  };
-
-/**
- * The ladder's rows, best first, at most 5: each `{ bid, ask }`, a side without a level at that row null. A rung is
- * `{ price, size, change }`, `change` the % against `previousClose` (null without one or for a market order, which
- * also carries `market: true`).
- */
-export function ladder(book, previousClose) {
-  const rows = [];
-  for (let i = 0; i < Math.min(BOOK_LEVELS, Math.max(book.bids.length, book.asks.length)); i++) {
-    rows.push({ bid: rung(book.bids[i] ?? null, previousClose), ask: rung(book.asks[i] ?? null, previousClose) });
-  }
-  return rows;
-}
-
-const sizes = (levels) => levels.reduce((sum, level) => sum + level.size, 0);
-
-/** The book's totals: each side's sum, bids minus asks, and bids over asks (null without asks). */
-export function bookTotals(book) {
-  const bids = sizes(book.bids);
-  const asks = sizes(book.asks);
-  return { bids, asks, diff: bids - asks, ratio: asks > 0 ? bids / asks : null };
-}
-
 /** A count with its sign, grouped: `+1,584`, `-12`, `0`. */
 export function formatSignedCount(n) {
   const text = formatCount(Math.abs(n));
   return text === "0" ? text : `${n > 0 ? "+" : "-"}${text}`;
-}
-
-/**
- * The detail's second row of price levels, a cell per column of the first row (3 for a pair, else 4): the limits under
- * high and low; in one column (`wide` false) the volume under open, in two the average price under open and the
- * amplitude under previous close. A cell is `{ label, value, unit }`. In two columns every place is drawn, one without a
- * value reading `—` (emptyCell). In one, a place without a value is null, so it keeps its column, and the row is null
- * when every place is empty.
- */
-export function secondRow(quote, wide, lang, tx) {
-  const pair = isCryptoPair(quote.symbol);
-  const plain = (label, value) => ({ label: tx(label), value, unit: "" });
-  const swing = amplitude(quote);
-  const first = wide
-    ? positive(quote.avgPrice)
-      ? plain("detail.avgPrice", number(quote, quote.avgPrice))
-      : null
-    : sizeCell(quote, pair ? "detail.volume24h" : "detail.volume", quote.volume, lang, tx);
-  const limit = (label, value) =>
-    hasLimits(quote.limitUp, quote.limitDown) ? plain(label, number(quote, value)) : null;
-  const places = [first, limit("detail.limitUpPrice", quote.limitUp), limit("detail.limitDownPrice", quote.limitDown)];
-  if (!pair) places.push(wide && swing !== null ? plain("detail.amplitude", formatShare(swing, 2)) : null);
-  if (wide) {
-    const keys = ["detail.avgPrice", "detail.limitUpPrice", "detail.limitDownPrice", "detail.amplitude"];
-    return places.map((cell, i) => cell ?? emptyCell(keys[i], tx));
-  }
-  return places.some(Boolean) ? places : null;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -435,60 +306,6 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
     default:
       return stateText(fresh, tx);
   }
-}
-
-/**
- * The detail dialog's times, to the second: the quote's (with its date when not today, as in formatStaleDate), the
- * last trade when it is not the quote's own time (Yahoo 奇摩股市 times a quiet stock at the feed), the fetch.
- */
-export function detailTimes(quote, now, lang, tx) {
-  const date = formatStaleDate(quote, now, lang);
-  const lastTrade =
-    quote.tradeTime && quote.tradeTime !== quote.timestamp
-      ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })]
-      : [];
-  return [
-    tx("detail.quoted", { time: stamp(date, quote.timestamp, true) }),
-    ...lastTrade,
-    tx("detail.fetched", { time: formatTime(quote.fetchedAt, true) }),
-  ];
-}
-
-const timeRange = ([start, end]) => `${formatTime(start)}–${formatTime(end)}`;
-
-// The language that names a listed closure's reason: the schedule gives it in Traditional Chinese only.
-const REASON_LANG = "zh-TW";
-
-// The 交易時段 line's parts for one sessionTimes value, by its kind (see sessionTimesParts).
-function hoursParts(times, lang, tx) {
-  switch (times.kind) {
-    case "allDay":
-      return [tx("detail.allDay")];
-    case "closedToday":
-      return [tx("detail.closedToday"), ...(lang === REASON_LANG ? [times.reason] : [])];
-    case "noTradesToday":
-      return [tx("detail.noTradesToday")];
-    case "futures": {
-      const night = times.night
-        ? tx("detail.nightSession", { times: timeRange(times.night) })
-        : tx(times.nightNoTrades ? "detail.nightNoTrades" : "detail.nightNotHeld");
-      return [tx("detail.daySession", { times: timeRange(times.day) }), night];
-    }
-    default: // "spans"
-      return times.spans.map(timeRange);
-  }
-}
-
-/**
- * The 交易時段 line's parts (see sessionTimes), for segments() (joined with " · "): the first part carries
- * tx("detail.sessionTimes", { times }); each range is `${formatTime(start)}–${formatTime(end)}`; [] for null. A
- * listed closed day reads 今日休市 (translated), then the schedule's reason in `lang` zh-TW only; a removed night
- * reads 夜盤休市. A day without trades reads 今日尚無成交，可能休市, and a night without trades 夜盤尚無成交.
- */
-export function sessionTimesParts(times, lang, tx) {
-  if (!times) return [];
-  const [first, ...rest] = hoursParts(times, lang, tx);
-  return [tx("detail.sessionTimes", { times: first }), ...rest];
 }
 
 /** A row with no price whose fetch failed: it will not price soon, so it gives up its empty lines. */

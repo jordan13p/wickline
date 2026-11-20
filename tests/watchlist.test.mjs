@@ -9,26 +9,11 @@ import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance
 import { mergeOverlay } from "../mods/wickline/overlay.js";
 import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
-import {
-  LIVE_MAX_AGE_MS,
-  detailSource,
-  detailWakeAt,
-  freshness,
-  sessionName,
-  sessionOf,
-  sessionTimes,
-} from "../mods/wickline/freshness.js";
+import { LIVE_MAX_AGE_MS, freshness, sessionName, sessionOf } from "../mods/wickline/freshness.js";
+import { detailSource, detailWakeAt, sessionTimes } from "../mods/wickline/detail.js";
 import { chartGeometry, chartLayout } from "../mods/wickline/chart.js";
-import {
-  collapsedRow,
-  detailTimes,
-  failureNote,
-  formatStaleDate,
-  formatTime,
-  freshnessLabel,
-  sessionTimesParts,
-} from "../mods/wickline/format.js";
-import { detailBook } from "../mods/wickline/format.js";
+import { collapsedRow, failureNote, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
+import { detailBook, detailTimes, sessionTimesParts } from "../mods/wickline/detail.js";
 import {
   BOTH_ON,
   CLOSE_0509,

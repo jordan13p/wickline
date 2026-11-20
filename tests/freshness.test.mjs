@@ -6,8 +6,6 @@ import {
   REALTIME_SOURCES,
   auctionFlagged,
   auctionWindowStart,
-  chartQuote,
-  detailSource,
   freshness,
   futuresSegment,
   inTaiwanAuction,
@@ -18,17 +16,18 @@ import {
   shownLimit,
   staleAt,
 } from "../mods/wickline/freshness.js";
+import { bandState, hoursWindow, nextEdge, rowDate } from "../mods/wickline/freshness.js";
 import {
   DETAIL_WAKE_CAP_MS,
-  bandState,
+  chartQuote,
   detailDimmed,
+  detailSource,
+  detailTimes,
   detailWakeAt,
   followDetail,
-  hoursWindow,
-  nextEdge,
-  rowDate,
   sessionTimes,
-} from "../mods/wickline/freshness.js";
+  sessionTimesParts,
+} from "../mods/wickline/detail.js";
 import { NIGHT_SESSION, resolvedMarket } from "../mods/wickline/markets.js";
 import { MINUTE_MS, usOffsetMin } from "../mods/wickline/time.js";
 import { taipeiDay, taipeiMinute } from "../mods/wickline/calendar.js";
@@ -36,15 +35,7 @@ import { closureOf, heldMarks, twMarket, withClosure } from "../mods/wickline/cl
 import { mergeOverlay } from "../mods/wickline/overlay.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { chartGeometry, chartLayout, sessionProgress } from "../mods/wickline/chart.js";
-import {
-  dayFor,
-  detailTimes,
-  failureNote,
-  formatStaleDate,
-  formatTime,
-  freshnessLabel,
-  sessionTimesParts,
-} from "../mods/wickline/format.js";
+import { dayFor, failureNote, formatStaleDate, formatTime, freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { YAHOOTW_CONSENT_VERSION, ownPeriods } from "../mods/wickline/providers/yahootw.js";
 import {

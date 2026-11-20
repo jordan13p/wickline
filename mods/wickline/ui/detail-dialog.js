@@ -1,5 +1,5 @@
 // The detail dialog: a copy whose props carry `detail` draws only this; it fetches nothing, its row hands it newer
-// quotes (main.js adoptDetail), and it redraws at its quote's own moments (freshness.js followDetail).
+// quotes (main.js adoptDetail), and it redraws at its quote's own moments (detail.js followDetail).
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
@@ -7,22 +7,27 @@ import { crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot } from "../c
 import {
   activityCells,
   bookTotals,
-  changeTone,
   detailBook,
-  displayName,
+  detailDimmed,
+  detailSource,
   detailTimes,
+  innerOuter,
+  ladder,
+  secondRow,
+  sessionTimes,
+  sessionTimesParts,
+} from "../detail.js";
+import {
+  changeTone,
+  displayName,
   formatChange,
   formatCount,
   formatSignedCount,
-  innerOuter,
-  ladder,
   lineDate,
   number,
-  secondRow,
-  sessionTimesParts,
   signed,
 } from "../format.js";
-import { detailDimmed, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
+import { sessionName, sessionOf } from "../freshness.js";
 import { heldMarks } from "../closures.js";
 import {
   blockedNote,
@@ -43,7 +48,7 @@ const CHART_H = 140;
 // The ladder's bid sizes sit in a fixed column, so each bid price starts at the same place.
 const SIZE_W = 44;
 
-// One side of a ladder row (format.js ladder): a 24 px band, the bid's size in its fixed column then its price toward the
+// One side of a ladder row (detail.js ladder): a 24 px band, the bid's size in its fixed column then its price toward the
 // center, the ask's price then its size. A price at the previous close (or without one) is plain `foreground`; others
 // take the change color; a market order reads detail.marketOrder in plain ink. `rung` null: empty.
 function ladderSide(view, t, q, rung, bid) {

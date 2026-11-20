@@ -1,19 +1,9 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
-// that is recent while its market trades; and when an open detail must redraw (detailWakeAt,
-// followDetail). No Herdr imports, so tests run it under Node.
+// that is recent while its market trades; its session, and the moments its row reads differently (nextEdge).
+// No Herdr imports, so tests run it under Node.
 import { taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
-import { heldMarks } from "./closures.js";
-import { formatStaleDate, nextDayTurn, stateText } from "./format.js";
-import {
-  DAY_SESSION,
-  NIGHT_SESSION,
-  TAIFEX_HOURS,
-  TWSE_HOURS,
-  US_HOURS,
-  exchangeRule,
-  kindOf,
-  resolvedMarket,
-} from "./markets.js";
+import { formatStaleDate, nextDayTurn } from "./format.js";
+import { TAIFEX_HOURS, TWSE_HOURS, US_HOURS, exchangeRule, kindOf, resolvedMarket } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 import { DAY_MS, MINUTE_MS, dayStart, localDay, localWindow, tradesOn, usOffsetMin, weekdayOf } from "./time.js";
 
@@ -72,7 +62,7 @@ function beforeOpen(quote) {
 }
 
 // A delayed quote's minutes late, from its exchange's rule; null when the rule gives none.
-function delayMinutes(quote) {
+export function delayMinutes(quote) {
   const { delayS } = exchangeRule(quote.exchange, quote.symbol);
   return delayS === null ? null : Math.ceil(delayS / 60);
 }
@@ -119,7 +109,7 @@ const NIGHT_FROM_MIN = 720;
 const isNight = ([start]) => taipeiMinute(start) >= NIGHT_FROM_MIN;
 
 // A quote whose night session is closed (see closures.js closureOf): removed by a listed day, or without trades.
-const nightClosed = (quote) => quote.closure?.kind === "nightRemoved" || quote.closure?.kind === "nightNoTrades";
+export const nightClosed = (quote) => quote.closure?.kind === "nightRemoved" || quote.closure?.kind === "nightNoTrades";
 
 /**
  * The session a future trades in at `now`: "day" or "night", or null between sessions. Its segments are
@@ -135,7 +125,7 @@ export function futuresSegment(quote, now) {
 
 // The exchange's lunch break (exchangeRule(...).lunch) on the local day of `at`, as [start, end] in ms, when it falls
 // strictly inside `regular` ([start, end]; null: wherever it falls); else null, also for an exchange without one.
-function lunchWithin(quote, regular, at) {
+export function lunchWithin(quote, regular, at) {
   const { lunch } = exchangeRule(quote.exchange, quote.symbol);
   if (!lunch) return null;
   const [start, end] = localWindow(lunch, at);
@@ -290,55 +280,6 @@ export function hoursWindow(quote, now) {
   const hours = market === "tw" ? TWSE_HOURS : market === "us" ? { ...US_HOURS, offsetMin: usOffsetMin(now) } : null;
   if (!hours) return null;
   return { regular: localWindow(hours, now), weekday: tradesOn(hours, localDay(hours.offsetMin, now)) };
-}
-
-// A regular period ([start, end] in ms) as its spans of trading time: split around the exchange's lunch
-// (exchangeRule(...).lunch, via localWindow taken at its start, so a Saturday detail with Friday's periods still splits)
-// when it falls inside, else whole.
-export function regularSpans(quote, regular) {
-  const [start, end] = regular;
-  const lunch = lunchWithin(quote, regular, start);
-  return lunch
-    ? [
-        [start, lunch[0]],
-        [lunch[1], end],
-      ]
-    : [[start, end]];
-}
-
-/**
- * The detail's 交易時段 for `quote` at `now`, as data (format.js writes it) tagged by `kind`; times in ms, regular
- * session only:
- * - "allDay" for a pair or FX (exchangeRule(...).fx; its regular period, the UTC day, is not shown);
- * - "closedToday" with the schedule's `reason` on a listed closed day (closure "listed");
- * - "noTradesToday" while a Taiwan quote reads as having no trades today (closure "noTrades");
- * - "futures" with `day` and `night` as [start, end] for a TAIFEX future, from TAIFEX_HOURS on the Taipei date of
- *   `now`; night null while it is closed (nightClosed), then `nightNoTrades` says whether it is for want of trades
- *   (closure "nightNoTrades") rather than removed;
- * - "spans" with `spans: [[start, end]]` from TWSE_HOURS (hoursWindow) for a Taiwan stock or index, whatever periods
- *   it carries (a TW-only index priced from an earlier day carries a zero-length period);
- * - "spans" with `spans: [[start, end], …]` from periods.regular (a `=F` future's as Yahoo gives it), else
- *   hoursWindow's, split around the exchange's lunch when it has one (regularSpans);
- * - null with nothing to show.
- */
-export function sessionTimes(quote, now) {
-  if (isCryptoPair(quote.symbol) || exchangeRule(quote.exchange, quote.symbol).fx) return { kind: "allDay" };
-  const closure = quote.closure?.kind;
-  if (closure === "listed") return { kind: "closedToday", reason: quote.closure.reason };
-  if (closure === "noTrades") return { kind: "noTradesToday" };
-  if (kindOf(quote.symbol) === "future") {
-    const { offsetMin } = TAIFEX_HOURS;
-    return {
-      kind: "futures",
-      day: localWindow({ offsetMin, ...DAY_SESSION }, now),
-      night: nightClosed(quote) ? null : localWindow({ offsetMin, ...NIGHT_SESSION }, now),
-      nightNoTrades: closure === "nightNoTrades",
-    };
-  }
-  const spans = (list) => ({ kind: "spans", spans: list });
-  if (resolvedMarket(quote.symbol, quote.exchange) === "tw") return spans([hoursWindow(quote, now).regular]);
-  const regular = quote.periods?.regular ?? hoursWindow(quote, now)?.regular;
-  return regular ? spans(regularSpans(quote, regular)) : null;
 }
 
 /**
@@ -510,122 +451,4 @@ export function shownLimit(quote, session, now) {
   const closed = CLOSED_STATES.has(state) || state === "post";
   const heldToday = state === "auction" && taipeiDay(quote.tradeTime ?? quote.timestamp) === taipeiDay(now);
   return state === "live" || (closed && traded) || heldToday ? priceLimit(quote) : null;
-}
-
-// A delayed quote's lateness in words: its exchange's minutes, else that the delay is not provided.
-function delayWords(quote, tx) {
-  const late = delayMinutes(quote);
-  return late === null ? tx("freshness.delayUnknown") : tx("freshness.delayedMinutes", { minutes: late });
-}
-
-// A detail line's keys: with a state, and for the source alone when the state has no word (unconfirmed).
-const PRICE_KEYS = { from: "detail.priceFrom", alone: "detail.priceSource" };
-const LINE_KEYS = { from: "detail.lineFrom", alone: "detail.lineSource" };
-const sourceText = (keys, state, source, tx) =>
-  state === null ? tx(keys.alone, { source }) : tx(keys.from, { state, source });
-
-/** A row's line as a quote of its own source: its times and cached flag (`chartCached`), not the price's. */
-export function chartQuote(quote) {
-  return {
-    ...quote,
-    source: quote.chartSource,
-    timestamp: quote.chartTimestamp,
-    fetchedAt: quote.chartFetchedAt,
-    cached: quote.chartCached,
-  };
-}
-
-// The line's own quote (chartQuote) when the line has a reading of its own: another source's than the price's, real
-// time; else null (no line, the price's own, or a delayed one, which reads by its exchange's delay).
-function lineReading(quote) {
-  if (!quote.chartSource || quote.chartSource === quote.source) return null;
-  const chart = chartQuote(quote);
-  return isRealtime(chart) ? chart : null;
-}
-
-// The open detail sleeps at most this long at a time, then rereads the clock: a machine that slept, or a clock that
-// moved, costs at most this much lateness.
-export const DETAIL_WAKE_CAP_MS = 600_000;
-
-// A stale moment the open detail reads (staleAt), or null: none for a quote that already reads stalled, which stays so
-// until an edge (a cached price reads stalled at once; one still at the previous close, unconfirmed, still turns).
-const readStaleAt = (quote, session, now) =>
-  freshness(quote, session, now).state === "stalled" ? null : staleAt(quote, session, now);
-
-/**
- * The next moment after `now` at which the open detail of `quote`, with its marks as held at `now` (heldMarks), can
- * read differently, in ms, or null: the earliest of its row's next edge (nextEdge), its mark's end (`closureUntil`),
- * and the stale moments (readStaleAt, in the session it reads) of what the detail shows a state for: a real-time
- * price that is not a pair (a delayed stock prints its delay, a pair no state), and a line that is another source's
- * real-time quote (lineReading). Each counts only when strictly later than `now`, so a wait cut at it is never zero.
- */
-export function detailWakeAt(detail, now) {
-  const quote = heldMarks(detail, now);
-  const session = sessionOf(quote, now);
-  const moments = [nextEdge(quote, now), quote.closureUntil];
-  if (isRealtime(quote) && !isCryptoPair(quote.symbol)) moments.push(readStaleAt(quote, session, now));
-  const line = lineReading(quote);
-  if (line) moments.push(readStaleAt(line, session, now));
-  const ahead = moments.filter((at) => at != null && at > now);
-  return ahead.length ? Math.min(...ahead) : null;
-}
-
-/**
- * The open detail's one task: a data timer, not animation. It fetches nothing (its row hands it newer quotes, see
- * main.js adoptDetail); one wake at a time, it sleeps to the quote's next reading change (detailWakeAt, from its marks
- * as held then), at most DETAIL_WAKE_CAP_MS per sleep before it rereads the clock, and calls `changed()` (a redraw)
- * only once a wake is reached, so a wake hours away costs one redraw. `detail` is a getter, read at each wake;
- * `woken()` gives a promise that settles when a handed quote was adopted, and the wake recomputes at once from it.
- * Every real quote has an edge ahead (a day edge at least), so the `null` branch is a guard: it waits for `woken()`
- * rather than ending. Each wake leaves the abandoned `sleep` pending (at most DETAIL_WAKE_CAP_MS, so about 60 at a 10 s
- * pace); they cost little and end with the dialog's `cx`, not a leak. The copy's `cx` ends it: a cancelled sleep rejects, and so does this.
- */
-export async function followDetail(detail, { now, sleep, changed, woken }) {
-  for (;;) {
-    const time = now();
-    const wake = detailWakeAt(detail(), time);
-    const signal = woken();
-    if (wake === null) {
-      await signal;
-      continue;
-    }
-    const reached = await Promise.race([
-      sleep(Math.min(wake - time, DETAIL_WAKE_CAP_MS)).then(() => true),
-      signal.then(() => false),
-    ]);
-    if (reached && now() >= wake) changed();
-  }
-}
-
-/**
- * The detail dialog's sources as lines, each a list of parts (joined with ` · `). A real-time price
- * names its state and source on one line: `Price: Live · TWSE MIS`, or its source alone while unconfirmed
- * (`Price: Yahoo Finance`); its line follows on its own, as the same state when the line is the price's own
- * source (Yahoo 奇摩股市), else as the line's own quote reads (`chartTimestamp`, `chartFetchedAt`; see
- * mergeOverlay): its state when that source is real time (stalled once that quote is, its source alone while
- * unconfirmed), else its exchange's delay: `Line: delayed 20 min · Yahoo Finance`. A delayed stock keeps its
- * plain wording as one line of two parts, with its exchange's delay in every session; a pair is one part.
- * `tx(key, params)` translates; a `src.<id>` key names a provider.
- */
-export function detailSource(quote, session, now, tx) {
-  if (isRealtime(quote) && !isCryptoPair(quote.symbol)) {
-    const own = stateText(freshness(quote, session, now), tx);
-    const price = sourceText(PRICE_KEYS, own, tx(`src.${quote.source}`), tx);
-    if (!quote.chartSource) return [[price]];
-    if (quote.chartSource === quote.source)
-      return [[price], [sourceText(LINE_KEYS, own, tx(`src.${quote.source}`), tx)]];
-    const line = lineReading(quote);
-    const state = line ? stateText(freshness(line, session, now), tx) : delayWords(chartQuote(quote), tx);
-    return [[price], [sourceText(LINE_KEYS, state, tx(`src.${quote.chartSource}`), tx)]];
-  }
-  if (isCryptoPair(quote.symbol)) return [[tx("detail.sourceCrypto")]];
-  return [[tx("detail.sourceStock"), delayWords(quote, tx)]];
-}
-
-/**
- * Whether the detail dims its price with its activity, inner/outer volume and book: its price is kept through a failed
- * refresh (`cached`) or reads stalled, so nothing beside it looks current. Rows keep their own look.
- */
-export function detailDimmed(quote, session, now) {
-  return Boolean(quote.cached) || freshness(quote, session, now).state === "stalled";
 }

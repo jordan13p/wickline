@@ -12,7 +12,8 @@ import {
   unpackTimes,
 } from "../mods/wickline/handover.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
-import { detailSource, sessionOf } from "../mods/wickline/freshness.js";
+import { sessionOf } from "../mods/wickline/freshness.js";
+import { detailSource } from "../mods/wickline/detail.js";
 import { taipeiDay } from "../mods/wickline/calendar.js";
 import { heldMarks } from "../mods/wickline/closures.js";
 import { failureNote } from "../mods/wickline/format.js";

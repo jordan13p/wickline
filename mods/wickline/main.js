@@ -25,7 +25,8 @@ import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
 import * as secrets from "./secrets.js";
 import { QuoteError } from "./quotes.js";
 import { changeTone, number } from "./format.js";
-import { followDetail, sessionOf, shownLimit } from "./freshness.js";
+import { followDetail } from "./detail.js";
+import { sessionOf, shownLimit } from "./freshness.js";
 import { DETAIL_KEY, adopt, clearsOnClose, makeToken, nextWrite, startHandover } from "./handover.js";
 import {
   FILTER_STORAGE_KEY,

@@ -162,7 +162,7 @@ export function statGrid(t, cells) {
   return v_flex().gap(10).children(rows);
 }
 
-// The inner/outer line (format.js innerOuter) over a 4 px bar of two parts 2 px apart, sized by their shares: inner in
+// The inner/outer line (detail.js innerOuter) over a 4 px bar of two parts 2 px apart, sized by their shares: inner in
 // `innerColor`, outer in `outerColor`. A side with no share draws no part.
 export function innerOuterBar(flow, innerColor, outerColor) {
   return v_flex()

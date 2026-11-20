@@ -2,7 +2,7 @@
 // run), and the crosshair's point and card. No Herdr imports, so tests run it under Node.
 import { futuresDay, taipeiAt } from "./calendar.js";
 import { formatChange, formatDate, number, stamp } from "./format.js";
-import { hoursWindow, regularSpans } from "./freshness.js";
+import { hoursWindow, lunchWithin } from "./freshness.js";
 import { DAY_SESSION, NIGHT_SESSION, TAIFEX_HOURS, kindOf } from "./markets.js";
 import { changePercent, positive } from "./quotes.js";
 import { tradesOn } from "./time.js";
@@ -125,6 +125,20 @@ function taifexDay(day) {
     [taipeiAt(night, NIGHT_SESSION.from), taipeiAt(night, NIGHT_SESSION.to)],
     [taipeiAt(day, DAY_SESSION.from), taipeiAt(day, DAY_SESSION.to)],
   ];
+}
+
+// A regular period ([start, end] in ms) as its spans of trading time: split around the exchange's lunch
+// (exchangeRule(...).lunch, via localWindow taken at its start, so a Saturday detail with Friday's periods still splits)
+// when it falls inside, else whole.
+export function regularSpans(quote, regular) {
+  const [start, end] = regular;
+  const lunch = lunchWithin(quote, regular, start);
+  return lunch
+    ? [
+        [start, lunch[0]],
+        [lunch[1], end],
+      ]
+    : [[start, end]];
 }
 
 // The spans of trading time in the trading day that `t` belongs to, as [start, end] in ms, or null when unknown. A future:
