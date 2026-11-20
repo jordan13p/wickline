@@ -387,8 +387,7 @@ export function bandState(quote, now) {
   return state === "noTrades" ? "stalled" : state;
 }
 
-// After the close, how long a price still belongs to the session: 90 minutes, for TWSE's after-close fixed-price
-// trades.
+// How long after its regular period's end a stock's price still counts as from that session (shownLimit): 90 minutes.
 const AFTER_CLOSE_MS = 90 * MINUTE_MS;
 
 /**
