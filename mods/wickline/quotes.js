@@ -1,7 +1,7 @@
 // Symbols, coded errors and what the quote sources share.
 // No Herdr imports, so tests run it under Node. The hosts live in providers/.
 
-export const VERSION = "0.8.0";
+const VERSION = "0.8.0";
 export const USER_AGENT = `Wickline-Herdr/${VERSION}`;
 // Sent with every request.
 export const HEADERS = { "User-Agent": USER_AGENT, Accept: "application/json" };
@@ -102,7 +102,7 @@ export const positiveOrNull = (value) => {
 export const sized = (volume, sizeUnit) => (positive(volume) ? { volume, sizeUnit } : {});
 
 // What a quote carries about the day's trading, which only the source that gives its price may speak for.
-export const ACTIVITY_FIELDS = [
+const ACTIVITY_FIELDS = [
   "volume",
   "previousVolume",
   "turnover",

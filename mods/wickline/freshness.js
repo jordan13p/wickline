@@ -532,7 +532,7 @@ export function freshness(quote, session, now) {
 }
 
 /** The states of a market closed for the rest of the day (a row's label carries its date): closed, 休市, 今日無成交. */
-export const CLOSED_STATES = new Set(["closed", "holiday", "noTrades"]);
+const CLOSED_STATES = new Set(["closed", "holiday", "noTrades"]);
 
 /**
  * The date a row adds after its state: none on a live row (its price is of this moment, and a quote stamped just

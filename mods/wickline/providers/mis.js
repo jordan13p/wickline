@@ -86,7 +86,7 @@ function bookPrice(bid, ask, up, down) {
  * either side possibly empty). A named row neither flagged nor priced whose bids and asks give no priced level goes in
  * `noLevels` (true): MIS answered, with no order yet. Each of the three keys is there only when not empty.
  */
-export function decodeMis(symbols, response, now) {
+function decodeMis(symbols, response, now) {
   // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
   if (response.status === 429) throw new QuoteError("mis.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("mis.http", { status: response.status });

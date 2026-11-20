@@ -36,7 +36,7 @@ export function finnhubCap(budgetPerMinute) {
 const number = (value) => (positive(value) ? value : null);
 
 /** The overlay for `symbol`; a zero price or time (Finnhub's answer for an unknown symbol) is no quote and no error. */
-export function decodeFinnhub(symbol, response, now) {
+function decodeFinnhub(symbol, response, now) {
   // Redirected elsewhere, or no final address to tell: the key may have gone with it, so it is not sent
   // again until the settings change.
   if (typeof response.url !== "string" || !FINNHUB_ORIGIN.test(response.url)) {
