@@ -830,11 +830,9 @@ export class Watchlist {
       ];
       for (const symbol of held.flatMap(Object.keys)) {
         if (symbols.has(symbol)) continue;
-        this.dropOverlay(provider, symbol);
-        if (provider === mis) delete this.noLevels[symbol];
+        this.forgetOverlay(provider, symbol, undefined);
         if (provider === yahootw) delete this.ytwAuctionBooks[symbol];
         if (this.lineTrades[provider.id]) delete this.lineTrades[provider.id][symbol];
-        this.setEntry(this.overlayErrors, symbol, provider.id, undefined);
       }
     }
     for (const symbol of Object.keys(this.localNames)) if (!covered.has(symbol)) delete this.localNames[symbol];
@@ -1381,6 +1379,12 @@ export class Watchlist {
       this.errors[symbol] = error;
       return;
     }
+    this.forgetOverlay(provider, symbol, error);
+  }
+
+  // `provider`'s overlay for `symbol` goes, with MIS's `noLevels` mark, and its error becomes `error` (undefined
+  // clears it).
+  forgetOverlay(provider, symbol, error) {
     this.dropOverlay(provider, symbol);
     if (provider === mis) delete this.noLevels[symbol];
     this.setEntry(this.overlayErrors, symbol, provider.id, error);
