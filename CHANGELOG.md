@@ -54,7 +54,9 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 ### Fixed
 
 - A cached price never shows as live, and a cached chart beside a live price says so.
-- A future's `No trading` mark holds through the night a listed holiday removes.
+- On a listed Taiwan holiday, a future's `No trading` mark now lasts until 05:00 the next morning, through the night
+  session the holiday cancels.
+- On a quiet futures day, `No trades today` ends at 15:10 even when no answer for the night session has arrived.
 
 ## [0.6.0] - 2026-11-11
 
@@ -66,8 +68,8 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 
 ### Changed
 
-- Rows turn at their session boundaries, not at the next refresh, and a quote without trading periods is read by its
-  exchange's hours.
+- A row changes state (open, lunch break, closed) at the moment its session starts or ends, not at the next refresh.
+- A Taiwan or US quote that arrives before its trading periods is read by its exchange's regular hours.
 - Currencies read closed only over their weekend, not by their daily period.
 
 ## [0.5.0] - 2026-11-11
@@ -80,8 +82,9 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 
 ### Changed
 
-- The Yahoo TW Stock statement now names what is asked by exchange, so earlier consents are asked once more; each
-  Taiwan consent shows its key points first.
+- The Yahoo TW Stock statement now lists what is asked for each exchange (TWSE, TPEx, TAIFEX), so anyone who
+  consented before is asked once more.
+- Each Taiwan consent shows its key points first.
 
 ### Fixed
 
@@ -143,3 +146,15 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 - A band, sidebar or table layout chosen by the pane's size; drag to reorder; move between a pane and its own tab;
   open with `ctrl-alt-b`.
 - A settings dialog, five interface languages, and red-up or green-up colors.
+
+[Unreleased]: https://github.com/jordan13p/wickline/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/jordan13p/wickline/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/jordan13p/wickline/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/jordan13p/wickline/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/jordan13p/wickline/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/jordan13p/wickline/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/jordan13p/wickline/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/jordan13p/wickline/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/jordan13p/wickline/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/jordan13p/wickline/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/jordan13p/wickline/releases/tag/v0.1.0
