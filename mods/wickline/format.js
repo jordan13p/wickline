@@ -1,6 +1,6 @@
 // How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
 // No Herdr imports, so tests run it under Node.
-import { hasLimits, isCryptoPair, positive, timedByTrade } from "./quotes.js";
+import { BOOK_LEVELS, changePercent, hasLimits, isCryptoPair, positive, timedByTrade } from "./quotes.js";
 import { nextTaipeiMidnight, taipeiDay } from "./calendar.js";
 import { HOUR_MS, resolvedMarket } from "./markets.js";
 
@@ -81,7 +81,7 @@ export function crosshairAt(geometry, times, xShare) {
 export function crosshairLabel(quote, index, lang) {
   const time = quote.times[index];
   const value = quote.series[index];
-  const percent = positive(quote.previousClose) ? ((value - quote.previousClose) / quote.previousClose) * 100 : null;
+  const percent = changePercent(value, quote.previousClose);
   const change = percent === null ? null : formatChange(percent);
   return { time: stamp(formatDate(time, lang), time), price: number(quote, value), change, percent };
 }
@@ -349,7 +349,7 @@ const rung = (level, previousClose) =>
  */
 export function ladder(book, previousClose) {
   const rows = [];
-  for (let i = 0; i < Math.min(5, Math.max(book.bids.length, book.asks.length)); i++) {
+  for (let i = 0; i < Math.min(BOOK_LEVELS, Math.max(book.bids.length, book.asks.length)); i++) {
     rows.push({ bid: rung(book.bids[i] ?? null, previousClose), ask: rung(book.asks[i] ?? null, previousClose) });
   }
   return rows;

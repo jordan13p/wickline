@@ -3,6 +3,7 @@
 // the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
 // dialog. No Herdr imports, so tests run it under Node.
 import {
+  BOOK_LEVELS,
   HEADERS,
   QuoteError,
   cleanText,
@@ -13,7 +14,7 @@ import {
   sized,
   withinLimits,
 } from "../quotes.js";
-import { failEach, parseJson } from "./provider.js";
+import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 import { fastPace } from "../markets.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
@@ -33,9 +34,6 @@ export function misChannel(symbol) {
 // The best real bid or ask: "2265.0000_2260.0000_..." → 2265. Market orders show as 0.0000 and are skipped.
 const best = (value) =>
   typeof value === "string" ? (value.split("_").map(positiveOrNull).find(Boolean) ?? null) : null;
-
-// The levels at most a side of the book shows.
-const BOOK_LEVELS = 5;
 
 // MIS's price of a market order.
 const MARKET_PRICE = /^0(\.0+)?$/;
@@ -88,7 +86,7 @@ function bookPrice(bid, ask, up, down) {
  */
 function decodeMis(symbols, response, now) {
   // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
-  if (response.status === 429) throw new QuoteError("mis.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (response.status === 429) throw new QuoteError("mis.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   if (!response.ok) throw new QuoteError("mis.http", { status: response.status });
   const body = parseJson(response.text, "mis.unreadable");
   if (!Array.isArray(body?.msgArray)) throw new QuoteError("mis.unreadable");

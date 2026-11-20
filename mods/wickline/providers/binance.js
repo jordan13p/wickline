@@ -1,7 +1,7 @@
 // Binance Spot market data: pairs written BASE/QUOTE, in batches, plus a 24-hour line per pair.
 // No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanTimedSeries, positive, positiveOrNull, sized } from "../quotes.js";
-import { failEach, parseJson } from "./provider.js";
+import { HEADERS, QuoteError, changePercent, cleanTimedSeries, positive, positiveOrNull, sized } from "../quotes.js";
+import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the default Binance host (a public market-data mirror).
 export const BINANCE_URL = "https://data-api.binance.vision";
@@ -12,9 +12,12 @@ const endpoint = (base, path) => `${base.replace(/\/+$/, "")}/api/v3/${path}`;
 
 /** @typedef {import("./provider.js").Provider} Provider */
 
+// A pair as Binance names it: "BTC/USDT" → "BTCUSDT".
+const binanceSymbol = (pair) => pair.replace("/", "");
+
 /** One request for up to BINANCE_BATCH pairs: `?symbols=["BTCUSDT","ETHUSDT"]`. */
 export function binanceUrl(base, pairs) {
-  return `${endpoint(base, "ticker/24hr")}?symbols=${encodeURIComponent(JSON.stringify(pairs.map((pair) => pair.replace("/", ""))))}`;
+  return `${endpoint(base, "ticker/24hr")}?symbols=${encodeURIComponent(JSON.stringify(pairs.map(binanceSymbol)))}`;
 }
 
 /** Quotes by requested pair; a pair Binance did not return is absent. */
@@ -23,12 +26,12 @@ export function decodeBinance(pairs, response, now) {
   if (response.status === 400) throw new QuoteError("binance.invalidPair", {}, { invalidSymbol: true });
   // No headers in Herdr's fetch, so no Retry-After: wait at least a minute.
   if (response.status === 429 || response.status === 418)
-    throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
+    throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   // Unavailable for legal reasons: Binance refuses this region.
   if (response.status === 451) throw new QuoteError("binance.region");
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
   const body = parseJson(response.text, "binance.unreadable");
-  const wanted = new Map(pairs.map((pair) => [pair.replace("/", ""), pair]));
+  const wanted = new Map(pairs.map((pair) => [binanceSymbol(pair), pair]));
   const quotes = {};
   for (const ticker of Array.isArray(body) ? body : [body]) {
     const pair = typeof ticker?.symbol === "string" ? wanted.get(ticker.symbol) : undefined;
@@ -43,7 +46,7 @@ export function decodeBinance(pairs, response, now) {
       name: "Binance Spot",
       price,
       // Against the price 24 hours before the last trade.
-      changePercent: positive(close) ? ((price - close) / close) * 100 : null,
+      changePercent: changePercent(price, close),
       currency: pair.split("/")[1],
       timestamp: time,
       fetchedAt: now,
@@ -62,7 +65,7 @@ export function decodeBinance(pairs, response, now) {
 
 /** The last 24 hours of one pair in 15-minute bars. */
 export function binanceKlinesUrl(base, pair) {
-  return `${endpoint(base, "klines")}?symbol=${encodeURIComponent(pair.replace("/", ""))}&interval=15m&limit=96`;
+  return `${endpoint(base, "klines")}?symbol=${encodeURIComponent(binanceSymbol(pair))}&interval=15m&limit=96`;
 }
 
 /**
@@ -72,7 +75,7 @@ export function binanceKlinesUrl(base, pair) {
 export function decodeKlines(response) {
   // Rate limited as the tickers are: the same backoff.
   if (response.status === 429 || response.status === 418)
-    throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
+    throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
   const body = parseJson(response.text, "binance.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("binance.unreadable");

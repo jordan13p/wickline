@@ -92,6 +92,12 @@ export function normalizeSymbol(input) {
 
 export const positive = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 
+/** `price` against the reference `ref` in percent, null when `ref` is not positive. */
+export const changePercent = (price, ref) => (positive(ref) ? ((price - ref) / ref) * 100 : null);
+
+// The levels at most a side of the book shows.
+export const BOOK_LEVELS = 5;
+
 /** A field as a positive number (a numeric string counts), else null: "2265.0000" → 2265, "-" → null. */
 export const positiveOrNull = (value) => {
   const n = Number(value);

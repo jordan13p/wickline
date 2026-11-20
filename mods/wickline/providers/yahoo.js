@@ -3,6 +3,7 @@
 import {
   HEADERS,
   QuoteError,
+  changePercent,
   cleanSeries,
   cleanText,
   cleanTimedSeries,
@@ -13,7 +14,7 @@ import {
   sized,
 } from "../quotes.js";
 import { kindOf, marketOf } from "../markets.js";
-import { failEach, parseJson } from "./provider.js";
+import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 
 // Each provider names the hosts it contacts; this is the only Yahoo host.
 const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/";
@@ -43,7 +44,7 @@ function volumeOf(symbol, meta) {
 /** `response` is `{ status, ok, text }` with the body already read. */
 export function decodeYahoo(symbol, response, now) {
   // Herdr's fetch does not expose headers, so Retry-After is unknown: wait at least a minute.
-  if (response.status === 429) throw new QuoteError("yahoo.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (response.status === 429) throw new QuoteError("yahoo.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   if (response.status === 404) throw new QuoteError("yahoo.notFound");
   if (!response.ok) throw new QuoteError("yahoo.http", { status: response.status });
   const body = parseJson(response.text, "yahoo.unreadable");
@@ -74,7 +75,7 @@ export function decodeYahoo(symbol, response, now) {
     source: "yahoo",
     name: cleanText(meta.longName) ?? cleanText(meta.shortName) ?? symbol,
     price: meta.regularMarketPrice,
-    changePercent: positive(close) ? ((meta.regularMarketPrice - close) / close) * 100 : null,
+    changePercent: changePercent(meta.regularMarketPrice, close),
     currency: currencyCode(meta.currency),
     // The exchange Yahoo names (NMS, TAI, OSA…), which gives an index its market (resolvedMarket).
     exchange: exchangeCode(meta.exchangeName),

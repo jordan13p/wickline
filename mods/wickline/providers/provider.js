@@ -1,4 +1,4 @@
-// What every provider shares: the JSDoc types, and the two helpers their decoders use at the boundary.
+// What every provider shares: the JSDoc types, the two helpers their decoders use at the boundary, and the retry wait.
 // No Herdr imports, so tests run it under Node.
 import { QuoteError } from "../quotes.js";
 
@@ -34,6 +34,9 @@ import { QuoteError } from "../quotes.js";
  * from starting an extra round (a request budget). `decode` does not throw
  * for an HTTP or body problem: the request's symbols each get that error instead.
  */
+
+// Herdr's fetch gives no headers, so no Retry-After: a rate-limited provider waits a minute.
+export const RATE_LIMIT_RETRY_MS = 60_000;
 
 /** `JSON.parse` for an answer's body; a body that is not JSON is the provider's `*.unreadable` error. */
 export function parseJson(text, unreadableCode) {

@@ -3,6 +3,7 @@
 // This file holds the host, limits and decoder; the switch and consent live in settings.js and the
 // settings dialog. No Herdr imports, so tests run it under Node.
 import {
+  BOOK_LEVELS,
   HEADERS,
   QuoteError,
   cleanText,
@@ -15,7 +16,7 @@ import {
 } from "../quotes.js";
 import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
 import { MINUTE_MS, fastPace, kindOf } from "../markets.js";
-import { failEach, parseJson } from "./provider.js";
+import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 import { period } from "./yahoo.js";
 
 // Fixed: the person cannot point it elsewhere.
@@ -73,9 +74,6 @@ const amount = (value, future) => {
   const n = typeof value === "string" && /^\d+(\.\d+)?$/.test(value) ? Number(value) : value;
   return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(future ? n * 1000 : n) : null;
 };
-
-// The levels at most a side of the book shows.
-const BOOK_LEVELS = 5;
 
 /**
  * One side (`side`: "bid" or "ask") of `orderbook`, in the order sent, or null when it does not add up to the answer's
@@ -143,8 +141,8 @@ const time = (value) => {
 // Both requests' status codes. A refusal (403) is backed off like a rate limit; Herdr's fetch has no
 // Retry-After, so wait at least a minute.
 function checkStatus(response) {
-  if (response.status === 403) throw new QuoteError("yahootw.refused", {}, { retryAfterMs: 60_000 });
-  if (response.status === 429) throw new QuoteError("yahootw.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (response.status === 403) throw new QuoteError("yahootw.refused", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
+  if (response.status === 429) throw new QuoteError("yahootw.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   if (!response.ok) throw new QuoteError("yahootw.http", { status: response.status });
 }
 
