@@ -389,7 +389,8 @@ export function bandState(quote, now) {
   return state === "noTrades" ? "stalled" : state;
 }
 
-// How long after its regular period's end a stock's price still counts as from that session (shownLimit): 90 minutes.
+// How long after its regular period's end a price (a future's excepted) still counts as from that session
+// (shownLimit): 90 minutes. That covers the 13:30 close's fixed-price trade at 14:30 plus a half-hour margin.
 const AFTER_CLOSE_MS = 90 * MINUTE_MS;
 
 /**
