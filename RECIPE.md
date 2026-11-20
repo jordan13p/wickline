@@ -120,27 +120,13 @@ A panel on the theme's `background` with `foreground` text: under 720px wide, th
 
 ## Built from
 
-Field-level details are in two companions: [RECIPE-sources.md](RECIPE-sources.md) holds each request, the fields it reads and each source's detailed rules; [RECIPE-internals.md](RECIPE-internals.md) the stored layouts, per-module notes, moves, logos and the icon drawing.
+Field-level details are in two companions: [RECIPE-sources.md](RECIPE-sources.md) holds each request, the fields it reads and each source's detailed rules; [RECIPE-internals.md](RECIPE-internals.md) the stored layouts, the module map, moves, logos and the icon drawing.
 
 - **One mod**, `mods/wickline/`, no layout. `mod.json`: `{ "place": "none", "title": "Wickline" }`, so Herdr never docks it on its own. As a pane in any tab: `pane.split {direction: "right", mod: "wickline"}`.
 - **`keys.json`** at the repo root, merged into the person's by the install flow: `{ "global": { "ctrl-alt-b": { "command": "pane.split", "args": { "direction": "right", "mod": "wickline" } } } }`. Nothing else is bound.
 - **Listing**: the repo root is the listing folder: `mods/wickline/`, `keys.json`, `RECIPE.md`, `RECIPE-internals.md`, `RECIPE-sources.md`, `preview.png`, `README.md`, `README.zh-TW.md` (same sections), `LICENSE`, `assets/` (the Traditional Chinese README's screenshot and two logos), `.github/workflows/checks.yml` (tests and a secret scan), `tests/`; no `layouts/`.
 - **Code**: `main.js` alone touches Herdr's storage, network, files and commands. Every other module outside `ui/` is core: it imports nothing from Herdr, gpui or `fs` (Herdr comes in as a `host` object or as arguments), and `node --test tests/` runs it with fakes; `ui/` imports gpui only. Hygiene tests hold both rules. Each module's header comment says what it owns; names not given here or in the internals are its exports.
-- `main.js`: the one `View`. It picks the mode from `props()`, builds the hosts, runs the loops and the command loop, makes every input outside `render` and sizes the panel (`layoutFor`). The dialogs are the same mod; settings starts no loop, the detail one redraw task (Detail).
-- `ui/`: functions of the view and theme returning elements. `panel.js` draws band, sidebar and table from shared parts (`rowFrame`); `parts.js` holds stateless helpers (`chart`, `priceBox`, `toggle`, …); `detail-dialog.js`, `settings-dialog.js`.
-- `watchlist.js`: the list and one loop per source (`runProvider(id, io)`). Host: `load`/`save`, `settings`, `fetch`, `loadSecret(name)`, `now`, optional `shown()`. A row shows `mergeOverlay(base, pickOverlay(...), line)`.
-- `secrets.js`: reads, writes and removes the key file (Storage) and reads its last four, given `fs/promises`, a `system` (with the one `chmod`) and the folder.
-- `layout.js`: the panel sizes above as constants, `layoutFor(size)`, `sparkWidth`, `tableColumns(width)` and `wantsCard`.
-- `panes.js`: where a move goes and when it has arrived (`returnPane`, `newWicklineTab`, `waitUntil`, `dockOf`, `isShown`, `blockYields`, `staleDockTab`). `moves.js` makes the moves; host: `panes`, `layout`, `run`, `shared`, `setShared`, `focused`.
-- `markets.js`: a symbol's market (`marketOf`; an index's from its exchange, `resolvedMarket`) and kind; Yahoo's exchange codes and their delays (`exchangeRule(exchange, symbol)`). Also the market filter (`marketFilters`, `readFilter`, `filterAfterAdd`, `dropBefore`, …).
-- `calendar.js`: Taipei days and a future's trading day (15:00 start, weekends skipped).
-- `handover.js`: the detail's hand-over (`nextWrite`, `adopt`).
-- `motion.js`: the timings, whole spin turns, `rowsWithGhosts` and `settleOffset`; `playRow` in `main.js` plays a row's motion.
-- `i18n.js`: `STRINGS`, one table per language with the same keys, and `t(lang, key, params)`, falling back to English, then the key.
-- `settings.js`: `readSettings`, `validateSettings`, `mergeSettings`, the source gates and consents, `currentHealth` and what the settings pages and items show.
-- `freshness.js`: `marketSession(quote, now)` (pre, open, post, closed) and `freshness(quote, session, now)`, the Freshness table, pure (with `msUntilStale`), plus `shownLimit` and the detail's sources; `format.js` writes their labels and the detail's times. The view draws only from them.
-- `quotes.js`: symbol rules, `priceLimit`, error codes with their English texts, the request headers and the cleaners for what a source sends. `format.js`: chart geometry, `rowName`, `displayName`, the change and a bare price, `changeTone`, and number, date and time formatting by hand.
-- `providers/`: per source (`yahoo.js`, `binance.js`, `mis.js`, `yahootw.js`, `finnhub.js`) its host, kinds, batching and decoding; `provider.js`: the `Provider` type, `parseJson`, `failEach`.
+- **Modules**: one line each, with build notes, in [RECIPE-internals.md](RECIPE-internals.md#modules).
 - `icon.svg`: three candles, one `currentColor` stroke, drawn with `svg("mods/wickline/icon.svg")`, tinted by the text color (band, tab bar).
 - `icons/`: `refresh`, `pause`, `play`, `settings`, `zoom` (own tab), `restore` (back), `close`, `grip`, `mark-sides`, `mark-center`, single-color, tinted by `text_color`.
 - **Storage**: four keys in Herdr's shared state (`shared(...)` / `setShared(...)`, persisted, seen by every copy), one file and one per-copy `localStorage` key:
