@@ -35,7 +35,7 @@ import {
   sparkWidth,
   tableColumns,
 } from "../layout.js";
-import { button, chart, dot, failureText, icon, iconButton, link, priceBox, priceInk } from "./parts.js";
+import { blockedNote, button, chart, dot, failureText, icon, iconButton, link, priceBox, priceInk } from "./parts.js";
 
 const ICON = "mods/wickline/icon.svg";
 // The day line spans a sidebar row's three lines (16, 14 and 14 px, 2 px apart); see sidebarRow.
@@ -254,9 +254,7 @@ function messages(view, t) {
 // One line per source with a problem (rate limited, unreachable, timed out, refused), then one per source whose Taiwan
 // answers carry no trade today (the rows read 今日無成交: the market may be closed, or the source may be stuck).
 function problemLines(view, t) {
-  return [...view.watch.problems(), ...view.watch.notes()].map((line) =>
-    div().text_size(11).text_color(t.blocked).child(view.say(line)),
-  );
+  return [...view.watch.problems(), ...view.watch.notes()].map((line) => blockedNote(t, view.say(line)));
 }
 
 // What a row shows, whichever layout draws it: `name` as rowName leaves it (none for a pair, or for a
@@ -293,12 +291,8 @@ function rowNotes(view, t, { quote, failed, fallback, overCap }) {
   const say = (reason) => view.say(reason);
   const note = quote ? failureText(quote, failed, say, (key, params) => view.tx(key, params)) : failed && say(failed);
   return [
-    note && div().text_size(11).text_color(t.blocked).child(note),
-    fallback &&
-      div()
-        .text_size(11)
-        .text_color(t.blocked)
-        .child(quote ? view.fallbackText(quote, fallback) : view.say(fallback)),
+    note && blockedNote(t, note),
+    fallback && blockedNote(t, quote ? view.fallbackText(quote, fallback) : view.say(fallback)),
     overCap &&
       div()
         .text_size(11)

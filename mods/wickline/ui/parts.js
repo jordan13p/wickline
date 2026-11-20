@@ -388,6 +388,11 @@ export function toggle(t, id, on, label, onChange) {
     );
 }
 
+// A problem line under a row or in the detail: smaller, in the blocked color.
+export function blockedNote(t, child) {
+  return div().text_size(11).text_color(t.blocked).child(child);
+}
+
 export function note(t, text) {
   // Its full width, and no wider, so a long note wraps at its column's edge.
   return div().w_full().min_w(0).text_size(11.5).text_color(t.dim).child(text);

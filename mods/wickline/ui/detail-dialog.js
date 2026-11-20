@@ -27,7 +27,17 @@ import {
 } from "../format.js";
 import { detailDimmed, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
 import { heldMarks } from "../calendar.js";
-import { chart, chartShape, failureText, innerOuterBar, priceBox, segments, statCell, statGrid } from "./parts.js";
+import {
+  blockedNote,
+  chart,
+  chartShape,
+  failureText,
+  innerOuterBar,
+  priceBox,
+  segments,
+  statCell,
+  statGrid,
+} from "./parts.js";
 
 // How far a stopped price dims, with the activity and book beside it.
 const DIM_OPACITY = 0.5;
@@ -278,8 +288,8 @@ export function detailView(view, t) {
     v_flex()
       .gap(2)
       .children([...source, ...(hours.length ? [hours] : []), times].map((parts) => segments(t, parts))),
-    Boolean(note) && div().text_size(11).text_color(t.blocked).child(note),
-    Boolean(q.fallback) && div().text_size(11).text_color(t.blocked).child(view.fallbackText(q, q.fallback)),
+    Boolean(note) && blockedNote(t, note),
+    Boolean(q.fallback) && blockedNote(t, view.fallbackText(q, q.fallback)),
   ].filter(Boolean);
 
   const root = v_flex().id("bw-detail").w_full().p(18).gap(14).text_color(t.foreground).text_size(12.5).child(header);
