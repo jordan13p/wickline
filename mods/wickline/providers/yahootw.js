@@ -101,11 +101,9 @@ function book(row, future) {
 }
 
 /**
- * A stock's or future's activity (ACTIVITY_FIELDS); a field is absent when the row does not send it or sends 0 or `-`.
- * - Counts in lots or contracts, with their unit; turnover in the currency (`turnoverM` is in millions); the average
- *   price.
- * - Inner and outer volume only when they add up exactly to the continuous-trading total (`totalMarketVolK`).
- * - The book only when it adds up.
+ * A stock's or future's activity; a field is absent when the row does not send it or sends 0 or `-`. Counts are in
+ * lots or contracts, turnover in the currency (`turnoverM` is in millions). Inner and outer volume come only when
+ * they add up exactly to the continuous-trading total.
  */
 function activity(row, future) {
   const counts = {
@@ -141,23 +139,17 @@ function checkStatus(response) {
 }
 
 /**
- * One stock-list answer, by requested symbol.
- * - A row is priced when its price is positive, it is not delayed, and its trade is from today's trading day. A
- *   future's may be from a later one, at most FUTURE_AHEAD_MS ahead of `now`; a symbol in `anyDay` (one only this
- *   source prices) may be from an earlier day.
- * - A price outside the row's own limits gets `yahootw.outOfLimits` instead; a future's limits are kept, not checked.
- * - A futures-form row from any exchange but TFE gives nothing, not even its name.
- * - An `anyDay` symbol whose price is delayed, untimed or too far ahead gets `yahootw.noLiveRows`.
- * - Any other row, or a symbol missing from the answer, gets no quote and no error.
+ * One stock-list answer, by requested symbol. A row is priced when its price is positive, it is not delayed, and its
+ * trade is from today's trading day. A future's may be up to FUTURE_AHEAD_MS ahead, and an `anyDay` symbol (one only
+ * this source prices) may be from an earlier day. A future's limits are kept but not checked.
  * A quote priced today is timed by the feed: the newest of today's trades on its market clock (futures, or stocks and
- * indices together), so a quiet stock is as current as the feed. An earlier day's quote keeps its own trade's time.
- * `tradeTime` is the quote's own last trade and `day` its trading day, which a line must share to be drawn with it.
+ * indices together), so a quiet stock is as current as the feed. `day` is its trade's trading day, which a line must
+ * share to be drawn with it.
  * Optional keys:
  * - `noLive`: prices came but none was accepted for today, so the source can say why it shows nothing live.
- * - `newestTrade`: per market clock, the newest accepted, undelayed trade time of a priced row, earlier days
- *   included, so a session without trades yet can be told apart.
- * - `auctionBook`: by symbol, the book of a stock in the opening auction (`preopen`, no price, not delayed) with at
- *   least one level, as `{ bids, asks, auction: true }`; such a row is never a price.
+ * - `newestTrade`: per market clock, the newest accepted trade time, earlier days included, so a session without
+ *   trades yet can be told apart.
+ * - `auctionBook`: by symbol, the book of a stock in the opening auction; such a row is never a price.
  */
 export function decodeStockList(symbols, response, now, anyDay = []) {
   checkStatus(response);
@@ -165,7 +157,6 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   if (!Array.isArray(body)) throw new QuoteError("yahootw.unreadable");
   const wanted = new Set(symbols);
   const anyDaySymbols = new Set(anyDay);
-  // Today's trading day on each market clock.
   const todayOn = { future: futuresDay(now), stock: taipeiDay(now) };
   // Every accepted quote, each with its own trade's trading day, and with its market clock when priced for today.
   const priced = [];
@@ -230,7 +221,6 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
         // An instrument only this source prices takes its market and currency from here.
         exchange: exchangeCode(row.exchange),
         currency: currencyCode(row.currency),
-        // An index's activity is not read.
         ...(kindOf(symbol) !== "index" && activity(row, future)),
         tradeTime,
         day,
@@ -238,7 +228,6 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       },
     ]);
   }
-  // The newest trade on each market clock among today's quotes.
   const feedTime = {};
   for (const [clock, quote] of priced) if (clock) feedTime[clock] = Math.max(feedTime[clock] ?? 0, quote.tradeTime);
   const quotes = Object.fromEntries(
@@ -263,16 +252,12 @@ const futuresSegments = (periods) =>
     .sort((a, b) => a[0] - b[0]);
 
 /**
- * One symbol's tick answer: its line, and its trading periods.
- * - The line, `{ day, series, times, lastAt, endAt }`, only with a point from today's trading day (a future's from
- *   15:00 the day before). `series` holds the one-minute closes, oldest first, a minute without a trade carrying the
- *   previous close; minutes before the first trade and after `now` are dropped. `times` gives each point's minute.
+ * One symbol's tick answer: its line, only with a point from today's trading day, and its trading periods, line or
+ * not. The line holds one-minute closes; a minute without a trade carries the previous close.
  * - `lastAt`: the last minute with a trade. A carried minute never moves it, so it tells a frozen answer from a quiet
  *   stock.
- * - `endAt`: when the regular session ends, so a later trade (a stock's 14:30 fixed-price one) is never expected in
- *   the line; absent unless the answer's regular period is today's.
- * - `periods`: the answer's trading periods, also without a point from today; none without a regular one. A future's
- *   also carry `segments`, its sessions as sorted [start, end] pairs.
+ * - `endAt`: when today's regular session ends, so a later trade (a stock's 14:30 fixed-price one) is never expected
+ *   in the line.
  */
 export function decodeTick(symbol, response, now) {
   checkStatus(response);
