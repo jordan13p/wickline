@@ -1,6 +1,7 @@
 // node --test tests/  (calendar.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
+import { parseHolidays, rocDay, taipeiDay } from "../mods/wickline/calendar.js";
 import {
   INFER_DELAYED_MS,
   INFER_REALTIME_MS,
@@ -8,10 +9,7 @@ import {
   closureOf,
   currentOpen,
   heldMarks,
-  parseHolidays,
-  rocDay,
-  taipeiDay,
-} from "../mods/wickline/calendar.js";
+} from "../mods/wickline/closures.js";
 import { HOLIDAYS_2026, at, listed2026, observation } from "./helpers.mjs";
 
 test("ROC dates become Taipei day numbers", () => {

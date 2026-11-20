@@ -13,7 +13,8 @@ import {
 } from "../mods/wickline/handover.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { detailSource, sessionOf } from "../mods/wickline/freshness.js";
-import { heldMarks, taipeiDay } from "../mods/wickline/calendar.js";
+import { taipeiDay } from "../mods/wickline/calendar.js";
+import { heldMarks } from "../mods/wickline/closures.js";
 import { failureNote } from "../mods/wickline/format.js";
 import { MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { yahootw } from "../mods/wickline/providers/yahootw.js";

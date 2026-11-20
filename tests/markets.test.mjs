@@ -2,27 +2,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  TYPICAL_EXCHANGE,
+  exchangeMarket,
+  exchangeRule,
+  isTaiwanForm,
+  kindOf,
+  marketOf,
+  resolvedMarket,
+} from "../mods/wickline/markets.js";
+import {
   FILTER_MIN_MARKETS,
   FILTER_MIN_SYMBOLS,
   FILTER_STORAGE_KEY,
-  TYPICAL_EXCHANGE,
   dropBefore,
-  exchangeMarket,
-  exchangeRule,
   filterAfterAdd,
   filterAfterRemove,
   heldFilter,
   inFilter,
-  isTaiwanForm,
-  kindOf,
   marketFilters,
-  marketOf,
   nextOf,
   openFilter,
   readFilter,
-  resolvedMarket,
   visibleSymbols,
-} from "../mods/wickline/markets.js";
+} from "../mods/wickline/filter.js";
 
 test("routes symbols to markets", () => {
   const table = [

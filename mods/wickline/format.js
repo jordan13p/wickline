@@ -2,7 +2,8 @@
 // No Herdr imports, so tests run it under Node.
 import { BOOK_LEVELS, changePercent, hasLimits, isCryptoPair, positive, timedByTrade } from "./quotes.js";
 import { nextTaipeiMidnight, taipeiDay } from "./calendar.js";
-import { HOUR_MS, resolvedMarket } from "./markets.js";
+import { resolvedMarket } from "./markets.js";
+import { HOUR_MS } from "./time.js";
 
 /**
  * The line through `series`, scaled into its box as [x%, y%] points spread over `extent` of its width (null: all of

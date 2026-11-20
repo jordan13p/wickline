@@ -2,7 +2,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SPIN_MS, UNDO_MS, rowsWithGhosts, settleOffset, spinTurnsFor } from "../mods/wickline/motion.js";
-import { marketOf, readFilter, resolvedMarket } from "../mods/wickline/markets.js";
+import { marketOf, resolvedMarket } from "../mods/wickline/markets.js";
+import { readFilter } from "../mods/wickline/filter.js";
 
 const ghost = (symbol, before) => ({ symbol, before });
 // The rows as the panel asks for them: the filter read once, as a render reads it.

@@ -1,18 +1,8 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade, withoutActivity } from "./quotes.js";
-import {
-  HOLIDAYS_URL,
-  closureOf,
-  currentOpen,
-  listsYearOf,
-  parseHolidays,
-  taipeiDay,
-  taipeiMinute,
-  tradingDay,
-  twMarket,
-  withClosure,
-} from "./calendar.js";
+import { HOLIDAYS_URL, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay } from "./calendar.js";
+import { closureOf, currentOpen, twMarket, withClosure } from "./closures.js";
 import {
   LIVE_MAX_AGE_MS,
   REALTIME_SOURCES,
@@ -24,7 +14,8 @@ import {
   sessionOf,
   staleAt,
 } from "./freshness.js";
-import { DAY_MS, HOUR_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import { DAY_MS, HOUR_MS, MINUTE_MS } from "./time.js";
 import { mergeOverlay, pickOverlay } from "./overlay.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
@@ -109,7 +100,7 @@ const HOLIDAY_RETRY_MS = HOUR_MS;
 // How long a session's trade observation is kept (Watchlist#seen): a session is never open longer.
 const SEEN_KEEP_MS = 2 * DAY_MS;
 
-// The status line's note for each inferred closure (calendar.js closureOf); a listed one has none.
+// The status line's note for each inferred closure (closures.js closureOf); a listed one has none.
 const NOTE_CODES = { noTrades: "closure.noTradesToday", nightNoTrades: "closure.noTradesNight" };
 
 const notice = (code, params = {}) => ({ code, params });
@@ -400,7 +391,7 @@ export class Watchlist {
 
   /**
    * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure`, its next deadline as
-   * `closureDeadline` and its mark's end as `closureUntil` (closureAt, by calendar.js withClosure; freshness.js
+   * `closureDeadline` and its mark's end as `closureUntil` (closureAt, by closures.js withClosure; freshness.js
    * nextEdge wakes the row at the deadline); for a Taiwan stock, `twRealtime: true` while MIS or Yahoo 奇摩股市 is on,
    * and MIS's flagged snapshot as `auctionAt` while the quote's price traded before it (`tradeTime`, else its time):
    * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
@@ -448,7 +439,7 @@ export class Watchlist {
   }
 
   /**
-   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until, twRealtime }` (calendar.js closureOf), from the
+   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until, twRealtime }` (closures.js closureOf), from the
    * schedule held and the answers seen, with the sources on read once (config().on): `twRealtime`, whether MIS or Yahoo
    * 奇摩股市 is on. Every row of a market reads the same, so it is worked out once per market and `now`, until closureRev
    * moves.
@@ -515,7 +506,7 @@ export class Watchlist {
    * Notes an answer arriving at `now` in a Taiwan `market` that carries a trade at `tradeTime`, on the session `now`
    * belongs to (currentOpen): its newest trade is kept (a time that is not a number is none), and so is the answer's
    * arrival for its source (`answer`: `{ source: providerId, realtime }`), which closureOf reads to tell a session
-   * without trades (see calendar.js INFER_RECENT_MS).
+   * without trades (see closures.js INFER_RECENT_MS).
    */
   noteTrade(market, tradeTime, answer, now) {
     const open = currentOpen(market, now);

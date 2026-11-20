@@ -26,7 +26,7 @@ import {
   signed,
 } from "../format.js";
 import { detailDimmed, detailSource, sessionName, sessionOf, sessionTimes } from "../freshness.js";
-import { heldMarks } from "../calendar.js";
+import { heldMarks } from "../closures.js";
 import {
   blockedNote,
   chart,

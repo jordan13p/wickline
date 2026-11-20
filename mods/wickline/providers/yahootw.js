@@ -15,7 +15,8 @@ import {
   withinLimits,
 } from "../quotes.js";
 import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
-import { MINUTE_MS, fastPace, kindOf } from "../markets.js";
+import { fastPace, kindOf } from "../markets.js";
+import { MINUTE_MS } from "../time.js";
 import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 import { period } from "./yahoo.js";
 

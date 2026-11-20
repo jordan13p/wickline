@@ -1,6 +1,6 @@
 // What a row does when the person adds, removes or drops it, apart from drawing it, how long the refresh
 // icon turns and how long Undo stays. No Herdr imports.
-import { inFilter } from "./markets.js";
+import { inFilter } from "./filter.js";
 
 // Every row motion: fade in, fade out and collapse, slide into place.
 export const ROW_MOTION_MS = 150;

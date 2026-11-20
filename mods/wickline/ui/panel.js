@@ -16,7 +16,7 @@ import {
   signed,
 } from "../format.js";
 import { bandState, freshness, rowDate, sessionOf } from "../freshness.js";
-import { nextOf } from "../markets.js";
+import { nextOf } from "../filter.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { ROW_MOTION_MS, rowsWithGhosts } from "../motion.js";
 import { finnhubCap } from "../providers/finnhub.js";

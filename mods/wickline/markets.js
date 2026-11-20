@@ -1,5 +1,5 @@
-// Which market a symbol trades on: from its form, or for an index from the exchange its source reports.
-// No Herdr imports.
+// Which market a symbol trades on (from its form, or for an index from the exchange its source reports), the
+// exchanges' hours, Yahoo Finance's delays per exchange and the market order of the filters. No Herdr imports.
 import { isCryptoPair, isFutureForm } from "./quotes.js";
 
 // Yahoo exchange suffixes.
@@ -83,47 +83,6 @@ export const fastPace = (session) => session === "open" || session === "auction"
 export const TWSE_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], from: 540, to: 810 }); // 09:00–13:30 Taipei, TWSE and TPEx
 export const US_HOURS = Object.freeze({ weekdays: [1, 2, 3, 4, 5], from: 570, to: 960 }); // 09:30–16:00 New York
 
-// The UTC instant of the `nth` Sunday (1-based) of `month` (0-based, as Date.UTC) at `hourUtc`.
-function nthSundayUtc(year, month, nth, hourUtc) {
-  const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
-  const date = 1 + ((7 - firstWeekday) % 7) + (nth - 1) * 7;
-  return Date.UTC(year, month, date) + hourUtc * 60 * MINUTE_MS;
-}
-
-/**
- * New York's UTC offset at `ms`: -240 from the second Sunday in March 07:00 UTC to the first Sunday in November
- * 06:00 UTC (02:00 local both times), else -300. By hand: QuickJS has no Intl.
- */
-export function usOffsetMin(ms) {
-  const year = new Date(ms).getUTCFullYear();
-  return ms >= nthSundayUtc(year, 2, 2, 7) && ms < nthSundayUtc(year, 10, 1, 6) ? -240 : -300;
-}
-
-export const MINUTE_MS = 60_000;
-export const HOUR_MS = 3_600_000;
-export const DAY_MS = 86_400_000;
-
-/** The day number of `ms` on a clock at a fixed UTC offset of `offsetMin`; by hand, as QuickJS has no `Intl`. */
-export const localDay = (offsetMin, ms) => Math.floor((ms + offsetMin * MINUTE_MS) / DAY_MS);
-
-/** The weekday of a day number (days since 1970-01-01 on any fixed-offset clock), Sunday 0: day 0 was a Thursday. */
-export const weekdayOf = (day) => (day + 4) % 7;
-
-/** Whether an exchange's `hours` (with `weekdays`) trade on day number `day` of its clock, by weekday alone. */
-export const tradesOn = (hours, day) => hours.weekdays.includes(weekdayOf(day));
-
-/** The start of day number `day` on a clock at a fixed UTC offset of `offsetMin`, in ms. */
-export const dayStart = (offsetMin, day) => day * DAY_MS - offsetMin * MINUTE_MS;
-
-/**
- * A window of the local day around `now` (its from and to in local minutes since midnight), as [start, end) in ms, by
- * the clock's fixed UTC offset: a lunch break, a TAIFEX session, or an exchange's regular hours.
- */
-export function localWindow({ offsetMin, from, to }, now) {
-  const start = dayStart(offsetMin, localDay(offsetMin, now));
-  return [start + from * MINUTE_MS, start + to * MINUTE_MS];
-}
-
 const LIVE = { realtime: true, delayS: null };
 const late = (delayS, lunch = null) => ({ delayS, lunch });
 
@@ -189,10 +148,6 @@ export function exchangeRule(exchange, symbol) {
 // The exchange a settings page's Yahoo fallback describes for its market.
 export const TYPICAL_EXCHANGE = { us: "NMS", tw: "TAI" };
 
-// The filter row shows only for a list long enough, and mixed enough, to be worth narrowing.
-export const FILTER_MIN_SYMBOLS = 8;
-export const FILTER_MIN_MARKETS = 2;
-
 // The order of the filters, fixed per interface language so it never depends on what the list holds or how
 // it is ordered: Japanese and Korean put their own market first, both Chinese put Taiwan first, and English
 // starts with the US.
@@ -206,97 +161,3 @@ const MARKET_ORDER = {
 
 /** Every market in `lang`'s fixed order; a language without its own order takes English's. */
 export const marketOrder = (lang) => MARKET_ORDER[lang] ?? MARKET_ORDER.en;
-
-/**
- * The filters to offer: `all` with the list's length, then each market on the list in `lang`'s fixed order,
- * with its count (so the counts add up to `all`). Empty below the thresholds. `marketFor` gives a symbol's
- * market (main.js passes the resolved one, see resolvedMarket), as in every filter function below.
- */
-export function marketFilters(symbols, marketFor, lang = "en") {
-  const counts = {};
-  for (const symbol of symbols) {
-    const market = marketFor(symbol);
-    counts[market] = (counts[market] ?? 0) + 1;
-  }
-  const listed = marketOrder(lang).filter((id) => counts[id]);
-  if (symbols.length < FILTER_MIN_SYMBOLS || listed.length < FILTER_MIN_MARKETS) return [];
-  return [{ id: "all", count: symbols.length }, ...listed.map((id) => ({ id, count: counts[id] }))];
-}
-
-/** `symbol` is in the market `filter` names; every symbol is in `all`. */
-export const inFilter = (symbol, filter, marketFor) => filter === "all" || marketFor(symbol) === filter;
-
-/** The symbols a filter shows, in list order. `all`, an unknown filter or a market not on the list shows everything. */
-export function visibleSymbols(symbols, filter, marketFor) {
-  if (filter === "all") return symbols;
-  const shown = symbols.filter((symbol) => inFilter(symbol, filter, marketFor));
-  return shown.length ? shown : symbols;
-}
-
-/**
- * The market filter as a copy reads it, for one render: the `filters` to offer (marketFilters), the
- * `chosen` one (the stored `filter` while the row offers it, otherwise All) and the symbols it shows (`shown`).
- */
-export function readFilter(symbols, filter, marketFor, lang = "en") {
-  const filters = marketFilters(symbols, marketFor, lang);
-  const chosen = filters.some(({ id }) => id === filter) ? filter : "all";
-  return { filters, chosen, shown: visibleSymbols(symbols, chosen, marketFor) };
-}
-
-/** The symbol after `symbol` in `list`, or null (also for the last one). */
-export const nextOf = (list, symbol) => list[list.indexOf(symbol) + 1] ?? null;
-
-/**
- * Where a drop in the filtered list lands in the full list, as `watch.move`'s `before` (null: the end):
- * in front of the visible row it was dropped on, or, after the last visible row, in front of that row's
- * successor in the full list.
- */
-export function dropBefore(full, visible, before) {
-  if (before !== null) return before;
-  return nextOf(full, visible[visible.length - 1]);
-}
-
-/** The filter after `symbol` was added (or found already listed) in `symbols`: All when it would hide that symbol. */
-export function filterAfterAdd(symbols, filter, symbol, marketFor) {
-  return readFilter(symbols, filter, marketFor).shown.includes(symbol) ? filter : "all";
-}
-
-/**
- * The filter after a remove left `symbols`: All when the chosen market has no symbol left and no symbol is
- * `pending` (an index still waiting for its first quote, whose market is not known yet).
- */
-export function filterAfterRemove(symbols, filter, marketFor, pending) {
-  return symbols.some((symbol) => inFilter(symbol, filter, marketFor) || pending(symbol)) ? filter : "all";
-}
-
-/**
- * The remove kept `filter` only for a `pending` index: no symbol is in its market. The index may resolve
- * elsewhere, so the choice settles (filterAfterRemove with nothing pending) once no index is pending.
- */
-export function heldFilter(symbols, filter, marketFor, pending) {
-  return (
-    filter !== "all" &&
-    filterAfterRemove(symbols, filter, marketFor, pending) === filter &&
-    !symbols.some((symbol) => inFilter(symbol, filter, marketFor))
-  );
-}
-
-// The key under which a copy keeps its market filter in its own storage (see main.js).
-export const FILTER_STORAGE_KEY = "wickline.filter";
-
-/**
- * The filter a copy opens with: its stored choice, else `prop` (the one it was opened with), else All.
- * It writes nothing: the props are saved with the tab, so they seed the copy on every start until the
- * person picks a filter there, and only that choice is stored (a write here would leave a storage file
- * behind for every moved copy). `storage`: the copy's own, with `getItem`; one that cannot be read reads
- * as nothing stored.
- */
-export function openFilter(storage, prop) {
-  let stored = null;
-  try {
-    stored = storage.getItem(FILTER_STORAGE_KEY) || null;
-  } catch {
-    // Unreadable: as if nothing were stored.
-  }
-  return stored ?? (typeof prop === "string" ? prop : "all");
-}

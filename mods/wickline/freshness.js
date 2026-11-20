@@ -1,27 +1,21 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades; and when an open detail must redraw (detailWakeAt,
 // followDetail). No Herdr imports, so tests run it under Node.
-import { futuresDay, heldMarks, taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
+import { futuresDay, taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
+import { heldMarks } from "./closures.js";
 import { formatStaleDate, nextDayTurn, stateText } from "./format.js";
 import {
-  DAY_MS,
   DAY_SESSION,
-  MINUTE_MS,
   NIGHT_SESSION,
   TAIFEX_HOURS,
   TWSE_HOURS,
   US_HOURS,
-  dayStart,
   exchangeRule,
   kindOf,
-  localDay,
-  localWindow,
   resolvedMarket,
-  tradesOn,
-  usOffsetMin,
-  weekdayOf,
 } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
+import { DAY_MS, MINUTE_MS, dayStart, localDay, localWindow, tradesOn, usOffsetMin, weekdayOf } from "./time.js";
 
 // A real-time quote older than this (inclusive) while its market is open has stalled.
 export const LIVE_MAX_AGE_MS = 120_000;
@@ -124,7 +118,7 @@ const NIGHT_FROM_MIN = 720;
 // A night session's segment: it starts at or after 12:00 Taipei.
 const isNight = ([start]) => taipeiMinute(start) >= NIGHT_FROM_MIN;
 
-// A quote whose night session is closed (see calendar.js closureOf): removed by a listed day, or without trades.
+// A quote whose night session is closed (see closures.js closureOf): removed by a listed day, or without trades.
 const nightClosed = (quote) => quote.closure?.kind === "nightRemoved" || quote.closure?.kind === "nightNoTrades";
 
 /**
@@ -242,7 +236,7 @@ function dayEdges(quote, now) {
   return [edge(nextDayTurn(quote, now))];
 }
 
-// A Taiwan row's next deadline (`closureDeadline`, set by Watchlist#marked from calendar.js closureOf), where its
+// A Taiwan row's next deadline (`closureDeadline`, set by Watchlist#marked from closures.js closureOf), where its
 // closure may turn: an inference deadline (to "noTrades" or, for a future's night, "nightNoTrades"), or its mark's end.
 const deadlineEdges = (quote) => (quote.closureDeadline ? [edge(quote.closureDeadline)] : []);
 
@@ -409,7 +403,7 @@ export function sessionTimes(quote, now) {
 }
 
 /**
- * "holiday" on a Taiwan quote's listed closed day (closure "listed", see calendar.js closureOf), whatever its periods
+ * "holiday" on a Taiwan quote's listed closed day (closure "listed", see closures.js closureOf), whatever its periods
  * say; "noTrades" while it reads as having no trades today (closure "noTrades", an inference; a night without trades
  * after a traded day is "nightNoTrades" instead, so a future reads "closed" then). Else "open", "pre", "post" or "closed" from the
  * quote's trading periods, and "lunch" while open inside its

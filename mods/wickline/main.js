@@ -36,8 +36,8 @@ import {
   nextOf,
   openFilter,
   readFilter,
-  resolvedMarket,
-} from "./markets.js";
+} from "./filter.js";
+import { resolvedMarket } from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
@@ -269,7 +269,7 @@ export default class Wickline extends View {
     if (id !== this.filter) this.setFilter(id);
   }
 
-  // The market filter as this copy reads it: `{ filters, chosen, shown }` (see readFilter in markets.js).
+  // The market filter as this copy reads it: `{ filters, chosen, shown }` (see readFilter in filter.js).
   filterState() {
     return readFilter(this.watch.preferences.symbols, this.filter, this.marketFor, this.lang);
   }
