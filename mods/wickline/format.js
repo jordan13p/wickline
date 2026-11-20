@@ -44,7 +44,7 @@ const CROSSHAIR_TIME_CHAR_PX = 6.5;
 const CROSSHAIR_VALUE_CHAR_PX = 7.5;
 const CROSSHAIR_VALUE_GAP_PX = 6;
 const CROSSHAIR_PAD_PX = 12;
-const CROSSHAIR_CARD_PX = 40;
+export const CROSSHAIR_CARD_PX = 40;
 // Between the vertical line and the card.
 const CROSSHAIR_GAP_PX = 6;
 

@@ -7,6 +7,7 @@ import { MESSAGES_EN } from "../mods/wickline/quotes.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
+import { CROSSHAIR_CARD_PX } from "../mods/wickline/format.js";
 
 const MOD = new URL("../mods/wickline/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);
@@ -89,22 +90,46 @@ test("core modules import only relative modules; ui/ adds the view libraries", (
     ["./a.js", "fs/promises", "gpui-kit", "herdr", "herdr"]);
 });
 
+// A split keeps the modules a tree: a cycle would make one module's top level run before another it needs is ready.
+test("no import cycle among the mod's modules", () => {
+  const graph = new Map(jsFiles().map((file) => [file.href, importSpecifiers(read(file))
+    .filter((specifier) => specifier.startsWith("./") || specifier.startsWith("../"))
+    .map((specifier) => new URL(specifier, file).href)]));
+  const name = (href) => relativeName(new URL(href));
+  const done = new Set();
+  const path = [];
+  const visit = (href) => {
+    const at = path.indexOf(href);
+    if (at >= 0) assert.fail(`import cycle: ${[...path.slice(at), href].map(name).join(" → ")}`);
+    if (done.has(href) || !graph.has(href)) return;
+    path.push(href);
+    for (const next of graph.get(href)) visit(next);
+    path.pop();
+    done.add(href);
+  };
+  for (const href of graph.keys()) visit(href);
+});
+
 // Herdr's globals reach no module but main.js either: `fetch` (the core gets it as `host.fetch`), also
 // aliased or through `window` / `self` (also destructured), `localStorage`, and `globalThis`, through which a module could
 // find anything else. `fetch:` as an object key and `fetchedAt` are not the global.
 const HERDR_GLOBALS = /(?<![.\w$])(?:fetch\b(?!\s*:)|localStorage\b|globalThis\b)|\b(?:window|self)\s*\.\s*fetch\b|\}\s*=\s*(?:window|self)\b/;
 // The source without comments, which may name these; a `//` after `:` or a quote is a URL, not a comment.
 const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
-// The source with each string's text left out, quote-aware: '…' and "…" become empty, a template keeps only
-// its `${…}` expressions, which are code. (No module writes a quote inside a regex literal.)
+// The source with each string's text blanked, quote-aware: the text of '…', "…" and a template turns to spaces
+// (a line break stays one), so every index still points at the same code; a template keeps its `${…}`
+// expressions, which are code. (No module writes a quote inside a regex literal.)
 function withoutStrings(source) {
   let out = "";
+  const blank = (from, to) => source.slice(from, Math.min(to, source.length)).replace(/[^\n]/g, " ");
   // One entry per `${…}` being read: how many `{` deep inside it.
   const open = [];
   let i = 0;
   // Template text from `i` to its closing backtick, or to the next `${`, which opens an expression.
   const templateText = () => {
+    const from = i;
     while (i < source.length && source[i] !== "`" && !(source[i] === "$" && source[i + 1] === "{")) i += source[i] === "\\" ? 2 : 1;
+    out += blank(from, i);
     if (source[i] === "`") {
       out += "`";
       i += 1;
@@ -119,7 +144,7 @@ function withoutStrings(source) {
     if (c === '"' || c === "'") {
       let j = i + 1;
       while (j < source.length && source[j] !== c && source[j] !== "\n") j += source[j] === "\\" ? 2 : 1;
-      out += c + c;
+      out += c + blank(i + 1, j) + (source[j] === c ? c : "");
       i = source[j] === c ? j + 1 : j;
     } else if (c === "`") {
       out += "`";
@@ -142,6 +167,73 @@ function withoutStrings(source) {
 // What the globals scan reads: the code without its strings, which may name a global (the text table's
 // storage disclosure names `localStorage`) without using it.
 const scanned = (source) => withoutStrings(code(source));
+
+// Hygiene pins: the checks on the code's own text find what they guard by shape, so a move between files, a
+// renamed local or a formatter's line breaks leave them standing, and each still fails when its decision breaks.
+
+// The code with no whitespace and no trailing comma before `)`, `]` or `}`: for shape patterns, written without
+// spaces. Identifier counts and words that must be absent are checked on code(), where `const intro` keeps its space.
+const flat = (text) => code(text).replace(/\s+/g, "").replace(/,(?=[)\]}])/g, "");
+// The index of the bracket that closes the one at `at`, counted on code whose strings are blanked; -1 if none.
+function closing(blanked, at) {
+  const open = blanked[at];
+  const close = { "(": ")", "{": "}", "[": "]" }[open];
+  let depth = 0;
+  for (let i = at; i < blanked.length; i += 1) {
+    if (blanked[i] === open) depth += 1;
+    else if (blanked[i] === close && --depth === 0) return i;
+  }
+  return -1;
+}
+// A function or method by name, from its head to its closing brace, as code(). A call never counts: its `)` is not
+// followed by `{`. Throws unless exactly one declaration has the name, so a pin never reads an empty slice.
+function body(source, name) {
+  const text = code(source);
+  const blanked = withoutStrings(text);
+  const head = new RegExp(`^[ \\t]*(?:export\\s+)?(?:async\\s+)?(?:function\\s+)?${name}\\s*\\(`, "gm");
+  const hits = [];
+  for (const match of blanked.matchAll(head)) {
+    const params = closing(blanked, match.index + match[0].length - 1);
+    if (params < 0) continue;
+    const brace = blanked.slice(params + 1).search(/\S/) + params + 1;
+    if (blanked[brace] === "{") hits.push({ start: match.index, brace });
+  }
+  if (hits.length !== 1) throw new Error(`body: ${hits.length} declarations of ${name}`);
+  return text.slice(hits[0].start, closing(blanked, hits[0].brace) + 1);
+}
+// From `anchor` through the braces that follow it, as code(). Throws unless `anchor` occurs exactly once.
+function block(source, anchor) {
+  const text = code(source);
+  const count = text.split(anchor).length - 1;
+  if (count !== 1) throw new Error(`block: ${count} occurrences of ${anchor}`);
+  const at = text.indexOf(anchor);
+  const blanked = withoutStrings(text);
+  return text.slice(at, closing(blanked, blanked.indexOf("{", at + anchor.length)) + 1);
+}
+const uiFiles = () => jsFiles().filter((url) => relativeName(url).startsWith("ui/"));
+// The panel and whatever it splits into: every ui/ module but the two dialogs and the parts they share with it.
+const NOT_PANEL = ["ui/detail-dialog.js", "ui/settings-dialog.js", "ui/parts.js"];
+const uiCode = () => uiFiles().map((url) => code(read(url))).join("\n");
+const panelCode = () => uiFiles().filter((url) => !NOT_PANEL.includes(relativeName(url))).map((url) => code(read(url))).join("\n");
+
+// The pins read code(), so a comment opener inside a string (`"/*"`) would erase code up to the next `*/`, and the
+// pins would pass on what is left. Every function and method head in a module must survive the stripper.
+const HEAD = /^[ \t]*(?:export\s+)?(?:async\s+)?(?:function\s*\*?\s*)?(\w+)\s*\([^()]*\)\s*\{/gm;
+const NOT_HEADS = ["if", "for", "while", "switch", "catch", "function", "return"];
+test("the comment stripper keeps every declared function and method", () => {
+  const heads = (text) => [...text.matchAll(HEAD)].map(([, name]) => name).filter((name) => !NOT_HEADS.includes(name));
+  for (const file of jsFiles()) {
+    const source = read(file);
+    const kept = heads(code(source));
+    const lost = heads(source).filter((name) => {
+      const at = kept.indexOf(name);
+      if (at >= 0) kept.splice(at, 1);
+      return at < 0;
+    });
+    assert.deepEqual(lost, [], relativeName(file));
+  }
+});
+
 test("only main.js wires Herdr's storage, network and files", () => {
   for (const file of jsFiles()) {
     const name = relativeName(file);
@@ -186,7 +278,7 @@ test("the only program is chmod 600 on the key file", () => {
   assert.ok(herdrImports(main).includes("exec"), "main.js imports exec");
   assert.doesNotMatch(main, /\bexec\s+as\b/, "exec imported under another name");
   assert.equal([...main.matchAll(/\bexec\b/g)].length, 2, "exec imported and called once");
-  assert.deepEqual([...main.matchAll(/\bexec\s*\(.*?\]\)/g)].map(([call]) => call), ['exec("chmod", ["600", path])']);
+  assert.equal([...flat(main).matchAll(/exec\("chmod",\["600",\w+\]\)/g)].length, 1, 'exec("chmod", ["600", path])');
   // Besides main.js, only moves.js runs anything, and only those commands, each named as it is run.
   for (const file of jsFiles().filter((url) => relativeName(url) !== "main.js")) {
     const name = relativeName(file);
@@ -197,7 +289,7 @@ test("the only program is chmod 600 on the key file", () => {
       assert.equal(runs, 0, `.run( in ${name}`);
       continue;
     }
-    const commands = [...source.matchAll(/(?<![.\w$])host\.run\("([^"]*)"/g)].map(([, id]) => id);
+    const commands = [...source.matchAll(/(?<![.\w$])host\.run\(\s*"([^"]*)"/g)].map(([, id]) => id);
     assert.equal(commands.length, runs, "every run in moves.js is host.run with its command named");
     assert.deepEqual([...new Set(commands)].sort(), [...MOVE_COMMANDS].sort());
   }
@@ -207,13 +299,18 @@ test("the only program is chmod 600 on the key file", () => {
 // panel's watchlist alone, and the dialog's loader goes through loadSecretEnding.
 test("the settings dialog never loads the full key", () => {
   const main = code(read(new URL("main.js", MOD)));
-  assert.deepEqual([...main.matchAll(/\bloadSecret\b.*$/gm)].map(([line]) => line.trim()),
-    ["loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);", "loadSecret,"]);
-  assert.match(main, /const loadSecretEnding = \(name\) => secrets\.loadSecretEnding\(fs, secretsDir\(\), name\);/);
-  const reader = main.match(/async readKeyEnding\(\) \{[\s\S]*?\n  \}/);
-  assert.ok(reader, "readKeyEnding found");
-  assert.match(reader[0], /\bloadSecretEnding\(SECRET_KEY_FINNHUB\)/);
-  assert.doesNotMatch(reader[0], /\bloadSecret\b|secrets\./);
+  // Two uses: its definition, and the panel's Watchlist.
+  const uses = [...main.matchAll(/(?<![.\w$])loadSecret\b/g)].map(({ index }) => index);
+  assert.equal(uses.length, 2, "loadSecret defined and used once");
+  assert.equal(uses[0], main.search(/(?<=\bconst\s+)loadSecret\s*=/), "the first is the definition");
+  assert.match(flat(main), /constloadSecret=\((\w+)\)=>secrets\.loadSecret\(fs,secretsDir\(\),\1\)/);
+  const watch = block(main, "new Watchlist(");
+  const watchAt = main.indexOf(watch);
+  assert.ok(uses[1] > watchAt && uses[1] < watchAt + watch.length, "the other is the panel's Watchlist");
+  assert.match(flat(main), /constloadSecretEnding=\((\w+)\)=>secrets\.loadSecretEnding\(fs,secretsDir\(\),\1\)/);
+  const reader = body(main, "readKeyEnding");
+  assert.match(reader, /\bloadSecretEnding\(\s*SECRET_KEY_FINNHUB\s*\)/);
+  assert.doesNotMatch(reader, /\bloadSecret\b|secrets\./);
   for (const name of ["ui/settings-dialog.js", "settings.js"]) assert.doesNotMatch(code(read(new URL(name, MOD))), /\bloadSecret|secrets\./, name);
 });
 
@@ -377,16 +474,15 @@ test("README.zh-TW.md quotes both Taiwan statements", () => {
 // Key points first: until consented, a source shows its summary and a link that opens the full statement
 // in place; the box stays below, reachable without opening it.
 test("the consent shows key points first and the full statement on request", () => {
-  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
-  const parts = dialog.slice(dialog.indexOf("function consentParts("), dialog.indexOf("function taiwanPage("));
+  const parts = flat(body(read(new URL("ui/settings-dialog.js", MOD)), "consentParts"));
   assert.match(parts, /view\.tx\(`\$\{source\}\.summary`\)/);
-  assert.match(parts, /"settings\.hideFullStatement" : "settings\.fullStatement"/);
+  assert.match(parts, /"settings\.hideFullStatement":"settings\.fullStatement"/);
   assert.ok(parts.indexOf(".summary`") < parts.indexOf('"settings.fullStatement"'), "key points before the link");
   // Each key point its own row (its text hangs past the bullet), and the link discloses like Advanced.
   assert.match(parts, /\.summary`\)\.split\("\\n"\)/);
-  assert.match(parts, /open \? "⌄" : "›"/);
+  assert.match(parts, /open\?"⌄":"›"/);
   // Not yet consented: only the full statement waits for the link; the box follows it either way.
-  assert.match(parts, /\n    open \? statement : null,\n    \.\.\.box,\n  \];\n\}/);
+  assert.match(parts, /open\?statement:null,\.\.\.box\]/);
 });
 
 test("the disclosure names every host and the key file in all four places", () => {
@@ -505,100 +601,98 @@ test("line heights are given in pixels", () => {
 // A scroll box inside the scrolling page clipped the statements and let them run past its edge: the page
 // alone scrolls, and every text wraps to the page width.
 test("the settings dialog scrolls only its page", () => {
-  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
-  assert.equal(dialog.match(/overflow_y_scrollbar\(/g).length, 1);
-  assert.match(dialog, /id\("bw-settings-pane"\)[^;]*overflow_y_scrollbar\(/);
+  assert.equal(uiCode().match(/overflow_y_scrollbar\(/g).length, 1);
+  assert.match(flat(uiCode()), /id\("bw-settings-pane"\)[^;]*overflow_y_scrollbar\(/);
 });
 
 // overflow_y_scrollbar paints its bar along the list's right edge, over the column where each row's remove ×
 // sits. The list scrolls on its own, and a separate bar sits in a lane of its own beside that column: the list
 // keeps the lane clear of rows, and every region keeps the same right inset, so all of them end on one edge.
 test("the list's scrollbar has its own lane", () => {
-  const panel = code(read(new URL("ui/panel.js", MOD)));
-  const list = panel.slice(panel.indexOf("function list("), panel.indexOf("function footer("));
+  const panel = panelCode();
+  const list = flat(body(panel, "list"));
   assert.match(list, /id\("bw-list"\)[^;]*overflow_y_scroll\(/);
   assert.doesNotMatch(list, /overflow_y_scrollbar\(/);
   assert.match(list, /id\("bw-list"\)[^;]*\.pr\(SCROLL_LANE\)/);
-  assert.match(panel, /Scrollbar\.vertical\("bw-list"\)[^;]*\.right\(0\)/);
-  assert.match(panel, /Scrollbar\.vertical\("bw-list"\)[^;]*\.w\(SCROLL_LANE\)/);
-  assert.doesNotMatch(panel, /\.mode\(/);
-  assert.match(panel, /id\(`bw-remove-\$\{symbol\}`\)[^;]*\.w\(REMOVE_W\)/);
+  assert.match(flat(panel), /Scrollbar\.vertical\("bw-list"\)[^;]*\.right\(0\)/);
+  assert.match(flat(panel), /Scrollbar\.vertical\("bw-list"\)[^;]*\.w\(SCROLL_LANE\)/);
+  assert.doesNotMatch(panel, /\.mode\s*\(/);
+  assert.match(flat(panel), /id\(`bw-remove-\$\{symbol\}`\)[^;]*\.w\(REMOVE_W\)/);
   // `inset` pads every region; the only other gutter is the empty-list text's, inside the list, ending at the ×.
-  assert.equal(panel.match(/pr\(RIGHT_INSET\)/g).length, 1);
-  assert.equal(panel.match(/pl\(GUTTER\)/g).length, 2);
-  assert.doesNotMatch(panel, /px\(GUTTER\)|pr\(GUTTER\)|right\(GUTTER\)/);
-  assert.doesNotMatch(panel, /\.p[xr]\(20\)/);
+  const ui = uiCode();
+  assert.equal(ui.match(/pr\(\s*RIGHT_INSET\s*\)/g).length, 1);
+  assert.equal(ui.match(/pl\(\s*GUTTER\s*\)/g).length, 2);
+  assert.doesNotMatch(ui, /(?:px|pr|right)\(\s*GUTTER\s*\)/);
+  assert.doesNotMatch(ui, /\.p[xr]\(\s*20\s*\)/);
 });
 
 test("the sidebar list keeps its gap and hairline outside the scroll", () => {
-  const panel = code(read(new URL("ui/panel.js", MOD)));
-  const list = panel.slice(panel.indexOf("function list("), panel.indexOf("function footer("));
+  const panel = panelCode();
+  const list = flat(body(panel, "list"));
+  for (const anchor of ['id("bw-list")', ".children(rows)", "returnv_flex"]) assert.ok(list.includes(anchor), anchor);
   const box = list.slice(list.indexOf('id("bw-list")'), list.indexOf(".children(rows)"));
   // The gap no longer scrolls away with the rows.
   assert.doesNotMatch(box, /\.pt\(/);
-  const tree = list.slice(list.indexOf("return v_flex"));
+  const tree = list.slice(list.indexOf("returnv_flex"));
+  assert.ok(tree.includes(".when("), ".when(");
   assert.match(tree.slice(0, tree.indexOf(".when(")), /\.pt\(top\)/);
   // A 1 px border hairline, only for a list with a gap (the sidebar), inset like the footer's, above the scrolling box.
-  assert.match(list, /top > 0[^;]*map\(inset\)[^;]*border_t\(1\)[^;]*border_color\(t\.border\)/);
+  assert.match(list, /top>0[^;]*map\(inset\)[^;]*border_t\(1\)[^;]*border_color\(t\.border\)/);
   assert.ok(tree.indexOf("border_t(1)") > 0 && tree.indexOf("border_t(1)") < tree.indexOf("scrolling"));
   // The bar is the scrolling box's next sibling, in the relative box that holds both.
-  assert.match(tree, /\.relative\(\)[^;]*\.child\(scrolling\)\s*\.child\(Scrollbar\.vertical\("bw-list"\)/);
+  assert.match(tree, /\.relative\(\)[^;]*\.child\(scrolling\)\.child\(Scrollbar\.vertical\("bw-list"\)/);
   // The empty-list text stays inside the scrolling box, so it sits below the hairline.
   assert.match(box, /list\.empty/);
-  assert.match(panel, /list\(view, t, rows, 8\)/);
-  assert.match(panel, /list\(view, t, rows\)\)/);
+  assert.match(flat(panel), /list\(\w+,\w+,\w+,8\)/);
+  assert.match(flat(panel), /list\(\w+,\w+,\w+\)\)/);
 });
 
 // The notice ends with its own full stop (。 in Chinese and Japanese), so a separator before Undo would sit
 // right after it; the link follows the text with only the gap between them.
 test("Undo follows the notice with no separator", () => {
-  const panel = read(new URL("ui/panel.js", MOD));
-  const messages = panel.slice(panel.indexOf("function messages("), panel.indexOf("function problemLines("));
-  assert.match(messages, /link\(t, "bw-undo"/);
+  const messages = body(panelCode(), "messages");
+  assert.match(flat(messages), /link\(\w+,"bw-undo"/);
   assert.doesNotMatch(messages, /"·"/);
 });
 
 // 亮燈 as Taiwan's quote boards draw it: a solid block in the limit's color with the panel's background as
 // ink, so it stands apart from the 16% chart fill beside it. Static: nothing here animates on its own.
 test("a lit price is a solid block that never animates", () => {
-  const parts = code(read(new URL("ui/parts.js", MOD)));
-  const box = parts.slice(parts.indexOf("export function priceBox("), parts.indexOf("export function link("));
-  assert.match(box, /\.bg\(mark\.color\)/);
-  assert.match(box, /mark\.ink/);
+  const box = body(uiCode(), "priceBox");
+  assert.ok(flat(box).includes(".bg(mark.color)"), ".bg(mark.color)");
+  assert.ok(flat(box).includes("mark.ink"), "mark.ink");
   assert.doesNotMatch(box, /opacity|transition|loop\(|frames\(|tint/);
 });
 
 test("a collapsed sidebar row is one line with its notes", () => {
-  const panel = code(read(new URL("ui/panel.js", MOD)));
-  const row = panel.slice(panel.indexOf("function sidebarRow("), panel.indexOf("function tableCell("));
-  assert.match(row, /collapsedRow\(row\)/);
+  const source = body(panelCode(), "sidebarRow");
+  const row = flat(source);
+  assert.ok(row.includes("collapsedRow(row)"), "collapsedRow(row)");
   // The body is chosen once and framed by one call, so a fading (ghost) row collapses exactly as a live one
   // does: the choice never looks at `ghost`, and a removed failed row fades from its short height.
-  assert.equal(row.split("ghostFrame(").length - 1, 1);
-  assert.equal(row.split("rowFrame(").length - 1, 1);
-  assert.doesNotMatch(row, /!ghost\s*&&\s*collapsedRow|collapsedRow[^;]*!ghost/);
-  assert.ok(row.indexOf("collapsedRow(row)") < row.indexOf("ghost ? ghostFrame("));
+  assert.equal(source.match(/\bghostFrame\s*\(/g)?.length, 1);
+  assert.equal(source.match(/\browFrame\s*\(/g)?.length, 1);
+  assert.doesNotMatch(row, /!ghost&&collapsedRow|collapsedRow[^;]*!ghost/);
+  assert.ok(row.indexOf("collapsedRow(row)") < row.indexOf("ghost?ghostFrame("));
 });
 
 test("the detail's stats are numbers without the currency", () => {
-  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.match(detail, /number\(q, price\)/);
+  assert.match(flat(read(new URL("ui/detail-dialog.js", MOD))), /\bnumber\(\w+,price\)/);
 });
 
 test("the detail names a future's day or night session", () => {
-  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.match(detail, /view\.tx\(`session\.\$\{sessionName\(q, session, now\)\}`\)/);
+  assert.match(flat(read(new URL("ui/detail-dialog.js", MOD))), /view\.tx\(`session\.\$\{sessionName\(/);
 });
 
 test("the detail's session times sit between the source lines and the times", () => {
-  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.match(detail, /\[\.\.\.source, \.\.\.\(hours\.length \? \[hours\] : \[\]\), times\]/);
-  assert.match(detail, /sessionTimesParts\(sessionTimes\(q, now\), view\.lang, tx\)/);
+  const detail = flat(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /\[\.\.\.source,\.\.\.\(hours\.length\?\[hours\]:\[\]\),times\]/);
+  assert.match(detail, /sessionTimesParts\(sessionTimes\(\w+,\w+\),view\.lang,\w+\)/);
 });
 
 test("rows keep their own look: only the detail dims together", () => {
-  const panel = code(read(new URL("ui/panel.js", MOD)));
-  assert.match(panel, /priceInk\(/);
+  const panel = panelCode();
+  assert.match(panel, /\bpriceInk\(/);
   assert.doesNotMatch(panel, /detailDimmed/);
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
   assert.match(detail, /detailDimmed\(/);
@@ -606,42 +700,40 @@ test("rows keep their own look: only the detail dims together", () => {
 
 test("no module names session.unknown, and the detail's header shows no word for an unknown session", () => {
   for (const file of jsFiles()) assert.ok(!code(read(file)).includes("session.unknown"), relativeName(file));
-  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.match(detail, /!== "unknown"/);
+  assert.ok(flat(read(new URL("ui/detail-dialog.js", MOD))).includes('!=="unknown"'));
 });
 
 test("the pause key acts as the button does", () => {
-  const main = code(read(new URL("main.js", MOD)));
-  assert.match(main, /command === "pause"\)\s*this\.act\(cx, \(\) => this\.togglePause\(\)\)/);
-  assert.doesNotMatch(main, /command === "pause"\)\s*this\.togglePause\(\)/);
+  const main = flat(read(new URL("main.js", MOD)));
+  assert.match(main, /command==="pause"\)this\.act\(\w+,\(\)=>this\.togglePause\(\)\)/);
+  assert.doesNotMatch(main, /command==="pause"\)this\.togglePause\(\)/);
 });
 
 test("render settles a choice a pending index held", () => {
-  const main = code(read(new URL("main.js", MOD)));
-  assert.match(main, /this\.filterHeld = heldFilter\(/);
-  const render = main.slice(main.indexOf("  render() {"), main.indexOf("\n  }\n", main.indexOf("  render() {")));
+  const main = read(new URL("main.js", MOD));
+  assert.ok(flat(main).includes("this.filterHeld=heldFilter("), "this.filterHeld = heldFilter(");
+  const render = flat(body(main, "render"));
   // After the sync, so another copy's quotes count; with nothing pending, so the choice cannot stay held.
+  assert.ok(render.includes("this.watch.sync()"), "this.watch.sync()");
   assert.ok(render.indexOf("this.watch.sync()") < render.indexOf("this.filterHeld"), "settles after watch.sync()");
-  assert.match(render, /if \(this\.filterHeld[\s\S]*?filterAfterRemove\([^;]*\(\) => false\)/);
+  assert.match(render, /if\(this\.filterHeld[\s\S]*?filterAfterRemove\([^;]*\(\)=>false\)/);
 });
 
 test("the settings dialog reads Yahoo's delay and real-time pace from the exchange table", () => {
-  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
-  const delay = dialog.slice(dialog.indexOf("function delayText("), dialog.indexOf("function pageTitle("));
-  assert.match(delay, /exchangeRule\(TYPICAL_EXCHANGE\[market\]/);
+  const delay = flat(body(read(new URL("ui/settings-dialog.js", MOD)), "delayText"));
+  assert.match(delay, /exchangeRule\(TYPICAL_EXCHANGE\[\w+\]/);
   assert.match(delay, /realtime[^;]*"settings\.liveEveryMinute"/);
-  assert.doesNotMatch(dialog, /TAIWAN_YAHOO_DELAY_S/);
+  assert.doesNotMatch(uiCode(), /TAIWAN_YAHOO_DELAY_S/);
 });
 
 // A lunch break is a session: no dot, like closed or pre-market.
 test("only a price that may not be current draws a ring", () => {
-  assert.match(code(read(new URL("ui/parts.js", MOD))), /const HOLLOW = \["unconfirmed", "stalled", "delayed"\];/);
+  assert.equal(flat(uiCode()).split('=["unconfirmed","stalled","delayed"]').length - 1, 1);
 });
 
 test("the US page says what Finnhub adds", () => {
-  const dialog = code(read(new URL("ui/settings-dialog.js", MOD)));
-  const us = dialog.slice(dialog.indexOf("function usPage("), dialog.indexOf("function cryptoPage("));
-  assert.match(us, /details\(\s*note\(t, view\.tx\("sources\.us\.faster"\)\)/);
+  const us = flat(body(read(new URL("ui/settings-dialog.js", MOD)), "usPage"));
+  assert.match(us, /details\(note\(\w+,view\.tx\("sources\.us\.faster"\)\)/);
 });
 
 test("the docs call Yahoo's US prices real time, and name lunch, FX and futures", () => {
@@ -656,75 +748,66 @@ test("the docs call Yahoo's US prices real time, and name lunch, FX and futures"
 });
 
 test("the row's stale date is judged by the quote's own day", () => {
-  assert.match(code(read(new URL("ui/panel.js", MOD))), /rowDate\(quote, fresh, now, view\.lang\)/);
+  assert.match(flat(panelCode()), /rowDate\(quote,\w+,now,view\.lang\)/);
 });
 
 test("the status line shows the no-trades notes after the problems", () => {
-  assert.match(code(read(new URL("ui/panel.js", MOD))), /\[\.\.\.view\.watch\.problems\(\), \.\.\.view\.watch\.notes\(\)\]/);
+  assert.ok(flat(panelCode()).includes("[...view.watch.problems(),...view.watch.notes()]"));
 });
 
 // One render reads every row's quote at its one `now`, so each Taiwan market's closure is worked out once
 // (Watchlist#closureAt) and every row reads the same one.
 test("a render reads every row's quote at its one now", () => {
-  const main = code(read(new URL("main.js", MOD)));
-  const start = main.indexOf("  rowSource(");
-  const rowSource = main.slice(start, main.indexOf("\n  }\n", start));
-  assert.match(rowSource, /^  rowSource\(symbol, now\) \{/);
+  const main = read(new URL("main.js", MOD));
+  const rowSource = flat(body(main, "rowSource"));
+  assert.ok(rowSource.startsWith("rowSource(symbol,now){"), rowSource.slice(0, 40));
   assert.doesNotMatch(rowSource, /Date\.now\(\)/);
-  const panel = code(read(new URL("ui/panel.js", MOD)));
-  assert.doesNotMatch(panel, /\.shown\(symbol\)|rowSource\(symbol\)/);
+  assert.doesNotMatch(panelCode(), /\.shown\(\s*symbol\s*\)|rowSource\(\s*symbol\s*\)/);
 });
-
-// A method of main.js's view, from its first line to its closing brace.
-const method = (source, head) => {
-  const start = source.indexOf(`  ${head}`);
-  assert.ok(start >= 0, head);
-  return source.slice(start, source.indexOf("\n  }\n", start));
-};
 
 // The first write is a boundary like handOver's: a failed one opens the detail on its quote, with no token (the
 // detail then keeps the quote it opened with), never blocks it.
 test("a failed first write never keeps the detail from opening", () => {
-  const open = method(code(read(new URL("main.js", MOD))), "openDetail(symbol) {");
-  const guarded = open.match(/try \{\s*detailStore\.write\(value\);[^}]*\} catch \{([^}]*)\}/);
+  const open = flat(body(read(new URL("main.js", MOD)), "openDetail"));
+  const guarded = open.match(/try\{detailStore\.write\(value\);[^}]*\}catch\{([^}]*)\}/);
   assert.ok(guarded, "the write is guarded");
-  assert.match(guarded[1], /token = null/);
+  assert.match(guarded[1], /token=null/);
   assert.ok(open.indexOf("openOverlay(") > open.indexOf(guarded[0]) + guarded[0].length, "the dialog opens after the guard");
-  assert.match(open, /props: \{ detail, token, wide \}/);
+  assert.ok(open.includes("props:{detail,token,wide}"), "props: { detail, token, wide }");
 });
 
 // The detail copy only reads what its row hands it (handover.js): no request, no list of its own.
 test("the detail copy sends no request and owns no Watchlist", () => {
-  const main = code(read(new URL("main.js", MOD)));
-  const start = main.indexOf("if (given.detail)");
-  assert.ok(start >= 0);
-  const branch = main.slice(start, main.indexOf("return;", start));
-  for (const word of ["new Watchlist", "fetch", "runProvider"]) assert.ok(!branch.includes(word), word);
+  const branch = flat(block(read(new URL("main.js", MOD)), "if (given.detail)"));
+  assert.ok(branch.includes("this.held="), "the detail branch");
+  for (const word of ["newWatchlist", "fetch", "runProvider"]) assert.ok(!branch.includes(word), word);
 });
 
 test("only detailStore touches wickline.detail, and the hand-over decides in one synchronous step", () => {
-  const main = code(read(new URL("main.js", MOD)));
+  const source = read(new URL("main.js", MOD));
+  const main = code(source);
   assert.ok(!withoutStrings(main).includes("wickline.detail") && !/["'`]wickline\.detail["'`]/.test(main), "the key by its constant only");
-  const store = main.slice(main.indexOf("const detailStore = {"), main.indexOf("\n};\n", main.indexOf("const detailStore = {")));
-  assert.match(store, /read: \(\) => shared\(DETAIL_KEY\)/);
-  assert.match(store, /write: \(value\) => setShared\(DETAIL_KEY, value\)/);
+  const store = block(source, "const detailStore =");
+  assert.ok(flat(store).includes("read:()=>shared(DETAIL_KEY)"), "read: () => shared(DETAIL_KEY)");
+  assert.match(flat(store), /write:\((\w+)\)=>setShared\(DETAIL_KEY,\1\)/);
   const uses = [...main.matchAll(/DETAIL_KEY/g)].map((m) => m.index);
-  const importAt = main.search(/import \{[^}]*DETAIL_KEY[^}]*\} from "\.\/handover\.js";/);
-  const storeAt = main.indexOf("const detailStore = {");
+  const importAt = main.search(/import\s*\{[^}]*\bDETAIL_KEY\b[^}]*\}\s*from\s*"\.\/handover\.js"/);
+  const storeAt = main.indexOf(store);
   for (const at of uses) {
     const inImport = importAt >= 0 && at > importAt && at < main.indexOf(";", importAt);
     const inStore = at > storeAt && at < storeAt + store.length;
     assert.ok(inImport || inStore, `DETAIL_KEY at ${at}`);
   }
-  const handOver = method(main, "handOver() {");
-  assert.match(handOver, /nextWrite\(detailStore\.read\(\), this\.handover, /);
+  const handOver = body(source, "handOver");
+  assert.ok(flat(handOver).includes("nextWrite(detailStore.read(),this.handover,"), "nextWrite(detailStore.read(), this.handover, …");
   assert.doesNotMatch(handOver, /\bawait\b/);
-  const open = method(main, "openDetail(symbol) {");
+  const open = flat(body(source, "openDetail"));
   assert.ok(open.indexOf("detailStore.write(") >= 0 && open.indexOf("detailStore.write(") < open.indexOf("openOverlay("), "written before the dialog opens");
-  assert.match(main, /changed: \(\) => \{ this\.handOver\(\); cx\.notify\(\); \}/);
-  assert.match(method(main, "close() {"), /clearsOnClose\(detailStore\.read\(\), this\.held/);
-  const render = method(main, "render() {");
-  const branch = render.slice(render.indexOf("if (this.detail)"), render.indexOf("detailView(") + 1);
+  assert.match(flat(main), /changed:\(\)=>\{this\.handOver\(\);cx\.notify\(\);?\}/);
+  assert.ok(flat(body(source, "close")).includes("clearsOnClose(detailStore.read(),this.held"), "clearsOnClose(detailStore.read(), this.held");
+  const render = flat(body(source, "render"));
+  assert.ok(render.includes("if(this.detail)") && render.includes("detailView("), "the detail's render");
+  const branch = render.slice(render.indexOf("if(this.detail)"), render.indexOf("detailView(") + 1);
   assert.match(branch, /this\.adoptDetail\(\)/);
 });
 
@@ -755,44 +838,44 @@ test("The detail's key", () => {
 });
 
 test("only the detail's chart follows the pointer", () => {
-  const panel = code(read(new URL("ui/panel.js", MOD)));
-  assert.doesNotMatch(panel, /crosshair/);
-  const parts = code(read(new URL("ui/parts.js", MOD)));
-  assert.equal(parts.match(/on_mouse_move/g)?.length, 1);
-  assert.match(parts, /\.when\(Boolean\(crosshair\)[\s\S]*?on_mouse_move/);
-  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.match(detail, /crosshair: traced \? crosshairOption\(/);
-  assert.match(detail, /bw-detail-chart/);
+  assert.doesNotMatch(panelCode(), /crosshair/);
+  const parts = read(new URL("ui/parts.js", MOD));
+  assert.equal(code(parts).match(/on_mouse_move/g)?.length, 1);
+  assert.match(flat(parts), /\.when\(Boolean\(crosshair\)[\s\S]*?on_mouse_move/);
+  const detail = flat(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /crosshair:\w+\?crosshairOption\(/);
+  assert.ok(detail.includes("bw-detail-chart"), "bw-detail-chart");
 });
 test("the crosshair's label dims with the detail and with a cached line", () => {
-  assert.match(code(read(new URL("ui/detail-dialog.js", MOD))), /dimmed \|\| Boolean\(q\.chartCached\)/);
+  assert.match(flat(read(new URL("ui/detail-dialog.js", MOD))), /dimmed\|\|Boolean\(\w+\.chartCached\)/);
 });
 test("the crosshair's card stays opaque: only its text dims", () => {
-  const layers = code(read(new URL("ui/parts.js", MOD))).match(/function crosshairLayers[\s\S]*?\n}/)?.[0] ?? "";
-  const plate = layers.match(/const card = [\s\S]*?\.bg\(t\.background\)[\s\S]*?\.child\(/)?.[0];
+  const layers = body(uiCode(), "crosshairLayers");
+  const plate = layers.match(/const\s+card\s*=[\s\S]*?\.bg\(\s*t\.background\s*\)[\s\S]*?\.child\(/)?.[0];
   assert.ok(plate);
   assert.doesNotMatch(plate, /opacity/);
-  assert.match(layers, /\.opacity\(mark\.opacity\)/);
-  assert.match(layers, /mark\.level/);
+  assert.ok(flat(layers).includes(".opacity(mark.opacity)"), ".opacity(mark.opacity)");
+  assert.ok(flat(layers).includes("mark.level"), "mark.level");
   assert.doesNotMatch(layers, / · /);
 });
 test("the crosshair card's lines carry fixed line heights that sum to the height crosshairLevel assumes", () => {
-  const layers = code(read(new URL("ui/parts.js", MOD))).match(/function crosshairLayers[\s\S]*?\n}/)?.[0] ?? "";
-  assert.match(layers, /div\(\)\.opacity\(mark\.opacity\)\.line_height\("14px"\)/);
-  assert.match(layers, /h_flex\(\)\.opacity\(mark\.opacity\)\.line_height\("16px"\)/);
+  const layers = flat(body(uiCode(), "crosshairLayers"));
+  assert.ok(layers.includes('div().opacity(mark.opacity).line_height("14px")'), "the time's 14 px line");
+  assert.ok(layers.includes('h_flex().opacity(mark.opacity).line_height("16px")'), "the price's 16 px line");
+  assert.ok(layers.includes(".gap(2).px(6).py(4)"), "the card's gap and padding");
   // 14 + 2 (gap) + 16 + 4 + 4 (py) = crosshairLevel's CROSSHAIR_CARD_PX
-  assert.match(layers, /\.gap\(2\)\.px\(6\)\.py\(4\)/);
-  assert.match(code(read(new URL("format.js", MOD))), /const CROSSHAIR_CARD_PX = 40;/);
+  assert.equal(CROSSHAIR_CARD_PX, 14 + 2 + 16 + 4 + 4);
 });
 test("the chart's date stands below the detail's chart, never over its line", () => {
-  const parts = code(read(new URL("ui/parts.js", MOD)));
-  assert.doesNotMatch(parts.match(/export function chart\([^)]*\)/)?.[0] ?? "", /\bdate\b/);
-  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  assert.match(detail, /lineDate\(q, view\.lang\)/);
+  const params = uiCode().match(/function\s+chart\s*\(([^)]*)\)/);
+  assert.ok(params, "chart found");
+  assert.doesNotMatch(params[1], /\bdate\b/);
+  const detail = flat(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /lineDate\(\w+,view\.lang\)/);
   // The date line wraps the chart from outside, and the chart's own options never see the date.
-  assert.match(detail, /shape !== null && dated\(chart\(q, color, t, \{/);
+  assert.match(detail, /\w+!==null&&dated\(chart\(/);
   assert.match(detail, /child\(box\)\.child\(div\(\)[^;]*child\(lineDay\)/);
-  const options = detail.match(/dated\(chart\(q, color, t, \{[\s\S]*?\}\)\),/)?.[0] ?? "";
+  const options = detail.match(/dated\(chart\(\w+,\w+,\w+,\{[\s\S]*?\}\)\)/)?.[0] ?? "";
   assert.ok(options);
   assert.doesNotMatch(options, /lineDay|lineDate/);
 });
