@@ -1,12 +1,12 @@
-// The Finnhub key, in plaintext, in Wickline's folder under Herdr's data folder: localStorage is per
-// copy, so the dialog could not hand it to the panel there, and shared state is no place for a key.
-// The caller passes in Herdr's `fs/promises`, `system` (`platform()`: Herdr's "macos", "linux" or
-// "windows"; `chmod(path)`: main.js's one chmod 600 through Herdr's exec) and the folder, so tests run this
-// under Node. No Herdr imports.
+// The Finnhub key, in plaintext, in Wickline's folder under Herdr's data folder.
+// Not in localStorage: it is per copy, so the dialog could not hand the key to the panel.
+// Not in shared state: that is no place for a key.
+// The caller passes Herdr's `fs/promises`, the folder and a `system` with `platform()` ("macos", "linux" or
+// "windows") and `chmod(path)` (main.js's one chmod 600), so tests run this under Node.
 const FILE = "secrets.json";
 const file = (dir) => `${dir}/${FILE}`;
-// Herdr's `fs.writeFile` takes no mode and leaves the file readable by other accounts; Windows keeps a
-// user's own folder private already.
+// Herdr's `fs.writeFile` takes no mode and leaves the file readable by other accounts.
+// Windows keeps a user's own folder private already.
 const OWNER_ONLY_PLATFORMS = ["macos", "linux"];
 // The dialog shows a saved key's last four characters only when they are a small part of it.
 const ENDING = 4;
@@ -20,8 +20,8 @@ async function readSecrets(fs, dir) {
   return value;
 }
 
-// Writes the file, then `chmod 600` on macOS and Linux: the only program Wickline runs. Resolves false
-// when chmod failed or could not start (the file is written all the same), else true.
+// Writes the file, then runs `chmod 600` on macOS and Linux: the only program Wickline runs.
+// Resolves false when chmod failed or could not start (the file is written all the same), else true.
 async function writeSecrets(fs, system, dir, secrets) {
   await fs.writeFile(file(dir), `${JSON.stringify(secrets, null, 2)}\n`);
   if (!OWNER_ONLY_PLATFORMS.includes(system.platform())) return true;
@@ -32,6 +32,7 @@ async function writeSecrets(fs, system, dir, secrets) {
   }
 }
 
+/** The saved value of key `name`, or null. */
 export async function loadSecret(fs, dir, name) {
   const value = (await readSecrets(fs, dir))[name];
   return typeof value === "string" ? value : null;
@@ -44,7 +45,7 @@ export async function loadSecretEnding(fs, dir, name) {
   return value.length >= ENDING_MIN_LENGTH ? value.slice(-ENDING) : "";
 }
 
-// A file that cannot be read is replaced by one holding only this key. Resolves as writeSecrets.
+/** Saves key `name`. A file that cannot be read is replaced by one holding only this key. Resolves as writeSecrets. */
 export async function saveSecret(fs, system, dir, name, value) {
   let secrets = {};
   try {
@@ -56,8 +57,10 @@ export async function saveSecret(fs, system, dir, name, value) {
   return writeSecrets(fs, system, dir, { ...secrets, [name]: value });
 }
 
-// The file goes once no key is left in it, else it is written again without this one. An unreadable
-// file rejects, so nothing is taken as removed. Resolves as writeSecrets (true when deleted).
+/**
+ * Removes key `name`, and the file once no key is left. An unreadable file rejects, so nothing is taken as removed.
+ * Resolves as writeSecrets (true when the file was deleted).
+ */
 export async function removeSecret(fs, system, dir, name) {
   if (!(await fs.exists(file(dir)))) return true;
   const { [name]: _removed, ...rest } = await readSecrets(fs, dir);

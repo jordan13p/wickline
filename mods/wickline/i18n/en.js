@@ -1,4 +1,5 @@
-// English: the reference table; the other languages carry the same keys. Product and source names (Wickline, Yahoo Finance, Binance Spot) stay as they are.
+// English: the reference table; the other languages carry the same keys.
+// Product and source names (Wickline, Yahoo Finance, Binance Spot) stay as they are.
 import { MESSAGES_EN } from "../quotes.js";
 
 export const EN = {

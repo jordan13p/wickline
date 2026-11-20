@@ -1,5 +1,4 @@
 // Which layout Wickline draws at a size, and which table columns fit a width.
-// No Herdr imports, so tests run it under Node.
 import { kindOf, marketOf } from "./markets.js";
 import { misEnabled, yahootwEnabled } from "./settings.js";
 
@@ -9,9 +8,9 @@ export const BAND_MAX_HEIGHT = 72;
 export const TABLE_MIN_WIDTH = 720;
 // The table never grows wider; a wider pane centers it.
 export const TABLE_MAX_WIDTH = 1280;
-// A row's left gutter holds the drag handle. Its right inset holds the remove × column, then the lane the
-// list's scrollbar sits in, outside the rows. Every region (header, add field, filter row, table head, rows,
-// footer) keeps the same gutter and inset, so they all end on one edge.
+// A row's left gutter holds the drag handle. Its right inset holds the remove × column, then the scrollbar's lane.
+// Every region (header, add field, filter row, table head, rows, footer) keeps the same gutter and inset, so they
+// all end on one edge.
 export const GUTTER = 20;
 export const REMOVE_W = 16;
 export const SCROLL_LANE = 12;
@@ -29,8 +28,8 @@ export const NAME_MIN_WIDTH = 120;
 export const NAME_MAX_WIDTH = 320;
 
 /**
- * In display order. `width` is the content width in px (`null`: the flexible name). Numbers align
- * right; the price column holds the number and a fixed slot for the currency.
+ * The table's columns in display order. `width` is the content width in px, null for the flexible name.
+ * The price column holds the number and a fixed slot for the currency.
  */
 export const TABLE_COLUMNS = [
   { id: "symbol", width: 88, align: "left" },
@@ -51,7 +50,7 @@ export const columnWidth = (id) => TABLE_COLUMNS.find((column) => column.id === 
 // First to go when the width cannot hold every column; the others never drop.
 export const DROP_ORDER = ["prevClose", "low", "high", "change", "line", "name"];
 
-/** "band" below BAND_MAX_HEIGHT, else "sidebar" below TABLE_MIN_WIDTH, else "table"; null (not laid out yet): "sidebar". */
+/** The layout for a copy's size: "band" when short, "table" when wide, else "sidebar" (also before layout). */
 export function layoutFor(size) {
   if (!size) return "sidebar";
   if (size.height < BAND_MAX_HEIGHT) return "band";
@@ -62,9 +61,8 @@ export function layoutFor(size) {
 export const SPARK_MIN = 32;
 
 /**
- * A sidebar row's day line in px for a copy `width` px wide: SPARK_MIN, growing with the pane to 120 only once the
- * left lines keep NAME_ROOM beside the gutter, the right inset, the price column and the gaps on each side
- * of the line. SPARK_MIN before the copy is laid out.
+ * The width of a sidebar row's day line for a copy `width` px wide. It stays at SPARK_MIN until the left lines have
+ * NAME_ROOM beside the fixed parts, then grows with the pane up to 120.
  */
 export function sparkWidth(width) {
   if (!(width > 0)) return SPARK_MIN;
@@ -73,8 +71,8 @@ export function sparkWidth(width) {
 }
 
 /**
- * A layout block that docks Wickline beside Herdr's own side panels asks for their rounded, bordered
- * card with `"props": {"card": true}`. Only `true` counts; panes and tabs never ask (Herdr frames them).
+ * Whether a copy draws Herdr's rounded, bordered card. A layout block docked beside Herdr's side panels asks with
+ * `"props": {"card": true}`. Panes and tabs never ask: Herdr frames them.
  */
 export const wantsCard = (props) => props?.card === true;
 
@@ -106,9 +104,8 @@ export const DETAIL_WIDTH = 440;
 export const DETAIL_WIDE_WIDTH = 720;
 
 /**
- * Whether a detail opened now can carry a book, so it opens in two columns (chosen at open, kept while open): a Taiwan
- * stock with TWSE MIS or Yahoo 奇摩股市 on, or a future with Yahoo 奇摩股市 on (MIS has no futures). `settings` is
- * readSettings' result.
+ * Whether a detail opened now can carry a book, so it opens in two columns and keeps them while open. That is a
+ * Taiwan stock with TWSE MIS or Yahoo 奇摩股市 on, or a future with Yahoo 奇摩股市 on (MIS has no futures).
  */
 export function canCarryBook(quote, settings) {
   const kind = kindOf(quote.symbol);

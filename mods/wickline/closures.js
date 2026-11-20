@@ -1,4 +1,4 @@
-// A Taiwan market's closure, listed or inferred from quiet answers, and when its reading ends. No Herdr imports.
+// A Taiwan market's closure, listed or inferred from quiet answers, and when its reading ends.
 import { isWeekday, nextTaipeiMidnight, taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
 import { DAY_SESSION, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, kindOf } from "./markets.js";
 import { tradesOn } from "./time.js";
@@ -7,9 +7,10 @@ import { tradesOn } from "./time.js";
 const NIGHT_END_MIN = NIGHT_SESSION.to - 24 * 60;
 
 /**
- * The open (ms) of the session of `market` that `now` belongs to, or null: "stock" 09:00 Taipei on a weekday
- * from 09:00 to midnight; "future" 08:45 from 08:45 to 15:00, 15:00 from 15:00 to midnight, and the day before's
- * 15:00 from 00:00 to 05:00 — each only when the session's own date is a weekday.
+ * The open (ms) of the session of `market` that `now` belongs to, or null. In Taipei time:
+ * - "stock": 09:00, from 09:00 to midnight;
+ * - "future": 08:45 from 08:45 to 15:00, 15:00 from 15:00 to midnight, and the day before's 15:00 from 00:00 to 05:00.
+ * Each counts only when the session's own date is a weekday.
  */
 export function currentOpen(market, now) {
   const today = taipeiDay(now);
@@ -21,10 +22,11 @@ export function currentOpen(market, now) {
   return minute < NIGHT_END_MIN ? open(today - 1, NIGHT_SESSION.from) : null;
 }
 
-// A session with answers but no trade since its open reads as having none (今日無成交, never 休市: the answers cannot tell
-// a closed market from a stuck feed) from its open + INFER_REALTIME_MS with an answer from a real-time source, or
-// + INFER_DELAYED_MS with one from Yahoo Finance (20 minutes late). A deadline counts only with that kind's latest answer
-// at or after it − INFER_RECENT_MS, so a source that answered once near the open and then went quiet never does.
+// A session with answers but no trade since its open reads as having no trades (今日無成交). Never as closed (休市):
+// the answers cannot tell a closed market from a stuck feed. The reading starts at the open + INFER_REALTIME_MS with
+// an answer from a real-time source, or + INFER_DELAYED_MS with one from Yahoo Finance (20 minutes late).
+// A deadline counts only when that kind's latest answer came at most INFER_RECENT_MS before it, so a source that
+// answered once near the open and then went quiet never counts.
 export const INFER_REALTIME_MS = 600_000;
 export const INFER_DELAYED_MS = 1_800_000;
 export const INFER_RECENT_MS = 120_000;
@@ -38,15 +40,14 @@ const INFER_DEADLINES = new Map([
 // The answers that may yet name a closure of a session: none once it traded (see closureOf).
 const quietAnswers = (observation) => (!observation || observation.traded ? [] : observation.answers);
 
-/** The Taiwan market a symbol trades in, as closureOf names it: TAIFEX's futures, else TWSE/TPEx's stocks and indices. */
+/** The Taiwan market a symbol trades in, as closureOf names it: "future" for TAIFEX, else "stock" (TWSE and TPEx). */
 export const twMarket = (symbol) => (kindOf(symbol) === "future" ? "future" : "stock");
 
 /**
- * What a Taiwan `market` ("stock" | "future") reads at `now`, from one observation of its current session (currentOpen):
- * `{ closure, deadline, until }`, its closure and when that reading ends without a new answer (closureRule; both null
- * once a trade came since that session's open, which clears every closure, the removed night's included), and the next
- * moment the reading can change: the earliest of that session's inference deadlines (see INFER_REALTIME_MS) and `until`.
- * `listed` and `seen` as closureRule reads them.
+ * What a Taiwan `market` ("stock" or "future") reads at `now`, as `{ closure, deadline, until }`.
+ * `closure` and `until` come from closureRule; both are null once the current session has traded, which clears every
+ * closure. `deadline` is the next moment the reading can change: the earliest of the session's inference deadlines
+ * and `until`. `listed` and `seen` are as closureRule reads them.
  */
 export function closureOf(market, now, listed, seen) {
   const open = currentOpen(market, now);
@@ -54,8 +55,7 @@ export function closureOf(market, now, listed, seen) {
   const { closure, until } = observation?.traded
     ? { closure: null, until: null }
     : closureRule(market, now, open, listed, seen);
-  // The open plus an answer's delay, for each answer, while the session has no trade; and the mark's end, which no
-  // answer of its own announces.
+  // Each answer's deadline while the session has no trade, and the mark's end, which no answer announces.
   const ahead = quietAnswers(observation)
     .map(({ realtime }) => open + INFER_DEADLINES.get(realtime))
     .filter((at) => at > now);
@@ -64,9 +64,8 @@ export function closureOf(market, now, listed, seen) {
 }
 
 /**
- * `quote` with its Taiwan market's reading (closureOf): `closure`, the deadline as `closureDeadline` (freshness.js
- * nextEdge wakes the row there) and the mark's end as `closureUntil` (heldMarks: the open detail, which learns a new
- * reading only from its row's hand-over, drops the mark there), each when there is one.
+ * `quote` with its Taiwan market's reading from closureOf: `closure`, plus `closureDeadline` and `closureUntil` when
+ * there is one. nextEdge wakes the row at the deadline; heldMarks drops the mark at `closureUntil`.
  */
 export const withClosure = (quote, { closure, deadline, until }) => ({
   ...quote,
@@ -76,10 +75,9 @@ export const withClosure = (quote, { closure, deadline, until }) => ({
 });
 
 /**
- * `quote` as the open detail reads it at `now` (it learns a new reading only from its row's hand-over): itself while its
- * mark holds (`closureUntil` unset, or still ahead); from that moment a copy without the mark (`closure` and
- * `closureUntil` null, no `closureDeadline`), so the detail reads its session from its periods and TAIFEX's table
- * again rather than a closure that is over.
+ * `quote` as the open detail reads it at `now`. The detail learns a new reading only from its row's hand-over, so it
+ * keeps the quote while its mark holds and drops the mark once `closureUntil` has passed. It then reads its session
+ * from its periods and TAIFEX's hours again, not from a closure that is over.
  */
 export function heldMarks(quote, now) {
   if (quote.closureUntil == null || now < quote.closureUntil) return quote;
@@ -88,45 +86,52 @@ export function heldMarks(quote, now) {
 }
 
 /**
- * The closure of a Taiwan `market` at `now` while its current session (opened at `open`, or null) has not traded: the
- * one place a quote's closure is decided, as `{ closure, until }`: `closure` one value, null or `{ kind, reason?, source? }`,
- * `until` the moment that reading ends when no new answer arrives (null without a closure):
- * - "listed": a day the schedule lists (`reason`, its name);
- * - "noTrades": a day without trades, inferred (`source`, the source of the answer that counts);
- * - "nightRemoved": a night a listed day removed;
+ * The closure of a Taiwan `market` at `now` while its current session has not traded, as `{ closure, until }`.
+ * This is the one place a quote's closure is decided.
+ * - `open`: the current session's open, or null.
+ * - `listed(day)`: the schedule's name for a closed day, or null.
+ * - `seen(market, open)`: that market's session opened at `open`, or undefined: `{ traded, newest, answers }`.
+ *   `traded`: a trade came at or after the open. `newest`: the newest trade time the answers carried. `answers`: each
+ *   source's latest answer since the open, `[{ at, source, realtime }]`, real-time sources first.
+ * `closure` is null or `{ kind, reason?, source? }`. `until` is when the reading ends if no new answer arrives.
+ * - "listed": a day the schedule lists (`reason`, its name).
+ * - "noTrades": a day without trades, inferred (`source`, the source whose answer counts).
+ * - "nightRemoved": a night removed by a listed day.
  * - "nightNoTrades": a night without trades after a day that traded, inferred (`source` as above).
- * `listed(day)` gives the schedule's reason or null; `seen(market, open)` the observation of that market's session that
- * opened at `open`, or undefined: `{ traded, newest, answers }`, whether a trade came at or after the open, the newest
- * trade time the answers carried, and each source's latest answer since the open, `[{ at, source, realtime }]`, in the
- * order that names a closure (real-time sources first). The first matching row, T being today in Taipei:
- * 1. a stock on a listed T: listed;
- * 2. a stock from 09:00 on a weekday T, its session quiet (quietSince) and T not traded (the veto: dayTraded, so a
- *    futures trade since 08:45 T, the night's answers' included): noTrades;
- * 3–5. a future from 00:00 to 05:00: after a T-1 that is not a weekday, listed on a listed T, else none; after a
- *    listed T-1 (its night removed), listed on a listed T, else nightRemoved; after an unlisted weekday, only with
- *    the night of T-1 quiet: listed on a listed T, else the night's reading of T-1 (below);
- * 6. a future from 05:00 on a listed T: listed;
- * 7. a future from 08:45 to 15:00 on a weekday T, its day session quiet and no stock traded since 09:00 T: noTrades;
- * 8. a future from 15:00 on a weekday T, its night session quiet: the night's reading of T;
- * 8b. else, until the night's deadline (its open + INFER_REALTIME_MS: only real-time sources price futures) and while
- *    T has not traded, its day session's reading carries on: noTrades (after it, a night source that went quiet
- *    leaves the existing reading); the reading ends at that cap (15:10:00) with no night answer at all;
- * 9. otherwise none.
- * Each reading's end: a stock's, its listed day's included, the next 00:00 (it lasts the Taipei day); a future's listed
- * day's, 05:00 the next day (the night it removes, which the 00:00 row reads as closed: nightRemoved, or listed again
- * on a listed T+1); a future's read before 05:00, 05:00 (the night's end); its day's (7, 8b), the cap at 15:10; its
- * night's from 15:10 (8), the next 05:00.
- * A night's reading of day D: after a day that traded (its day session, the night's newest trade since 08:45 D, or a
- * stock since 09:00 D), the night is closed and says it has no trades yet (nightNoTrades); after a day without trades,
- * the whole day has none (noTrades).
+ *
+ * The first matching row wins; T is today in Taipei.
+ * 1. A stock on a listed T: listed.
+ * 2. A stock from 09:00 on a weekday T, its session quiet (quietSince) and T not traded (dayTraded, which also counts
+ *    futures trades since 08:45 T, the night's answers included): noTrades.
+ * 3. A future from 00:00 to 05:00 after a T-1 that is not a weekday: listed on a listed T, else none.
+ * 4. The same after an unlisted weekday T-1, once the night of T-1 is quiet: listed on a listed T, else the night's
+ *    reading of T-1.
+ * 5. The same after a listed T-1, whose night is removed: listed on a listed T, else nightRemoved.
+ * 6. A future from 05:00 on a listed T: listed.
+ * 7. A future from 08:45 to 15:00 on a weekday T, its day session quiet and no stock traded since 09:00 T: noTrades.
+ * 8. A future from 15:00 on a weekday T, its night session quiet: the night's reading of T.
+ * 8b. Otherwise, before the cap and while T has not traded, the day session's reading carries on: noTrades. The cap
+ *    (15:10) is the night's deadline, its open + INFER_REALTIME_MS, as only real-time sources price futures. With no
+ *    night answer at all the reading ends at the cap; a night source that went quiet leaves the reading as it is.
+ * 9. Otherwise none.
+ *
+ * When each reading ends:
+ * - a stock's, a listed day included: the next 00:00;
+ * - a future's listed day: 05:00 the next day, when the night it removes ends;
+ * - a future's before 05:00 (3–5): 05:00;
+ * - a future's day reading (7, 8b): the cap;
+ * - a future's night reading (8, from 15:10 on): the next 05:00.
+ *
+ * A night's reading of day D: if D traded (its day session, the night's newest trade since 08:45 D, or a stock since
+ * 09:00 D), the night has no trades yet (nightNoTrades). Otherwise the whole day has none (noTrades).
  */
 function closureRule(market, now, open, listed, seen) {
   const today = taipeiDay(now);
   const before = today - 1;
   const minute = taipeiMinute(now);
   const reason = listed(today);
-  // The source that says the session of `market` that opened at `start` has no trade, or null: the first answer that is
-  // recent (INFER_RECENT_MS) at its deadline while `now` is at or past it.
+  // The source that says the session of `market` opened at `start` has no trade, or null: the first answer still
+  // recent at its deadline (INFER_RECENT_MS), once `now` is past that deadline.
   const quietSince = (start) =>
     quietAnswers(seen(market, start)).find(({ at, realtime }) => {
       const deadline = start + INFER_DEADLINES.get(realtime);
@@ -138,17 +143,16 @@ function closureRule(market, now, open, listed, seen) {
     tradedSince("future", dayOpen(day)) ||
     seen("future", taipeiAt(day, NIGHT_SESSION.from))?.newest >= dayOpen(day) ||
     tradedSince("stock", taipeiAt(day, TWSE_HOURS.from));
-  // Where each row's reading ends (see above); the cap is the night's deadline (its open + INFER_REALTIME_MS: only
-  // real-time sources price futures).
+  // Where each row's reading ends (see above).
   const midnight = nextTaipeiMidnight(now);
   const nightEnd = taipeiAt(today, NIGHT_END_MIN);
-  // A future's listed mark outlasts the day: the night that runs from 15:00 on T to 05:00 on T+1 is removed too.
+  // A future's listed mark outlasts the day: the night from 15:00 on T to 05:00 on T+1 is removed too.
   const listedEnd = market === "future" ? taipeiAt(today + 1, NIGHT_END_MIN) : midnight;
   const cap = taipeiAt(today, NIGHT_SESSION.from) + INFER_REALTIME_MS;
   const ruled = (closure, until) => ({ closure, until: closure ? until : null });
   const noTrades = (source) => ({ kind: "noTrades", source });
   const nightReading = (day, source) => (dayTraded(day) ? { kind: "nightNoTrades", source } : noTrades(source));
-  // From 00:00 to 05:00, the night of an unlisted weekday T-1 runs on: until it reads quiet, not even a listed T
+  // From 00:00 to 05:00, the night of an unlisted weekday T-1 runs on. Until it reads quiet, not even a listed T
   // closes it.
   const runningNight = market === "future" && minute < NIGHT_END_MIN && isWeekday(before) && !listed(before);
   const nightSource = runningNight ? quietSince(open) : null;

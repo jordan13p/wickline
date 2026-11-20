@@ -1,5 +1,5 @@
-// How a quote is written and drawn as text and numbers, by hand: Herdr's QuickJS runtime has no Intl.
-// No Herdr imports, so tests run it under Node.
+// How a quote is written as text: prices, changes, sizes, dates, times and row labels.
+// By hand, as Herdr's QuickJS runtime has no Intl.
 import { isCryptoPair, timedByTrade } from "./quotes.js";
 import { nextTaipeiMidnight, taipeiDay } from "./calendar.js";
 import { resolvedMarket } from "./markets.js";
@@ -16,6 +16,7 @@ function significant(price) {
   return text;
 }
 
+/** A price grouped, 2 decimals from 1 up, with its currency when known: `1,234.50 USD`, `0.00000441`. */
 export function formatPrice(quote) {
   const [whole, fraction] = (quote.price < 1 ? significant(quote.price) : quote.price.toFixed(2)).split(".");
   const price = group(whole) + (fraction === undefined ? "" : `.${fraction}`);
@@ -29,7 +30,7 @@ export function bandCurrency(quote) {
     : quote.currency;
 }
 
-// `value` (the price by default) without its currency, for a fixed right-aligned column.
+/** `value` (the price by default) without its currency, for a fixed right-aligned column; "—" without one. */
 export function number(quote, value = quote.price) {
   return typeof value === "number" && value > 0 ? formatPrice({ ...quote, price: value, currency: null }) : "—";
 }
@@ -37,9 +38,11 @@ export function number(quote, value = quote.price) {
 // The sign follows the rounded text, so a change too small to show reads `0.00`, never `+0.00` or `-0.00`.
 const withSign = (value, size) => (/[1-9]/.test(size) ? `${value >= 0 ? "+" : "-"}${size}` : size);
 
-// The day's change in the price's own units and precision: `+3.58`, `-1,234.56`; below 1, the price's
-// significant digits (`+0.00000012`). From 1 up it is 2 decimals like the price, so float noise in a
-// source's price (227.52000427 against 227.52) reads `0.00`, never `+0.000004272`.
+/**
+ * The day's change in the price's own units and precision: `+3.58`, `-1,234.56`, and below 1 the price's significant
+ * digits (`+0.00000012`). From 1 up it has 2 decimals like the price, so float noise in a source's price
+ * (227.52000427 against 227.52) reads `0.00`.
+ */
 export function signed(quote) {
   if (!(quote.previousClose > 0)) return "—";
   const change = quote.price - quote.previousClose;
@@ -49,11 +52,12 @@ export function signed(quote) {
   return withSign(change, `${group(whole)}.${fraction}`);
 }
 
+/** A change % with its sign and 2 decimals: `+2.76%`; "—" without one. */
 export function formatChange(value) {
   return value === null || value === undefined ? "—" : `${withSign(value, Math.abs(value).toFixed(2))}%`;
 }
 
-/** A change % that reads `0.00%`: neither a gain nor a loss, whatever its sign before rounding. */
+/** Whether a change % reads `0.00%`: neither a gain nor a loss, whatever its sign before rounding. */
 export const isFlat = (percent) => formatChange(percent) === "0.00%";
 
 /** How a change % is colored: "none" without one, "flat" when it reads `0.00%`, else "up" or "down". */
@@ -114,9 +118,11 @@ const COMPACT_UNITS = {
 };
 
 /**
- * A large number in its language's units: English `48.2M` (`places` decimals, the unit inline, so `unit` is ""), the
- * others `4,821.35` with `萬`/`万`/`만` or `億`/`亿`/`억` as `unit`, always 2 decimals. Below 1,000 (English) or 10,000
- * it is a plain count. A value that rounds up to 1,000 (English) or 10,000 of its unit moves up one unit.
+ * A large number in its language's units, as `{ value, unit }`.
+ * - English: `48.2M`, with `places` decimals and the unit inline (`unit` is "").
+ * - Other languages: `4,821.35` with `萬`/`万`/`만` or `億`/`亿`/`억` as `unit`, always 2 decimals.
+ * Below one unit (1,000 in English, else 10,000) it is a plain count. A value that rounds up to a full step of its
+ * unit moves up one unit.
  */
 export function compact(n, lang, places = 1) {
   const rule = COMPACT_UNITS[lang] ?? COMPACT_UNITS.en;
@@ -133,13 +139,14 @@ export function compact(n, lang, places = 1) {
   return inline ? { value: value + name, unit: "" } : { value, unit: name };
 }
 
-// A base asset's amount from here up is compact: below it, a pair's volume keeps its decimals (`1,234.5 BTC`).
+// A base asset's amount from here up is compact; below it, a pair's volume keeps its decimals (`1,234.5 BTC`).
 const AMOUNT_COMPACT_FROM = 1e6;
 
 /**
- * A size with its unit as `{ value, unit }`: lots and contracts as counts in the language's own unit (singular for 1),
- * shares compact, anything else a base asset's amount with its code, compact from AMOUNT_COMPACT_FROM (`1.0B DOGE`,
- * `10.12 億 DOGE`).
+ * A size with its unit, as `{ value, unit }`.
+ * - Lots and contracts: a count in the language's own unit (singular for 1).
+ * - Shares: compact.
+ * - Anything else: a base asset's amount with its code, compact from AMOUNT_COMPACT_FROM (`1.0B DOGE`, `10.12 億 DOGE`).
  */
 export function formatSize(n, sizeUnit, lang, tx) {
   if (sizeUnit === "lot" || sizeUnit === "contract") {
@@ -162,17 +169,18 @@ export function formatSignedCount(n) {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// The local calendar date of a time in ms as a comparable day key (year·10000 + month·100 + date).
+// The local calendar date of a time in ms, as a comparable day key.
 function localDate(ms) {
   const date = new Date(ms);
   return date.getFullYear() * 10000 + date.getMonth() * 100 + date.getDate();
 }
 
 /**
- * The row's and the detail's failure note for `quote` after `error` (its Yahoo Finance or sole source's reason): null
- * without an error; the string key for what is cached, the price first ("quote.cached"), else the line
- * ("quote.chartCached"); null when the line shown is the price source's own (the failure touches nothing shown); else
- * "reason", the reason alone, so a row priced by another source without its Yahoo Finance quote never loses why.
+ * The failure note the row and the detail show for `quote` after `error` (from Yahoo Finance or the sole source).
+ * - null without an error;
+ * - "quote.cached" when the price is cached, else "quote.chartCached" when the line is;
+ * - null when the line shown is the price source's own, as the failure touches nothing shown;
+ * - else "reason": the reason alone, so a row priced by another source never loses why Yahoo Finance failed.
  */
 export function failureNote(quote, error) {
   if (!error) return null;
@@ -182,8 +190,8 @@ export function failureNote(quote, error) {
 }
 
 /**
- * A quote from an earlier day than `now`'s, by its own day (dayFor), gets its date, so a closed market never reads as
- * today's: "Oct 31" in English, "10/31" in the other languages.
+ * The date of a quote from an earlier day than `now`'s (by dayFor), else "". A closed market then never reads as
+ * today's.
  */
 export function formatStaleDate(quote, now, lang = "en") {
   const day = dayFor(quote);
@@ -191,18 +199,17 @@ export function formatStaleDate(quote, now, lang = "en") {
 }
 
 /**
- * The day function a quote's "is it today" uses: taipeiDay for a Taiwan quote (resolvedMarket(symbol, exchange)
- * === "tw": stocks, futures, TAI/TWO/TFE indices), else the local date. The date and time still print in local time.
+ * The day function that decides whether a quote is today's: taipeiDay for a Taiwan quote (stocks, futures and
+ * TAI/TWO/TFE indices), else the local date. The date and time still print in local time.
  */
 export function dayFor(quote) {
   return resolvedMarket(quote.symbol, quote.exchange) === "tw" ? taipeiDay : localDate;
 }
 
 /**
- * The next moment after `now` at which a row's day (dayFor) turns, in ms: Taipei midnight for a Taiwan quote, else the
- * next local midnight. A turn that lands early (at or before `now`, or still on `now`'s date) steps on by the hour
- * until the date has turned. That is defense for a runtime whose Date resolves a midnight that way (QuickJS); no
- * tested case enters it.
+ * The next moment after `now` at which a row's day (dayFor) turns: Taipei midnight for a Taiwan quote, else the next
+ * local midnight. A turn that lands early (at or before `now`, or still on `now`'s date) steps on by the hour until
+ * the date has turned, in case a runtime's Date resolves a midnight that way.
  */
 export function nextDayTurn(quote, now) {
   const day = dayFor(quote);
@@ -216,10 +223,9 @@ export function nextDayTurn(quote, now) {
 }
 
 /**
- * The date the detail writes under its chart's left end, like the start of a time axis: its first point's local date
- * ("Nov 19" in English, "11/19" in the other languages), for every timed line, so the layout holds still from the
- * open and a line across midnight (a US index) reads from its start. "" when the line has fewer than two points or
- * not exactly one time per point, since its first point's day is then not known.
+ * The date the detail writes under its chart's left end, like the start of a time axis: the first point's local date.
+ * Every timed line gets it, so the layout holds still from the open and a line across midnight reads from its start.
+ * "" when the line has fewer than two points or not one time per point, since the first point's day is not known.
  */
 export function lineDate(quote, lang) {
   const series = Array.isArray(quote.series) ? quote.series : [];
@@ -234,10 +240,9 @@ export function formatDate(timestamp, lang = "en") {
 }
 
 /**
- * What a row shows as its freshness label and its name, so nothing on the row says the same thing
- * twice: a name that only repeats the ticker is left out. A pair has no instrument name (its "name" is
- * the venue), so it never gets one of its own. The label always stays whole, also beside a name that
- * begins with it ("Live" beside "Live Nation Entertainment"). `name` is "" when there is none to show.
+ * A row's freshness label and name, so nothing on the row says the same thing twice. `name` is "" when it only
+ * repeats the ticker, and for a pair, whose "name" is the venue. The label always stays whole, even beside a name
+ * that begins with it ("Live" beside "Live Nation Entertainment").
  */
 export function rowName(symbol, label, name) {
   const named = name && name !== symbol && !isCryptoPair(symbol) ? name : "";
@@ -261,13 +266,12 @@ export function formatTime(timestamp, seconds = false) {
   return seconds ? `${time}:${two(date.getSeconds())}` : time;
 }
 
-// A time (formatTime) after its `date` when there is one: "Oct 31 15:04", or "15:04" with "" for the date.
+/** A time after its `date` when there is one: "Oct 31 15:04", or "15:04" with "" for the date. */
 export const stamp = (date, timestamp, seconds = false) => `${date ? `${date} ` : ""}${formatTime(timestamp, seconds)}`;
 
 /**
- * A real-time price's state in words, for the row and the detail dialog alike: "Live", the stop time,
- * else the session; null for an unconfirmed one, which has no word (its source names it alone).
- * `tx(key, params)` translates.
+ * A real-time price's state in words, for the row and the detail alike: "Live", the stop time, or the session.
+ * Null for an unconfirmed price, which has no word; its source names it alone. `tx(key, params)` translates.
  */
 export function stateText(fresh, tx) {
   if (fresh.state === "live") return tx("freshness.live");
@@ -277,13 +281,12 @@ export function stateText(fresh, tx) {
 }
 
 /**
- * A row's freshness label: the state for a real-time price ("Live"), its source only while unconfirmed,
- * the stop time, the delay, or the session when it is not trading. Closed, and a listed closed day ("holiday"),
- * carry the last trade's time, with its date when not today; a day without trades ("noTrades") always with its date,
- * so an inference never hides how old its price is. A price not timed by a trade (timedByTrade) gives any of the three
- * no time, since its time is no trade, but still its date when it is from an earlier day (formatStaleDate), so a feed
- * stuck since then never hides its age.
- * `tx(key, params)` translates.
+ * A row's freshness label: the state for a real-time price ("Live"), its source while unconfirmed, the stop time,
+ * the delay, or the session when it is not trading. `tx(key, params)` translates.
+ * - "closed" and "holiday" carry the last trade's time, with its date when not today.
+ * - "noTrades" always carries the date, so an inference never hides how old its price is.
+ * - A price not timed by a trade (timedByTrade) gets no time in these three, only its date when it is from an earlier
+ *   day, so a feed stuck since then never hides its age.
  */
 export function freshnessLabel(quote, fresh, now, lang, tx) {
   switch (fresh.state) {
@@ -308,7 +311,7 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
   }
 }
 
-/** A row with no price whose fetch failed: it will not price soon, so it gives up its empty lines. */
+/** Whether a row has no price and its fetch failed; it will not price soon, so it gives up its empty lines. */
 export function collapsedRow(row) {
   return !row.quote && Boolean(row.failed);
 }

@@ -1,13 +1,17 @@
-// Which market a symbol trades on (from its form, or for an index from the exchange its source reports), the
-// exchanges' hours, Yahoo Finance's delays per exchange and the market order of the filters. No Herdr imports.
+// Which market a symbol trades on, the exchanges' hours, Yahoo Finance's delay per exchange, and the order of the
+// market filters.
 import { isCryptoPair, isFutureForm } from "./quotes.js";
 
 // Yahoo exchange suffixes.
 const SUFFIXES = { TW: "tw", TWO: "tw", HK: "hk", SS: "cn", SZ: "cn", T: "jp", KS: "kr", KQ: "kr" };
 
 /**
- * "pair", "index" (a leading ^), "future" (letters then & or @: a TAIFEX code at Yahoo 奇摩股市), "other" (has =: a
- * currency or a Yahoo future such as ES=F) or "stock".
+ * A symbol's kind, by its form:
+ * - "pair": a Binance pair (BTC/USDT)
+ * - "index": a leading ^
+ * - "future": a TAIFEX code as Yahoo 奇摩股市 writes it (WTX&)
+ * - "other": has =, a currency or a Yahoo future (ES=F)
+ * - "stock": anything else
  */
 export function kindOf(symbol) {
   if (isCryptoPair(symbol)) return "pair";
@@ -17,8 +21,8 @@ export function kindOf(symbol) {
 }
 
 /**
- * "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other" (indices, currencies, other exchanges), by form alone. A
- * future is TAIFEX's: "tw".
+ * A symbol's market by its form alone: "us", "tw", "hk", "cn", "jp", "kr", "crypto" or "other". Indices, currencies
+ * and other exchanges are "other"; a future is TAIFEX's, "tw".
  */
 export function marketOf(symbol) {
   const kind = kindOf(symbol);
@@ -30,7 +34,7 @@ export function marketOf(symbol) {
   return SUFFIXES[symbol.slice(dot + 1)] ?? "other";
 }
 
-/** An index of Taiwan form (^TW…): Yahoo 奇摩股市 may know one that Yahoo Finance does not. */
+/** Whether an index has Taiwan's form (^TW…); Yahoo 奇摩股市 may know one that Yahoo Finance does not. */
 export const isTaiwanForm = (symbol) => symbol.startsWith("^TW");
 
 // The exchanges a source reports (Yahoo's exchangeName, Yahoo 奇摩股市's exchange) whose market is known.
@@ -51,8 +55,8 @@ const EXCHANGE_MARKET = Object.fromEntries(
 export const exchangeMarket = (exchange) => EXCHANGE_MARKET[exchange] ?? null;
 
 /**
- * A symbol's market: its form's, except an index, which takes its source's reported `exchange` (other until
- * one is reported, or when it is not in the table). A currency or a Yahoo future (=) stays other.
+ * A symbol's market. An index takes the market of the `exchange` its source reports, and is "other" until then or
+ * when the exchange is not in the table. Every other symbol takes its form's market.
  */
 export function resolvedMarket(symbol, exchange) {
   return symbol.startsWith("^") ? (exchangeMarket(exchange) ?? "other") : marketOf(symbol);
@@ -63,8 +67,8 @@ const TOKYO_LUNCH = { offsetMin: 540, from: 690, to: 750 };
 const HONG_KONG_LUNCH = { offsetMin: 480, from: 720, to: 780 };
 const CHINA_LUNCH = { offsetMin: 480, from: 690, to: 780 };
 
-// TAIFEX's published hours (Taipei, +8 h, no DST), in minutes since midnight; each session opens Monday to
-// Friday (Sunday 0). The night session runs past midnight into the next day. Holidays follow the data only.
+// TAIFEX's published hours in Taipei minutes since midnight, Monday to Friday (Sunday 0). The night session runs
+// past midnight into the next day. Holidays are known only from the data.
 export const TAIFEX_HOURS = Object.freeze({
   offsetMin: 480,
   weekdays: [1, 2, 3, 4, 5],
@@ -76,48 +80,51 @@ export const TAIFEX_HOURS = Object.freeze({
 export const DAY_SESSION = TAIFEX_HOURS.sessions[0];
 export const NIGHT_SESSION = TAIFEX_HOURS.sessions[1];
 
-/** Whether a source polls at its fast pace in `session` (Watchlist#sessionFor's): open, a call auction, or not yet known. */
+/** Whether a source polls at its fast pace in `session` (from Watchlist#sessionFor): open, auction or unknown. */
 export const fastPace = (session) => session === "open" || session === "auction" || session === "unknown";
 
-// Regular hours used only for a Taiwan or US quote with no trading periods yet; exchange-local minutes.
-export const TWSE_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], from: 540, to: 810 }); // 09:00–13:30 Taipei, TWSE and TPEx
+// Regular hours, in exchange-local minutes, used only for a Taiwan or US quote with no trading periods yet.
+// TWSE and TPEx: 09:00–13:30 Taipei.
+export const TWSE_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], from: 540, to: 810 });
 export const US_HOURS = Object.freeze({ weekdays: [1, 2, 3, 4, 5], from: 570, to: 960 }); // 09:30–16:00 New York
 
 const LIVE = { realtime: true, delayS: null };
 const late = (delayS, lunch = null) => ({ delayS, lunch });
 
 // How Yahoo Finance serves each exchange it reports. Closed on purpose: any other code reads as a delay not
-// provided, never a guess. It mixes Yahoo's facts (realtime, delayS) with the exchange's own (lunch, fx), and
-// stays here rather than in a provider, since the view reads both together.
+// provided, never a guess. It mixes Yahoo's facts (realtime, delayS) with the exchange's own (lunch, fx), and stays
+// here rather than in a provider because the view reads both together.
+// Most delays were measured against live quotes and win over Yahoo's help pages where they differ; WCB follows the
+// help pages and CBT follows CME.
 const RULES = {
   NMS: LIVE,
   NYQ: LIVE,
-  PCX: LIVE, // measured 2026-11-09, lag 1–16 s
+  PCX: LIVE,
   NGM: LIVE,
   NCM: LIVE,
   ASE: LIVE,
-  BTS: LIVE, // measured 2026-11-10 in a US session: NGM, NCM, ASE and BTS real time (0–34 s)
+  BTS: LIVE,
   SNP: LIVE,
   DJI: LIVE,
-  NIM: LIVE, // measured 2026-11-09
-  CCY: { ...LIVE, fx: true }, // measured 2026-11-10, lag 2–31 s; indicative quotes
+  NIM: LIVE,
+  CCY: { ...LIVE, fx: true }, // indicative quotes
   TAI: late(1200),
-  TWO: late(1200), // measured 2026-11-10, 1198–1220 s
+  TWO: late(1200),
   KSC: late(1200),
-  KOE: late(1200), // measured 2026-11-10, 1197–1210 s
+  KOE: late(1200),
   JPX: late(900, TOKYO_LUNCH),
-  OSA: late(900, TOKYO_LUNCH), // measured 2026-11-10 (899–901 s, after lunch); Yahoo help says 20
-  HKG: late(900, HONG_KONG_LUNCH), // measured 2026-11-10, 896–907 s
+  OSA: late(900, TOKYO_LUNCH),
+  HKG: late(900, HONG_KONG_LUNCH),
   SHH: late(900, CHINA_LUNCH),
-  SHZ: late(900, CHINA_LUNCH), // measured 2026-11-10, 898–901 s (help says 30)
-  CXI: late(1200), // measured 2026-11-09, 1117 s (over 15 min)
+  SHZ: late(900, CHINA_LUNCH),
+  CXI: late(1200),
   PNK: late(900),
   NYS: late(900),
-  WCB: late(900), // Yahoo help (SLN2310)
+  WCB: late(900),
   CME: { ...late(600), futures: true },
   NYM: { ...late(600), futures: true },
-  CMX: { ...late(600), futures: true }, // measured 2026-11-10, 592–611 s
-  CBT: { ...late(600), futures: true }, // CME Group, as CME; not measured
+  CMX: { ...late(600), futures: true },
+  CBT: { ...late(600), futures: true },
 };
 
 // Every rule in full, built once and shared by every caller, so frozen.
@@ -126,14 +133,14 @@ const FULL = new Map(Object.entries(RULES).map(([code, rule]) => [code, Object.f
 const FUTURE_BY_FORM = Object.freeze({ ...NONE, futures: true });
 const FX_BY_FORM = Object.freeze({ ...NONE, ...LIVE, fx: true });
 
-// A Taiwan stock's suffix, which keeps TAI's 20 min when Yahoo reports no exchange or one not in the table.
+// A Taiwan stock's suffix. It keeps TAI's 20 min when Yahoo reports no exchange, or one not in the table.
 const TAIWAN_SUFFIX = /\.TWO?$/;
 
 /**
- * How fresh Yahoo Finance's quotes are for `exchange`: `realtime`, else `delayS` (null: not provided), the
- * exchange's `lunch` break or null, and whether it trades `futures` or `fx`. A `.TW`/`.TWO` symbol whose
- * exchange is missing or not in the table takes TAI's rule. Only without a reported exchange does any other
- * form decide: `=F` is a future with no delay known, `=X` real-time FX.
+ * How fresh Yahoo Finance's quotes are for `exchange`: `realtime` or a `delayS` (null when not provided), the
+ * exchange's `lunch` break or null, and whether it trades `futures` or `fx`.
+ * A `.TW`/`.TWO` symbol whose exchange is missing or unknown takes TAI's rule. With no reported exchange, `=F` is a
+ * future with no known delay and `=X` is real-time FX.
  */
 export function exchangeRule(exchange, symbol) {
   const listed = exchange ? FULL.get(exchange) : undefined;
@@ -148,9 +155,8 @@ export function exchangeRule(exchange, symbol) {
 // The exchange a settings page's Yahoo fallback describes for its market.
 export const TYPICAL_EXCHANGE = { us: "NMS", tw: "TAI" };
 
-// The order of the filters, fixed per interface language so it never depends on what the list holds or how
-// it is ordered: Japanese and Korean put their own market first, both Chinese put Taiwan first, and English
-// starts with the US.
+// The order of the filters, fixed per interface language so it never depends on the list. Japanese and Korean put
+// their own market first, both Chinese put Taiwan first, and English starts with the US.
 const MARKET_ORDER = {
   en: ["us", "tw", "hk", "cn", "jp", "kr", "crypto", "other"],
   "zh-TW": ["tw", "us", "hk", "cn", "jp", "kr", "crypto", "other"],

@@ -1,5 +1,5 @@
-// The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host`
-// and each loop's `io`, so tests drive it under Node with a fake clock and network.
+// The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host` and each loop's `io`,
+// so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade, withoutActivity } from "./quotes.js";
 import { HOLIDAYS_URL, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay } from "./calendar.js";
 import { closureOf, currentOpen, twMarket, withClosure } from "./closures.js";
@@ -32,20 +32,21 @@ import {
 import { yahoo } from "./providers/yahoo.js";
 import { ownPeriods, yahootw } from "./providers/yahootw.js";
 
-// The watchlist lives in Herdr's shared state (persisted), so every copy sees one list.
+// The watchlist lives in Herdr's persisted shared state, so every copy sees one list.
 export const WATCHLIST_KEY = "wickline.watchlist.v1";
 // Herdr's fetch cannot be aborted: a request that has not answered by then counts as failed.
 export const REQUEST_TIMEOUT_MS = 10_000;
-// Started in this order, so their first requests go out in this order too. The order also sets the
-// overlay sources' priority.
+// Started in this order, so their first requests go out in this order too. The order also sets the overlay sources'
+// priority.
 const PROVIDERS = [binance, yahootw, mis, finnhub, yahoo];
-// The overlay sources in priority order (Yahoo 奇摩股市, then TWSE MIS): with several live ones for a
-// symbol, the first wins.
+// The overlay sources in priority order (Yahoo 奇摩股市, then TWSE MIS); with several live ones for a symbol, the first
+// wins.
 const OVERLAYS = PROVIDERS.filter((provider) => provider.overlay);
 const OVERLAY_ORDER = OVERLAYS.map((provider) => provider.id);
-// Overlay sources the person turns on in Settings: whether each is on now (given this watchlist, which
-// holds the key read from the secrets file), what its settings row and status line say while it is chosen but
-// cannot run, and, for a source that can refuse the key, the settings whose change lets it try again.
+// The sources the user turns on in Settings. For each:
+// - `on`: whether it runs now (the watchlist holds the key read from the secrets file);
+// - `notice`: what its settings row and status line say while it is chosen but cannot run;
+// - `retryOn`: for a source that can refuse the key, the settings whose change lets it try again.
 const SWITCHES = {
   yahootw: { on: yahootwEnabled, notice: (settings) => (yahootwReconfirm(settings) ? "yahootw.reconfirm" : null) },
   mis: { on: misEnabled, notice: (settings) => (misReconfirm(settings) ? "mis.reconfirm" : null) },
@@ -64,10 +65,9 @@ const SWITCHES = {
     retryOn: (settings) => JSON.stringify([settings.sources.us, settings.keyRev]),
   },
 };
-// A provider refreshes at the pace of its busiest symbol; a pair's "24h" counts as open, and a lunch break
-// ranks below a session not yet known but above pre/post. A listed closed day and a day without trades pace as closed
-// (sessionFor then reads "closed": its line is not asked again, and no source says it prices nothing live). A call
-// auction paces as open: the closing auction's end brings the close.
+// A provider refreshes at the pace of its busiest symbol. A pair's "24h" counts as open; a lunch break ranks below a
+// session not yet known but above pre/post. A listed closed day and a day without trades pace as closed, so the line
+// is not asked again. A call auction paces as open: the closing auction's end brings the close.
 const SESSION_RANK = {
   open: 4,
   "24h": 4,
@@ -85,13 +85,12 @@ const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadabl
 // The source is down or hung: the rest of the round would only wait out more timeouts.
 const SOURCE_DOWN = /\.(unreachable|timeout)$/;
 const TIMED_OUT = {};
-// How long a traded minute may take to show in a line after it ends, and how far a line's last traded minute may
-// end before a trade it must hold.
+// How long a traded minute may take to show in a line after it ends, and how far a line's last traded minute may end
+// before a trade it must hold.
 const LINE_LAG_MS = 120_000;
 // How many trade times a line is judged by: the newest settled one and the ones still settling (see lineFrozen).
 const LINE_TRADES = 4;
-// A provider's backoff after a rate limit: at least BACKOFF_BASE_MS, doubling for up to BACKOFF_MAX_DOUBLINGS
-// failures after the first, never over BACKOFF_MAX_MS (see backOff).
+// A provider's backoff after a rate limit (see backOff).
 const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_MAX_MS = 900_000;
 const BACKOFF_MAX_DOUBLINGS = 4;
@@ -100,12 +99,12 @@ const HOLIDAY_RETRY_MS = HOUR_MS;
 // How long a session's trade observation is kept (Watchlist#seen): a session is never open longer.
 const SEEN_KEEP_MS = 2 * DAY_MS;
 
-// The status line's note for each inferred closure (closures.js closureOf); a listed one has none.
+// The status line's note for each inferred closure; a listed one has none.
 const NOTE_CODES = { noTrades: "closure.noTradesToday", nightNoTrades: "closure.noTradesNight" };
 
 const notice = (code, params = {}) => ({ code, params });
 const coded = (error) => notice(error.code, error.params);
-// A quote-less sole-source symbol's session, read from its stand-in (see Watchlist#sessionFor), "closed" when it gives none.
+// A quote-less sole-source symbol's session, read from its stand-in (see sessionFor); "closed" when it gives none.
 const soleSession = (standIn, now) => {
   const session = sessionOf(standIn, now);
   return session === "unknown" ? "closed" : session;
@@ -118,8 +117,9 @@ function wake(state) {
   resolve?.();
 }
 
+/** The saved watchlist from any stored value; a bad entry is skipped, not the whole list. */
 export function readPreferences(value) {
-  // Nothing saved yet: a starter list, until the first edit saves the person's own.
+  // Nothing saved yet: a starter list, until the first edit saves the user's own.
   if (value === undefined || value === null) return { version: 1, symbols: [...STARTER_SYMBOLS], paused: false };
   const saved = typeof value === "object" ? value : null;
   const symbols = [];
@@ -138,85 +138,78 @@ export function readPreferences(value) {
 }
 
 /**
- * host: {
- *   load(): unknown, save(preferences): void          // the saved watchlist
- *   settings(): unknown                                // the saved settings (read only)
- *   fetch(url, headers): Promise<{ status, ok, text() }>  // GET with the request's headers; hosts in providers/
- *   loadSecret(name): Promise<string|null>             // the secrets file's value (null: no file or no key);
- *                                                      // rejects when the file cannot be read
- *   now(): number
- *   shown?(): boolean                                  // this copy is on screen (default: yes); a docked
- *                                                      // copy that is not sends nothing
- * }
- * Each loop gets its own io: { sleep(ms): Promise<void>, changed(): void } (redraw).
+ * The watchlist, its quotes and one refresh loop per provider. `host` gives:
+ * - `load()`, `save(preferences)`: the saved watchlist; `settings()`: the saved settings (read only);
+ * - `fetch(url, headers)`: a GET resolving to `{ status, ok, text() }`;
+ * - `loadSecret(name)`: the secrets file's value, null without one; rejects when the file cannot be read;
+ * - `now()`, and `shown()`: whether this copy is on screen (default yes). A copy that is not shown sends nothing.
+ * Each loop gets its own io: `{ sleep(ms), changed() }`, where `changed` asks for a redraw.
  */
 export class Watchlist {
   constructor(host) {
     this.host = host;
-    // This copy is on screen; a host without shown() always is.
+    // Whether this copy is on screen; a host without shown() always is.
     this.isShown = () => host.shown?.() ?? true;
-    // The Finnhub key as read from the secrets file for keyRev `keyRev` (null: not read yet). Only in
-    // memory: never in the config, the shared state or an error.
+    // The Finnhub key as read from the secrets file for `keyRev`, null until read. Only in memory: never in the
+    // config, the shared state or an error.
     this.finnhubKey = null;
     this.keyRev = null;
     this.keyUnreadable = false;
     this.preferences = readPreferences(host.load());
     this.configKey = JSON.stringify(this.config());
-    // By symbol: the base quote (Yahoo for stocks, Binance for pairs), and the real-time overlays over it,
-    // one per overlay source (by provider id). A symbol with a sole source (soleSource) has no base quote: its
-    // price stays in that source's overlay slot.
+    // By symbol: the base quote (Yahoo for stocks, Binance for pairs), and the real-time overlays over it by provider
+    // id. A symbol with a sole source has no base quote; its price stays in that source's overlay slot.
     this.quotes = {};
     this.overlays = {};
-    // By symbol: the time of the snapshot in which MIS last flagged it as in a call auction (decodeMis), while MIS
-    // still flags it; kept with MIS's held price, which the flag leaves in place.
+    // By symbol, while MIS flags it as in a call auction: the time of the snapshot that flagged it. Kept with MIS's
+    // held price, which the flag leaves in place.
     this.auctionAt = {};
-    // By symbol: the levels of MIS's newest flag for it (decodeMis `auctionBook`), kept and dropped with `auctionAt`;
-    // none when that flag carried none.
+    // By symbol: the levels of MIS's newest flag (decodeMis `auctionBook`), kept and dropped with `auctionAt`.
     this.auctionBooks = {};
-    // By symbol: true while MIS's latest answer for it named it with neither a price, a flag nor a level (decodeMis
-    // `noLevels`): it answered before any order, so the row's book is empty rather than unknown.
+    // By symbol: true while MIS's latest answer named it with no price, flag or level. It answered before any order,
+    // so the row's book is empty rather than unknown.
     this.noLevels = {};
-    // By symbol: `{ book, fetchedAt }`, the opening auction's book from Yahoo 奇摩股市's latest answer (decodeStockList
-    // `auctionBook`), answer by answer; rowBook shows it only inside the auction window it was fetched in.
+    // By symbol: `{ book, fetchedAt }`, the opening auction's book from Yahoo 奇摩股市's latest answer. rowBook shows
+    // it only inside the auction window it was fetched in.
     this.ytwAuctionBooks = {};
-    // By provider id, then symbol: an overlay source's own line, `{ day, series, times }` (`day`: its trading
-    // day), kept only while that source's price for the symbol is.
+    // By provider id, then symbol: an overlay source's own line, `{ day, series, times }` (`day` is its trading day).
+    // Kept only while that source's price for the symbol is.
     this.lines = {};
-    // By provider id, then symbol: the trade times seen at an overlay line's recent arrivals, oldest first, that
-    // the line is judged against (see lineFrozen). Kept through a dropped price (each is a past trade of the
-    // symbol), dropped when the symbol leaves the source. Only in memory, per copy.
+    // By provider id, then symbol: the trade times seen at an overlay line's recent arrivals, oldest first, which the
+    // line is judged against (see lineFrozen). Kept through a dropped price, as each is a past trade; dropped when the
+    // symbol leaves the source.
     this.lineTrades = {};
     // By symbol: the last name an overlay gave (its Chinese name), kept while that source fails.
     this.localNames = {};
-    // By symbol: `{ code, params }` for the view to translate; an overlay's own errors apart (by
-    // provider id), since its symbol still has the base quote.
+    // By symbol: `{ code, params }` for the view to translate. An overlay's errors are kept apart, by provider id,
+    // since its symbol still has the base quote.
     this.errors = {};
     this.overlayErrors = {};
-    // TW-only symbols: a ^TW… index Yahoo Finance answered not found, which Yahoo 奇摩股市 then prices alone
-    // while it is on (soleSource). Only in memory, so each start learns them again with one Yahoo Finance request.
+    // TW-only symbols: a ^TW… index Yahoo Finance answered not found, which Yahoo 奇摩股市 then prices alone while it
+    // is on. Only in memory, so each start learns them again with one Yahoo Finance request.
     this.twOnly = new Set();
-    // By symbol: the trading periods the last line answer gave a symbol priced by its sole source alone, which
-    // has no base quote to give them (see ownPeriods).
+    // By symbol: the trading periods the last line answer gave a sole-source symbol, which has no base quote to give
+    // them (see ownPeriods).
     this.linePeriods = {};
-    // TWSE's holiday schedule, only in memory: `days` its closed weekdays (Taipei day number → name), `day` the Taipei
-    // date of the last success, `tried` that of the last attempt, `retryAt` when a failed one may be tried again, and
-    // `pending` the fetch in flight (one per copy, shared by its loops). See loadHolidays.
+    // TWSE's holiday schedule, only in memory (see loadHolidays):
+    // - `days`: its closed weekdays, Taipei day number → name;
+    // - `day`, `tried`: the Taipei dates of the last success and the last attempt;
+    // - `retryAt`: when a failed fetch may be tried again; `pending`: the fetch in flight, shared by the loops.
     this.holidays = { days: {}, day: null, tried: null, retryAt: 0, pending: null };
-    // Per Taiwan market, by the open (ms) of a session: what this copy saw of it since that open, `{ newest, answers }`:
-    // the newest trade time any answer carried (whatever its day; the session has traded once it is at or after the
-    // open), and by source id that source's latest answer, `{ at, realtime }` (when it arrived, and whether the source
-    // is real time). Only in memory; older than SEEN_KEEP_MS is dropped on write. Written by
-    // noteTrade, read only through observed.
+    // Per Taiwan market, by a session's open (ms): what this copy saw of it since, `{ newest, answers }`.
+    // `newest` is the newest trade time any answer carried; the session has traded once it is at or after the open.
+    // `answers` holds each source's latest answer, `{ at, realtime }`. Entries older than SEEN_KEEP_MS are dropped on
+    // write. Written by noteTrade, read only through observed.
     this.seen = { stock: {}, future: {} };
-    // Each Taiwan market's reading at one `now` (closureAt), `{ now, rev, byMarket }`, and the revision of its inputs:
-    // bumped by noteTrade, a new schedule and a change of config() (which sources are on), so a read in the same ms
-    // as such a change never gets the reading from before it.
+    // Each Taiwan market's reading at one `now` (closureAt), and the revision of its inputs. The revision is bumped by
+    // noteTrade, a new schedule and a change of config(), so a read in the same ms as such a change never gets the
+    // reading from before it.
     this.closures = { now: null, rev: 0, byMarket: {} };
     this.closureRev = 0;
     this.revision = 0;
     this.stopped = false;
-    // Per provider: its backoff, its current problem, its round and its own wake-up. `lineFailures`, by
-    // symbol: the source failure of that symbol's last line request, for a provider with `linesPerRound`.
+    // Per provider: its backoff, its current problem, its round and its own wake-up.
+    // `lineFailures`: by symbol, the source failure of its last line request (a provider with `linesPerRound`).
     // `noLive`: while the market is open, why an overlay source that answers prices nothing.
     this.sources = Object.fromEntries(
       PROVIDERS.map((provider) => [
@@ -244,8 +237,8 @@ export class Watchlist {
   }
 
   /**
-   * What the providers are given: the saved addresses and budget, and which overlay sources are on.
-   * The key is added only to the requests of a round, so it never reaches `configKey`.
+   * What the providers are given: the saved addresses and budget, and which sources are on. The key is added only to
+   * a round's requests, so it never reaches `configKey`.
    */
   config() {
     const settings = readSettings(this.host.settings());
@@ -258,15 +251,14 @@ export class Watchlist {
       // Choosing Finnhub must wake its loop to read the key, also when keyRev did not change.
       usProvider: settings.sources.us.provider,
       on: Object.fromEntries(Object.entries(SWITCHES).map(([id, { on }]) => [id, on(settings, this)])),
-      // Yahoo 奇摩股市 switched on but awaiting re-confirmation: what a row it alone can price says (unpricedReason).
+      // Yahoo 奇摩股市 switched on but awaiting consent again: a row only it can price says so (unpricedReason).
       yahootwPending: yahootwReconfirm(settings),
     };
   }
 
   /**
-   * Reads the Finnhub key again when Finnhub is chosen and keyRev changed; a broken file is no key.
-   * With Finnhub not chosen no key is held, so a key removed from the file leaves memory too; choosing
-   * Finnhub again reads the file again.
+   * Reads the Finnhub key again when Finnhub is chosen and keyRev changed; a broken file is no key. With Finnhub not
+   * chosen no key is held, so a key removed from the file leaves memory too.
    */
   async loadKey(settings) {
     if (!finnhubChosen(settings)) {
@@ -292,7 +284,7 @@ export class Watchlist {
     return this.symbolsFor(finnhub);
   }
 
-  /** A listed US stock left on Yahoo because Finnhub's budget is used up by the ones before it. */
+  /** Whether a listed US stock is left on Yahoo because the ones before it use up Finnhub's budget. */
   overCap(symbol) {
     const config = this.config();
     return (
@@ -304,30 +296,29 @@ export class Watchlist {
   }
 
   /**
-   * The exchange a symbol's quote reports (Yahoo's exchangeName), else its Yahoo 奇摩股市 overlay's (a symbol
-   * with a sole source has no base quote: its own quote is in that overlay slot), or null: see resolvedMarket.
+   * The exchange a symbol's quote reports, else its Yahoo 奇摩股市 overlay's (a sole-source symbol's own quote is in
+   * that slot), else null.
    */
   exchangeOf(symbol) {
     return this.quotes[symbol]?.exchange ?? this.overlays[symbol]?.[yahootw.id]?.exchange ?? null;
   }
 
-  /** A symbol's market: an index's from the exchange its quote reports (see exchangeOf, resolvedMarket). */
+  /** A symbol's market; an index's comes from the exchange its quote reports. */
   marketFor(symbol) {
     return resolvedMarket(symbol, this.exchangeOf(symbol));
   }
 
   /**
-   * An index still waiting for its first quote: no quote, overlay or error yet, so its market is unknown. One
-   * priced without an exchange, or one that failed, is not waiting.
+   * Whether an index is still waiting for its first quote, with no quote, overlay or error yet, so its market is
+   * unknown.
    */
   pendingIndex(symbol) {
     return kindOf(symbol) === "index" && !this.quotes[symbol] && !this.overlays[symbol] && !this.errors[symbol];
   }
 
   /**
-   * What a row shows: its base quote (unmarkedBase) with its overlay, if any, then its closure (marked, once). A
-   * symbol with a sole source shows its own quote over itself: the name, currency and periods are its own, and the
-   * line only its own.
+   * What a row shows: its base quote with its overlay, if any, then its closure (marked, once). A sole-source symbol
+   * shows its own quote over itself, so the name, currency, periods and line are all its own.
    */
   shown(symbol, now = this.host.now()) {
     const pick = this.pick(symbol, now);
@@ -337,11 +328,9 @@ export class Watchlist {
   }
 
   /**
-   * What the detail dialog opens on and is handed (main.js handOver), all read at one `now`, or null without a quote: the
-   * row as shown (a Taiwan row with its mark's end, `closureUntil`, by marked: the open detail fetches nothing and must
-   * drop a mark that is over), without its next deadline (`closureDeadline`: the detail gets no answers of its own, so no
-   * inference lands there, and `closureUntil` alone ends the mark), its error (`error`) and its overlay's (`fallback`,
-   * overlayError).
+   * What the detail dialog opens on and is handed, all read at one `now`, or null without a quote: the row as shown,
+   * with its `error` and its overlay's (`fallback`). It drops `closureDeadline`: the detail gets no answers of its
+   * own, so `closureUntil` alone ends its mark.
    */
   detailQuote(symbol, now) {
     const quote = this.shown(symbol, now);
@@ -351,7 +340,7 @@ export class Watchlist {
   }
 
   /**
-   * The source that prices `symbol` alone (Yahoo 奇摩股市 for a TW-only symbol or a future while it is on), else null.
+   * The source that prices `symbol` alone, else null: Yahoo 奇摩股市, for a TW-only symbol or a future while it is on.
    * `config` is read only for such a symbol, since this is asked for every row.
    */
   soleSource(symbol, config) {
@@ -360,9 +349,9 @@ export class Watchlist {
   }
 
   /**
-   * Why a symbol only Yahoo 奇摩股市 can price has no price while it is off (`config`: config()). Awaiting
-   * re-confirmation, either kind says so. Otherwise a future says the source must be turned on; a TW-only index
-   * says what Yahoo Finance last said: not found.
+   * Why a symbol only Yahoo 奇摩股市 can price has no price while it is off. While consent is awaited again, it says
+   * so. Otherwise a future says the source must be turned on, and a TW-only index says what Yahoo Finance said: not
+   * found.
    */
   unpricedReason(symbol, config) {
     if (config.yahootwPending) return notice("yahootw.reconfirm");
@@ -375,10 +364,9 @@ export class Watchlist {
   }
 
   /**
-   * What a row is built on, before its closure: shown() marks the row once, after its overlay. With a sole source:
-   * that source's own quote, read by the trading periods ownPeriods gives it. Otherwise the base quote. Either one,
-   * kept through a failure or a missing row, is marked `cached`, so freshness ages it to now, never by its last good
-   * fetch.
+   * What a row is built on, before its closure: the base quote, or a sole source's own quote with the periods
+   * ownPeriods gives it. Kept through a failure, it is marked `cached`, so freshness ages it to now rather than to its
+   * last good fetch.
    */
   unmarkedBase(symbol, now) {
     const sole = this.soleSource(symbol);
@@ -390,13 +378,13 @@ export class Watchlist {
   }
 
   /**
-   * `quote` (none: none) with, for a Taiwan symbol, its market's closure at `now` as `closure`, its next deadline as
-   * `closureDeadline` and its mark's end as `closureUntil` (closureAt, by closures.js withClosure; freshness.js
-   * nextEdge wakes the row at the deadline); for a Taiwan stock, `twRealtime: true` while MIS or Yahoo 奇摩股市 is on,
-   * and MIS's flagged snapshot as `auctionAt` while the quote's price traded before it (`tradeTime`, else its time):
-   * the one place a quote gets them, so whatever reads a row (its session, label, cadence and edges) reads the same
-   * closure and call auction. A Taiwan stock priced by Yahoo Finance while a real-time source is on loses its
-   * activity, so a 20-minute-late volume never stands beside a real-time price. Its book is then rowBook's.
+   * `quote` with a Taiwan symbol's marks. This is the one place a quote gets them, so whatever reads a row (its
+   * session, label, cadence and edges) reads the same closure and call auction.
+   * - `closure`, `closureDeadline` and `closureUntil`: its market's reading at `now` (closureAt).
+   * - `twRealtime: true`, for a stock while MIS or Yahoo 奇摩股市 is on.
+   * - `auctionAt`: MIS's flagged snapshot, while the quote's price traded before it.
+   * - The book from rowBook. A stock priced by Yahoo Finance while a real-time source is on loses its activity, so a
+   *   20-minute-late volume never stands beside a real-time price.
    */
   marked(symbol, quote, now) {
     if (!quote || this.marketFor(symbol) !== "tw") return quote;
@@ -413,13 +401,13 @@ export class Watchlist {
   }
 
   /**
-   * The book a Taiwan row shows (see marked), its price and activity untouched, or null: while MIS's flag holds the
-   * price (`held`) and that flag carried levels, its auction book; else the quote's own. A Taiwan stock's book from
-   * Yahoo 奇摩股市 fetched inside a call auction (auctionWindowStart) is that auction's: marked `auction: true` while
-   * `now` is still in the same window and the quote traded on the fetch's Taipei day, and none otherwise, so it never
-   * shows as the market's book, as another auction's, nor as an earlier day's last book. Before those, Yahoo 奇摩股市's
-   * opening-auction book (ytwAuctionBooks) while `now` is in the window it was fetched in. Without a book, an empty one
-   * while MIS's latest answer had no level (`noLevels`).
+   * The book a Taiwan row shows, or null, first match wins:
+   * 1. MIS's auction book, while MIS's flag holds the price (`held`) and that flag carried levels;
+   * 2. Yahoo 奇摩股市's opening-auction book, while `now` is in the window it was fetched in;
+   * 3. the quote's own book. A Yahoo 奇摩股市 stock book fetched inside a call auction is that auction's: marked
+   *    `auction: true` while `now` is in the same window and the quote traded that day, else none. It never shows as
+   *    the market's book, another auction's, or an earlier day's;
+   * 4. an empty book while MIS's latest answer had no level.
    */
   rowBook(symbol, quote, held, now) {
     if (held && this.auctionBooks[symbol]) return this.auctionBooks[symbol];
@@ -439,10 +427,8 @@ export class Watchlist {
   }
 
   /**
-   * A Taiwan `market`'s reading at `now`, `{ closure, deadline, until, twRealtime }` (closures.js closureOf), from the
-   * schedule held and the answers seen, with the sources on read once (config().on): `twRealtime`, whether MIS or Yahoo
-   * 奇摩股市 is on. Every row of a market reads the same, so it is worked out once per market and `now`, until closureRev
-   * moves.
+   * A Taiwan `market`'s reading at `now` (closureOf), plus `twRealtime`: whether MIS or Yahoo 奇摩股市 is on. Every
+   * row of a market reads the same, so it is worked out once per market and `now`, until closureRev moves.
    */
   closureAt(market, now) {
     if (this.closures.now !== now || this.closures.rev !== this.closureRev) {
@@ -463,10 +449,9 @@ export class Watchlist {
   }
 
   /**
-   * The observation of `market`'s session opened at `open` as closureOf reads it, or undefined without one:
-   * `{ traded, newest, answers }`, `answers` each source's latest answer as `{ at, source, realtime }`, real-time
-   * sources first and each kind in PROVIDERS order (the order that names a closure), leaving out an overlay source that
-   * is off now (`on`: config().on), so its answers stop counting the moment it is turned off.
+   * The observation of `market`'s session opened at `open`, as closureOf reads it, or undefined without one. Answers
+   * are ordered real-time first, then by PROVIDERS. An overlay source that is off now is left out, so its answers stop
+   * counting the moment it is turned off.
    */
   observed(market, open, on) {
     const entry = this.seen[market][open];
@@ -479,9 +464,8 @@ export class Watchlist {
   }
 
   /**
-   * The status line's no-trades notes at `now`: for each Taiwan market the list holds whose closure (closureOf) is an
-   * inferred one, `{ code, params: { source } }` by NOTE_CODES; one per code and source. Kept apart from problems():
-   * the settings' health shows only those, since a source that answers is working.
+   * The status line's no-trades notes at `now`: one per inferred closure of a listed Taiwan market, by code and
+   * source. Kept apart from problems(), which the settings' health shows, since a source that answers is working.
    */
   notes(now = this.host.now()) {
     const markets = new Set(this.preferences.symbols.filter((symbol) => this.marketFor(symbol) === "tw").map(twMarket));
@@ -503,10 +487,9 @@ export class Watchlist {
   }
 
   /**
-   * Notes an answer arriving at `now` in a Taiwan `market` that carries a trade at `tradeTime`, on the session `now`
-   * belongs to (currentOpen): its newest trade is kept (a time that is not a number is none), and so is the answer's
-   * arrival for its source (`answer`: `{ source: providerId, realtime }`), which closureOf reads to tell a session
-   * without trades (see closures.js INFER_RECENT_MS).
+   * Notes an answer arriving at `now` in a Taiwan `market`, on the session `now` belongs to. Keeps the newest trade
+   * time (a time that is not a number is none) and the answer's arrival for its source, `{ source, realtime }`, which
+   * closureOf reads to tell a session without trades.
    */
   noteTrade(market, tradeTime, answer, now) {
     const open = currentOpen(market, now);
@@ -520,12 +503,13 @@ export class Watchlist {
   }
 
   /**
-   * Fetches TWSE's holiday schedule when due: not yet fetched this Taipei date, and past `retryAt`. One GET of
-   * HOLIDAYS_URL at a time per copy (`pending`, shared by every loop), raced against REQUEST_TIMEOUT_MS. Only the
-   * first attempt of a Taipei date is waited for, so it holds a Taiwan round by the timeout at most; a retry runs
-   * beside the rounds. A failure (no answer, an error, an unreadable list, a list without a closed weekday of this
-   * Taipei year: listsYearOf) keeps the schedule held and tries again HOLIDAY_RETRY_MS after the failed attempt
-   * started. Never throws, and never shows a problem: without the schedule, rows read as before.
+   * Fetches TWSE's holiday schedule when due: not yet fetched this Taipei date, and past `retryAt`.
+   * - One GET at a time per copy, shared by every loop and raced against REQUEST_TIMEOUT_MS.
+   * - Only a date's first attempt is waited for, so it holds a Taiwan round by the timeout at most; a retry runs
+   *   beside the rounds.
+   * - A failure (no answer, an error, an unreadable list, or none for this year) keeps the schedule held and tries
+   *   again HOLIDAY_RETRY_MS after the failed attempt started.
+   * Never throws and never shows a problem: without the schedule, rows read by inference alone.
    */
   async loadHolidays(io) {
     const holidays = this.holidays;
@@ -559,9 +543,9 @@ export class Watchlist {
   }
 
   /**
-   * What a symbol without a quote is read by at `now`, for its session and its edges alike: its form alone, with no
-   * periods (sessionOf and nextEdge read a Taiwan or US one by its exchange's hours, a future by TAIFEX's), and its
-   * closure (marked).
+   * What a symbol without a quote is read by at `now`, for its session and edges alike: its form alone, with no
+   * periods, and its closure. sessionOf then reads a Taiwan or US symbol by its exchange's hours, a future by
+   * TAIFEX's.
    */
   standIn(symbol, now) {
     return this.marked(symbol, { symbol, periods: null }, now);
@@ -573,9 +557,8 @@ export class Watchlist {
   }
 
   /**
-   * Why a symbol has no live overlay: the first overlay source's error, in priority order; null while a
-   * live one shows. A stale one shown still gets the reason a source before it has none. A symbol's sole
-   * source never writes one: with no base to fall back to, its row's own error says why.
+   * Why a symbol has no live overlay: the first overlay source's error, in priority order; null while a live one
+   * shows. A sole source never writes one: with no base to fall back to, its row's own error says why.
    */
   overlayError(symbol, now = this.host.now()) {
     const pick = this.pick(symbol, now);
@@ -589,16 +572,15 @@ export class Watchlist {
     return PROVIDERS.map((provider) => provider.id);
   }
 
-  /** A round the person asked for (Refresh) is running; automatic rounds do not count. */
+  /** Whether a round the user asked for (Refresh) is running; automatic rounds do not count. */
   get refreshing() {
     return Object.values(this.sources).some((state) => state.loading && state.refreshing);
   }
 
   /**
-   * One entry per provider that has a problem now (rate limited, unreachable, timed out, refused),
-   * or that is chosen but cannot run (consent to confirm again). `stopped: true` marks a source that
-   * makes no request until its settings change (a notice, or a refusal that disabled it), so the
-   * settings dialog reads that from here instead of from a list of codes.
+   * One entry per provider that has a problem now (rate limited, unreachable, timed out, refused), or that is chosen
+   * but cannot run (consent to give again). `stopped: true` marks a source that makes no request until its settings
+   * change, so the settings dialog reads that here instead of from a list of codes.
    */
   problems() {
     const settings = readSettings(this.host.settings());
@@ -611,8 +593,8 @@ export class Watchlist {
     });
   }
 
-  // Edits are synchronous (the store is Herdr's shared state) and return a short notice,
-  // `{ code, params }`, for the view to translate. A change that returns null changed nothing: no save.
+  // Edits are synchronous (the store is Herdr's shared state) and return a short notice, `{ code, params }`, for the
+  // view to translate. A change that returns null changed nothing, so nothing is saved.
   edit(change) {
     const preferences = readPreferences(this.host.load());
     const message = change(preferences);
@@ -635,15 +617,15 @@ export class Watchlist {
     const config = this.config();
     const cap = finnhubCap(config.budgetPerMinute);
     if (this.overCap(symbol)) return notice("notice.overCap", { symbol, cap });
-    // The symbol went to the top, so a US stock Finnhub priced before may have lost its place under the
-    // cap. With Finnhub off, or a symbol Finnhub does not price, both lists are the same.
+    // The symbol went to the top, so a US stock Finnhub priced before may have lost its place under the cap. With
+    // Finnhub off, or a symbol Finnhub does not price, both lists are the same.
     const kept = new Set(this.symbolsFor(finnhub, config));
     const pushed = this.symbolsFor(finnhub, config, before).find((s) => !kept.has(s));
     return pushed ? notice("notice.overCapPushed", { symbol, pushed, cap }) : message;
   }
 
-  // A removal's notice carries `undo`, the symbol and its place in the list as saved before it, for
-  // `restore`; any later notice replaces it, which ends the Undo.
+  // A removal's notice carries `undo`, the symbol and its place in the list before, for `restore`. Any later notice
+  // replaces it, which ends the Undo.
   remove(symbol) {
     return this.edit((p) => {
       const index = p.symbols.indexOf(symbol);
@@ -653,8 +635,8 @@ export class Watchlist {
     });
   }
 
-  // Puts a removed symbol back at `index` (splice puts it at the end when the list has grown shorter since). Null, and
-  // nothing saved, when it is listed again already (another copy added it).
+  // Puts a removed symbol back at `index`, or at the end when the list has grown shorter since. Null, and nothing
+  // saved, when it is listed again already (another copy added it).
   restore(symbol, index) {
     return this.edit((p) => {
       if (p.symbols.includes(symbol)) return null;
@@ -664,9 +646,9 @@ export class Watchlist {
   }
 
   /**
-   * Moves `symbol` before `beforeSymbol` (null: to the end), judged against the list as saved now,
-   * so a drop in a copy that has not synced yet still lands beside the symbol it was dropped on.
-   * Null, and nothing saved, when either symbol is gone or the order would stay.
+   * Moves `symbol` before `beforeSymbol` (null for the end), judged against the list as saved now, so a drop in a
+   * copy that has not synced yet still lands beside the symbol it was dropped on. Null, and nothing saved, when either
+   * symbol is gone or the order would stay.
    */
   move(symbol, beforeSymbol) {
     return this.edit((p) => {
@@ -688,9 +670,9 @@ export class Watchlist {
   }
 
   /**
-   * One round of every source now, also while paused; a source's cooldown still holds. A source on
-   * a request budget (Finnhub) keeps its own pace. A source already in a round joins it (the round
-   * counts as asked for) instead of queuing another, so a second click costs no extra request.
+   * One round of every source now, also while paused; a source's cooldown still holds. A source on a request budget
+   * (Finnhub) keeps its own pace. A source already in a round marks that round as asked for instead of queuing
+   * another, so a second click costs no extra request.
    */
   refreshNow() {
     for (const provider of PROVIDERS) {
@@ -716,14 +698,13 @@ export class Watchlist {
   }
 
   /**
-   * Starts the round a hidden copy skipped, at once, in each source that skipped one (the main view
-   * calls it on render, which is when a hidden docked copy is shown again). A source that missed
-   * nothing keeps its own pace, so a render never starts a round by itself. A copy still judged hidden
-   * wakes nothing: it can render anyway (a second card block, a stack with no active child), and each
-   * wake would mark the round missed again and redraw, in a loop.
+   * Starts at once the round a hidden copy skipped, in each source that skipped one. The view calls it on render,
+   * which is when a hidden docked copy is shown again. A source that missed nothing keeps its own pace.
+   * A copy still judged hidden wakes nothing: it can render anyway (a second card block, a stack with no active
+   * child), and each wake would mark the round missed again and redraw, in a loop.
    */
   wakeMissed() {
-    // Most renders find nothing missed: then shown(), which reads the layout for a docked copy, is not asked.
+    // Most renders find nothing missed, so shown(), which reads the layout for a docked copy, is not asked.
     const missed = Object.values(this.sources).filter((state) => state.missed && state.wake);
     if (!missed.length || !this.isShown()) return;
     for (const state of missed) {
@@ -739,10 +720,7 @@ export class Watchlist {
     this.poke();
   }
 
-  /**
-   * Picks up another copy's edit of the shared list, or a saved source address, at once
-   * (the main view calls it on render).
-   */
+  /** Picks up another copy's edit of the shared list or settings at once; the view calls it on render. */
   sync() {
     const preferences = readPreferences(this.host.load());
     const configKey = JSON.stringify(this.config());
@@ -766,8 +744,8 @@ export class Watchlist {
   }
 
   /**
-   * Takes `preferences` as the list and starts new rounds only when something the loops act on
-   * changed (or `restart`): a pure reorder leaves the rounds in flight alone.
+   * Takes `preferences` as the list, and starts new rounds only when something the loops act on changed (or on
+   * `restart`). A pure reorder leaves the rounds in flight alone.
    */
   adoptAndRestart(preferences, restart = false) {
     const before = this.loopKey();
@@ -783,10 +761,10 @@ export class Watchlist {
     }
     const config = this.config();
     if (!config.on[yahootw.id]) {
-      // Off: every TW-only symbol goes back to Yahoo Finance, so turning it on again starts over. Until Yahoo
-      // Finance answers again (paused, or backing off), its row says what it last said: not found, or, while the
-      // consent awaits re-confirmation, that. No other source prices a future, so its row says why. A re-confirm
-      // reason left on any row is taken again, so it goes once nothing awaits confirmation.
+      // Off: every TW-only symbol goes back to Yahoo Finance, so turning the source on again starts over.
+      // Until Yahoo Finance answers again, the row says what it last said (not found), or that consent is awaited.
+      // No other source prices a future, so its row says why. A stale "consent awaited" reason is worked out again,
+      // so it goes once nothing awaits consent.
       for (const [symbol, error] of Object.entries(this.errors)) {
         if (error.code === "yahootw.reconfirm") this.errors[symbol] = this.unpricedReason(symbol, config);
       }
@@ -830,9 +808,8 @@ export class Watchlist {
   }
 
   /**
-   * Whether `provider` prices `symbol`: it declares the symbol's market (an index's from its quote's exchange,
-   * see resolvedMarket) and its kind. A symbol with a sole source (in `config`) is priced by that source alone,
-   * whatever its market reads.
+   * Whether `provider` prices `symbol`: it declares the symbol's market and kind. A sole-source symbol is priced by
+   * that source alone, whatever its market reads.
    */
   serves(provider, symbol, config) {
     const sole = this.soleSource(symbol, config);
@@ -845,10 +822,7 @@ export class Watchlist {
     );
   }
 
-  /**
-   * The listed symbols (or those of `list`) a provider quotes, up to its cap; none for an overlay source
-   * that is off.
-   */
+  /** The listed symbols (or `list`'s) a provider quotes, up to its cap; none for an overlay source that is off. */
   symbolsFor(provider, config = this.config(), list = this.preferences.symbols) {
     if (provider.overlay && !config.on[provider.id]) return [];
     const symbols = list.filter((symbol) => this.serves(provider, symbol, config));
@@ -856,13 +830,12 @@ export class Watchlist {
   }
 
   /**
-   * The busiest session among `symbols`: open or auction (open on a tie) > unknown (no quote yet) > lunch > pre/post >
-   * closed. Read from the base quotes (baseQuote: an overlay keeps the base's trading periods); one MIS still flags
-   * (auctionFlagged) reads "auction" whatever its session, and "auction" reads "closed" before 09:00 Taipei. A symbol
-   * with a sole source and nothing to show (no source knows it) takes its form's session: a future's by TAIFEX's
-   * hours, so it is asked every 10 s in a session; any other counts as closed, so it is never polled every 10 s.
-   * One that source has answered as not found counts as closed too, so a mistyped code never holds the batch at
-   * 10 s; the wake at each TAIFEX opening still asks it.
+   * The busiest session among `symbols`, by SESSION_RANK (open wins a tie with auction), read from the base quotes.
+   * - A symbol MIS still flags reads "auction" whatever its session; "auction" reads "closed" before 09:00 Taipei.
+   * - A sole-source symbol with nothing to show takes its form's session: a future's by TAIFEX's hours, anything
+   *   else "closed", so it is never polled at the fast pace.
+   * - One that source answered as not found reads "closed", so a mistyped code never holds the batch at the fast
+   *   pace; the wake at each TAIFEX opening still asks for it.
    */
   sessionFor(symbols, now) {
     let best = "closed";
@@ -876,8 +849,8 @@ export class Watchlist {
             : soleSession(this.standIn(symbol, now), now)
           : "unknown";
       // MIS's flag keeps the pace also where a delayed price from today reads its own session. Before 09:00 Taipei (the
-      // trial match's end) a call auction paces as closed: its answers show nothing new, the consent texts promise the
-      // fast pace only during trading hours, and the 09:00 opening starts a round.
+      // trial match's end) a call auction paces as closed: its answers show nothing new, the fast pace is for trading
+      // hours only, and the 09:00 opening starts a round.
       if (session === "auction" || (quote && auctionFlagged(quote.auctionAt, now))) {
         session = taipeiMinute(now) < TW_TRIAL_MATCH.to ? "closed" : "auction";
       }
@@ -890,10 +863,9 @@ export class Watchlist {
   }
 
   /**
-   * How long until the first of `symbols`' shown quotes turns stale, each at its own moment (staleAt);
-   * at most LIVE_MAX_AGE_MS, also when none ever does. A quote that cannot turn stale in its session is
-   * skipped: inside a lunch window its age stands still, also after a half day's close, and the cap wakes the
-   * loop for the reopening or for the trading hours a delayed quote has not been given yet.
+   * How long until the first of `symbols`' shown quotes turns stale; at most LIVE_MAX_AGE_MS, also when none ever
+   * does. A quote that cannot turn stale in its session (inside a lunch window, say) is skipped; the cap still wakes
+   * the loop for the reopening.
    */
   staleInMs(symbols, now) {
     let wait = LIVE_MAX_AGE_MS;
@@ -906,8 +878,8 @@ export class Watchlist {
   }
 
   /**
-   * The earliest nextEdge among `symbols`' shown quotes (a symbol without one by its standIn), or null;
-   * `mode` is nextEdge's (`{ openings: true }`: openings only).
+   * The earliest nextEdge among `symbols`' shown quotes (a symbol without one by its standIn), or null. `mode` is
+   * passed to nextEdge.
    */
   edgeAt(symbols, now, mode) {
     let earliest = null;
@@ -919,8 +891,8 @@ export class Watchlist {
   }
 
   /**
-   * One provider's loop, until stop(). Each round starts the provider's interval after the
-   * previous one ends (or when its cooldown ends, if later); an edit starts one at once.
+   * One provider's loop, until stop(). Each round starts the provider's interval after the previous one ends, or when
+   * its cooldown ends if later; an edit starts one at once.
    */
   async runProvider(id, io) {
     const provider = PROVIDERS.find((p) => p.id === id);
@@ -951,9 +923,8 @@ export class Watchlist {
           state.lineFailures = {};
           state.noLive = null;
         }
-        // A hidden copy never renders (so nothing else tells it), but its loops run: it asks here. A round
-        // it skips is marked missed, and it waits as idle until wakeMissed() on the render that shows
-        // the copy again.
+        // A hidden copy never renders, but its loops run, so they ask here. A skipped round is marked missed, and the
+        // loop waits as idle until wakeMissed() on the render that shows the copy again.
         hidden = !this.isShown();
         const due = symbols.length && !state.disabled && (manual || !this.preferences.paused);
         state.missed = hidden && Boolean(due);
@@ -961,9 +932,9 @@ export class Watchlist {
           state.refreshing = manual;
           if (this.holdsTaiwan(symbols)) {
             await this.loadHolidays(io);
-            // A change the loops act on during that wait (a source or its consent turned off, a pause, a removed
-            // symbol) restarted them (restart): these symbols and settings are old, so start again from the top,
-            // keeping a Refresh asked for, which may be the only reason a paused list has a round.
+            // A change during that wait (a source turned off, a pause, a removed symbol) restarted the loops, so these
+            // symbols and settings are old. Start again from the top, keeping a Refresh asked for: it may be the only
+            // reason a paused list has a round.
             if (state.dirty) {
               state.manual ||= manual;
               continue;
@@ -985,9 +956,8 @@ export class Watchlist {
       const now = this.host.now();
       let due = now;
       if (!idle) {
-        // A break's interval ends at the next opening (a session's start, a lunch's end, the FX week's start), so
-        // the first price of a session is not up to an interval late; from then on the row reads that session, and
-        // its cadence with it.
+        // A break's interval ends at the next opening (a session's start, a lunch's end, the FX week's start), so a
+        // session's first price is not up to an interval late.
         const opens = this.edgeAt(symbols, now, { openings: true });
         due += Math.max(
           Math.min(provider.intervalMs(this.sessionFor(symbols, now)), opens === null ? Infinity : opens - now),
@@ -999,10 +969,9 @@ export class Watchlist {
   }
 
   /**
-   * Sleeps until `due` (an idle loop: until a shown price turns stale), or until poked. A long wait,
-   * such as a rate-limit cooldown, is cut where a shown price turns stale or a row reaches its next edge
-   * (edgeAt): those wakes only redraw. A hidden copy never renders, so it skips the edges and waits for
-   * wakeMissed().
+   * Sleeps until `due`, or until poked; an idle loop sleeps until a shown price turns stale. A long wait, such as a
+   * rate-limit cooldown, is cut where a shown price turns stale or a row reaches its next edge; those wakes only
+   * redraw. A hidden copy never renders, so it skips the edges and waits for wakeMissed().
    */
   async rest(state, symbols, due, io, hidden) {
     for (;;) {
@@ -1033,8 +1002,8 @@ export class Watchlist {
       state.configKey = configKey;
       state.linesAt = {};
     }
-    // Only Finnhub's requests carry the key; no other source is ever handed it. The symbols Yahoo 奇摩股市 prices
-    // alone go to its requests only, never to config(): a change there would make sync() restart every round.
+    // Only Finnhub's requests carry the key; no other source is ever handed it. The symbols Yahoo 奇摩股市 prices alone
+    // go to its requests only, never to config(), where a change would make sync() restart every round.
     const asked =
       provider === finnhub
         ? { ...config, finnhubKey: this.finnhubKey }
@@ -1047,8 +1016,8 @@ export class Watchlist {
     let problem = null;
     let live = false;
     let noLive = null;
-    // A provider with `linesPerRound` lists its lines after its prices: this loop sends the prices, and
-    // the due lines are picked once they are in. Any other provider's requests go out as listed.
+    // A provider with `linesPerRound` lists its lines after its prices: this loop sends the prices, and the due lines
+    // are picked once they are in. Any other provider's requests go out as listed.
     const listed = provider.linesPerRound ? quoteCount : requests.length;
     state.loading = true;
     io.changed();
@@ -1107,19 +1076,18 @@ export class Watchlist {
           return;
         }
         if (!current()) return;
-        // A failure of the source itself (an HTTP error, an unreadable answer) shows, as a price's would.
-        // A line is asked only every `linesMs`, so it stays shown through the rounds between, until
-        // that symbol's next line comes in; otherwise a line that always fails would blink.
+        // A failure of the source itself (an HTTP error, an unreadable answer) shows, as a price's would. A line is
+        // asked only every `linesMs`, so the failure stays shown until that symbol's next line comes in; otherwise a
+        // line that always fails would blink.
         if (failed && SOURCE_FAILURE.test(failed.code)) state.lineFailures[request.symbols[0]] = failed;
         else delete state.lineFailures[request.symbols[0]];
       }
       if (!current()) return;
-      // A symbol no longer priced by this source (removed, or its price gone) is not asked for a line
-      // again, so its failure goes.
+      // A symbol no longer priced by this source is not asked for a line again, so its failure goes.
       for (const symbol of Object.keys(state.lineFailures))
         if (!this.priced(provider, symbol)) delete state.lineFailures[symbol];
-      // An answer that prices nothing live while the market is open is shown, or the person sees only
-      // delayed rows with no word why; it stays until an answer prices a row again.
+      // An answer that prices nothing live while the market is open is shown, or the user sees only delayed rows with
+      // no word why. It stays until an answer prices a row again.
       if (live || this.sessionFor(symbols, this.host.now()) !== "open") state.noLive = null;
       else if (noLive) state.noLive = noLive;
       problem ??= state.noLive ?? Object.values(state.lineFailures)[0] ?? null;
@@ -1131,10 +1099,7 @@ export class Watchlist {
     }
   }
 
-  /**
-   * The line requests a round sends of `requests`: those that are due (lineDue), longest-waiting first
-   * (never asked counts as longest), at most `linesPerRound`.
-   */
+  /** The due line requests of `requests`, longest-waiting (or never asked) first, at most `linesPerRound`. */
   dueLines(provider, state, requests) {
     const now = this.host.now();
     const askedAt = (request) => state.linesAt[request.symbols[0]] ?? 0;
@@ -1145,8 +1110,8 @@ export class Watchlist {
   }
 
   /**
-   * A symbol's line is due: the symbol has this provider's price and its line waited `linesMs`. After the
-   * close, a line already held for its price's day is the whole day: it is not asked again.
+   * Whether a symbol's line is due: the symbol has this provider's price and its line waited `linesMs`. After the
+   * close, a line already held for its price's day is the whole day, so it is not asked again.
    */
   lineDue(provider, state, symbol, now) {
     const priced = this.priced(provider, symbol);
@@ -1157,21 +1122,21 @@ export class Watchlist {
     return now - (state.linesAt[symbol] ?? -Infinity) >= provider.linesMs(session);
   }
 
-  // What a line is drawn beside: this provider's overlay (for a symbol it prices alone, its own quote), or the base quote.
+  // What a line is drawn beside: this provider's overlay (a sole-source symbol's own quote), or the base quote.
   priced(provider, symbol) {
     return provider.overlay ? this.overlays[symbol]?.[provider.id] : this.quotes[symbol];
   }
 
-  // A line's error ends the round when the source rate limited it or, for a provider with
-  // `linesPerRound` (its lines come after all its prices), when it is down or hung, so the next price
-  // round is not held up by more line timeouts.
+  // Whether a line's error ends the round: when the source rate limited it, or, for a provider with `linesPerRound`
+  // (its lines come after all its prices), when it is down or hung, so more line timeouts do not hold up the next
+  // price round.
   endsRound(provider, error) {
     if (!error) return false;
     return error.retryAfterMs !== undefined || (Boolean(provider.linesPerRound) && SOURCE_DOWN.test(error.code));
   }
 
-  // A line that ends the round. Rate limited: the source backs off. Down or hung: its prices are in, so
-  // a backoff ends as after a clean round, and the round ends with the problem shown.
+  // A line that ends the round. Rate limited: the source backs off. Down or hung: its prices are in, so a backoff ends
+  // as after a clean round, and the round ends with the problem shown.
   endOnLine(provider, state, requests, index, failed) {
     if (failed.retryAfterMs !== undefined) {
       this.backOff(provider, state, requests, index, failed);
@@ -1183,9 +1148,9 @@ export class Watchlist {
     state.lineFailures[requests[index].symbols[0]] = failed;
   }
 
-  // Back off this provider only: at least a minute, doubling up to 15 minutes; the rest of the
-  // round's quote requests are deferred. A rate-limited line of an overlay source defers all its
-  // prices, sent or not, so its rows fall to the next source (one it prices alone keeps its price, cached).
+  // Backs off this provider only: BACKOFF_BASE_MS, doubling with each further failure, never over BACKOFF_MAX_MS.
+  // The rest of the round's requests are deferred. A rate-limited line of an overlay source defers all its prices,
+  // sent or not, so its rows fall to the next source; a sole-source row keeps its price, cached.
   backOff(provider, state, requests, index, limited) {
     state.failures++;
     const backoff = Math.min(
@@ -1221,11 +1186,12 @@ export class Watchlist {
           else delete this.ytwAuctionBooks[symbol];
         }
         if (this.soleSource(symbol) === provider) {
-          // A symbol this source prices alone has no base, so it keeps its last price and line, as a base quote
-          // does, and its own row says why: nothing once its source prices it, else a failure as itself (a row
-          // rejected with a reason still names it), never as not found, else nothing once named, else not found
-          // (by this source once it priced it, so the kept price reads cached, and always for a future, which
-          // Yahoo Finance never sees).
+          // A sole-source symbol has no base, so it keeps its last price and line, as a base quote does. Its row's
+          // error, first match wins:
+          // - none once its source prices it, or names it without an error;
+          // - the source's failure as itself, never as not found;
+          // - not found: by this source once it priced it (so the kept price reads cached) and always for a future,
+          //   which Yahoo Finance never sees; else by Yahoo Finance.
           if (overlay || (!error && result.names?.[symbol])) delete this.errors[symbol];
           else
             this.errors[symbol] =
@@ -1233,8 +1199,8 @@ export class Watchlist {
           continue;
         }
         // A symbol in a call auction (MIS's flag) keeps the price held from before it. A flag from a snapshot older
-        // than that price is an answer MIS's cache served late: ignored. The auction book is the newest flag's: one
-        // older than the flag held changes nothing, and a newer one without levels drops it.
+        // than that price is an answer MIS's cache served late, and is ignored. The auction book is the newest
+        // flag's: an older flag changes nothing, and a newer one without levels drops it.
         const flaggedAt = result.auction?.[symbol];
         if (flaggedAt === undefined) {
           if (!overlay) this.dropOverlay(provider, symbol);
@@ -1271,15 +1237,15 @@ export class Watchlist {
       this.errors[symbol] = coded(error);
       if (error.code !== "yahoo.notFound" || !isTaiwanForm(symbol)) continue;
       // A Taiwan index Yahoo Finance does not know may be Yahoo 奇摩股市's alone; the error stays until it is priced.
-      // A TW-only row keeps nothing of a quote Yahoo Finance gave before; a Yahoo 奇摩股市 overlay already held
-      // stays, as the symbol's own quote.
+      // A TW-only row keeps nothing of an earlier Yahoo Finance quote; a Yahoo 奇摩股市 overlay already held stays,
+      // as the symbol's own quote.
       if (config.on[yahootw.id]) {
         this.twOnly.add(symbol);
         delete this.linePeriods[symbol];
         delete this.quotes[symbol];
         this.setEntry(this.overlayErrors, symbol, yahootw.id, undefined);
       } else if (config.yahootwPending) {
-        // Not found is true but not the whole story: the person's consent to the old statement is what holds it back.
+        // Not found is true but not the whole story: consent to the current statement is what holds it back.
         this.errors[symbol] = this.unpricedReason(symbol, config);
       }
     }
@@ -1287,13 +1253,12 @@ export class Watchlist {
   }
 
   /**
-   * Notes what one answer saw of each Taiwan market, once per market (noteTrade): the decoder's `newestTrade` when it
-   * gives one (Yahoo 奇摩股市: each market's newest trade among its real-time rows, whatever their day, so an answer of
-   * yesterday's prices still counts as one), else the newest trade among the answer's priced Taiwan rows (a row's own
-   * trade time, else its time; a quote not timedByTrade, a MIS book price, carries no trade), real time
-   * as the row that set it is (isRealtime). A symbol MIS flags as in a call auction counts as a row without a trade,
-   * as its book price did. Run once the rows are in, so an index reads its market by the exchange this answer
-   * gave.
+   * Notes what one answer saw of each Taiwan market, once per market (noteTrade). The trade is:
+   * - the decoder's `newestTrade` when it gives one (Yahoo 奇摩股市's newest real-time trade per market, whatever its
+   *   day, so an answer of yesterday's prices still counts as an answer);
+   * - else the newest trade among the answer's priced Taiwan rows, real time as the row that set it is. A quote not
+   *   timed by a trade, or a symbol MIS flags as in a call auction, counts as a row without a trade.
+   * Run once the rows are in, so an index reads its market by the exchange this answer gave.
    */
   observe(provider, result, now) {
     const trades = {};
@@ -1328,10 +1293,9 @@ export class Watchlist {
   }
 
   /**
-   * A base answer that named an index's exchange can hand the index to an overlay source (`before`:
-   * overlaySymbols() from before the answer): each source whose symbols changed rounds again now, not after its
-   * idle wait; one in a round adds a round after it. Never restart(): that would drop the rounds in flight,
-   * this base one too.
+   * A base answer that named an index's exchange can hand the index to an overlay source. Each source whose symbols
+   * changed since `before` runs a round now, not after its idle wait; one in a round adds a round after it. Never
+   * restart(): that would drop the rounds in flight, this base one too.
    */
   wakeResolved(before) {
     const after = this.overlaySymbols();
@@ -1362,8 +1326,8 @@ export class Watchlist {
     }
   }
 
-  // A symbol whose request was not answered: a base quote stays, marked cached, and so does the quote of a symbol
-  // this source prices alone, which has no base; an overlay goes.
+  // A symbol whose request was not answered. A base quote stays, marked cached, and so does a sole-source symbol's
+  // quote, which has no base; an overlay goes.
   fail(provider, symbol, error) {
     if (provider === yahootw) delete this.ytwAuctionBooks[symbol];
     if (!provider.overlay || this.soleSource(symbol) === provider) {
@@ -1373,7 +1337,7 @@ export class Watchlist {
     this.forgetOverlay(provider, symbol, error);
   }
 
-  // `provider`'s overlay for `symbol` goes, with MIS's `noLevels` mark, and its error becomes `error` (undefined
+  // Drops `provider`'s overlay for `symbol`, with MIS's `noLevels` mark, and sets its error to `error` (undefined
   // clears it).
   forgetOverlay(provider, symbol, error) {
     this.dropOverlay(provider, symbol);
@@ -1381,7 +1345,7 @@ export class Watchlist {
     this.setEntry(this.overlayErrors, symbol, provider.id, error);
   }
 
-  // An overlay's line goes with its price, so a line is never drawn with a later price it did not end at; MIS's
+  // An overlay's line goes with its price, so a line is never drawn with a later price it did not end at. MIS's
   // auction flag goes with MIS's price.
   dropOverlay(provider, symbol) {
     this.setEntry(this.overlays, symbol, provider.id, undefined);
@@ -1412,14 +1376,13 @@ export class Watchlist {
   }
 
   /**
-   * A symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. A
-   * base provider writes the base quote's line and a failure leaves it as it was; an overlay provider
-   * keeps its own line beside its price, and an answer without one (a failure, or no point from today)
-   * drops it. So does a frozen line (lineFrozen): a frozen answer (such as a cached one from earlier in the
-   * day) would be drawn as live with only its tail moving. Checked as the line arrives, not at each price: a
-   * busy stock trades on while its line waits up to `linesMs` for the next request.
-   * A symbol this source prices alone keeps the answer's trading periods, line or not; known ones are never
-   * dropped. Returns the request's error for the symbol, if any (endsRound says what it does to the round).
+   * Asks for a symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. Returns
+   * the request's error for the symbol, if any.
+   * - A base provider writes the base quote's line; a failure leaves it as it was.
+   * - An overlay provider keeps its own line beside its price. An answer without one (a failure, or no point from
+   *   today) drops it, and so does a frozen line, which would be drawn as live with only its tail moving. Frozen is
+   *   judged as the line arrives, not at each price.
+   * - A sole-source symbol keeps the answer's trading periods, line or not; known ones are never dropped.
    */
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
@@ -1445,16 +1408,14 @@ export class Watchlist {
 
   /**
    * Whether an overlay line arriving at `now` has stopped: its last traded minute ends over LINE_LAG_MS before a
-   * trade it must already hold. A minute shows in a line only once it has ended, so a trade is judged by only once
-   * it has settled: its minute has ended and LINE_LAG_MS has passed. The trades seen at this and earlier arrivals
-   * are kept (LINE_TRADES at most) and the line is judged against the newest settled one, capped at the end of the
-   * line's regular session (sessionEnd: a stock's 14:30 fixed-price trade is never in its line); the trade just seen
-   * counts once it has settled itself (a line first asked after the close is judged at once). Until one has
-   * settled, the line stays, so a thin future's or quiet stock's line is never dropped for a trade it cannot
-   * hold yet. Measured while open, with lines 2 min apart (longer when more lines wait than a round sends, and
-   * every bound grows with it): a line frozen from its first arrival is dropped at its third, 4 min later; a line
-   * that stops mid-session, 485-595 s after it stops; one first asked after the close at once, when its last trade is
-   * 3 min old by then. A frozen line stays dropped, also through a dropped price.
+   * trade it must already hold.
+   * - A minute shows in a line only once it has ended, so a trade counts once settled: its minute has ended and
+   *   LINE_LAG_MS has passed. Until one has settled the line stays, so a quiet line is never dropped for a trade it
+   *   cannot hold yet.
+   * - The trades seen at recent arrivals are kept (LINE_TRADES at most). The line is judged against the newest settled
+   *   one, capped at its regular session's end: a stock's 14:30 fixed-price trade is never in its line.
+   * With lines 2 min apart, a line frozen from its first arrival was dropped at its third, and one that stopped
+   * mid-session 8 to 10 min after it stopped. A frozen line stays dropped, also through a dropped price.
    */
   lineFrozen(provider, symbol, line, tradeTime, now) {
     const trades = ((this.lineTrades[provider.id] ??= {})[symbol] ??= []);
@@ -1471,9 +1432,8 @@ export class Watchlist {
   }
 
   /**
-   * When the regular session of a line's trading day ends: the answer's own (`endAt`), else the periods known for
-   * the symbol (the last line answer's for a symbol this source prices alone, the base quote's otherwise) when
-   * they are of that day; with neither, never.
+   * When the regular session of a line's trading day ends: the answer's own `endAt`, else the known periods' end when
+   * they are of that day (a sole-source symbol's from its last line answer, else the base quote's); else never.
    */
   sessionEnd(provider, symbol, line) {
     if (Number.isFinite(line.endAt)) return line.endAt;
@@ -1495,9 +1455,9 @@ export class Watchlist {
   }
 
   /**
-   * One request, decoded; null once the round is stale. A request that does not answer within
-   * REQUEST_TIMEOUT_MS gets `request.timeout` and its late answer is dropped; a network failure
-   * (or a decoder bug) becomes the provider's `unreachable` error, for each of its symbols.
+   * One request, decoded; null once the round is stale. A request that does not answer within REQUEST_TIMEOUT_MS gets
+   * `request.timeout`, and its late answer is dropped. A network failure or a decoder bug becomes the provider's
+   * `unreachable` error for each of its symbols.
    */
   async ask(provider, request, io, current) {
     try {

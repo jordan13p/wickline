@@ -1,6 +1,6 @@
-// Every text the person reads, by language and key; `{name}` is filled from params.
-// The language is the person's choice only: never the markets watched, never the system's.
-// The tables are in `i18n/`, one per language. No Herdr imports, so tests run it under Node.
+// Every text the user reads, by language and key; `{name}` is filled from params.
+// The language is the user's choice only, never taken from the markets watched or the system.
+// The tables are in `i18n/`, one per language.
 import { fill } from "./quotes.js";
 import { EN } from "./i18n/en.js";
 import { JA } from "./i18n/ja.js";

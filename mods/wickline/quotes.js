@@ -1,11 +1,10 @@
-// Symbols, coded errors and what the quote sources share.
-// No Herdr imports, so tests run it under Node. The hosts live in providers/.
+// Symbols, coded errors and what the quote sources share. The sources themselves live in providers/.
 
 const VERSION = "0.8.0";
 export const USER_AGENT = `Wickline-Herdr/${VERSION}`;
 // Sent with every request.
 export const HEADERS = { "User-Agent": USER_AGENT, Accept: "application/json" };
-// Shown until the person saves a watchlist of their own.
+// Shown until the user saves a watchlist of their own.
 export const STARTER_SYMBOLS = ["AAPL", "NVDA", "^GSPC", "BTC/USDT"];
 
 /** English text by error code; `{name}` is filled from the error's params. */
@@ -55,6 +54,7 @@ export const MESSAGES_EN = {
 export const fill = (text, params) =>
   text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
 
+/** A failed request: an error code the view translates, and how the scheduler should treat it. */
 export class QuoteError extends Error {
   constructor(code, params = {}, options = {}) {
     super(fill(MESSAGES_EN[code] ?? code, params));
@@ -75,7 +75,7 @@ export function isCryptoPair(symbol) {
 /** A TAIFEX future as Yahoo 奇摩股市 writes it: letters then & (near month) or @ (next month), such as WTX&. */
 export const isFutureForm = (symbol) => /^[A-Z]{1,6}[&@]$/.test(symbol);
 
-/** Yahoo tickers, Binance pairs or Taiwan futures, never company names or URLs. Throws a message for people. */
+/** A typed symbol in its canonical form: a Yahoo ticker, a Binance pair or a Taiwan future. Throws otherwise. */
 export function normalizeSymbol(input) {
   let symbol = String(input ?? "")
     .trim()
@@ -90,12 +90,13 @@ export function normalizeSymbol(input) {
   return symbol;
 }
 
+/** Whether `value` is a finite number above 0. */
 export const positive = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 
 /** `price` against the reference `ref` in percent, null when `ref` is not positive. */
 export const changePercent = (price, ref) => (positive(ref) ? ((price - ref) / ref) * 100 : null);
 
-// The levels at most a side of the book shows.
+/** The most levels a side of the book shows. */
 export const BOOK_LEVELS = 5;
 
 /** A field as a positive number (a numeric string counts), else null: "2265.0000" → 2265, "-" → null. */
@@ -104,10 +105,10 @@ export const positiveOrNull = (value) => {
   return positive(n) ? n : null;
 };
 
-/** A volume with its unit, the two together or neither: a volume that is not positive is none. */
+/** A volume with its unit, both or neither; a volume that is not positive gives neither. */
 export const sized = (volume, sizeUnit) => (positive(volume) ? { volume, sizeUnit } : {});
 
-// What a quote carries about the day's trading, which only the source that gives its price may speak for.
+// A quote's facts about the day's trading. Only the source that gives the price may supply them.
 const ACTIVITY_FIELDS = [
   "volume",
   "previousVolume",
@@ -131,12 +132,12 @@ export function withoutActivity(quote) {
 // MIS sends limit-up 9999.95 (and no limit-down) for a stock without daily limits. It is off the tick grid
 // (ticks of 5 from 1000), so a real limit-up past 9999 still counts.
 const NO_LIMIT_UP = 9999.95;
+/** Whether a stock has daily price limits. */
 export const hasLimits = (up, down) => positive(up) && positive(down) && up !== NO_LIMIT_UP;
 
 /**
- * Whether a quote's price is at its own source's limit-up or limit-down: "up", "down" or null. Exact on
- * purpose: MIS's no-trade midpoint half a tick under a 0.01-tick limit (8.315 against 8.32) is within 0.005
- * of it, and is not a stock at its limit.
+ * "up" or "down" when a quote's price is at its own source's limit, else null. Exact on purpose: MIS's no-trade
+ * midpoint can sit half a tick under a limit (8.315 against 8.32), and that is not a stock at its limit.
  */
 export function priceLimit(quote) {
   if (!quote || !positive(quote.price) || !hasLimits(quote.limitUp, quote.limitDown)) return null;
@@ -145,6 +146,7 @@ export function priceLimit(quote) {
   return null;
 }
 
+/** Both limits, or both null when the stock has none. */
 export const limitPair = (up, down) =>
   hasLimits(up, down) ? { limitUp: up, limitDown: down } : { limitUp: null, limitDown: null };
 
@@ -153,26 +155,28 @@ export function withinLimits(price, up, down) {
   return !hasLimits(up, down) || (down <= price && price <= up);
 }
 
+/** A source's text without control characters, cut to 100 characters; null when empty or not a string. */
 export const cleanText = (value) =>
   typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 100) || null : null;
 
 /**
- * Whether a quote's time is a trade's: every source times a quote by a trade, except a MIS price taken from the order
- * book (`fromBook`), timed by its snapshot. Where a trade is counted (Watchlist#observe) or printed as one (the closed,
- * 休市 and 今日無成交 labels).
+ * Whether a quote's time is a trade's. Every source times a quote by a trade, except a MIS price taken from the order
+ * book (`fromBook`), which is timed by its snapshot. Used where a trade is counted (Watchlist#observe) or printed as
+ * one (the closed, 休市 and 今日無成交 labels).
  */
 export const timedByTrade = (quote) => !quote.fromBook;
 
-// An exchange code (NMS, TAI, OSA…) and a currency (USD, TWD) as a source sends them; anything else is null.
+/** An exchange code (NMS, TAI, OSA…) as a source sends it; anything else is null. */
 export const exchangeCode = (value) => (typeof value === "string" && /^[A-Z]{2,5}$/.test(value) ? value : null);
+/** A currency code (USD, TWD) as a source sends it; anything else is null. */
 export const currencyCode = (value) => (typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : null);
 
 const MAX_POINTS = 400;
 
 /**
- * Finite closes in order with the time of each kept close; gaps (null bars) are dropped, each with its time. `times` is
- * null when they cannot be matched to the values: not an array, another length than `values`, or a time that is not a positive
- * number among those kept after the cap (a null time must never become 1970).
+ * The last MAX_POINTS closes that are positive numbers, in order, with the time of each. A gap (a null bar) is
+ * dropped with its time. `times` is null when it does not match `values` (not an array, or another length) or when
+ * a kept time is not a positive number: a null time must never become 1970.
  */
 export function cleanTimedSeries(values, times) {
   if (!Array.isArray(values)) return { series: [], times: null };

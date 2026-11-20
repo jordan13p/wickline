@@ -1,5 +1,5 @@
-// The chart: its line and price in the box (chartGeometry, laid out by chartLayout from how far the trading day has
-// run), and the crosshair's point and card. No Herdr imports, so tests run it under Node.
+// The chart: where its line and price fall in the box, by how far the trading day has run, and the crosshair's point
+// and card.
 import { futuresDay, taipeiAt } from "./calendar.js";
 import { formatChange, formatDate, number, stamp } from "./format.js";
 import { hoursWindow, lunchWithin } from "./freshness.js";
@@ -8,10 +8,11 @@ import { changePercent, positive } from "./quotes.js";
 import { tradesOn } from "./time.js";
 
 /**
- * The line through `series`, scaled into its box as [x%, y%] points spread over `extent` of its width (null: all of
- * it; chartLayout), where the reference price (the previous close) falls whenever it is positive, and
- * `dot` ({ x, price }: x a share of the width) as [x%, y%], or null. The y range holds all three. null when nothing
- * would be drawn: no reference, no dot and fewer than two points (a line needs two).
+ * The chart in its box, in % of the box, as `{ points, reference, dot }`; null when nothing would be drawn.
+ * - `points`: the line through `series` as [x, y], spread over `extent` of the width (null for all of it).
+ * - `reference`: the y of the previous close, when it is positive.
+ * - `dot`: `{ x, price }` (x a share of the width) as [x, y], or null.
+ * The y range holds all three. A line needs two points.
  */
 export function chartGeometry(series, reference, { extent, dot } = {}) {
   const points = Array.isArray(series) ? series : [];
@@ -45,11 +46,11 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
   };
 }
 
-// The crosshair card's size, estimated: its time at 11 px (6.5 px a character) over its price and change at 12 px
-// semibold (7.5 px a character, 6 px between them), 6 px padding each side and 4 px above and below; exactly 40 px
-// tall: a 14 px and a 16 px line (ui/parts.js sets both line heights) and the 2 px between them. Only to pick its side
-// and height and to catch a card too wide for both sides: a card on the line's left is placed by its right edge and
-// one at the bottom by its bottom edge, so the gaps never depend on the font.
+// The crosshair card's size. The width is estimated: the time at 11 px (6.5 px a character) over the price and change
+// at 12 px semibold (7.5 px a character, 6 px apart), with 6 px padding each side. The height is exact: a 14 px and a
+// 16 px line (ui/parts.js sets both) plus 2 px between and 4 px above and below.
+// The estimate only picks the card's side and catches a card too wide for both. A card on the line's left is placed
+// by its right edge, and one at the bottom by its bottom edge, so the gaps never depend on the font.
 const CROSSHAIR_TIME_CHAR_PX = 6.5;
 const CROSSHAIR_VALUE_CHAR_PX = 7.5;
 const CROSSHAIR_VALUE_GAP_PX = 6;
@@ -59,9 +60,9 @@ export const CROSSHAIR_CARD_PX = 40;
 const CROSSHAIR_GAP_PX = 6;
 
 /**
- * The drawn line point (chartGeometry) nearest `xShare` of the box's width, clamped to 0…1, the later one on a tie:
- * `{ index, x, y }` (x and y in % of the box), so past a line that ends early it holds on the last point. null when
- * there is no line, `times` is not one time per point, or `xShare` is not a finite number.
+ * The drawn line point nearest `xShare` of the box's width (clamped to 0…1), the later one on a tie, as
+ * `{ index, x, y }` in % of the box. Past a line that ends early it holds on the last point. null when there is no
+ * line, `times` is not one time per point, or `xShare` is not a finite number.
  */
 export function crosshairAt(geometry, times, xShare) {
   const points = geometry?.points ?? [];
@@ -76,10 +77,10 @@ export function crosshairAt(geometry, times, xShare) {
 }
 
 /**
- * What the crosshair's card says of point `index` of `quote`'s line: `time`, its local date and time, always dated
- * (a US line crosses midnight, so a bare time would read ambiguously): "11/20 10:32", "Nov 19 23:00"; `price`
- * ("2,175.00"); `change`, its change against the previous close ("+0.23%"), and `percent`, that change as a number,
- * both null without a positive previous close.
+ * What the crosshair's card says of point `index` of `quote`'s line:
+ * - `time`: its local date and time ("Nov 19 23:00"), always dated, as a US line crosses midnight;
+ * - `price`: "2,175.00";
+ * - `change` ("+0.23%") and `percent` (the same as a number), against the previous close; null without one.
  */
 export function crosshairLabel(quote, index, lang) {
   const time = quote.times[index];
@@ -90,9 +91,8 @@ export function crosshairLabel(quote, index, lang) {
 }
 
 /**
- * Where the crosshair's card (crosshairLabel) sits across a box `widthPx` wide for a line at `x`% of it: `{ left }`
- * 6 px right of the line when it fits there, else `{ right }` (its right edge 6 px left of the line) when it fits
- * there, else `{ left: 0 }`, held at the box's left edge. Its width is its wider line's.
+ * Where the crosshair's card sits across a box `widthPx` wide, for a line at `x`% of it: `{ left }` right of the line
+ * when it fits there, else `{ right }` left of the line when it fits there, else `{ left: 0 }` at the box's left edge.
  */
 export function crosshairSpot(x, label, widthPx) {
   const time = label.time.length * CROSSHAIR_TIME_CHAR_PX;
@@ -107,8 +107,8 @@ export function crosshairSpot(x, label, widthPx) {
 }
 
 /**
- * Where the crosshair's card sits down a box `heightPx` tall for a point `y`% down it: its middle at the point,
- * `{ top }` in px, held at the top (`{ top: 0 }`) and at the bottom by its own bottom edge (`{ bottom: 0 }`).
+ * Where the crosshair's card sits down a box `heightPx` tall, for a point `y`% down it: `{ top }` with its middle at
+ * the point, held inside the box by `{ top: 0 }` or `{ bottom: 0 }`.
  */
 export function crosshairLevel(y, heightPx) {
   const top = (y * heightPx) / 100 - CROSSHAIR_CARD_PX / 2;
@@ -116,8 +116,8 @@ export function crosshairLevel(y, heightPx) {
   return top + CROSSHAIR_CARD_PX >= heightPx ? { bottom: 0 } : { top };
 }
 
-// A future's trading day `day` (futuresDay) as its two sessions from TAIFEX_HOURS: the night from 15:00 on the trading
-// weekday before it (Friday's for a Monday), then the day session.
+// A future's trading day `day` as its two sessions: the night from 15:00 on the weekday before (Friday's for a
+// Monday), then the day session.
 function taifexDay(day) {
   let night = day - 1;
   while (!tradesOn(TAIFEX_HOURS, night)) night--;
@@ -127,9 +127,11 @@ function taifexDay(day) {
   ];
 }
 
-// A regular period ([start, end] in ms) as its spans of trading time: split around the exchange's lunch
-// (exchangeRule(...).lunch, via localWindow taken at its start, so a Saturday detail with Friday's periods still splits)
-// when it falls inside, else whole.
+/**
+ * A regular period ([start, end] in ms) as its spans of trading time: split around the exchange's lunch when it falls
+ * inside, else whole. The lunch is taken on the period's own day, so a Saturday detail with Friday's periods still
+ * splits.
+ */
 export function regularSpans(quote, regular) {
   const [start, end] = regular;
   const lunch = lunchWithin(quote, regular, start);
@@ -141,9 +143,9 @@ export function regularSpans(quote, regular) {
     : [[start, end]];
 }
 
-// The spans of trading time in the trading day that `t` belongs to, as [start, end] in ms, or null when unknown. A future:
-// the segments its periods list for `t`'s trading day, else TAIFEX's. Any other: its regular period, else its exchange's
-// hours (hoursWindow), split around the exchange's lunch (regularSpans).
+// The spans of trading time in the trading day of `t`, as [start, end] in ms, or null when unknown.
+// A future takes the segments its periods list for that day, else TAIFEX's sessions. Any other symbol takes its
+// regular period, else its exchange's hours, split around the lunch.
 function tradingSpans(quote, t) {
   if (kindOf(quote.symbol) === "future") {
     const day = futuresDay(t);
@@ -155,10 +157,10 @@ function tradingSpans(quote, t) {
 }
 
 /**
- * The share of `quote`'s trading day elapsed at `t`, in [0, 1], counting trading time only (a lunch break and the gap
- * between a future's sessions take none); null for a pair, FX or a Yahoo future (`=F`), or with neither periods nor
- * exchange hours. An earlier, finished day gives 1: a time before its period, any time while the quote's own time is
- * before its period's start (yesterday's bars under today's periods), and a period of zero length.
+ * The share of `quote`'s trading day elapsed at `t`, in [0, 1], counting trading time only: a lunch break and the gap
+ * between a future's sessions take none. null for a pair, FX or a Yahoo future (`=F`), or with neither periods nor
+ * exchange hours. A finished earlier day gives 1: a time before the period, a quote timed before its period's start
+ * (yesterday's bars under today's periods), or a period of zero length.
  */
 export function sessionProgress(quote, t) {
   const kind = kindOf(quote.symbol);
@@ -177,10 +179,10 @@ export function sessionProgress(quote, t) {
 const DOT_AFTER_MS = 300_000;
 
 /**
- * Where `quote`'s line and price fall in its box (chartGeometry draws them): `extent`, the share of the box the
- * line reaches, sessionProgress at its last point (`chartTimestamp`, else the quote's time); and `dot`, the price at
- * sessionProgress of its own time, when its trading day is known and no line is drawn or the line ends more than
- * DOT_AFTER_MS before it. null extent: the whole box.
+ * Where `quote`'s line and price fall in its box, as `{ extent, dot }`, for chartGeometry.
+ * - `extent`: the share of the box the line reaches, the session's progress at its last point; null for the whole box.
+ * - `dot`: the price at its own time's progress, when the trading day is known and no line is drawn or the line ends
+ *   more than DOT_AFTER_MS before the price.
  */
 export function chartLayout(quote) {
   const lineEnd = quote.chartTimestamp ?? quote.timestamp;

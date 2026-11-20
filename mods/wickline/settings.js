@@ -1,6 +1,5 @@
-// The person's settings: interface language, gain/loss colors, whether the
-// language prompt was dismissed, and where each source lives. No Herdr imports,
-// so tests run it under Node.
+// The user's settings: interface language, gain/loss colors, whether the language prompt was dismissed, and
+// where each source lives.
 import { LANGUAGES } from "./i18n.js";
 import { TYPICAL_EXCHANGE, exchangeRule, marketOrder } from "./markets.js";
 import { BINANCE_URL } from "./providers/binance.js";
@@ -8,7 +7,7 @@ import { FINNHUB_URL, finnhubAddressOk } from "./providers/finnhub.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "./providers/mis.js";
 import { YAHOOTW_CONSENT_VERSION } from "./providers/yahootw.js";
 
-// Herdr's shared state (persisted), so every copy uses the same settings.
+// In Herdr's persisted shared state, so every copy uses the same settings.
 export const SETTINGS_KEY = "wickline.settings.v1";
 // The Finnhub key's name in `data/wickline/secrets.json`; the key is never put in shared state.
 export const SECRET_KEY_FINNHUB = "finnhub.key";
@@ -23,18 +22,18 @@ const readUrl = (value, fallback) => (typeof value === "string" && value.trim() 
 
 const section = (sources, name) => (isPlainObject(sources) && isPlainObject(sources[name]) ? sources[name] : {});
 
-// The consent the person gave, by the version of the text they read; anything else is none.
+// The consent the user gave, by the version of the statement they read; anything else is none.
 const readAck = (value) =>
   isPlainObject(value) && Number.isInteger(value.version) ? { version: value.version } : null;
 
-/** Any object is read one field at a time; a field that is missing or unreadable gets its default. */
+/** The settings from any stored value, read one field at a time; a missing or unreadable field gets its default. */
 export function readSettings(value) {
   const saved = isPlainObject(value) ? value : {};
   const crypto = section(saved.sources, "crypto");
   const tw = section(saved.sources, "tw");
   const us = section(saved.sources, "us");
-  // Before the two Taiwan switches, `provider: "mis"` chose MIS. Every save writes `provider` in step with
-  // `mis`, so the two differ only after 0.3.1 (which writes `provider` alone) changed it: `provider` wins.
+  // `sources.tw.provider` is a legacy field: before the two Taiwan switches, `provider: "mis"` chose MIS. Every save
+  // writes it in step with `mis`, so the two differ only when an older build wrote `provider` alone; then it wins.
   const mis = typeof tw.provider === "string" ? tw.provider === "mis" : tw.mis === true;
   return {
     version: 1,
@@ -52,7 +51,7 @@ export function readSettings(value) {
           Number.isInteger(us.budgetPerMinute) && us.budgetPerMinute > 0 ? us.budgetPerMinute : DEFAULT_FINNHUB_BUDGET,
       },
       tw: {
-        // For going back to 0.3.1, which reads only this key; it follows `mis`.
+        // The legacy field, kept for older builds that read only it; it follows `mis`.
         provider: mis ? "mis" : "yahoo",
         mis,
         yahootw: tw.yahootw === true,
@@ -65,31 +64,31 @@ export function readSettings(value) {
   };
 }
 
-/** Finnhub is chosen for US stocks; it runs only once a key is saved too. */
+/** Whether Finnhub is chosen for US stocks; it runs only once a key is saved too. */
 export function finnhubChosen(settings) {
   return settings.sources.us.provider === "finnhub";
 }
 
 /**
- * What Save does with the Finnhub key, given the US source chosen, the key field (trimmed), whether a
- * key is saved now and whether the person pressed Remove (the dialog never holds the saved key): "write"
- * a typed key while Finnhub is chosen, "remove" the saved key after Remove with nothing typed, else null.
- * An empty field keeps the saved key; choosing Yahoo alone keeps it too.
+ * What Save does with the Finnhub key: "write" a typed key while Finnhub is chosen, "remove" the saved key after
+ * Remove with nothing typed, else null. An empty field keeps the saved key; so does choosing Yahoo.
+ * `typed` is the trimmed field; `saved` says a key is saved now. The dialog never holds the saved key itself.
  */
 export function keyChange({ provider, typed, saved, removing }) {
   if (provider === "finnhub" && typed !== "") return "write";
   return removing && saved ? "remove" : null;
 }
 
-// A Finnhub stop lifts only by what caused it, so a refused key never reads live after another edit:
-// these (an address the key may not be sent to) by a new address; any other (the key refused, missing
-// or unreadable) by a key typed or removed.
+// A Finnhub stop lifts only by changing what caused it, so a refused key never reads live after another edit.
+// These stops (an address the key may not be sent to) lift with a new address. Any other stop (the key refused,
+// missing or unreadable) lifts with a key typed or removed.
 const FINNHUB_ADDRESS_STOPS = ["finnhub.redirected", "finnhub.badUrl"];
 
 /**
- * A key Finnhub would use after Save. A key typed (trimmed) decides alone: Save writes it only when well
- * formed (`typedValid`). Otherwise the saved one, while it stays (no Remove) and `health` (each source's
- * current problem) has not stopped Finnhub. An address stop refuses any key, as Save would not send one.
+ * Whether Finnhub would have a usable key after Save.
+ * - A typed key decides alone: usable when well formed (`typedValid`) and no address stop holds.
+ * - Otherwise the saved key, while Remove was not pressed and `health` (each source's current problem) has not
+ *   stopped Finnhub.
  */
 export function finnhubKeyUsable({ typed, typedValid, saved, removing, health }) {
   const stops = health.filter((p) => p.provider === "finnhub" && p.stopped);
@@ -100,28 +99,28 @@ export function finnhubKeyUsable({ typed, typedValid, saved, removing, health })
 // Each Taiwan source's consent, as [key in sources.tw, current version].
 export const CONSENTS = { yahootw: ["yahootwAck", YAHOOTW_CONSENT_VERSION], mis: ["misAck", MIS_CONSENT_VERSION] };
 
-/** `tw` (a `sources.tw`) holds consent to `source`'s current statement; an older version is none. */
+/** Whether `tw` (a `sources.tw`) holds consent to `source`'s current statement; an older version is none. */
 export function consentGiven(tw, source) {
   const [ack, version] = CONSENTS[source];
   return tw[ack]?.version === version;
 }
 
-/** MIS is on only when switched on and consented to for the current statement. */
+/** Whether MIS is on: switched on and consented to for the current statement. */
 export function misEnabled(settings) {
   return settings.sources.tw.mis === true && consentGiven(settings.sources.tw, "mis");
 }
 
-/** MIS is switched on but its consent is missing or for an older statement: Taiwan does not use it until it is given again. */
+/** Whether MIS is switched on but its consent is missing or old; it is not used until consent is given again. */
 export function misReconfirm(settings) {
   return settings.sources.tw.mis === true && !misEnabled(settings);
 }
 
-/** Yahoo 奇摩股市 is on only when switched on and consented to for its own current statement. */
+/** Whether Yahoo 奇摩股市 is on: switched on and consented to for its own current statement. */
 export function yahootwEnabled(settings) {
   return settings.sources.tw.yahootw === true && consentGiven(settings.sources.tw, "yahootw");
 }
 
-/** Yahoo 奇摩股市 is switched on but its consent is missing or for an older statement. */
+/** Whether Yahoo 奇摩股市 is switched on but its consent is missing or old. */
 export function yahootwReconfirm(settings) {
   return settings.sources.tw.yahootw === true && !yahootwEnabled(settings);
 }
@@ -143,11 +142,11 @@ function realtimeSources(settings, market, keyAvailable) {
 }
 
 /**
- * The source a market would use with `settings`, and whether it is real time: the first real-time source
- * switched on (and consented to) that is not `failing` (provider ids), as the panel's rows pick it; the
- * first one when all of them are; Yahoo Finance when none is on, real time as the exchange table says for
- * the market's typical exchange (the US yes; Taiwan and other markets no). `keyAvailable`: a Finnhub key
- * would be there after Save (the key is never in the settings).
+ * The source a market would use with `settings`, and whether it is real time, as `{ live, source }`.
+ * - The first real-time source switched on that is not `failing`, as the panel's rows pick it; the first one when
+ *   all are failing.
+ * - Yahoo Finance when none is on, live as the exchange table says for the market's typical exchange.
+ * `keyAvailable` says a Finnhub key would be there after Save; the key is never in the settings.
  */
 export function marketState(settings, market, { keyAvailable = false, failing = [] } = {}) {
   const sources = realtimeSources(settings, market, keyAvailable);
@@ -155,8 +154,8 @@ export function marketState(settings, market, { keyAvailable = false, failing = 
   return { live: true, source: sources.find((source) => !failing.includes(source)) ?? sources[0] };
 }
 
-// The settings each source reads, as [section, field]: its problem holds while they are as saved. Yahoo
-// Finance reads none, so no edit drops its problem; Finnhub also reads the key (`keyEdited`).
+// The settings each source reads, as [section, field]; its problem holds while they are as saved.
+// Yahoo Finance reads none, so no edit drops its problem. Finnhub also reads the key (`keyEdited`).
 const SOURCE_FIELDS = {
   yahootw: [
     ["tw", "yahootw"],
@@ -175,9 +174,8 @@ const SOURCE_FIELDS = {
   binance: [["crypto", "binanceUrl"]],
 };
 /**
- * The entries of `health` (each source's problem when the dialog opened) that still describe `draft`:
- * a source's problem holds while the settings it reads are as in `saved`. `keyEdited`: a key typed or
- * Remove pressed (or, in a dialog left open after Save, a key written or removed).
+ * The entries of `health` (each source's problem when the dialog opened) that still describe `draft`: a problem holds
+ * while the settings its source reads are as in `saved`. `keyEdited` says a key was typed, written or removed.
  */
 export function currentHealth({ health, saved, draft, keyEdited }) {
   const same = ([section, field]) =>
@@ -190,10 +188,9 @@ export function currentHealth({ health, saved, draft, keyEdited }) {
 }
 
 /**
- * A market's status in the settings dialog: what it would use after Save (marketState over `draft`)
- * and `problem`, every source it could use failing, so it never reads live while it does not work.
- * Of `health`, only currentHealth counts: a source whose settings changed is judged by the choice
- * alone. `key`: the Finnhub key fields finnhubKeyUsable takes, less `health`.
+ * A market's status in the settings dialog: marketState over `draft`, plus `problem` when the source it would use is
+ * failing, so it never reads live while it does not work. Only currentHealth counts, so a source whose settings
+ * changed is judged by the choice alone. `key` holds finnhubKeyUsable's fields without `health`.
  */
 export function marketStatus({ saved, draft, health, market, key }) {
   const counted = currentHealth({ health, saved, draft, keyEdited: key.typed !== "" || key.removing });
@@ -203,14 +200,14 @@ export function marketStatus({ saved, draft, health, market, key }) {
 }
 
 /**
- * A source's statement folds away once consent to its current version is both saved and still in the
- * draft: a box just ticked stays where the pointer is until Save.
+ * Whether a source's statement folds away: once consent to its current version is both saved and in the draft.
+ * A box just ticked stays where the pointer is until Save.
  */
 export function consentCollapsed(saved, draft, source) {
   return consentGiven(saved.sources.tw, source) && consentGiven(draft.sources.tw, source);
 }
 
-/** The code of the first of `errors` (validateSettings) on a page of `markets`, taken in that order; null when none. */
+/** The first error code (from validateSettings) on the pages of `markets`, in that order; null when none. */
 export function firstDraftError(errors, markets) {
   for (const market of markets) {
     const path = Object.keys(errors).find((key) => key.startsWith(`sources.${market}.`));
@@ -219,26 +216,26 @@ export function firstDraftError(errors, markets) {
   return null;
 }
 
-// Field path -> error code; an https address, optionally with a path, and no userinfo, query or fragment.
-// Finnhub's keeps the host finnhub.io (it is sent the key).
+// The address fields, by error path. Each must be an https address, optionally with a path, and no userinfo, query
+// or fragment. Finnhub's keeps the host finnhub.io, as it is sent the key.
 // A field is checked only while it is shown: the MIS address only with MIS on.
 const URL_FIELDS = [
   ["sources.us.finnhubUrl", (s) => (s.sources.us?.provider === "finnhub" ? s.sources.us.finnhubUrl : null)],
   ["sources.tw.misUrl", (s) => (s.sources.tw?.mis === true ? s.sources.tw.misUrl : null)],
   ["sources.crypto.binanceUrl", (s) => s.sources.crypto.binanceUrl],
 ];
-// The host has at least one letter or digit and no `@` (a password in the address would be sent as is).
+// The host has at least one letter or digit and no `@`: a password in the address would be sent as is.
 const HTTPS_ADDRESS = /^https:\/\/[^\s/?#@]*[a-z0-9][^\s/?#@]*(\/[^\s?#]*)?$/i;
 
-// A key as typed, trimmed: no spaces or control characters inside, and a loose length bound (a key in
-// Finnhub's current shape is 20 characters; a longer future one still fits).
+// A typed key, trimmed, has no spaces or control characters inside. The length bound is loose: Finnhub's keys are
+// 20 characters now, and a longer one still fits.
 const KEY_MAX_LENGTH = 128;
 const KEY_BAD_CHARACTER = /[\s\x00-\x1f\x7f]/;
 
 /**
- * What stops a save: `{}` is valid. The text for each code is in i18n/. `finnhubKey` is the key
- * typed in the dialog (it is never in the settings; without it the key is not checked) and `keySaved`
- * says a saved key stays after Save, so an empty field keeps it.
+ * What stops a save, as error path → code; `{}` is valid. `finnhubKey` is the key typed in the dialog, which is
+ * never in the settings; without it the key is not checked. `keySaved` says a saved key stays, so an empty field
+ * keeps it.
  */
 export function validateSettings(settings, { finnhubKey, keySaved = false } = {}) {
   const errors = {};
@@ -267,8 +264,8 @@ export function validateSettings(settings, { finnhubKey, keySaved = false } = {}
 }
 
 /**
- * What a save writes: keys this build does not know are kept (a newer copy may have added them),
- * known ones are read as usual, then `change` applies.
+ * What a save writes: the known keys read as usual, then `change`. Keys this build does not know are kept, as a newer
+ * copy may have added them.
  */
 export function mergeSettings(raw, change) {
   const old = isPlainObject(raw) ? raw : {};
@@ -300,7 +297,7 @@ function mergeSources(old, known, change) {
   return sources;
 }
 
-/** Gains in red (and losses in green): automatic means every language but English. */
+/** Whether gains show in red (and losses in green). Automatic means every language but English. */
 export function upIsRed(settings) {
   if (settings.colors === "red-up") return true;
   if (settings.colors === "green-up") return false;

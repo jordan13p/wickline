@@ -1,8 +1,7 @@
-// Moving Wickline between a pane, a tab of its own and a docked block, and whether a docked block is on
-// screen. No Herdr imports, so tests run it under Node: main.js hands in `host`, Herdr's functions
-// `{ panes, layout, run, shared, setShared, focused }`, and the view, whose move state these read and
-// set: `card`, `dock`, `yielding`, `dockShown`, `fromDock`, `moving`, `filter` and the tab an own-tab copy
-// was opened from (view.from: by a pane or by the docked block).
+// Moving Wickline between a pane, a tab of its own and a docked block, and whether a docked block is on screen.
+// main.js hands in `host`, Herdr's `{ panes, layout, run, shared, setShared, focused }`, and the view.
+// These functions read and set the view's move state: `card`, `dock`, `yielding`, `dockShown`, `fromDock`,
+// `moving`, `filter`, and the tab an own-tab copy was opened from, as view.from.
 // `cx` is the click's; each wait runs in a task spawned from it that owns its own cx.
 import {
   DOCK_TAB_KEY,
@@ -20,33 +19,33 @@ import {
 } from "./panes.js";
 
 /**
- * Where a docked block sits and whether it is on screen, `{ dock, yielding, shown }`: it is on screen while
- * its panel is open and its tab is the stack's active one, and draws quotes unless it yields to its own tab
- * (then it fetches nothing either). A copy that is not a card is not docked and always on screen. Reads the
- * layout each time, as the person may move the block or switch layouts. On the way it clears a dock tab
- * record left stale, from the loops too: a hidden block never renders, and the record must be gone before
- * a Wickline pane opened another way in that tab could make the block yield.
+ * Where a docked block sits and whether it is on screen, as `{ dock, yielding, shown }`.
+ * A block is shown while its panel is open, its tab is the stack's active one, and it does not yield to its own tab.
+ * A copy that is not a card is not docked and always shown. The layout is read each time, as the user may move the
+ * block or switch layouts.
+ * It also clears a stale dock tab record, from the loops too: a hidden block never renders, and the record must be
+ * gone before a Wickline pane opened another way in that tab could make the block yield.
  */
 function readDock(host, card) {
   const tree = card ? host.layout() : null;
-  // The first card block in the layout is taken to be this copy: Wickline is docked once, as the
-  // office layout does, and panes() cannot tell copies apart anyway.
+  // The first card block in the layout is taken to be this copy: Wickline is docked once, and panes() cannot tell
+  // copies apart anyway.
   const dock = tree && dockOf(tree, MOD_ID);
   if (!dock) return { dock: null, yielding: false, shown: true };
   const dockTab = host.shared(DOCK_TAB_KEY);
   const all = host.panes();
-  // Written only while stale, so the write (which re-renders every copy) happens once.
+  // Written only while stale, so the write, which re-renders every copy, happens once.
   if (staleDockTab(dockTab, all)) host.setShared(DOCK_TAB_KEY, { tab: null });
   const yielding = blockYields(dockTab, all);
   return { dock, yielding, shown: isShown(tree, dock) && !yielding };
 }
 
-/** The loops' check: this copy is on screen. It leaves the view as it is; render keeps it (syncDock). */
+/** The loops' check that this copy is on screen. It leaves the view as it is; render updates it (syncDock). */
 export function onScreen(host, view) {
   return readDock(host, view.card).shown;
 }
 
-/** On render: sets `view.dock`, `view.yielding` and `view.dockShown`, which that render's drawing and clicks read. */
+/** On render: sets `view.dock`, `view.yielding` and `view.dockShown` for that render's drawing and clicks. */
 export function syncDock(host, view) {
   const { dock, yielding, shown } = readDock(host, view.card);
   view.dock = dock;
@@ -54,18 +53,17 @@ export function syncDock(host, view) {
   view.dockShown = shown;
 }
 
-// What a moved copy is handed in its props besides where it came from: this copy's market filter.
+// What a moved copy gets in its props besides where it came from: this copy's market filter.
 const carried = (view) => ({ filter: view.filter });
 
 /**
- * The header's own-tab icon, `{ icon, label, go(cx) }`, or null. A pane copy that shares its tab offers
- * its own tab; the copy in that tab offers the way back, when there is a pane to go back beside. A docked
- * block offers its own tab while it is shown, and its tab copy offers the way back to the panel. Dialog
- * copies draw neither (they never reach the header). Clicking a mod pane focuses it, so the focused
- * Wickline pane is the one clicked; each click checks again. panes() lists the new copy a little after
- * run() returns, so a task looks for it (closeOnceOpened) and only then closes the old copy's own pane,
- * never a shell the person split in beside it. Clicks while a move is under way do nothing, so copies
- * never pile up.
+ * The header's own-tab icon, `{ icon, label, go(cx) }`, or null.
+ * - A pane copy that shares its tab offers its own tab; the copy in that tab offers the way back, when there is a
+ *   pane to go back beside.
+ * - A docked block offers its own tab while it is shown; its tab copy offers the way back to the panel.
+ * Clicking a mod pane focuses it, so the focused Wickline pane is the one clicked. panes() lists the new copy a
+ * little after run() returns, so a task waits for it (closeOnceOpened) and only then closes the old copy's own pane,
+ * never a shell split in beside it. Clicks while a move is under way do nothing, so copies never pile up.
  */
 export function ownTabAction(host, view) {
   if (view.fromDock) {
@@ -118,9 +116,9 @@ export function ownTabAction(host, view) {
 }
 
 /**
- * The block's own tab: opens it, and only once panes() shows it records the tab (so the block yields
- * if the panel is opened again) and collapses the panel. The block's copy stays, so the button works
- * again afterwards; when the tab never shows up, nothing collapses.
+ * The docked block's own-tab button. It opens the tab; once panes() shows it, it records the tab (so the block
+ * yields if the panel is opened again) and collapses the panel. When the tab never shows up, nothing collapses.
+ * The block's copy stays, so the button works again afterwards.
  */
 function dockTabAction(host, view) {
   if (!view.dockShown) return null;
@@ -131,7 +129,7 @@ function dockTabAction(host, view) {
       if (view.moving) return;
       const before = host.panes();
       const { collapse } = view.dock;
-      // The tab the person is on, to return to on the way back.
+      // The tab the user is on, to return to on the way back.
       const from = host.focused()?.tab;
       host.run("tab.new", {
         mod: MOD_ID,
@@ -153,14 +151,13 @@ function dockTabAction(host, view) {
 }
 
 /**
- * Reopens the panel on the Wickline block, and only once it is shown closes `pane`, the Wickline pane
- * of the tab (never the tab, so a shell split in beside it stays), and forgets the tab. The tab copy
- * selects the tab it was opened from (view.from) before closing. The tab's own copy passes the focused
- * Wickline pane; the block's yield view, which is not focused, the dock tab's.
- * With the panel already open, select and show change nothing. The block is found again in the
- * layout: the person may have moved it since. No pane, nothing happens: never close one unseen.
- * `leaving`: `pane` is this copy's own (the tab copy), so the move keeps further clicks out for good;
- * the block's yield view closes another copy's pane and stays, so its buttons keep working.
+ * Reopens the panel on the Wickline block. Once it is shown, closes `pane` (the tab's Wickline pane, never the tab,
+ * so a shell split in beside it stays) and forgets the tab.
+ * - The tab copy passes its own focused pane with `leaving` true. It first selects the tab it was opened from, and
+ *   its move keeps further clicks out for good.
+ * - The block's yield view passes the dock tab's pane with `leaving` false, and stays, so its buttons keep working.
+ * The block is found again in the layout, as the user may have moved it. Without a pane nothing happens: never close
+ * a pane unseen.
  */
 function backToPanel(host, view, cx, pane, leaving) {
   if (view.moving) return;
@@ -171,13 +168,13 @@ function backToPanel(host, view, cx, pane, leaving) {
     if (dock.collapse) host.run("layout.show", { id: dock.collapse });
     if (!(await waitUntil(() => isShown(host.layout(), dock), { sleep: (ms) => cx.sleep(ms) }))) return false;
     host.setShared(DOCK_TAB_KEY, { tab: null });
-    // Closing the tab would hand the focus to its neighbour, so the tab copy first returns the person to
-    // the tab they opened it from, while that tab is still there. A refused select still lets the pane close.
+    // Closing the tab would hand the focus to its neighbour, so the tab copy first returns the user to the tab they
+    // opened it from, while that tab is still there. A refused select still lets the pane close.
     if (leaving && view.from && host.panes().some((p) => p.tab === view.from)) {
       try {
         host.run("tab.select", { id: view.from });
       } catch {
-        // Herdr's own choice of tab then stands, as before.
+        // Herdr's own choice of tab then stands.
       }
     }
     host.run("pane.close", { pane: pane.pane });
@@ -198,9 +195,9 @@ export function backFromYield(host, view, cx) {
 }
 
 /**
- * Runs `step(cx)` as a move, in a spawned task that owns its cx. Further clicks do nothing meanwhile.
- * `step` resolves true once this copy is going away (its pane closed), which keeps them out for good;
- * false, or a throw, leaves everything as it was and the button works again.
+ * Runs `step(cx)` as a move, in a spawned task that owns its cx; further clicks do nothing meanwhile.
+ * `step` resolves true once this copy is going away (its pane closed), which keeps clicks out for good.
+ * False, or a throw, leaves everything as it was, and the button works again.
  */
 function runMove(view, cx, step) {
   view.moving = true;

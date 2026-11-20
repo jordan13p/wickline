@@ -1,17 +1,17 @@
-// The open detail's quote, handed over through one shared key by the panel copy that opened it. The key holds the quote
-// with its line's times packed (packTimes); the opening copy keeps it plain and the detail unpacks it on adoption. The
-// decisions only: main.js reads and writes the key (its detailStore). No imports, so tests run it under Node.
+// The open detail's quote, handed over through one shared key by the panel copy that opened it.
+// The key holds the quote with its line's times packed (packTimes); the opening copy keeps it plain, and the detail
+// unpacks it when it adopts it. This module holds the decisions only; main.js reads and writes the key (detailStore).
 
 export const DETAIL_KEY = "wickline.detail";
 
 /**
- * A token no other copy, and no earlier run, makes: the time and a random draw, both in base 36. The detail gets it
- * in its props, so it adopts only what its own opening copy wrote.
+ * A token no other copy or earlier run makes: the time and a random draw, both in base 36. The detail gets it in its
+ * props, so it adopts only what its own opening copy wrote.
  */
 export const makeToken = (now, random) => `${now.toString(36)}-${Math.floor(random * 36 ** 8).toString(36)}`;
 
-// A hand-over as written: `{ symbol, token, seq, quote }`. Anything else (`{}` once cleared, a malformed value from
-// another version) is no one's.
+// Whether `stored` is a hand-over, `{ symbol, token, seq, quote }`. Anything else (`{}` once cleared, a malformed
+// value) belongs to no one.
 function handedOver(stored) {
   return (
     stored !== null &&
@@ -27,12 +27,12 @@ function handedOver(stored) {
 }
 
 /**
- * What a hand-over compares: the whole quote, or, while the list is paused, all but its closure marks. A loop that
- * fetches nothing still runs a pass at each edge and at least every 120 s, where the row's quote is marked again at the
- * new time: a paused detail keeps the mark it holds until the mark's end (heldMarks), never a newer one at midnight.
- * Whatever else the row reads differently (a fallback as its overlay ages, a sole source's periods turning, a source
- * turned off) is handed while paused too. Both keys are built in the current mode, so a pause after a write never
- * hands a mark change.
+ * What a hand-over compares: the whole quote, or all but its closure marks while the list is paused.
+ * A paused loop still runs a pass at each edge and at least every 120 s, and marks the row again at the new time.
+ * A paused detail keeps the mark it holds until the mark ends (heldMarks), so a newer mark is not handed over.
+ * Every other change to the row (a fallback as its overlay ages, a sole source's periods, a source turned off) is
+ * handed over while paused too. Both keys are built in the current mode, so a pause after a write never hands over a
+ * mark change.
  */
 function contentKey(quote, paused) {
   if (!paused) return JSON.stringify(quote);
@@ -40,7 +40,7 @@ function contentKey(quote, paused) {
   return JSON.stringify(rest);
 }
 
-// The packed form, only in the written key: whole seconds, the first time then each step.
+/** The quote as the key holds it: `times` packed as whole seconds, the first time then each step. */
 export function packTimes(quote) {
   if (!("times" in quote)) return quote;
   const { times, ...rest } = quote;
@@ -53,8 +53,8 @@ export function packTimes(quote) {
 }
 
 /**
- * The adopted form: `times` in ms again, only from a packed value whose steps are whole seconds and that gives one time
- * per value of the line. A plain `times` in the key, or anything that cannot be aligned, leaves the quote without times.
+ * The quote as the detail adopts it: `times` in ms again. Only a packed value with whole-second steps and one time per
+ * value of the line is unpacked; anything else leaves the quote without times.
  */
 export function unpackTimes(quote) {
   const { timesPacked: packed, times: _times, ...rest } = quote;
@@ -70,16 +70,16 @@ export function unpackTimes(quote) {
   return { ...rest, times };
 }
 
-/** The first write, before the dialog opens: `value` for the key, `mine` what the opening copy keeps of it (plain). */
+/** The first write, before the dialog opens: `value` for the key, and `mine`, the plain copy the opener keeps. */
 export function startHandover(symbol, token, quote) {
   return { value: { symbol, token, seq: 1, quote: packTimes(quote) }, mine: { symbol, token, seq: 1, quote } };
 }
 
 /**
- * After a pass of the opening copy's loop: what to write (`write`, null for nothing) and what it keeps (`mine`), given
- * the key as read now (`stored`), what it keeps, its row's quote now (null: the symbol is no longer listed) and whether
- * the list is paused. Once the key holds anything but its own token (another detail, or `{}`), the copy drops its
- * token for good. A quote that reads as the last one written is not written again.
+ * After a pass of the opening copy's loop: what to write (`write`, null for nothing) and what to keep (`mine`).
+ * `stored` is the key as read now; `quote` is the row's quote now, null once the symbol is no longer listed.
+ * Once the key holds anything but this copy's token (another detail, or `{}`), the copy drops its token for good.
+ * A quote that reads as the last one written is not written again.
  */
 export function nextWrite(stored, mine, quote, paused) {
   if (!mine || !handedOver(stored) || stored.token !== mine.token) return { write: null, mine: null };
@@ -88,10 +88,7 @@ export function nextWrite(stored, mine, quote, paused) {
   return { write: { ...next, quote: packTimes(quote) }, mine: { ...next, quote } };
 }
 
-/**
- * The detail's read: `{ quote, seq }` (the quote unpacked) when the key holds its own token (`held`) with a newer `seq`,
- * else null.
- */
+/** The detail's read: `{ quote, seq }`, unpacked, when the key holds its own token with a newer `seq`; else null. */
 export function adopt(stored, held) {
   if (!held || !handedOver(stored) || stored.token !== held.token || stored.seq <= held.seq) return null;
   return { quote: unpackTimes(stored.quote), seq: stored.seq };
