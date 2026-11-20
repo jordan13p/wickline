@@ -65,9 +65,16 @@ test("no module imports program runners from herdr, but main.js its one exec", (
   assert.deepEqual(herdrImports('import {\n  theme,\n  exec as run } from "herdr";'), ["theme", "exec"]);
 });
 
-// Every module specifier, whether it is imported with a list, a namespace, a default or `import("…")`.
+// The source without comments, which may name the things the pins forbid; a `//` after `:` or a quote is a URL, not a
+// comment.
+const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+
+// Every module specifier of the code, whether it is imported with a list, a namespace, a default or `import("…")`; a
+// comment such as `// comes from "x"` is not an import.
 function importSpecifiers(source) {
-  return [...source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["'`]([^"'`]+)["'`]/g)].map(([, specifier]) => specifier);
+  return [...code(source).matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["'`]([^"'`]+)["'`]/g)].map(
+    ([, specifier]) => specifier,
+  );
 }
 
 // The layer rule. The core imports only other modules of the mod, so `node --test` can load it. ui/ adds
@@ -97,7 +104,7 @@ test("core modules import only relative modules; ui/ adds the view libraries", (
   assert.ok(ui > 0, "no ui module found");
   assert.deepEqual(
     importSpecifiers(
-      'import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";\nawait import ( "herdr" );\nawait import(`herdr`);',
+      '// comes from "./nope.js"\n/* import "nope" */\nimport { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";\nawait import ( "herdr" );\nawait import(`herdr`);',
     ),
     ["./a.js", "fs/promises", "gpui-kit", "herdr", "herdr"],
   );
@@ -133,8 +140,6 @@ test("no import cycle among the mod's modules", () => {
 // find anything else. `fetch:` as an object key and `fetchedAt` are not the global.
 const HERDR_GLOBALS =
   /(?<![.\w$])(?:fetch\b(?!\s*:)|localStorage\b|globalThis\b)|\b(?:window|self)\s*\.\s*fetch\b|\}\s*=\s*(?:window|self)\b/;
-// The source without comments, which may name these; a `//` after `:` or a quote is a URL, not a comment.
-const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
 // The source with each string's text blanked, quote-aware: the text of '…', "…" and a template turns to spaces
 // (a line break stays one), so every index still points at the same code; a template keeps its `${…}`
 // expressions, which are code. (No module writes a quote inside a regex literal.)
@@ -209,7 +214,7 @@ function closing(blanked, at) {
   return -1;
 }
 // A function or method by name, from its head to its closing brace, as code(). A call never counts: its `)` is not
-// followed by `{`. Throws unless exactly one declaration has the name, so a pin never reads an empty slice.
+// followed by `{`. Throws unless exactly one declaration has the name and it closes, so a pin never reads an empty slice.
 function body(source, name) {
   const text = code(source);
   const blanked = withoutStrings(text);
@@ -222,16 +227,23 @@ function body(source, name) {
     if (blanked[brace] === "{") hits.push({ start: match.index, brace });
   }
   if (hits.length !== 1) throw new Error(`body: ${hits.length} declarations of ${name}`);
-  return text.slice(hits[0].start, closing(blanked, hits[0].brace) + 1);
+  const end = closing(blanked, hits[0].brace);
+  if (end < 0) throw new Error(`body: no closing brace for ${name}`);
+  return text.slice(hits[0].start, end + 1);
 }
-// From `anchor` through the braces that follow it, as code(). Throws unless `anchor` occurs exactly once.
+// From `anchor` through the braces that follow it, as code(). Throws unless `anchor` occurs exactly once and a brace
+// follows it and closes.
 function block(source, anchor) {
   const text = code(source);
   const count = text.split(anchor).length - 1;
   if (count !== 1) throw new Error(`block: ${count} occurrences of ${anchor}`);
   const at = text.indexOf(anchor);
   const blanked = withoutStrings(text);
-  return text.slice(at, closing(blanked, blanked.indexOf("{", at + anchor.length)) + 1);
+  const open = blanked.indexOf("{", at + anchor.length);
+  if (open < 0) throw new Error(`block: no { after ${anchor}`);
+  const end = closing(blanked, open);
+  if (end < 0) throw new Error(`block: no closing brace after ${anchor}`);
+  return text.slice(at, end + 1);
 }
 const uiFiles = () => jsFiles().filter((url) => relativeName(url).startsWith("ui/"));
 // The panel and whatever it splits into: every ui/ module but the two dialogs and the parts they share with it.
@@ -826,7 +838,8 @@ test("a collapsed sidebar row is one line with its notes", () => {
 });
 
 test("the detail's stats are numbers without the currency", () => {
-  assert.match(flat(read(new URL("ui/detail-dialog.js", MOD))), /\bnumber\(\w+,price\)/);
+  // On code(), not flat(): `return number(` would flatten to `returnnumber(` and lose the word boundary.
+  assert.match(code(read(new URL("ui/detail-dialog.js", MOD))), /\bnumber\(\s*\w+\s*,\s*price\s*,?\s*\)/);
 });
 
 test("the detail names a future's day or night session", () => {
