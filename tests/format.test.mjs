@@ -21,25 +21,20 @@ import { compact, formatAmount, formatCount, formatSize } from "../mods/wickline
 import { formatShare } from "../mods/wickline/format.js";
 import { formatSignedCount } from "../mods/wickline/format.js";
 import {
-  activityCells,
   amplitude,
   bookTotals,
-  detailBook,
   detailSource,
   detailTimes,
-  innerOuter,
   ladder,
-  secondRow,
   sessionTimes,
   sessionTimesParts,
 } from "../mods/wickline/detail.js";
-import { decodeStockList } from "../mods/wickline/providers/yahootw.js";
 import { formatDate, nextDayTurn, stateText } from "../mods/wickline/format.js";
 import { lineDate } from "../mods/wickline/format.js";
-import { chartGeometry, crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot } from "../mods/wickline/chart.js";
+import { chartGeometry, crosshairLabel } from "../mods/wickline/chart.js";
 import { decodeKlines } from "../mods/wickline/providers/binance.js";
 import { freshness, sessionName, sessionOf } from "../mods/wickline/freshness.js";
-import { CLOSE_1224, at, day, jsonFixture, ok, say, taipei, withTZ } from "./helpers.mjs";
+import { CLOSE_1224, SCENARIO_BOOK, at, day, jsonFixture, levels, ok, say, taipei, withTZ } from "./helpers.mjs";
 import { t } from "../mods/wickline/i18n.js";
 
 test("formats without Intl", () => {
@@ -108,16 +103,6 @@ test("dates by language, times in 24 hours", () => {
   assert.equal(formatStaleDate({ symbol: "AAPL", timestamp: new Date(2026, 10, 2, 9).getTime() }, now, "zh-TW"), "");
   assert.equal(formatTime(new Date(2026, 10, 2, 21, 5, 7).getTime()), "21:05");
   assert.equal(formatTime(new Date(2026, 10, 2, 9, 5, 7).getTime(), true), "09:05:07");
-});
-
-// A line needs two points: a lone one with no rule and no dot draws nothing, so the detail shows no empty box.
-test("a lone point is drawn only with a rule or a dot", () => {
-  assert.equal(chartGeometry([2200], null), null);
-  assert.equal(chartGeometry([2200], 0, { extent: 0.5 }), null);
-  const ruled = chartGeometry([2200], 2190);
-  assert.ok(ruled.reference !== null && ruled.reference > 0 && ruled.reference < 100);
-  const dotted = chartGeometry([2200], null, { extent: 0.2, dot: { x: 0.5, price: 2210 } });
-  assert.deepEqual([dotted.reference, dotted.dot[0]], [null, 50]);
 });
 
 test("scales a line into its box", () => {
@@ -492,24 +477,6 @@ test("nextDayTurn: Taipei midnight for a Taiwan row, the local one for others, o
   });
 });
 
-const AAPL_Q = {
-  symbol: "AAPL",
-  price: 230,
-  previousClose: 225,
-  currency: "USD",
-  volume: 48_213_500,
-  sizeUnit: "share",
-};
-const BTC_Q = {
-  symbol: "BTC/USDT",
-  price: 65_000,
-  previousClose: 64_000,
-  currency: "USDT",
-  volume: 1234.5,
-  sizeUnit: "BTC",
-};
-const text = (cell) => [cell.label, cell.value, cell.unit].filter(Boolean).join(" ");
-
 test("counts and amounts are grouped by hand", () => {
   assert.equal(formatCount(42269), "42,269");
   assert.equal(formatCount(41999.6), "42,000");
@@ -518,39 +485,6 @@ test("counts and amounts are grouped by hand", () => {
   assert.equal(formatAmount(1234), "1,234");
   assert.equal(formatAmount(0.125), "0.13");
   assert.equal(formatAmount(1234.004), "1,234");
-});
-
-test("Another market", () => {
-  assert.equal(text(secondRow(AAPL_Q, false, "en", say("en"))[0]), "Volume 48.2M");
-  assert.deepEqual(
-    secondRow(BTC_Q, false, "en", say("en")).map((c) => c && text(c)),
-    ["24h volume 1,234.5 BTC", null, null],
-  );
-  assert.deepEqual(
-    secondRow(AAPL_Q, false, "en", say("en")).map((c) => c && text(c)),
-    ["Volume 48.2M", null, null, null],
-  );
-});
-
-test("Detail at limit-up", () => {
-  const q = { symbol: "6488.TWO", price: 563, previousClose: 512, limitUp: 563, limitDown: 461 };
-  assert.deepEqual(
-    secondRow(q, false, "zh-TW", say("zh-TW")).map((c) => c && text(c)),
-    [null, "漲停價 563.00", "跌停價 461.00", null],
-  );
-});
-
-test("Limits without the limit", () => {
-  const q = { symbol: "2330.TW", price: 2240, previousClose: 2170, limitUp: 2345, limitDown: 1925 };
-  const row = secondRow(q, false, "zh-TW", say("zh-TW"));
-  assert.equal(text(row[1]), "漲停價 2,345.00");
-  assert.equal(text(row[2]), "跌停價 1,925.00");
-  // A stock without daily limits (MIS's 9999.95) has none to show.
-  assert.equal(secondRow({ ...q, limitUp: 9999.95, limitDown: null }, false, "zh-TW", say("zh-TW")), null);
-});
-
-test("Layout unchanged", () => {
-  assert.equal(secondRow({ symbol: "^GSPC", price: 6000, previousClose: 5990 }, false, "en", say("en")), null);
 });
 
 test("The change amount beside the change", () => {
@@ -600,145 +534,6 @@ test("a pair's large volume is compact, with its base asset", () => {
   assert.deepEqual(formatSize(999_999.5, "DOGE", "zh-TW", say("zh-TW")), { value: "999,999.5", unit: "DOGE" });
 });
 
-// The recorded 2026-11-18 rows (2330.TW after the close, WTX& in the day session) as Yahoo 奇摩股市's decoder gives them.
-const DETAIL_NOW = at("2026-11-18T06:05:00Z");
-const ytw = (name, symbol) => decodeStockList([symbol], ok(jsonFixture(name)), DETAIL_NOW).quotes[symbol];
-const YTW_2330 = ytw("ytw-detail-close", "2330.TW");
-const YTW_WTX = ytw("ytw-detail-mixed", "WTX&");
-const texts = (cells) => cells.map((cell) => cell && text(cell));
-
-test("Yahoo 奇摩股市's activity", () => {
-  assert.deepEqual(texts(activityCells(YTW_2330, "zh-TW", say("zh-TW"))), [
-    "成交量 42,269 張",
-    "昨日成交量 54,723 張",
-    "成交值 920.47 億",
-    "最後一筆 4,869 張",
-  ]);
-  // Below 1 億, 萬.
-  assert.equal(
-    text(activityCells({ ...YTW_2330, turnover: 48_213_500 }, "zh-TW", say("zh-TW"))[2]),
-    "成交值 4,821.35 萬",
-  );
-});
-
-test("Other languages", () => {
-  const en = activityCells(YTW_2330, "en", say("en"));
-  assert.equal(text(en[0]), "Volume 42,269 lots");
-  assert.equal(text(en[2]), "Turnover 92.05B");
-  const cn = activityCells(YTW_2330, "zh-CN", say("zh-CN"));
-  assert.equal(text(cn[0]), "成交量 42,269 张");
-  assert.equal(text(cn[2]), "成交额 920.47 亿");
-});
-
-test("MIS alone", () => {
-  const mis = {
-    symbol: "2330.TW",
-    source: "mis",
-    price: 2175,
-    previousClose: 2170,
-    volume: 42_269,
-    lastSize: 4_869,
-    sizeUnit: "lot",
-  };
-  assert.deepEqual(texts(activityCells(mis, "zh-TW", say("zh-TW"))), [
-    "成交量 42,269 張",
-    "昨日成交量 —",
-    "成交值 —",
-    "最後一筆 4,869 張",
-  ]);
-});
-
-test("Before the open", () => {
-  // Yahoo Finance's earlier-day quote, its activity stripped under MIS: every label stays, each value `—`.
-  const bare = { symbol: "2330.TW", source: "yahoo", price: 2215, previousClose: 2200, high: 2220, low: 2190 };
-  assert.deepEqual(texts(activityCells(bare, "zh-TW", say("zh-TW"))), [
-    "成交量 —",
-    "昨日成交量 —",
-    "成交值 —",
-    "最後一筆 —",
-  ]);
-  assert.deepEqual(texts(secondRow({ ...bare, high: null, low: null }, true, "zh-TW", say("zh-TW"))), [
-    "均價 —",
-    "漲停價 —",
-    "跌停價 —",
-    "振幅 —",
-  ]);
-  assert.deepEqual(texts(activityCells(bare, "en", say("en"))), [
-    "Volume —",
-    "Prev volume —",
-    "Turnover —",
-    "Last size —",
-  ]);
-  // One column is unchanged: nothing to show, no row.
-  assert.equal(secondRow({ ...bare, high: null, low: null }, false, "zh-TW", say("zh-TW")), null);
-});
-
-test("A future", () => {
-  assert.deepEqual(texts(activityCells(YTW_WTX, "zh-TW", say("zh-TW"))), [
-    "成交量 82,587 口",
-    "昨日成交量 170,139 口",
-    "成交值 —",
-    "最後一筆 3 口",
-  ]);
-  const row = secondRow(YTW_WTX, true, "zh-TW", say("zh-TW"));
-  assert.equal(text(row[0]), "均價 —");
-  assert.equal(row.length, 4);
-});
-
-test("The bar", () => {
-  const tw = innerOuter(YTW_2330, say("zh-TW"));
-  assert.equal(tw.left, "內盤 39.1% 15,147");
-  assert.equal(tw.right, "外盤 60.9% 23,585");
-  assert.ok(Math.abs(tw.innerShare - 0.391) < 0.0005);
-  assert.ok(Math.abs(tw.outerShare - 0.609) < 0.0005);
-  const cn = innerOuter(YTW_2330, say("zh-CN"));
-  assert.deepEqual([cn.left, cn.right], ["内盘 39.1% 15,147", "外盘 60.9% 23,585"]);
-  const en = innerOuter(YTW_2330, say("en"));
-  assert.deepEqual([en.left, en.right], ["At bid 39.1% 15,147", "At ask 60.9% 23,585"]);
-});
-
-test("an inner volume of 0 reads 0.0%", () => {
-  const io = innerOuter({ ...YTW_2330, inner: 0, outer: 38_732 }, say("zh-TW"));
-  assert.deepEqual([io.left, io.right, io.innerShare, io.outerShare], ["內盤 0.0% 0", "外盤 100.0% 38,732", 0, 1]);
-});
-
-test("no inner/outer line without both, or with both at 0", () => {
-  const { inner, outer, ...rest } = YTW_2330;
-  assert.equal(innerOuter(rest, say("zh-TW")), null);
-  assert.equal(innerOuter({ ...rest, inner }, say("zh-TW")), null);
-  assert.equal(innerOuter({ ...rest, outer }, say("zh-TW")), null);
-  assert.equal(innerOuter({ ...rest, inner: 0, outer: 0 }, say("zh-TW")), null);
-});
-
-test("The second row's places", () => {
-  const q = {
-    symbol: "2330.TW",
-    price: 2175,
-    high: 2210,
-    low: 2150,
-    previousClose: 2170,
-    avgPrice: 2177,
-    limitUp: 2385,
-    limitDown: 1955,
-    volume: 42_269,
-    sizeUnit: "lot",
-  };
-  assert.deepEqual(texts(secondRow(q, true, "zh-TW", say("zh-TW"))), [
-    "均價 2,177.00",
-    "漲停價 2,385.00",
-    "跌停價 1,955.00",
-    "振幅 2.76%",
-  ]);
-  // One column keeps its volume under open, and no amplitude.
-  assert.deepEqual(texts(secondRow(q, false, "zh-TW", say("zh-TW"))), [
-    "成交量 42,269 張",
-    "漲停價 2,385.00",
-    "跌停價 1,955.00",
-    null,
-  ]);
-  assert.equal(text(secondRow(YTW_2330, true, "zh-TW", say("zh-TW"))[0]), "均價 2,177.00");
-});
-
 test("amplitude and shares", () => {
   assert.ok(Math.abs(amplitude({ high: 2210, low: 2150, previousClose: 2170 }) - 2.7649) < 0.0001);
   assert.equal(amplitude({ high: 2210, low: 2150, previousClose: null }), null);
@@ -747,26 +542,6 @@ test("amplitude and shares", () => {
   assert.equal(formatShare(2.76498, 2), "2.76%");
   assert.equal(formatShare(0), "0.0%");
 });
-
-// 2330.TW's best five levels at the close of 11/18, against a previous close of 2,170.
-const levels = (pairs) => pairs.map(([price, size]) => ({ price, size }));
-const SCENARIO_BOOK = {
-  bids: levels([
-    [2170, 2280],
-    [2165, 208],
-    [2160, 394],
-    [2155, 467],
-    [2150, 1280],
-  ]),
-  asks: levels([
-    [2175, 503],
-    [2180, 1248],
-    [2185, 571],
-    [2190, 362],
-    [2195, 361],
-  ]),
-};
-const AUCTION_BOOK = { bids: levels([[2185, 1]]), asks: levels([[2200, 73]]), auction: true };
 
 test("The ladder", () => {
   const rows = ladder(SCENARIO_BOOK, 2170);
@@ -807,50 +582,6 @@ test("A market order", () => {
   assert.deepEqual(texts, ["市價", "Market", "市价", "成行", "시장가"]);
 });
 
-test("In a call auction", () => {
-  const q = { symbol: "2330.TW", book: AUCTION_BOOK };
-  assert.deepEqual(detailBook(q, true), { title: "detail.auctionBook", book: AUCTION_BOOK, line: null });
-  assert.equal(detailBook(q, false).book, null);
-});
-
-test("Before any order", () => {
-  // MIS answered at 08:20 with the stock's name and no level: not an auction.
-  assert.deepEqual(detailBook({ symbol: "2330.TW", book: { bids: [], asks: [] } }, false), {
-    title: "detail.book",
-    book: null,
-    line: "detail.bookEmpty",
-  });
-});
-
-test("The auction ends in a paused detail", () => {
-  // At 09:01:57 the flag is 2 minutes old: the auction book no longer shows.
-  assert.deepEqual(detailBook({ symbol: "2330.TW", book: AUCTION_BOOK }, false), {
-    title: "detail.book",
-    book: null,
-    line: "detail.bookNone",
-  });
-});
-
-test("Yahoo 奇摩股市 alone before the open", () => {
-  assert.equal(detailBook({ symbol: "2330.TW" }, true).line, "detail.bookNone");
-  // A book from before the auction never shows in it.
-  assert.deepEqual(detailBook({ symbol: "2330.TW", book: SCENARIO_BOOK }, true), {
-    title: "detail.book",
-    book: null,
-    line: "detail.bookNone",
-  });
-});
-
-test("A failure without a book", () => {
-  const fallback = { code: "mis.timeout", params: {} };
-  assert.equal(detailBook({ symbol: "2330.TW", fallback, error: null }, false).line, "reason");
-  // A cached price's own failure says why too; an error under a current price does not.
-  assert.equal(detailBook({ symbol: "2330.TW", cached: true, error: fallback, fallback: null }, false).line, "reason");
-  assert.equal(detailBook({ symbol: "2330.TW", error: fallback, fallback: null }, false).line, "detail.bookNone");
-  // A book to show wins over the reason.
-  assert.equal(detailBook({ symbol: "2330.TW", fallback, book: SCENARIO_BOOK }, false).book, SCENARIO_BOOK);
-});
-
 test("a one-sided book", () => {
   const book = { bids: SCENARIO_BOOK.bids, asks: [] };
   const rows = ladder(book, 2170);
@@ -865,75 +596,6 @@ test("a one-sided book", () => {
   assert.deepEqual(bookTotals({ bids: [], asks: [] }), { bids: 0, asks: 0, diff: 0, ratio: null });
 });
 
-test("crosshairAt picks the nearest drawn point, the later one on a tie", () => {
-  const g = chartGeometry([10, 20, 15], 15); // x 0, 50, 100
-  const at = (share) => crosshairAt(g, [1, 2, 3], share)?.index;
-  assert.deepEqual([at(0.24), at(0.25), at(0.26), at(0.9)], [0, 1, 1, 2]);
-  assert.deepEqual(crosshairAt(g, [1, 2, 3], 0.5), { index: 1, x: 50, y: g.points[1][1] });
-  assert.deepEqual([at(-0.2), at(1.3)], [0, 2]); // clamped
-  assert.equal(crosshairAt(chartGeometry([10, 20], 15, { extent: 0 }), [1, 2], 0.4).index, 1);
-});
-test("Past a line that ends early: the crosshair holds on its last point", () => {
-  const g = chartGeometry(
-    Array.from({ length: 14 }, (_, i) => 2170 + i),
-    2170,
-    { extent: 0.25 },
-  ); // 2330.TW 09:00…10:05
-  assert.equal(
-    crosshairAt(
-      g,
-      Array.from({ length: 14 }, (_, i) => taipei("09:00:00") + i * 300_000),
-      0.6,
-    ).index,
-    13,
-  );
-});
-test("crosshairAt refuses what it cannot place", () => {
-  const g = chartGeometry([10, 20], 15);
-  for (const [geometry, times, share] of [
-    [null, [1, 2], 0.5],
-    [chartGeometry([], 15), [], 0.5],
-    [chartGeometry([], null, { dot: { x: 0, price: 15 } }), [], 0.5],
-    [g, undefined, 0.5],
-    [g, [1], 0.5],
-    [g, [1, 2, 3], 0.5],
-    [g, [1, 2], NaN],
-    [g, [1, 2], Infinity],
-  ]) {
-    assert.equal(crosshairAt(geometry, times, share), null);
-  }
-});
-test("crosshairAt reads the same share against a new line", () => {
-  const long = chartGeometry(
-    Array.from({ length: 1_140 }, (_, i) => 40_000 + i),
-    null,
-  );
-  const short = chartGeometry([40_000, 40_010, 40_005], null, { extent: 0.01 });
-  assert.equal(crosshairAt(long, Array(1_140).fill(0), 0.7).index, 797);
-  assert.equal(crosshairAt(short, [0, 0, 0], 0.7).index, 2);
-});
-test("Reading a point: date, time, price and change against the previous close", () =>
-  withTZ("Asia/Taipei", () => {
-    const q = {
-      symbol: "2330.TW",
-      exchange: "TAI",
-      price: 2180,
-      previousClose: 2170,
-      timestamp: taipei("10:40:00", "2026-11-20"),
-      series: [2170, 2175, 2180],
-      times: [taipei("10:31:00", "2026-11-20"), taipei("10:32:00", "2026-11-20"), taipei("10:40:00", "2026-11-20")],
-    };
-    const label = crosshairLabel(q, 1, "zh-TW");
-    assert.deepEqual([label.time, label.price, label.change], ["11/20 10:32", "2,175.00", "+0.23%"]);
-    assert.ok(Math.abs(label.percent - (5 / 2170) * 100) < 1e-12);
-    assert.equal(crosshairLabel(q, 1, "en").time, "Nov 20 10:32");
-    assert.deepEqual(crosshairLabel({ ...q, previousClose: null }, 1, "zh-TW"), {
-      time: "11/20 10:32",
-      price: "2,175.00",
-      change: null,
-      percent: null,
-    });
-  }));
 test("A pair's and a night future's points carry their dates", () =>
   withTZ("Asia/Taipei", () => {
     const line = decodeKlines(ok(jsonFixture("binance-btc-15m")));
@@ -956,73 +618,6 @@ test("A pair's and a night future's points carry their dates", () =>
     assert.equal(crosshairLabel(wtx, 0, "zh-TW").time, "11/10 22:00");
     assert.equal(crosshairLabel(wtx, 1, "zh-TW").time, "11/11 02:00");
   }));
-test("A line across midnight: each point carries its own date", () =>
-  withTZ("Asia/Taipei", () => {
-    const sox = {
-      symbol: "^SOX",
-      price: 5_000,
-      previousClose: 4_950,
-      timestamp: taipei("05:00:00", "2026-11-20"),
-      series: [4_960, 4_980, 5_000],
-      times: [taipei("22:30:00", "2026-11-19"), taipei("23:00:00", "2026-11-19"), taipei("03:00:00", "2026-11-20")],
-    };
-    assert.equal(crosshairLabel(sox, 1, "zh-TW").time, "11/19 23:00");
-    assert.equal(crosshairLabel(sox, 2, "zh-TW").time, "11/20 03:00");
-    assert.equal(crosshairLabel(sox, 1, "en").time, "Nov 19 23:00");
-  }));
-test("Yesterday's line before the open: its points carry their date", () =>
-  withTZ("Asia/Taipei", () => {
-    const q = {
-      symbol: "0050.TW",
-      exchange: "TAI",
-      price: 60,
-      previousClose: 59.5,
-      timestamp: taipei("13:30:00", "2026-11-19"),
-      series: [59.8, 60],
-      times: [taipei("11:55:00", "2026-11-19"), taipei("13:30:00", "2026-11-19")],
-    };
-    assert.equal(crosshairLabel(q, 0, "zh-TW").time, "11/19 11:55");
-    assert.equal(crosshairLabel(q, 0, "en").time, "Nov 19 11:55");
-    const pair = {
-      symbol: "BTC/USDT",
-      price: 91_000,
-      previousClose: 90_000,
-      timestamp: taipei("08:36:00", "2026-11-20"),
-      series: [90_500, 91_000],
-      times: [taipei("23:00:00", "2026-11-19"), taipei("00:15:00", "2026-11-20")],
-    };
-    assert.equal(crosshairLabel(pair, 0, "en").time, "Nov 19 23:00");
-    assert.equal(crosshairLabel(pair, 1, "en").time, "Nov 20 00:15");
-  }));
-// A card's width: the wider of its time (6.5 px a character) and its price and change (7.5 px a character, 6 px
-// between them), plus 12 px of padding.
-test("Near the right edge the card sits on the line's left", () => {
-  const card = { time: "10:32", price: "2,175.00", change: "+0.23%" }; // line 2: 14 characters + 6: 111 px; card 123 px
-  assert.deepEqual(crosshairSpot(50, card, 400), { left: 206 }); // 6 px right of the line at 200
-  assert.deepEqual(crosshairSpot(80, card, 400), { right: 86 }); // its right edge 6 px left of the line at 320, in any font
-  const longest = { time: "Nov 18 22:15", price: "91,234.56", change: "+1.23%" }; // line 2: 118.5 px; card 130.5 px
-  assert.deepEqual(crosshairSpot(100, longest, 404), { right: 6 }); // the single-column chart's right edge
-  assert.deepEqual(crosshairSpot(75, longest, 388), { right: 103 }); // the two-column chart: fits only on the left
-});
-test("crosshairSpot holds a wide card inside the box, measured by its wider line", () => {
-  const wide = { time: "Nov 18 22:15", price: "64,000.01", change: "+0.79%" }; // 130.5 px
-  assert.deepEqual(crosshairSpot(50, wide, 250), { left: 0 }); // fits neither side
-  assert.deepEqual(crosshairSpot(95, wide, 300), { right: 21 });
-  assert.deepEqual(crosshairSpot(0, { time: "10:32", price: "2,175.00", change: null }, 0), { left: 0 });
-  const dated = { time: "Nov 18 22:15", price: "1.00", change: null }; // the time is wider: 78 px; card 90 px
-  assert.deepEqual(crosshairSpot(50, dated, 200), { left: 106 });
-  assert.deepEqual(crosshairSpot(50, dated, 190), { left: 0 });
-});
-// A card's height: an 11 px and a 12 px line, 2 px apart, 4 px padding above and below: about 40 px.
-test("The card's middle follows the point, held inside the box", () => {
-  assert.deepEqual(crosshairLevel(50, 140), { top: 50 }); // its middle at the point's 70 px
-  assert.deepEqual(crosshairLevel(20, 140), { top: 8 });
-  assert.deepEqual(crosshairLevel(5, 140), { top: 0 }); // a peak: held at the top
-  assert.deepEqual(crosshairLevel(95, 140), { bottom: 0 }); // a trough: held at the bottom by its own edge, in any font
-  assert.deepEqual(crosshairLevel(50, 30), { top: 0 }); // a box shorter than the card
-  const g = chartGeometry([10, 20, 15], 15);
-  assert.deepEqual(crosshairLevel(crosshairAt(g, [1, 2, 3], 0.5).y, 140), { top: 0 });
-});
 test("A timed line carries its first point's date on the detail's chart", () =>
   withTZ("Asia/Taipei", () => {
     const q = {

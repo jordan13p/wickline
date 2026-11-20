@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 import { MIS_CONSENT_VERSION } from "../mods/wickline/providers/mis.js";
 import { HOLIDAYS_URL, parseHolidays, taipeiDay } from "../mods/wickline/calendar.js";
+import { followDetail } from "../mods/wickline/detail.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -233,3 +234,63 @@ export const TWELVE = [
   "AMZN",
   "SOL/USDT",
 ];
+
+// 2330.TW's best five levels at the close of 11/18, against a previous close of 2,170.
+export const levels = (pairs) => pairs.map(([price, size]) => ({ price, size }));
+export const SCENARIO_BOOK = {
+  bids: levels([
+    [2170, 2280],
+    [2165, 208],
+    [2160, 394],
+    [2155, 467],
+    [2150, 1280],
+  ]),
+  asks: levels([
+    [2175, 503],
+    [2180, 1248],
+    [2185, 571],
+    [2190, 362],
+    [2195, 361],
+  ]),
+};
+
+// Runs followDetail on a fake clock from `from` until `until`, returning the redraw times and each sleep asked. A sleep
+// that would end past `until` rejects, as cx.sleep does once the dialog closes, which ends the loop; so does the wake
+// promise at `until`, and it is never woken before.
+export async function wakes(detail, from, until) {
+  const host = fakeHost(() => ok({}));
+  host.clock = from;
+  const redraws = [];
+  const asked = [];
+  const sleep = (ms) => {
+    asked.push(ms);
+    return host.clock + ms > until ? Promise.reject(new Error("closed")) : host.sleep(ms);
+  };
+  const closed = new Promise((_, reject) =>
+    host.sleeps.push({ at: until, resolve: () => reject(new Error("closed")) }),
+  );
+  closed.catch(() => {});
+  const run = followDetail(() => detail, {
+    now: host.now,
+    sleep,
+    changed: () => redraws.push(host.clock),
+    woken: () => closed,
+  }).catch(() => {});
+  await advance(host, until);
+  await run;
+  return { redraws, asked };
+}
+
+// An open WTX& detail on Yahoo 奇摩股市 and TAIFEX's table (periods null), with its trade time and marks in `overrides`.
+export const wtxDetail = (overrides) => ({
+  symbol: "WTX&",
+  source: "yahootw",
+  price: 23_000,
+  periods: null,
+  chartSource: "yahootw",
+  ...overrides,
+});
+
+export const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
+
+export const line = (fields) => ({ price: 2180, previousClose: 2200, series: [2190, 2185, 2180], ...fields });
