@@ -1,5 +1,7 @@
 # Contributing to Wickline
 
+Herdr is a desktop app for terminals and coding agents; its mods are listed at [herdr.dev/mods](https://herdr.dev/mods).
+
 Wickline is a Herdr mod in plain JavaScript. Herdr runs it in QuickJS: no Node APIs, no `Intl`, no `setTimeout`
 (timers come from Herdr's `cx.timer` and `cx.sleep`). Export each name on its own (`export function`,
 `export const`): Herdr's loader rejects destructured exports. The mod has no dependencies; `package.json` is for
@@ -17,7 +19,8 @@ npm run format                         # format in place
 herdr-app check "$PWD/mods/wickline"   # Herdr loads the mod
 ```
 
-A change is done when all of them pass. CI runs lint and tests on every push and pull request.
+A change is done when all of them pass. CI runs lint, tests and a secret scan on every branch push and pull request (a
+release tag is not checked again).
 
 ## Layers
 
@@ -39,7 +42,13 @@ All under `mods/wickline/`. Per-module build notes: [RECIPE-internals.md](RECIPE
 
 ### Shell
 
-- `main.js`: the one view; picks the panel or a dialog, runs each source's loop, handles input and commands.
+- `main.js`: the one view and the only module that talks to Herdr; picks the panel or a dialog, runs each source's
+  loop, handles input and commands.
+
+### Moves, handover and the key file
+
+Core modules (see Layers) that serve `main.js`; any Herdr call or file access they need comes in from it.
+
 - `moves.js`, `panes.js`: moving the panel between a pane, its own tab and the dock, and telling when it has arrived.
 - `handover.js`: hands the open detail dialog each newer quote of its row.
 - `secrets.js`: reads, writes and removes the Finnhub key file.
