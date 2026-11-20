@@ -1389,8 +1389,9 @@ export class Watchlist {
    * Whether an overlay line arriving at `now` has stopped: its last traded minute ends over LINE_LAG_MS before a
    * trade it must already hold.
    * - A trade counts once settled: its minute has ended and LINE_LAG_MS has passed. Until one has, the line stays,
-   *   so a quiet line is never dropped for a trade it cannot hold yet. A line first asked after the close finds
-   *   the price's last trade already settled, so it is judged on its first arrival.
+   *   so a quiet line is never dropped for a trade it cannot hold yet. A line first asked at least 3 minutes (the
+   *   minute plus LINE_LAG_MS) after the price's last trade finds that trade settled, so it is judged on its first
+   *   arrival; asked sooner, it is judged once that trade has settled.
    * - The trades seen at recent arrivals are kept (LINE_TRADES at most). The line is judged against the newest settled
    *   one, capped at its regular session's end: a stock's 14:30 fixed-price trade is never in its line.
    * With lines 2 min apart, a line frozen from its first arrival was dropped at its third, and one that stopped

@@ -69,7 +69,7 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 ### Changed
 
 - A row changes state (open, lunch break, closed) at the moment its session starts or ends, not at the next refresh.
-- A Taiwan or US quote that arrives before its trading periods is read by its exchange's regular hours.
+- A Taiwan or US quote whose trading periods have not arrived yet is read by its exchange's regular hours until they do.
 - Currencies read closed only over their weekend, not by their daily period.
 
 ## [0.5.0] - 2026-11-11

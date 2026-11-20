@@ -396,8 +396,8 @@ const AFTER_CLOSE_MS = 90 * MINUTE_MS;
 /**
  * A quote's limit as drawn: "up", "down" or null (priceLimit), only while it still holds.
  * - Lit while live, and once the market is not open (closed, holiday, noTrades, post) for a price from the regular
- *   session its periods describe. A future's price belongs to its periods only up to their end; a stock's also
- *   through the after-close window.
+ *   session its periods describe. A future's price belongs to its periods only up to their end; any other kind's
+ *   also through the after-close window.
  * - Lit in a call auction for a price from today; not for one from an earlier day (the morning's trial match).
  * - Never while stalled (the lock may have opened since), unconfirmed, or before the open. Yahoo gives Taiwan no
  *   pre-market period, so without a real-time source a price at 08:45 reads closed; only its time, before the
