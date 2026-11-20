@@ -1,14 +1,15 @@
-// The panel's header pieces: the brand, the count and status lines, the header's icons, the add field, the
-// language prompt, and the edit's notice and the sources' problem lines under it. Drawn from the view; every
-// Herdr call goes back through it.
+// The panel's header pieces: the brand, the count and status lines, the header's icons, the add field, the language
+// prompt, and the notice and problem lines under it. Drawn from the view; every Herdr call goes back through it.
 import { div, svg } from "gpui-kit";
 import { h_flex, Input } from "gpui-base";
 import { formatTime } from "../format.js";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
 import { blockedNote, icon, iconButton, link } from "./parts.js";
 
-// Until answered: `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`. A label switches and
-// dismisses; × only dismisses, and sits beside the labels, not inside one.
+/**
+ * The language prompt, until answered: `Language: English · 繁中 · 简中 · 日本語 · 한국어 ×`. A label switches and
+ * dismisses; × only dismisses, and sits beside the labels, not inside one.
+ */
 export function languagePrompt(view, t) {
   const choices = LANGUAGES.flatMap((language, i) => [
     ...(i ? [div().flex_none().text_color(t.dim).child("·")] : []),
@@ -27,24 +28,26 @@ export function languagePrompt(view, t) {
     );
 }
 
-// The text for the header's count: `8 tickers`.
+/** The header's count: `8 tickers`. */
 export function countText(view) {
   const count = view.watch.preferences.symbols.length;
   return view.tx(count === 1 ? "header.tickers.one" : "header.tickers.other", { count });
 }
 
-// `Auto-refresh on · Updated 14:05` (the newest fetch among the rows), or `… · Refreshing quotes…` during a Refresh.
+/** The status line: `Auto-refresh on · Updated 14:05` (the newest fetch), or `Refreshing quotes…` in a Refresh. */
 export function statusText(view, now) {
   const w = view.watch;
   const state = view.tx(w.preferences.paused ? "status.paused" : "status.on");
-  // Only for a refresh the person asked for: automatic rounds would flip the line every few seconds.
+  // Only for a refresh the user asked for: automatic rounds would flip the line every few seconds.
   if (w.refreshing) return `${state} · ${view.tx("status.refreshing")}`;
   const fetched = Math.max(0, ...w.preferences.symbols.map((symbol) => w.shown(symbol, now)?.fetchedAt ?? 0));
   return fetched ? `${state} · ${view.tx("status.updated", { time: formatTime(fetched) })}` : state;
 }
 
-// The mark and the name in the text color, the mark's middle candle in the accent: two single-color
-// layers, since an svg takes one tint. Otherwise the accent is kept for focus, the drop line and links.
+/**
+ * The mark and the name in the text color, with the mark's middle candle in the accent: two single-color layers,
+ * since an svg takes one tint. Otherwise the accent is kept for focus, the drop line and links.
+ */
 export function brand(t) {
   return h_flex()
     .flex_none()
@@ -62,7 +65,7 @@ export function brand(t) {
     .child(div().flex_none().text_size(13).font_semibold().text_color(t.foreground).child("Wickline"));
 }
 
-// Refresh, pause or resume, settings, own tab or back; the glyphs' right edge lines up with the content's.
+/** The header's icons: refresh, pause or resume, settings, own tab or back, right-aligned with the content. */
 export function headerIcons(view, t) {
   const { paused } = view.watch.preferences;
   const own = view.ownTabAction();
@@ -94,9 +97,11 @@ export function headerIcons(view, t) {
     );
 }
 
-// Filled and borderless at rest; the accent border marks focus. The border is always 1 px, so focus never moves
-// the text. `selected` is one step off the panel's `background` in light and dark themes alike, and a step
-// past `hover`, so the field never looks like a hovered row.
+/**
+ * The add field: filled and borderless at rest, with an accent border on focus. The border is always 1 px, so focus
+ * never moves the text. `selected` is one step off the panel's `background` in light and dark themes alike, and a
+ * step past `hover`, so the field never looks like a hovered row.
+ */
 export function addField(view, t) {
   return Input.new(view.input)
     .h(32)
@@ -109,8 +114,10 @@ export function addField(view, t) {
     .text_color(t.foreground);
 }
 
-// What the last edit said, under the add field. A removal's notice offers Undo right after its text
-// (`Removed 2330.TW.  Undo`, no separator after its full stop), which wraps at its natural width rather than pushing the link to the edge.
+/**
+ * What the last edit said, under the add field. A removal's notice offers Undo right after its text, with no
+ * separator (`Removed 2330.TW.  Undo`); the text wraps at its natural width rather than pushing the link to the edge.
+ */
 export function messages(view, t) {
   if (view.error) return [div().text_size(11).text_color(t.ansi1).child(view.say(view.error))];
   if (!view.notice) return [];
@@ -126,8 +133,10 @@ export function messages(view, t) {
   ];
 }
 
-// One line per source with a problem (rate limited, unreachable, timed out, refused), then one per source whose Taiwan
-// answers carry no trade today (the rows read 今日無成交: the market may be closed, or the source may be stuck).
+/**
+ * One line per source with a problem (rate limited, unreachable, timed out, refused), then one per source whose
+ * Taiwan answers carry no trade today: the rows read 今日無成交, as the market may be closed or the source stuck.
+ */
 export function problemLines(view, t) {
   return [...view.watch.problems(), ...view.watch.notes()].map((line) => blockedNote(t, view.say(line)));
 }

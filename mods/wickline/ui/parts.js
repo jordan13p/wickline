@@ -1,5 +1,6 @@
-// Stateless drawing helpers shared by the panel and the dialogs: each takes the theme and what it
-// draws, and returns an element, except failureText, which returns the failure note's words. No Herdr calls, no state.
+// Stateless drawing helpers shared by the panel and the dialogs. Most take the theme and what they draw and return
+// an element; icon, inset, chartShape, priceInk and failureText return a path, a padded element, a shape, a color
+// and words. No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex, Checkbox, Switch } from "gpui-base";
 import { chartGeometry, chartLayout } from "../chart.js";
@@ -12,21 +13,26 @@ const AREA_OPACITY = 0.16;
 
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
+/** The path of icon `name` under the mod's icons/. */
 export const icon = (name) => `mods/wickline/icons/${name}.svg`;
-// Every region outside the list's rows: the left gutter, and the right inset that holds the × column and
-// the scrollbar lane, so all of them end on one edge.
+/**
+ * `el` with the left gutter and the right inset (the × column and the scrollbar lane), so every region outside the
+ * list's rows ends on one edge.
+ */
 export const inset = (el) => el.pl(GUTTER).pr(RIGHT_INSET);
 
-// What `quote`'s chart draws (chart.js chartGeometry, laid out by chartLayout), or null when its box holds nothing.
+/** What `quote`'s chart draws (chartGeometry), or null when its box holds nothing. */
 export const chartShape = (quote) => chartGeometry(quote.series, quote.previousClose, chartLayout(quote));
 
-// The day's line, scaled to its box and reaching only as far as its trading day has run (chartLayout); the previous
-// close is a dashed rule, drawn with any number of points; a price past its line is a filled dot in `color`, `dot` px
-// (4 in rows and the table, 6 in the detail), never joined to the line and no state dot. `stroke` defaults to 2 px with
-// the area and 1.25 px without. `crosshair` (only the detail passes it) follows the pointer: the box takes its `id`,
-// hands `move` the pointer's x as a share of its width (0…1) with that width, and calls `leave` when the pointer goes;
-// its `mark`, when set, draws a 1 px `dim` vertical line and a 6 px dot at a line point and beside it a card on a
-// `background` plate, placed across by `spot` ({ left } or { right }, px) and down by `level` ({ top } or { bottom }).
+/**
+ * The day's line, scaled to its box and reaching only as far as its trading day has run.
+ * - The previous close is a dashed rule, drawn with any number of points.
+ * - A price past its line is a filled dot in `color`, `dot` px wide, never joined to the line.
+ * - `stroke` defaults to 2 px with the area and 1.25 px without.
+ * - `crosshair` (the detail's) follows the pointer: the box takes its `id`, hands `move` the pointer's x as a share
+ *   of its width with that width, and calls `leave` when the pointer goes. Its `mark`, when set, draws a vertical
+ *   line and a dot at a line point, and a card beside them placed by `spot` across and `level` down.
+ */
 export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, crosshair }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
@@ -105,11 +111,11 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
   );
 }
 
-// The crosshair's three layers over the full box (positioned, so none takes room): the vertical line and the dot
-// centred on the point (never the price dot's inset layer; at either end half the dot falls outside); the card beside
-// them, two lines: the date and time (11 px on a 14 px line, `dim`) over the price (semibold) and its change in the
-// change color (12 px on a 16 px line); the fixed line heights make the card exactly as tall as crosshairLevel
-// assumes. The plate stays opaque, so the line never shows through; only its text dims.
+// The crosshair's three layers over the full box, positioned so none takes room:
+// - the vertical line and the dot, centred on the point (at either end half the dot falls outside);
+// - the card beside them: the date and time (11 px on a 14 px line, `dim`) over the price and its change (12 px on a
+//   16 px line). The fixed line heights make the card exactly as tall as crosshairLevel assumes. Its plate stays
+//   opaque, so the line never shows through; only its text dims.
 function crosshairLayers(t, mark) {
   const card = v_flex()
     .absolute()
@@ -137,8 +143,10 @@ function crosshairLayers(t, mark) {
   ];
 }
 
-// One place of the detail's second row of price levels: the stat look (a 10.5 px `dim` label over a semibold value) with
-// the unit 3 px after the value in 10.5 px `dim`; a place without a cell stays empty and keeps its column.
+/**
+ * One place of the detail's second row: a 10.5 px `dim` label over a semibold value, the unit 3 px after it in
+ * 10.5 px `dim`. A place without a cell stays empty and keeps its column.
+ */
 export function statCell(t, cell) {
   if (!cell) return div().flex_1();
   return v_flex()
@@ -153,7 +161,7 @@ export function statCell(t, cell) {
     );
 }
 
-// Cells (statCell) two to a row, as the detail's activity grid; an odd last cell keeps its column.
+/** Cells (statCell) two to a row, as the detail's activity grid; an odd last cell keeps its column. */
 export function statGrid(t, cells) {
   const rows = [];
   for (let i = 0; i < cells.length; i += 2)
@@ -166,8 +174,10 @@ export function statGrid(t, cells) {
   return v_flex().gap(10).children(rows);
 }
 
-// The inner/outer line (detail.js innerOuter) over a 4 px bar of two parts 2 px apart, sized by their shares: inner in
-// `innerColor`, outer in `outerColor`. A side with no share draws no part.
+/**
+ * The inner/outer line (innerOuter) over a 4 px bar of two parts 2 px apart, sized by their shares: inner in
+ * `innerColor`, outer in `outerColor`. A side with no share draws no part.
+ */
 export function innerOuterBar(flow, innerColor, outerColor) {
   return v_flex()
     .gap(6)
@@ -197,14 +207,14 @@ export function innerOuterBar(flow, innerColor, outerColor) {
     );
 }
 
-// 6px: filled for a live quote, a 1px ring when the price may not be current, none for a session.
+/** A 6 px freshness dot: filled for a live quote, a 1 px ring when the price may not be current, none for a session. */
 export function dot(t, state) {
   const dot = div().flex_none().w(6).h(6).rounded_full();
   if (state === "live") return dot.bg(t.foreground);
   return HOLLOW.includes(state) ? dot.border_1().border_color(t.dim) : null;
 }
 
-// `a · b · c` that wraps only between parts: each part stays whole, the `·` ends the line it is on.
+/** `a · b · c` that wraps only between parts: each part stays whole, and the `·` ends the line it is on. */
 export function segments(t, parts) {
   const shown = parts.filter(Boolean);
   return h_flex()
@@ -221,6 +231,7 @@ export function segments(t, parts) {
     );
 }
 
+/** A small outlined text button. */
 export function button(t, id, label, onClick) {
   return h_flex()
     .id(id)
@@ -242,8 +253,10 @@ export function button(t, id, label, onClick) {
 /** A price's ink when it is not lit: `dim` while cached (kept through a failed refresh), else `foreground`. */
 export const priceInk = (t, quote) => (quote.cached ? t.dim : t.foreground);
 
-// The failure note under a price (failureNote) for `quote` after `error`, or null: the reason alone, or inside the
-// words for what is cached. `say` words a reason, `tx` translates.
+/**
+ * The failure note's words under a price (failureNote), or null: the reason alone, or inside the words for what is
+ * cached. `say` words a reason, `tx` translates.
+ */
 export function failureText(quote, error, say, tx) {
   const key = failureNote(quote, error);
   if (key === null) return null;
@@ -252,8 +265,8 @@ export function failureText(quote, error, say, tx) {
 
 /**
  * A price in a content-sized box whose padding and negative margin cancel, so its digits stay put, lit or not.
- * `mark` (a price at its limit, from the view's limitMark) lights it as Taiwan's quote boards do: a solid
- * block in the limit's color, the text in `mark.ink`, the limit in words on hover.
+ * `mark` (a price at its limit) lights it as Taiwan's quote boards do: a solid block in the limit's color, the text
+ * in `mark.ink`, and the limit in words on hover.
  */
 export function priceBox(id, text, color, mark, { pad = 4 } = {}) {
   return div()
@@ -268,7 +281,7 @@ export function priceBox(id, text, color, mark, { pad = 4 } = {}) {
     .child(text);
 }
 
-// A text link: `muted`, `foreground` under the pointer.
+/** A text link: `muted`, `foreground` under the pointer. */
 export function link(t, id, label, onClick) {
   return div()
     .id(id)
@@ -280,7 +293,7 @@ export function link(t, id, label, onClick) {
     .child(label);
 }
 
-// A header action: a 16 px single-color icon in a 28 × 28 target, named by its tooltip.
+/** A header action: a 16 px single-color icon in a 28 × 28 target, named by its tooltip. */
 export function iconButton(t, id, name, label, onClick, spinning = false) {
   return h_flex()
     .id(id)
@@ -303,7 +316,7 @@ export function iconButton(t, id, name, label, onClick, spinning = false) {
     );
 }
 
-// One group of choices: the chosen one filled, the rest muted.
+/** One group of choices: the chosen one filled, the rest muted. */
 export function segmented(t, id, choices, current, onPick) {
   return h_flex()
     .flex_none()
@@ -331,7 +344,7 @@ export function segmented(t, id, choices, current, onPick) {
     );
 }
 
-// A box drawn in the theme (accent-filled while ticked) and its label; a click on either toggles it.
+/** A box drawn in the theme (accent-filled while ticked) and its label; a click on either toggles it. */
 export function checkbox(t, id, checked, label, onChange) {
   return Checkbox.new(id)
     .w_full()
@@ -368,8 +381,10 @@ export function checkbox(t, id, checked, label, onChange) {
     );
 }
 
-// A switch drawn in the theme: a 28 × 16 track, `accent` with the knob at the right while on, `border` with
-// it at the left while off. It draws no label of its own, so `label` is what a screen reader announces.
+/**
+ * A switch drawn in the theme: a 28 × 16 track, `accent` with the knob at the right while on, `border` with it at
+ * the left while off. It draws no label of its own, so `label` is what a screen reader announces.
+ */
 export function toggle(t, id, on, label, onChange) {
   return Switch.new(id)
     .flex_none()
@@ -392,11 +407,12 @@ export function toggle(t, id, on, label, onChange) {
     );
 }
 
-// A problem line under a row or in the detail: smaller, in the blocked color.
+/** A problem line under a row or in the detail: smaller, in the blocked color. */
 export function blockedNote(t, child) {
   return div().text_size(11).text_color(t.blocked).child(child);
 }
 
+/** A small `dim` note across its column. */
 export function note(t, text) {
   // Its full width, and no wider, so a long note wraps at its column's edge.
   return div().w_full().min_w(0).text_size(11.5).text_color(t.dim).child(text);

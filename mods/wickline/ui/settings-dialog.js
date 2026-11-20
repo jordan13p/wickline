@@ -1,5 +1,5 @@
-// The settings dialog: a copy whose props carry `settings` draws only this. The draft, its inputs and
-// Save live on the view (inputs are made outside render, and saving writes Herdr's storage).
+// The settings dialog: a copy whose props carry `settings` draws only this. The draft, its inputs and Save live on
+// the view, as inputs are made outside render and saving writes Herdr's storage.
 import { div } from "gpui-kit";
 import { h_flex, v_flex, Input } from "gpui-base";
 import { LANGUAGES, LANGUAGE_LABELS } from "../i18n.js";
@@ -32,8 +32,8 @@ const COLOR_CHOICES = [
   ["green-up", "display.colors.greenUp"],
 ];
 
-// The sidebar on the left (the market pages, then Display and Disclaimer & privacy), the page on the
-// right, Cancel / Save below.
+// The sidebar on the left (the market pages, then Display and Disclaimer & privacy), the page on the right, and
+// Cancel and Save below.
 export function settingsView(view, t) {
   const errors = view.draftErrors();
   const invalid = Object.keys(errors).length > 0 || !view.keyLoaded || view.saving;
@@ -173,8 +173,8 @@ export function settingsView(view, t) {
   );
 }
 
-// A market's status (marketStatus over the draft and the panel's health), with the dot and short label
-// the sidebar and the page title show.
+// A market's status over the draft and the panel's health, with the dot and short label the sidebar and the page
+// title show.
 function shownStatus(view, market, key) {
   const status = marketStatus({ saved: view.settings, draft: view.draft, health: view.health, market, key });
   const dotState = status.problem ? "stalled" : status.live ? "live" : "delayed";
@@ -182,8 +182,8 @@ function shownStatus(view, market, key) {
   return { ...status, dotState, label };
 }
 
-// How fresh Yahoo Finance is for the market: the exchange table's rule for the market's typical exchange (real
-// time, or its minutes late), else a plain "Delayed" (by exchange).
+// How fresh Yahoo Finance is for the market, by its typical exchange: real time or its minutes late, else a plain
+// "Delayed" (by exchange).
 function delayText(view, market) {
   const { realtime, delayS } = exchangeRule(TYPICAL_EXCHANGE[market], "");
   if (realtime) return view.tx("settings.liveEveryMinute");
@@ -291,9 +291,9 @@ function fallback(view, t, market) {
   ];
 }
 
-// The page's address fields, folded away until the person opens them. A refused address holds them open,
-// its header dimmed and not clickable meanwhile; typing in a field keeps them open after (main.js), so
-// fixing an address never hides the field being typed in.
+// The page's address fields, folded away until the user opens them. A refused address holds them open, with the
+// header dimmed and not clickable. Typing in a field keeps them open after, so fixing an address never hides the
+// field being typed in.
 function advanced(view, t, market, fields, error) {
   const forced = Boolean(error);
   const open = view.advancedOpen.has(market) || forced;
@@ -325,11 +325,14 @@ function advanced(view, t, market, fields, error) {
   return [header, ...(open ? fields : [])];
 }
 
-// A Taiwan source switched on: once consent to its current statement is saved, one line, "✓ Consented ·
-// View", whose link reads Hide in the same place while the statement shows below it. Until then, its key
-// points, a link that shows the full statement in place (and hides it again), which text prevails and the box
-// (Save waits for it), so the box is reachable without opening the full text. Every text wraps to the page,
-// which scrolls, in the reader's language; the Traditional Chinese text prevails.
+/**
+ * The consent parts of a Taiwan source switched on.
+ * - Once consent to its current statement is saved: one line, "✓ Consented · View", whose link reads Hide while the
+ *   statement shows below it.
+ * - Until then: its key points, a link that shows or hides the full statement in place, which text prevails, and
+ *   the box Save waits for, reachable without opening the full text.
+ * Every text is in the reader's language and wraps to the scrolling page; the Traditional Chinese text prevails.
+ */
 function consentParts(view, t, source) {
   const tw = view.draft.sources.tw;
   const [ack, version] = CONSENTS[source];
@@ -488,7 +491,7 @@ function savedKey(view, t) {
     );
 }
 
-// Finnhub switched on: the person's key and per-minute budget.
+// Finnhub switched on: the user's key and per-minute budget.
 function finnhubParts(view, t, errors) {
   const keyError = errors["sources.us.key"];
   const budgetError = errors["sources.us.budgetPerMinute"];
@@ -529,8 +532,8 @@ function finnhubParts(view, t, errors) {
   ];
 }
 
-// United States: Finnhub with the person's key (how often it updates, on or off), else Yahoo Finance. With
-// Finnhub off, a saved key stays until Remove and Save, so its line stays too.
+// United States: Finnhub with the user's key, else Yahoo Finance. With Finnhub off, a saved key stays until Remove
+// and Save, so its line stays too.
 function usPage(view, t, errors, status) {
   const us = view.draft.sources.us;
   const on = us.provider === "finnhub";
@@ -581,7 +584,7 @@ function usPage(view, t, errors, status) {
   );
 }
 
-// Crypto: Binance Spot only, always on, at the address the person may change.
+// Crypto: Binance Spot only, always on, at an address the user may change.
 function cryptoPage(view, t, errors, status) {
   const urlError = errors["sources.crypto.binanceUrl"];
   return marketPage(

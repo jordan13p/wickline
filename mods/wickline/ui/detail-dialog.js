@@ -1,4 +1,4 @@
-// The detail dialog: a copy whose props carry `detail` draws only this; it fetches nothing, its row hands it newer
+// The detail dialog: a copy whose props carry `detail` draws only this. It fetches nothing: its row hands it newer
 // quotes (main.js adoptDetail), and it redraws at its quote's own moments (detail.js followDetail).
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
@@ -48,9 +48,9 @@ const CHART_H = 140;
 // The ladder's bid sizes sit in a fixed column, so each bid price starts at the same place.
 const SIZE_W = 44;
 
-// One side of a ladder row (detail.js ladder): a 24 px band, the bid's size in its fixed column then its price toward the
-// center, the ask's price then its size. A price at the previous close (or without one) is plain `foreground`; others
-// take the change color; a market order reads detail.marketOrder in plain ink. `rung` null: empty.
+// One side of a ladder row, in a 24 px band: the bid's size in its fixed column then its price toward the center, the
+// ask's price then its size. A price at the previous close (or without one) is plain `foreground`; others take the
+// change color. A market order reads detail.marketOrder in plain ink. A null `rung` is empty.
 function ladderSide(view, t, q, rung, bid) {
   const side = h_flex().flex_1().h(24).px(6).items_center().justify_between();
   if (!rung) return side;
@@ -63,8 +63,8 @@ function ladderSide(view, t, q, rung, bid) {
   return bid ? side.child(size.w(SIZE_W).text_right()).child(price) : side.child(price).child(size);
 }
 
-// The right column's book: the ladder with its totals and their difference and ratio (detailBook shown), or its title
-// over one line saying why there is none.
+// The right column's book: the ladder with its totals, their difference and ratio; or its title over one line
+// saying why there is none.
 function bookBlock(view, t, q, shown, tx) {
   const title = div().text_size(11).text_color(t.dim).child(tx(shown.title));
   if (!shown.book) {
@@ -119,9 +119,9 @@ function bookBlock(view, t, q, shown, tx) {
     .child(div().w_full().text_center().text_size(11).text_color(t.dim).child(balance));
 }
 
-// The chart's crosshair (parts.js chart): the line point nearest the pointer (view.chartPointer) of `shape`, its card
-// and its place, the card's text at the detail's dim opacity when `dimmed`. A move redraws only when the nearest point
-// or the box's width changes; a leave clears the pointer.
+// The chart's crosshair: the line point of `shape` nearest the pointer, its card and its place, the card's text dimmed
+// with the detail when `dimmed`. A move redraws only when the nearest point or the box's width changes; a leave
+// clears the pointer.
 function crosshairOption(view, t, q, shape, dimmed) {
   const pointer = view.chartPointer;
   const at = pointer && crosshairAt(shape, q.times, pointer.share);
@@ -157,9 +157,11 @@ function crosshairOption(view, t, q, shape, dimmed) {
   };
 }
 
-// The dialog a row opens: the day's chart, its range and the session. A quote that can carry a book (main.js
-// openDetail) opens wide, in two columns: the price, chart, levels and source lines on the left, its activity and book
-// on the right. The right column always holds the book or the line saying why there is none, so its width never moves.
+/**
+ * The dialog a row opens: the day's chart, its range and the session. A quote that can carry a book opens wide, in
+ * two columns: the price, chart, levels and source lines on the left, the activity and book on the right. The right
+ * column always holds the book or the line saying why there is none, so its width never moves.
+ */
 export function detailView(view, t) {
   const now = Date.now();
   // Never refetched: its row hands it newer quotes; a mark holds until its end or the next hand-over.
@@ -175,7 +177,7 @@ export function detailView(view, t) {
   const second = secondRow(q, view.wide, view.lang, tx);
   const amount = signed(q);
   // A timed line has its date just below the chart's left end, as a time axis starts; never over the line, and no row
-  // at all without times.
+  // without times.
   const lineDay = lineDate(q, view.lang);
   const dated = (box) =>
     lineDay ? v_flex().w_full().gap(2).child(box).child(div().text_size(10.5).text_color(t.dim).child(lineDay)) : box;
@@ -183,8 +185,8 @@ export function detailView(view, t) {
   const dimmed = detailDimmed(q, session, now);
   const dim = (el) => (dimmed ? el.opacity(DIM_OPACITY) : el);
   const shape = chartShape(q);
-  // A crosshair needs a line with one time per point (crosshairAt places one at any share then). A pointer kept while
-  // there is none would bring it back at its old place when one returns.
+  // A crosshair needs a line with one time per point. The pointer is dropped while there is none, or it would bring
+  // the crosshair back at its old place when one returns.
   const traced = crosshairAt(shape, q.times, 0) !== null;
   if (!traced) view.chartPointer = null;
   const stat = (label, price) =>
@@ -257,8 +259,8 @@ export function detailView(view, t) {
           ),
         ),
     ),
-    // The box only when its chart draws something (chartShape: a rule, a line or the price's dot), else nothing. The
-    // crosshair's card text dims with the detail, and over a cached line, which is not current.
+    // The box only when its chart draws something (a rule, a line or the price's dot). The crosshair's card text dims
+    // with the detail, and over a cached line, which is not current.
     shape !== null &&
       dated(
         chart(q, color, t, {
@@ -281,8 +283,8 @@ export function detailView(view, t) {
           .child(stat("detail.high", q.high))
           .child(stat("detail.low", q.low))
           .child(stat("detail.prevClose", q.previousClose)),
-    // The second row on the same grid: the limits under high and low (at a limit or not); under open, one column's
-    // volume (its activity, dimmed with the price) or two columns' average price; two columns draw every place.
+    // The second row on the same grid: the limits under high and low; under open, the volume in one column (dimmed
+    // with the price) or the average price in two. Two columns draw every place.
     second !== null &&
       h_flex()
         .gap(12)

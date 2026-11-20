@@ -1,7 +1,6 @@
-// Wickline: stock and crypto quotes beside your agents. A watchlist panel with an
-// add field and a line per ticker; docked as a short strip (top or bottom), it
-// draws one line of quotes. A row opens the ticker's day as a dialog, and the
-// settings button opens the settings: the same mod, given the quote or `settings` in its props.
+// Wickline: stock and crypto quotes beside your agents. A watchlist panel with an add field and a line per ticker;
+// docked as a short strip (top or bottom), it draws one line of quotes. A row opens the ticker's day as a dialog,
+// and the settings button opens the settings: the same mod, given the quote or `settings` in its props.
 import { View } from "gpui-kit";
 import { v_flex, h_flex, InputState } from "gpui-base";
 import {
@@ -64,17 +63,17 @@ import { SETTINGS_TABS, settingsView } from "./ui/settings-dialog.js";
 
 // The key file lives in Herdr's data folder (see secrets.js); `appHome()` is called per use, never at the top level.
 const secretsDir = () => `${appHome()}/data/wickline`;
-// The one program Wickline runs: `chmod 600` on that file after each write, on macOS and Linux
-// (secrets.js decides). Both are called per use, never at the top level.
+// The one program Wickline runs: `chmod 600` on that file after each write, on macOS and Linux (secrets.js
+// decides). Both are called per use, never at the top level.
 const system = { platform: () => appWindow().platform, chmod: (path) => exec("chmod", ["600", path]) };
-// This copy's market filter lives in its own localStorage (per copy in Herdr 0.1.12, which is the point:
-// the side panel and a pane keep separate choices). Nothing else goes there. Read per use, inside a try.
+// This copy's market filter lives in its own localStorage, which Herdr keeps per copy: the side panel and a pane
+// keep separate choices. Nothing else goes there. Read per use, inside a try.
 const filterStorage = {
   getItem: (key) => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
 };
-// The open detail's hand-over (handover.js), in the shared state, saved to disk: the only code that touches its key,
-// so a copy that must not touch the person's shared state can hold it in memory instead.
+// The open detail's hand-over (handover.js), in the persisted shared state. The only code that touches its key, so a
+// copy that must not touch the user's shared state can hold it in memory instead.
 const detailStore = {
   read: () => shared(DETAIL_KEY),
   write: (value) => setShared(DETAIL_KEY, value),
@@ -82,7 +81,7 @@ const detailStore = {
 const loadSecret = (name) => secrets.loadSecret(fs, secretsDir(), name);
 // The dialog reads only what it may show of a saved key, never the key.
 const loadSecretEnding = (name) => secrets.loadSecretEnding(fs, secretsDir(), name);
-// Both resolve false when the file could not be made owner-only (it is written all the same).
+// Both resolve false when the file could not be made owner-only; it is written all the same.
 const saveSecret = (name, value) => secrets.saveSecret(fs, system, secretsDir(), name, value);
 const removeSecret = (name) => secrets.removeSecret(fs, system, secretsDir(), name);
 // What the moves between a pane, a tab and a docked block use of Herdr (see moves.js).
@@ -102,13 +101,14 @@ export default class Wickline extends View {
     this.overlay = given.overlay;
     // Two columns or one, chosen when it opened and kept while it is open.
     this.wide = given.wide === true;
-    // The token its opening copy writes under, and the last `seq` it adopted (none without a token: nothing to adopt).
+    // The token its opening copy writes under, and the last `seq` it adopted; null without a token, as there is
+    // nothing to adopt.
     this.held = typeof given.token === "string" ? { token: given.token, seq: 1 } : null;
     // The pointer's x over the detail's chart as a share of its width, and that width: `{ share, width }`, or null.
     // Kept only while the chart is drawn.
     this.chartPointer = null;
     // Redraws at its quote's own moments (a stale price, a session's edge, a mark's end) and at each quote its row
-    // hands it; it fetches nothing.
+    // hands it. It fetches nothing.
     cx.spawn(async (cx) => {
       await followDetail(() => this.detail, {
         now: () => Date.now(),
@@ -124,7 +124,7 @@ export default class Wickline extends View {
 
   initSettings(given, cx) {
     this.overlay = given.overlay;
-    // No tab (the settings button) opens the first market page in the person's language.
+    // Without a tab (the settings button), it opens the first market page in the user's language.
     this.tab = SETTINGS_TABS.includes(given.settings.tab) ? given.settings.tab : settingsMarkets(this.lang)[0];
     // Each source's problem as the panel saw it when it opened the dialog.
     this.health = Array.isArray(given.settings.health) ? given.settings.health : [];
@@ -133,26 +133,27 @@ export default class Wickline extends View {
 
   initPanel(given, cx) {
     this.size = null;
-    // The row under the pointer (shows its drag handle) and a drag in progress: `{ symbol, before }`,
-    // `before` being the symbol the dragged one would land in front of (null: at the end).
+    // The row under the pointer, which shows its drag handle, and a drag in progress: `{ symbol, before }`, where
+    // `before` is the symbol the dragged one would land in front of (null for the end).
     this.hovered = null;
     this.drag = null;
-    // Row motion, only for what this copy's person just did (see playRow). Rows from a first load, the
-    // starter list or another copy's edit never move. `added`: symbol -> "new" (drawn transparent) then
-    // "shown"; `leaving`: removed rows still on screen, `{ symbol, before, row, height, gone }`; `settle`: the
-    // dropped row, `{ symbol, from }` (px it starts from, then 0); `rowHeights`: each row's measured height.
+    // Row motion, only for what the user just did in this copy (see playRow). Rows from a first load, the starter
+    // list or another copy's edit never move.
+    // - `added`: symbol → "new" (drawn transparent), then "shown".
+    // - `leaving`: removed rows still on screen, `{ symbol, before, row, height, gone }`.
+    // - `settle`: the dropped row, `{ symbol, from }`, where `from` is the px offset it starts at, then 0.
+    // - `rowHeights`: each row's measured height.
     this.added = new Map();
     this.leaving = [];
     this.settle = null;
     this.rowHeights = {};
-    // The market filter: this copy's stored choice, else the one it was opened with (props; Herdr keeps them
-    // with the tab, so they must never override a later choice), else "all". Only a choice made here is
-    // stored. Rows and the filter row read it through filterState, so a market no longer on the list reads as All.
+    // The market filter: this copy's stored choice, else the one it was opened with, else "all" (see openFilter).
+    // Rows and the filter row read it through filterState, so a market no longer on the list reads as All.
     this.filter = openFilter(filterStorage, given.filter);
     // A remove kept the choice only for an index awaiting its first quote (see heldFilter): render settles it.
     this.filterHeld = false;
-    // A symbol's market for the filter and the fading rows: the watchlist's (an index's from the exchange its
-    // quote reports), or, for a row still fading out (its quote already dropped), the one its row was drawn with.
+    // A symbol's market for the filter and the fading rows: the watchlist's, or, for a row still fading out (its
+    // quote already dropped), the one its row was drawn with.
     this.marketFor = (symbol) => {
       const exchange = this.watch.exchangeOf(symbol);
       const ghost = exchange === null ? this.leaving.find((g) => g.symbol === symbol) : null;
@@ -164,24 +165,24 @@ export default class Wickline extends View {
     // `{ code, params }` or null, translated when drawn.
     this.notice = null;
     this.error = null;
-    // The tab this copy's own tab was opened from (props().from; from a pane or a block), or null.
+    // The tab this copy's own tab was opened from, by a pane or a block, or null.
     this.from = typeof given.from === "string" ? given.from : null;
     // Docked beside Herdr's Files and Changes, it draws their card (see wantsCard).
     this.card = wantsCard(given);
     // Where that block sits in the layout (set on render by syncDock), or null for a copy that is not docked.
     this.dock = null;
-    // The block's tab holds a Wickline pane (set by syncDock): the block shows only a way back.
+    // Whether the block's tab holds a Wickline pane (set by syncDock); the block then shows only a way back.
     this.yielding = false;
-    // The block is on screen and not yielding (set by syncDock): it offers its own tab.
+    // Whether the block is on screen and not yielding (set by syncDock); it then offers its own tab.
     this.dockShown = false;
-    // This copy is the own tab a docked block moved to (props().dock), so it goes back to that block.
+    // Whether this copy is the own tab a docked block moved to, so it goes back to that block.
     this.fromDock = given.dock === true;
-    // A move to or from the own tab is waiting for the new copy (see finishMove).
+    // Whether a move to or from the own tab is waiting for the new copy.
     this.moving = false;
-    // The refresh icon's turn (see refresh): null at rest, else `{ start, needed }`, turning since `start` (ms)
-    // until `needed` whole turns are done.
+    // The refresh icon's spin: null at rest, else `{ start, needed }`, turning since `start` until `needed` whole
+    // turns are done.
     this.spin = null;
-    // What this copy last handed the detail it opened (handover.js), or null: none open, or another took over.
+    // What this copy last handed the detail it opened, or null when none is open or another took over.
     this.handover = null;
     this.makeInput();
 
@@ -189,10 +190,11 @@ export default class Wickline extends View {
       load: () => shared(WATCHLIST_KEY),
       save: (preferences) => setShared(WATCHLIST_KEY, preferences),
       settings: () => shared(SETTINGS_KEY),
-      // Read-only GETs to Yahoo Finance and Binance (or the Binance address the person set), and to
-      // TWSE MIS (or the MIS address the person set) only once the person turned it on and consented,
-      // and finnhub.io (the Finnhub path the person set) only once chosen with a key saved; and to
-      // openapi.twse.com.tw (TWSE's holiday list), once a Taipei day while the list holds a Taiwan symbol.
+      // Read-only GETs to:
+      // - Yahoo Finance, and Binance or the Binance address the user set;
+      // - TWSE MIS or the MIS address the user set, only once the user turned it on and consented;
+      // - finnhub.io at the path the user set, only once chosen with a key saved;
+      // - openapi.twse.com.tw (TWSE's holiday list), once a Taipei day while the list holds a Taiwan symbol.
       fetch: (url, headers) => fetch(url, { headers }),
       // Read again by each copy when keyRev changes in the shared settings.
       loadSecret,
@@ -200,8 +202,8 @@ export default class Wickline extends View {
       // A docked block that is not on screen sends nothing.
       shown: () => this.onScreen(),
     });
-    // One loop per source, so a slow source never holds up another. Each owns the cx of its own
-    // spawn for its whole life: sleeping and redrawing go through it.
+    // One loop per source, so a slow source never holds up another. Each owns the cx of its own spawn for its whole
+    // life: sleeping and redrawing go through it.
     for (const id of this.watch.providerIds()) {
       cx.spawn(async (cx) => {
         await this.watch.runProvider(id, {
@@ -213,8 +215,8 @@ export default class Wickline extends View {
         });
       });
     }
-    // A language chosen in another copy reaches this one on render, where no input can be made: render
-    // wakes this loop, which remakes the input at once, keeping what was typed and the focus.
+    // A language chosen in another copy reaches this one on render, where no input can be made. Render wakes this
+    // loop, which remakes the input at once, keeping what was typed and the focus.
     cx.spawn(async (cx) => {
       for (;;) {
         await new Promise((resolve) => {
@@ -227,7 +229,7 @@ export default class Wickline extends View {
         cx.notify();
       }
     });
-    // `wickline.refresh` and `wickline.pause` (bind them in keys.json if you like).
+    // The `wickline.refresh` and `wickline.pause` commands, which keys.json may bind.
     cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
@@ -245,7 +247,7 @@ export default class Wickline extends View {
     if (this.held && clearsOnClose(detailStore.read(), this.held.token)) detailStore.write({});
   }
 
-  // Shared by every copy; the language is the person's choice, never the market's or the system's.
+  // Shared by every copy. The language is the user's choice, never the market's or the system's.
   readSettings() {
     this.settings = readSettings(shared(SETTINGS_KEY));
     this.lang = this.settings.language;
@@ -275,7 +277,7 @@ export default class Wickline extends View {
     return readFilter(this.watch.preferences.symbols, this.filter, this.marketFor, this.lang);
   }
 
-  // A filter that would hide `symbol` (just added, or already listed) goes back to All, so the person sees it.
+  // A filter that would hide `symbol` (just added, or already listed) goes back to All, so the user sees it.
   revealSymbol(symbol) {
     this.resetFilter(filterAfterAdd(this.watch.preferences.symbols, this.filter, symbol, this.marketFor));
   }
@@ -315,8 +317,8 @@ export default class Wickline extends View {
     });
   }
 
-  // A removal's notice offers Undo for UNDO_MS, then keeps its text without it. One sleep in a task of its
-  // own, not a poll; a newer notice (any later edit) has ended the Undo already, so it leaves that alone.
+  // A removal's notice offers Undo for UNDO_MS, then keeps its text without it. One sleep in a task of its own, not
+  // a poll. A newer notice has ended the Undo already, so it leaves that alone.
   expireUndo(cx) {
     const held = this.notice;
     if (!held?.undo) return;
@@ -329,9 +331,9 @@ export default class Wickline extends View {
     });
   }
 
-  // Puts the last removed symbol back where it was, in every copy. Read before `act` replaces the notice,
-  // so a second click on a stale Undo does nothing. Listed again already (another copy added it): `restore`
-  // gives null and the notice line clears.
+  // Puts the last removed symbol back where it was, in every copy. Read before `act` replaces the notice, so a second
+  // click on a stale Undo does nothing. When another copy has added it again, `restore` gives null and the notice
+  // line clears.
   undoRemove(cx) {
     const undo = this.notice?.undo;
     if (!undo) return;
@@ -345,7 +347,7 @@ export default class Wickline extends View {
     });
   }
 
-  // A symbol this copy's person just added fades in: its first draw is transparent.
+  // A symbol the user just added in this copy fades in: its first draw is transparent.
   fadeIn(cx, symbol) {
     // Added again while its old row is still fading out: that row goes at once.
     this.leaving = this.leaving.filter((g) => g.symbol !== symbol);
@@ -359,8 +361,8 @@ export default class Wickline extends View {
     );
   }
 
-  // Drops `drag.symbol` in front of `drag.before`. A move that changed the order slides the row from where
-  // it was to where it landed (the distance, from the rows' measured heights).
+  // Drops `drag.symbol` in front of `drag.before`. A move that changed the order slides the row from where it was to
+  // where it landed, by the rows' measured heights.
   dropRow(cx, drag) {
     const symbols = this.watch.preferences.symbols;
     const was = this.filterState().shown;
@@ -385,10 +387,9 @@ export default class Wickline extends View {
   }
 
   /**
-   * One row motion, from a click or a drop and never from a round. The row has just been given its start
-   * state (the caller redraws), `flip` moves it to the end state a frame later, which the row's
-   * `transition` animates, and `clear` drops the state once that is done, also when a step throws. One
-   * sleep per step in a task of its own, not a timer: it ends with the copy.
+   * One row motion, from a click or a drop and never from a round. The row has just been given its start state;
+   * `flip` moves it to the end state a frame later, which the row's `transition` animates; `clear` drops the state
+   * once that is done, also when a step throws. One sleep per step in a task of its own, so it ends with the copy.
    */
   playRow(cx, flip, clear) {
     cx.spawn(async (cx) => {
@@ -431,7 +432,7 @@ export default class Wickline extends View {
     this.trackFocus(this.misUrlInput, "misUrlFocused");
   }
 
-  // `this[flag]` follows whether `input` has the focus, redrawing on each change: a field's border shows it.
+  // Keeps `this[flag]` true while `input` has the focus, redrawing on each change, as a field's border shows it.
   trackFocus(input, flag) {
     this[flag] = false;
     input.on("focus", (_e, cx) => {
@@ -444,14 +445,13 @@ export default class Wickline extends View {
     });
   }
 
-  // The key input is for a new key only: it starts empty and masked, and a saved key is shown as its last
-  // four characters (keyEnding; null: none saved). Save waits for that read, so a missing key is never
-  // taken for a saved one.
+  // The key input is for a new key only: it starts empty and masked. A saved key is shown as its last four characters
+  // (keyEnding, null when none is saved). Save waits for that read, so a missing key is never taken for a saved one.
   initFinnhubDraft(cx) {
     this.keyEnding = null;
     this.keyLoaded = false;
     this.keyShown = false;
-    // Remove was pressed: the saved key goes on Save; Cancel drops it with the rest of the draft.
+    // Whether Remove was pressed: the saved key goes on Save; Cancel drops it with the rest of the draft.
     this.keyRemoving = false;
     // `{ code, params }` once the key was saved but could not be made owner-only.
     this.keyWarning = null;
@@ -505,8 +505,8 @@ export default class Wickline extends View {
     this.keyInput.set_masked(true);
   }
 
-  // The input's placeholder is fixed when it is made, so a new language needs a new input
-  // (made in init, an event handler or a spawned task, never in render).
+  // The input's placeholder is fixed when it is made, so a new language needs a new input. It is made in init, an
+  // event handler or a spawned task, never in render.
   makeInput() {
     this.input?.release();
     this.inputLang = this.lang;
@@ -540,7 +540,8 @@ export default class Wickline extends View {
     return this.tx(coded.code, source ? { ...coded.params, source: this.tx(`src.${source}`) } : coded.params);
   }
 
-  // `failure` names what could not be saved: the watchlist, or the settings for the prompt.
+  // Runs an edit and shows its notice, or its error. `failure` names what could not be saved: the watchlist, or the
+  // settings for the prompt.
   act(cx, action, failure = "error.save") {
     this.error = null;
     try {
@@ -556,7 +557,8 @@ export default class Wickline extends View {
     this.expireUndo(cx);
   }
 
-  // Every notice an add gives but the duplicate's means a new symbol, whatever it says about Finnhub's cap.
+  // Adds the typed symbol. Every notice an add gives but the duplicate's means a new symbol, whatever it says about
+  // Finnhub's cap.
   add(cx) {
     this.act(cx, () => {
       const notice = this.watch.add(this.typed);
@@ -576,11 +578,10 @@ export default class Wickline extends View {
   }
 
   /**
-   * Asks every source for a round and turns the refresh icon until it ends, always a whole number of
-   * turns so it stops upright, and at least one whole turn for each press (a round that ends at once
-   * still turns once). One task per spin: a press while it runs adds a turn and starts no new round (a
-   * round still out has already joined; one that just ended is under a second old), so a double click
-   * costs one round per source. Its single sleep per turn is not a poll; it ends with the copy.
+   * Asks every source for a round and turns the refresh icon until it ends: a whole number of turns, so it stops
+   * upright, and at least one whole turn for each press.
+   * One task per spin. A press while it runs adds a turn and starts no new round, so a double click costs one round
+   * per source. Its one sleep per turn is not a poll, and it ends with the copy.
    */
   refresh(cx) {
     if (this.spin) {
@@ -605,8 +606,9 @@ export default class Wickline extends View {
     return this.watch.pause(!this.watch.preferences.paused);
   }
 
-  // Written before the dialog opens, so its first render finds its own hand-over; a second open replaces the first.
-  // The write is a boundary: when it fails, the detail still opens, without a token, and keeps the quote it opened with.
+  // Opens the detail for `symbol`. The hand-over is written before the dialog opens, so its first render finds it; a
+  // second open replaces the first. When the write fails, the detail still opens, without a token, and keeps the
+  // quote it opened with.
   openDetail(symbol) {
     const now = Date.now();
     const detail = this.watch.detailQuote(symbol, now);
@@ -630,9 +632,9 @@ export default class Wickline extends View {
   }
 
   /**
-   * After each pass of a source's loop (where it calls changed(), a round or not): hands the open detail its row's quote
-   * when it reads differently, while the key still holds this copy's token (nextWrite). Read, decided and written in one
-   * synchronous step, so no other copy's write comes between. It runs inside the loop: a failed write must not end it.
+   * After each pass of a source's loop, hands the open detail its row's quote when it reads differently, while the key
+   * still holds this copy's token (nextWrite). Read, decided and written in one synchronous step, so no other copy's
+   * write comes between. It runs inside the loop, so a failed write must not end it.
    */
   handOver() {
     if (!this.handover) return;
@@ -650,8 +652,8 @@ export default class Wickline extends View {
     }
   }
 
-  // The detail's read of its hand-over, on render (it only reads: a write here would re-render every copy, again and
-  // again). A newer quote replaces the one held and wakes followDetail to time its next redraw from it.
+  // The detail's read of its hand-over, on render. It only reads: a write here would re-render every copy, again and
+  // again. A newer quote replaces the one held and wakes followDetail to time its next redraw from it.
   adoptDetail() {
     const got = adopt(detailStore.read(), this.held);
     if (!got) return;
@@ -692,14 +694,14 @@ export default class Wickline extends View {
     if (this.draft) return settingsView(this, t);
     // Herdr re-renders every copy when shared state changes: adopt another copy's edit now.
     this.watch.sync();
-    // A choice a remove held for a pending index settles once none is pending: an index that reported
-    // another market must not leave it stored, or the next add in that market would narrow the list.
+    // A choice a remove held for a pending index settles once none is pending. An index that reported another market
+    // must not leave it stored, or the next add in that market would narrow the list.
     if (this.filterHeld && !this.watch.preferences.symbols.some((symbol) => this.watch.pendingIndex(symbol))) {
       this.filterHeld = false;
       this.resetFilter(filterAfterRemove(this.watch.preferences.symbols, this.filter, this.marketFor, () => false));
     }
-    // A hidden docked block never renders, so a render usually means it was just shown: run the rounds it
-    // skipped. wakeMissed asks shown() itself, so a copy judged hidden or yielding wakes nothing.
+    // A hidden docked block never renders, so a render usually means it was just shown: run the rounds it skipped.
+    // wakeMissed asks shown() itself, so a copy judged hidden or yielding wakes nothing.
     if (this.card) {
       this.syncDock();
       this.watch.wakeMissed();
@@ -723,8 +725,8 @@ export default class Wickline extends View {
     return form === "table" ? table(this, root, t) : sidebar(this, root, t);
   }
 
-  // What a row reads from the watchlist at `now` (one per render, so every row reads the same closure). A row being
-  // removed draws from the copy taken before its quote went.
+  // What a row reads from the watchlist at `now`, one `now` per render so every row reads the same closure. A row
+  // being removed draws from the copy taken before its quote went.
   rowSource(symbol, now) {
     const w = this.watch;
     return {
@@ -738,10 +740,9 @@ export default class Wickline extends View {
   }
 
   /**
-   * A price at its own source's limit, as drawn: null for any other, and for one no longer current (shownLimit:
-   * cached, stalled, or a trial match before the open).
-   * Its color is the gain or loss color by the limit's side, whatever the %: an ex-dividend day's limits are
-   * set from a reference price, not the previous close.
+   * How a price at its own source's limit is lit, or null: for any other price, and for one no longer current
+   * (shownLimit). Its color is the gain or loss color by the limit's side, whatever the %, as an ex-dividend day's
+   * limits are set from a reference price, not the previous close.
    */
   limitMark(t, quote, now) {
     const limit = shownLimit(quote, sessionOf(quote, now), now);
@@ -757,8 +758,8 @@ export default class Wickline extends View {
     };
   }
 
-  // Red-up or green-up, by the color setting (automatic: red-up in every language but English). A day
-  // that reads 0.00% is neither, in every view.
+  // The color of a change: red-up or green-up by the color setting (automatic: red-up in every language but
+  // English). A day that reads 0.00% is neither, in every view.
   changeColor(t, change) {
     const tone = changeTone(change);
     if (tone === "none") return t.dim;
@@ -800,9 +801,9 @@ export default class Wickline extends View {
     });
   }
 
-  // The Finnhub key as the dialog holds it, given `errors` (draftErrors), for marketStatus: it decides
-  // whether the US page names Finnhub or Yahoo Finance as its source. The US market reads live from
-  // Yahoo with or without a key (its US prices are real time), and reads Problem when every source fails.
+  // The Finnhub key as the dialog holds it, given draftErrors' `errors`, for marketStatus: it decides whether the US
+  // page names Finnhub or Yahoo Finance as its source. The US market reads live either way, as Yahoo's US prices are
+  // real time, and reads Problem when every source fails.
   keyFields(errors) {
     return {
       typed: this.keyInput.value().trim(),
@@ -812,9 +813,8 @@ export default class Wickline extends View {
     };
   }
 
-  // Writes only what the dialog edits, over what is saved now: a newer copy's other keys stay. A new
-  // Finnhub key goes to the secrets file first (or, after Remove, leaves it), then keyRev + 1
-  // tells every copy to read it again.
+  // Writes only what the dialog edits, over what is saved now, so a newer copy's other keys stay. A new Finnhub key
+  // goes to the secrets file first (or, after Remove, leaves it); then keyRev + 1 tells every copy to read it again.
   saveDraft(cx) {
     if (Object.keys(this.draftErrors()).length || !this.keyLoaded || this.saving) return;
     const { language, colors, sources } = this.draft;

@@ -1,7 +1,6 @@
-// The panel: the band (a short docked strip), the sidebar and the table, with the list that scrolls their rows
-// and takes a dragged row's drop, the market filters and the footer; the header's pieces are in header.js, the
-// rows in rows.js. Everything that talks to Herdr (storage, requests, commands, panes) stays on the view in
-// main.js; these functions draw from it and call back into it.
+// The panel's three layouts: the band (a short docked strip), the sidebar and the table. Also the list that scrolls
+// their rows and takes a drop, the market filters and the footer. The header's pieces are in header.js, the rows in
+// rows.js. Everything that talks to Herdr stays on the view in main.js; these functions draw from it and call back.
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar } from "gpui-base";
 import { bandCurrency, formatChange, number } from "../format.js";
@@ -28,7 +27,7 @@ const FILTER_SLIDE = { duration: 180, easing: "ease-out" };
 // Below this panel width the footer shows the short disclaimer.
 const SHORT_FOOTER_WIDTH = 480;
 
-// One line: Wickline, then as many quotes as fit.
+/** The band: one line, Wickline and then as many quotes as fit. */
 export function band(view, root, t) {
   const w = view.watch;
   const symbols = w.preferences.symbols;
@@ -87,8 +86,7 @@ export function band(view, root, t) {
     );
 }
 
-// A docked block whose own tab is open: one line and the way back, no quotes. The band has one line of
-// height, so it gets one row.
+/** A docked block whose own tab is open: a line and the way back, no quotes; one row in the band. */
 export function yieldView(view, root, t, inBand) {
   const notice = div().text_color(t.dim).child(view.tx("dock.openInTab"));
   const back = button(t, "bw-yield-back", view.tx("button.backToPanel"), (cx) => view.backFromYield(cx));
@@ -107,10 +105,11 @@ export function yieldView(view, root, t, inBand) {
   );
 }
 
-// The scrolling rows, which end at their × column, and the scrollbar in the lane beside it: the lane is padding
-// of the list, so no row fill (hover, a dragged row) reaches under the bar. No pointer capture: a release outside
-// the list never arrives, so leaving it cancels a drag. A list with a gap above it (the sidebar) keeps the gap and
-// a hairline outside the scroll, so a row scrolled up is cut at the hairline instead of touching the region above.
+// The scrolling rows, which end at their × column, and the scrollbar in the lane beside it.
+// - The lane is padding of the list, so no row fill (hover, a dragged row) reaches under the bar.
+// - There is no pointer capture: a release outside the list never arrives, so leaving it cancels a drag.
+// - A list with a gap above it (the sidebar) keeps the gap and a hairline outside the scroll, so a row scrolled up is
+//   cut at the hairline instead of touching the region above.
 function list(view, t, rows, top = 0) {
   const scrolling = v_flex()
     .id("bw-list")
@@ -151,7 +150,7 @@ function list(view, t, rows, top = 0) {
     );
 }
 
-// One line: the disclaimer, which opens the settings' disclaimer tab.
+// The footer: one line of disclaimer, which opens the settings' disclaimer page.
 function footer(view, t) {
   const short = view.size && view.size.width < SHORT_FOOTER_WIDTH;
   return div()
@@ -173,7 +172,7 @@ function footer(view, t) {
     );
 }
 
-// Below TABLE_MIN_WIDTH: the header, the status line, the add field, the rows (see rows.js sidebarRow), the footer.
+/** The layout below TABLE_MIN_WIDTH: the header, the status line, the add field, the rows and the footer. */
 export function sidebar(view, root, t) {
   const filter = view.filterState();
   const now = Date.now();
@@ -210,8 +209,10 @@ export function sidebar(view, root, t) {
     .child(footer(view, t));
 }
 
-// From TABLE_MIN_WIDTH: one header line, column labels that stay while the rows scroll, 36 px rows. At most
-// TABLE_MAX_WIDTH wide, centered; columns drop by DROP_ORDER when the width cannot hold them.
+/**
+ * The layout from TABLE_MIN_WIDTH: one header line, column labels that stay while the rows scroll, 36 px rows. At
+ * most TABLE_MAX_WIDTH wide, centered; columns drop by DROP_ORDER when the width cannot hold them.
+ */
 export function table(view, root, t) {
   const filter = view.filterState();
   const now = Date.now();
@@ -257,13 +258,13 @@ export function table(view, root, t) {
   return root.items_center().child(frame);
 }
 
-// One row of market filters above the list (a list of one element, as header.js `messages`), or none while the list is short or of one market. The chosen
-// one sits on a pill that slides to a new choice: an absolute div whose `left` is the widths of the labels
-// before it plus the gaps, and whose `width` is the chosen label's, both measured from the labels
-// themselves (on_size_change), so the pill follows any language or count. The scrolling area holds the
-// labels in a content box of their own, so the pill scrolls with them; it scrolls sideways (natively: a
-// horizontal wheel or a trackpad swipe) when the labels do not fit. Until every label it needs has been
-// measured there is no pill. `filter`: the view's filterState().
+// The row of market filters above the list, as a list of one element like header.js `messages`; none while the
+// list is short or of one market.
+// - The chosen label sits on a pill that slides to a new choice. The pill's `left` and `width` are measured from the
+//   labels themselves (on_size_change), so it follows any language or count; until every label it needs has been
+//   measured there is no pill.
+// - The labels sit in a content box of their own, so the pill scrolls with them. The row scrolls sideways when they
+//   do not fit.
 function filterBar(view, t, { filters, chosen }) {
   if (!filters.length) return [];
   const index = filters.findIndex(({ id }) => id === chosen);

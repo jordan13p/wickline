@@ -1,6 +1,6 @@
-// The panel's rows, whichever layout draws them: a sidebar row and a table row, the table's column labels, the
-// frame that holds a row's drag handle and ×, and a removed row's fading copy. Drawn from the view; every Herdr
-// call goes back through it.
+// The panel's rows, whichever layout draws them: a sidebar row and a table row, the table's column labels, the frame
+// that holds a row's drag handle and ×, and a removed row's fading copy. Drawn from the view; every Herdr call goes
+// back through it.
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
@@ -18,8 +18,8 @@ const TABLE_SPARK = { width: columnWidth("line"), height: 28 };
 // A row fading in, fading out and collapsing, or sliding into its dropped place.
 const ROW_MOTION = { duration: ROW_MOTION_MS, easing: "ease-out" };
 
-// What a row shows, whichever layout draws it: `name` as rowName leaves it (none for a pair, or for a
-// name that only repeats the ticker), and `state`, the freshness label, then an earlier day's date.
+// What a row shows, whichever layout draws it: `name` as rowName leaves it, and `state`, the freshness label, then an
+// earlier day's date.
 function rowData(view, t, now, symbol, source) {
   const { quote } = source;
   const fresh = quote && freshness(quote, sessionOf(quote, now), now);
@@ -67,18 +67,18 @@ function waiting(view, row) {
   return view.tx(row.failed ? "row.unavailable" : view.watch.preferences.paused ? "row.notFetched" : "row.waiting");
 }
 
-// That text in a box the caller sizes, right-aligned to end where a price's digits end (a currency slot in
-// from the edge).
+// That text in a box the caller sizes, right-aligned to end where a price's digits end, a currency slot in from the
+// edge.
 const waitingCell = (view, t, row, box) =>
   box.pr(CODE_W).text_right().text_size(11).text_color(t.dim).child(waiting(view, row));
 
-// One line of the sidebar grid. Its line height is its own height in px (a bare number is a multiplier), so
-// the glyphs and their descenders fit, and equal boxes put the left and right lines on one baseline. It is
-// drawn even when empty, so a row keeps its three lines (a collapsed row is the exception, see sidebarRow).
+// One line of the sidebar grid. Its line height is its own height in px (a bare number is a multiplier), so the
+// glyphs and their descenders fit, and equal boxes put the left and right lines on one baseline. It is drawn even
+// when empty, so a row keeps its three lines.
 const lineBox = (height, el = div()) => el.flex_none().h(height).line_height(`${height}px`);
 
-// The price with its currency in its own slot, then the change and the change %, right-aligned on the
-// price's last digit. None of them truncates: a long one grows to the left.
+// The price with its currency in its own slot, then the change and the change %, right-aligned on the price's last
+// digit. None of them truncates: a long one grows to the left.
 function priceStack(view, t, row) {
   const { quote, color } = row;
   const column = v_flex()
@@ -103,10 +103,9 @@ function priceStack(view, t, row) {
     .child(figure(formatChange(quote.changePercent)));
 }
 
-// A row: the drag handle in the left gutter and × in its column at the right, both only under the pointer; between
-// them the body, which opens the ticker's day. Hairlines between rows span the body only. A row this copy
-// just added starts transparent and fades in; a row just dropped starts where it was and slides to its
-// place (the transition animates the change from the next render on, see main.js `playRow`). `place`: see drawRows.
+// A row: the drag handle in the left gutter and × in its column at the right, both only under the pointer, and the
+// body between them, which opens the detail. Hairlines between rows span the body only. A row this copy just added
+// fades in; a row just dropped starts where it was and slides to its place (see main.js `playRow`).
 function rowFrame(view, t, symbol, place, body, clickable) {
   const { next, moving } = place;
   const dragged = view.drag?.symbol === symbol;
@@ -199,8 +198,8 @@ function rowFrame(view, t, symbol, place, body, clickable) {
   );
 }
 
-// A removed row for the time it fades out and collapses: its copy at its last height, then at none. It
-// takes no clicks and no drag, and has an id of its own so it shares no state with a row of the same symbol.
+// A removed row while it fades out and collapses: its copy at its last height, then at none. It takes no clicks and
+// no drag, and has an id of its own so it shares no state with a row of the same symbol.
 function ghostFrame(t, ghost, body) {
   return v_flex()
     .id(`bw-ghost-${ghost.symbol}`)
@@ -220,9 +219,11 @@ function ghostFrame(t, ghost, body) {
     );
 }
 
-// The rows to draw, each removed row (a ghost) where it was. `filter`: the view's filterState(). A live row is
-// drawn with its `place`, `{ next, moving }`: the row after it among those shown (null: the last one), and
-// whether the drag under way would move a row.
+/**
+ * The rows to draw, each removed row (a ghost) where it was. A live row is drawn with its `place`,
+ * `{ next, moving }`: the row after it among those shown (null for the last), and whether the drag under way would
+ * move a row.
+ */
 export function drawRows(view, filter, draw) {
   const { shown } = filter;
   const moving = Boolean(view.drag) && !dropsInPlace(view.drag, shown);
@@ -233,12 +234,14 @@ export function drawRows(view, filter, draw) {
   );
 }
 
-// A three-line grid: symbol, name and freshness on the left; the day line spanning all three; the price,
-// the change and the change % at a fixed width on the right, so a wider pane gives its room to the left
-// lines, and past NAME_ROOM to the day line. A row without a name of its own (a pair, a name that repeats
-// the ticker) keeps line 2 empty. Notes go under the grid. The exception is a collapsed row (no price, its
-// fetch failed): the ticker and its state on one line, the reason under it, its state ending where a price's
-// digits end. One body and one frame call serve a live row and a fading one alike.
+/**
+ * A sidebar row: a three-line grid, with notes under it.
+ * - Left: symbol, name and freshness. A row without a name of its own keeps line 2 empty.
+ * - Middle: the day line, spanning all three lines.
+ * - Right: the price, the change and the change % at a fixed width, so a wider pane gives its room to the left lines
+ *   and then to the day line.
+ * A collapsed row (no price, its fetch failed) is one line, the ticker and its state, with the reason under it.
+ */
 export function sidebarRow(view, t, symbol, place, now, ghost) {
   const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol, now));
   const grid = () => {
@@ -297,6 +300,7 @@ function tableCell(id, nameW) {
     .w(id === "name" ? nameW : columnWidth(id));
 }
 
+/** The table's column labels, which stay while the rows scroll. */
 export function tableHead(view, t, columns, nameW) {
   const labels = {
     symbol: "table.symbol",
@@ -338,6 +342,7 @@ export function tableHead(view, t, columns, nameW) {
     );
 }
 
+/** A table row: one cell per column that fits. */
 export function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
   const row = rowData(view, t, now, symbol, ghost ? ghost.row : view.rowSource(symbol, now));
   const { quote, color } = row;
@@ -405,7 +410,7 @@ export function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
   return ghost ? ghostFrame(t, ghost, body) : rowFrame(view, t, symbol, place, body, Boolean(quote));
 }
 
-// `drag` would put the row where it already is: in front of itself or of the row after it, among the rows `shown`.
+/** Whether `drag` would put the row where it already is: in front of itself or of the row after it, among `shown`. */
 export function dropsInPlace(drag, shown) {
   const { symbol, before } = drag;
   return before === symbol || before === nextOf(shown, symbol);
