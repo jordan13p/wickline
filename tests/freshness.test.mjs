@@ -6,7 +6,6 @@ import {
   REALTIME_SOURCES,
   auctionFlagged,
   auctionWindowStart,
-  chartLayout,
   chartQuote,
   detailSource,
   freshness,
@@ -16,7 +15,6 @@ import {
   msUntilStale,
   sessionName,
   sessionOf,
-  sessionProgress,
   shownLimit,
   staleAt,
 } from "../mods/wickline/freshness.js";
@@ -37,8 +35,8 @@ import { taipeiDay, taipeiMinute } from "../mods/wickline/calendar.js";
 import { closureOf, heldMarks, twMarket, withClosure } from "../mods/wickline/closures.js";
 import { mergeOverlay } from "../mods/wickline/overlay.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
+import { chartGeometry, chartLayout, sessionProgress } from "../mods/wickline/chart.js";
 import {
-  chartGeometry,
   dayFor,
   detailTimes,
   failureNote,

@@ -3,14 +3,11 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { isCryptoPair } from "../quotes.js";
+import { crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot } from "../chart.js";
 import {
   activityCells,
   bookTotals,
   changeTone,
-  crosshairAt,
-  crosshairLabel,
-  crosshairLevel,
-  crosshairSpot,
   detailBook,
   displayName,
   detailTimes,

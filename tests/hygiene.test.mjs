@@ -7,7 +7,7 @@ import { MESSAGES_EN } from "../mods/wickline/quotes.js";
 import { STRINGS } from "../mods/wickline/i18n.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
-import { CROSSHAIR_CARD_PX } from "../mods/wickline/format.js";
+import { CROSSHAIR_CARD_PX } from "../mods/wickline/chart.js";
 
 const MOD = new URL("../mods/wickline/", import.meta.url);
 const ROOT = new URL("../", import.meta.url);

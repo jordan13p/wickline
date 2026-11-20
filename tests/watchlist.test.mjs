@@ -11,7 +11,6 @@ import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/wickline/watc
 import { t } from "../mods/wickline/i18n.js";
 import {
   LIVE_MAX_AGE_MS,
-  chartLayout,
   detailSource,
   detailWakeAt,
   freshness,
@@ -19,8 +18,8 @@ import {
   sessionOf,
   sessionTimes,
 } from "../mods/wickline/freshness.js";
+import { chartGeometry, chartLayout } from "../mods/wickline/chart.js";
 import {
-  chartGeometry,
   collapsedRow,
   detailTimes,
   failureNote,

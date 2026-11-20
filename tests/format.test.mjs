@@ -3,7 +3,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   changeTone,
-  chartGeometry,
   collapsedRow,
   dayFor,
   detailTimes,
@@ -24,7 +23,8 @@ import { activityCells, amplitude, formatShare, innerOuter } from "../mods/wickl
 import { bookTotals, detailBook, formatSignedCount, ladder } from "../mods/wickline/format.js";
 import { decodeStockList } from "../mods/wickline/providers/yahootw.js";
 import { formatDate, nextDayTurn, sessionTimesParts, stateText } from "../mods/wickline/format.js";
-import { crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot, lineDate } from "../mods/wickline/format.js";
+import { lineDate } from "../mods/wickline/format.js";
+import { chartGeometry, crosshairAt, crosshairLabel, crosshairLevel, crosshairSpot } from "../mods/wickline/chart.js";
 import { decodeKlines } from "../mods/wickline/providers/binance.js";
 import { detailSource, freshness, sessionName, sessionOf, sessionTimes } from "../mods/wickline/freshness.js";
 import { CLOSE_1224, at, day, jsonFixture, ok, say, taipei, withTZ } from "./helpers.mjs";

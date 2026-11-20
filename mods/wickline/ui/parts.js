@@ -2,8 +2,8 @@
 // draws, and returns an element, except failureText, which returns the failure note's words. No Herdr calls, no state.
 import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex, Checkbox, Switch } from "gpui-base";
-import { chartGeometry, failureNote } from "../format.js";
-import { chartLayout } from "../freshness.js";
+import { chartGeometry, chartLayout } from "../chart.js";
+import { failureNote } from "../format.js";
 import { SPIN_MS } from "../motion.js";
 
 // The soft fill under a line chart.
@@ -13,7 +13,7 @@ const AREA_OPACITY = 0.16;
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
 export const icon = (name) => `mods/wickline/icons/${name}.svg`;
 
-// What `quote`'s chart draws (format.js chartGeometry, laid out by chartLayout), or null when its box holds nothing.
+// What `quote`'s chart draws (chart.js chartGeometry, laid out by chartLayout), or null when its box holds nothing.
 export const chartShape = (quote) => chartGeometry(quote.series, quote.previousClose, chartLayout(quote));
 
 // The day's line, scaled to its box and reaching only as far as its trading day has run (chartLayout); the previous

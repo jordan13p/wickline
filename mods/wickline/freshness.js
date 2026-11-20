@@ -1,7 +1,7 @@
 // How fresh a quote is, as the view draws it: a filled dot only for a real-time price
 // that is recent while its market trades; and when an open detail must redraw (detailWakeAt,
 // followDetail). No Herdr imports, so tests run it under Node.
-import { futuresDay, taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
+import { taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
 import { heldMarks } from "./closures.js";
 import { formatStaleDate, nextDayTurn, stateText } from "./format.js";
 import {
@@ -292,21 +292,10 @@ export function hoursWindow(quote, now) {
   return { regular: localWindow(hours, now), weekday: tradesOn(hours, localDay(hours.offsetMin, now)) };
 }
 
-// A future's trading day `day` (futuresDay) as its two sessions from TAIFEX_HOURS: the night from 15:00 on the trading
-// weekday before it (Friday's for a Monday), then the day session.
-function taifexDay(day) {
-  let night = day - 1;
-  while (!tradesOn(TAIFEX_HOURS, night)) night--;
-  return [
-    [taipeiAt(night, NIGHT_SESSION.from), taipeiAt(night, NIGHT_SESSION.to)],
-    [taipeiAt(day, DAY_SESSION.from), taipeiAt(day, DAY_SESSION.to)],
-  ];
-}
-
 // A regular period ([start, end] in ms) as its spans of trading time: split around the exchange's lunch
 // (exchangeRule(...).lunch, via localWindow taken at its start, so a Saturday detail with Friday's periods still splits)
 // when it falls inside, else whole.
-function regularSpans(quote, regular) {
+export function regularSpans(quote, regular) {
   const [start, end] = regular;
   const lunch = lunchWithin(quote, regular, start);
   return lunch
@@ -315,56 +304,6 @@ function regularSpans(quote, regular) {
         [lunch[1], end],
       ]
     : [[start, end]];
-}
-
-// The spans of trading time in the trading day that `t` belongs to, as [start, end] in ms, or null when unknown. A future:
-// the segments its periods list for `t`'s trading day, else TAIFEX's. Any other: its regular period, else its exchange's
-// hours (hoursWindow), split around the exchange's lunch (regularSpans).
-function tradingSpans(quote, t) {
-  if (kindOf(quote.symbol) === "future") {
-    const day = futuresDay(t);
-    const own = (quote.periods?.segments ?? []).filter(([start]) => futuresDay(start) === day);
-    return own.length ? own : taifexDay(day);
-  }
-  const regular = quote.periods?.regular ?? hoursWindow(quote, t)?.regular;
-  return regular ? regularSpans(quote, regular) : null;
-}
-
-/**
- * The share of `quote`'s trading day elapsed at `t`, in [0, 1], counting trading time only (a lunch break and the gap
- * between a future's sessions take none); null for a pair, FX or a Yahoo future (`=F`), or with neither periods nor
- * exchange hours. An earlier, finished day gives 1: a time before its period, any time while the quote's own time is
- * before its period's start (yesterday's bars under today's periods), and a period of zero length.
- */
-export function sessionProgress(quote, t) {
-  const kind = kindOf(quote.symbol);
-  if (kind === "pair" || kind === "other") return null;
-  const regular = quote.periods?.regular;
-  if (regular && (quote.timestamp < regular[0] || regular[1] <= regular[0])) return 1;
-  const spans = tradingSpans(quote, t);
-  if (!spans) return null;
-  const total = spans.reduce((sum, [start, end]) => sum + end - start, 0);
-  if (total <= 0 || t < spans[0][0]) return 1;
-  const elapsed = spans.reduce((sum, [start, end]) => sum + Math.min(Math.max(t, start), end) - start, 0);
-  return elapsed / total;
-}
-
-// A drawn line that ends more than this before the shown price's time leaves the price a dot of its own.
-const DOT_AFTER_MS = 300_000;
-
-/**
- * Where `quote`'s line and price fall in its box (format.js chartGeometry draws them): `extent`, the share of the box the
- * line reaches, sessionProgress at its last point (`chartTimestamp`, else the quote's time); and `dot`, the price at
- * sessionProgress of its own time, when its trading day is known and no line is drawn or the line ends more than
- * DOT_AFTER_MS before it. null extent: the whole box.
- */
-export function chartLayout(quote) {
-  const lineEnd = quote.chartTimestamp ?? quote.timestamp;
-  const extent = sessionProgress(quote, lineEnd);
-  const behind = !quote.series?.length || quote.timestamp - lineEnd > DOT_AFTER_MS;
-  if (!behind) return { extent, dot: null };
-  const at = lineEnd === quote.timestamp ? extent : sessionProgress(quote, quote.timestamp);
-  return { extent, dot: at === null ? null : { x: at, price: quote.price } };
 }
 
 /**
