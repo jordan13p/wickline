@@ -97,5 +97,6 @@ docs, and shared helpers in `helpers.mjs`.
 - Tag every commit `[STRUCT]` (no behavior change: move, rename, extract, format) or `[BEHAV]` (changes what
   Wickline does, with tests that show it). Never mix the two in one commit.
 - Subject in the imperative; the body says why, how and what it changes.
+- `git blame` skips the one formatting commit after `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 - A `[BEHAV]` commit updates `RECIPE.md` (at most 57,000 bytes; a test checks) and the READMEs where they describe
   that behavior.
