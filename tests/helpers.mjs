@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 import { MIS_CONSENT_VERSION } from "../mods/wickline/providers/mis.js";
-import { HOLIDAYS_URL, parseHolidays } from "../mods/wickline/calendar.js";
+import { HOLIDAYS_URL, parseHolidays, taipeiDay } from "../mods/wickline/calendar.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import { freshnessLabel } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
@@ -30,6 +30,23 @@ export const yq = (symbol, exchange, timestamp, periods = null) => ({
 });
 // A clock time on the Taipei clock (UTC+8), on Tuesday 2026-11-17 (the call-auction recordings' day) unless `date` says.
 export const taipei = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
+// Tuesday 2026-11-17 in Taipei: a Yahoo 奇摩股市 line of 0050.TW and a price laid over it.
+export const DAY = taipeiDay(taipei("10:00:00"));
+export const line0050 = {
+  day: DAY,
+  series: [189.1, 189.2, 189.2],
+  times: [taipei("10:29:00"), taipei("10:30:00"), taipei("10:31:00")],
+  lastAt: taipei("10:30:00"),
+};
+export const ytw0050 = (fields) => ({
+  symbol: "0050.TW",
+  source: "yahootw",
+  price: 189.3,
+  day: DAY,
+  timestamp: taipei("10:32:05"),
+  fetchedAt: taipei("10:32:06"),
+  ...fields,
+});
 
 /**
  * Runs `run` with process.env.TZ set to `zone` (Node honours a change at run time) and restores the old value after,
