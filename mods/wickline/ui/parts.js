@@ -23,9 +23,7 @@ export const chartShape = (quote) => chartGeometry(quote.series, quote.previousC
 // hands `move` the pointer's x as a share of its width (0…1) with that width, and calls `leave` when the pointer goes;
 // its `mark`, when set, draws a 1 px `dim` vertical line and a 6 px dot at a line point and beside it a card on a
 // `background` plate, placed across by `spot` ({ left } or { right }, px) and down by `level` ({ top } or { bottom }).
-// `date` (only the detail passes it: format.js lineDate) is written small and `dim` on a `background` plate in the
-// top-left corner, under the crosshair's card.
-export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, crosshair, date }) {
+export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, crosshair }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
   const g = chartShape(quote);
@@ -58,9 +56,6 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
     .when(g.dot !== null, (el) => el.child(div().absolute().top(0).bottom(0).left(half).right(half)
       .child(div().absolute().left(`${g.dot[0]}%`).top(`${g.dot[1]}%`).ml(-half).mt(-half).w(dot).h(dot).rounded_full()
         .bg(color))))
-    // On an opaque plate, as the card is, so a line that starts high never runs through it.
-    .when(Boolean(date), (el) => el.child(div().absolute().top(0).left(0).px(4).py(1).rounded(3).bg(t.background)
-      .text_size(10.5).text_color(t.dim).child(date)))
     .when(Boolean(mark), (el) => el.children(crosshairLayers(t, mark)));
 }
 

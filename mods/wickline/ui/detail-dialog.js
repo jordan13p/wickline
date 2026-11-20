@@ -106,6 +106,12 @@ export function detailView(view, t) {
   const hours = sessionTimesParts(sessionTimes(q, now), view.lang, tx);
   const second = secondRow(q, view.wide, view.lang, tx);
   const amount = signed(q);
+  // An earlier day's line (before the open, a closed day) has its date just below the chart's left end, as a time axis
+  // starts; never over the line, and no row at all for today's.
+  const lineDay = lineDate(q, now, view.lang);
+  const dated = (box) => (lineDay
+    ? v_flex().w_full().gap(2).child(box).child(div().text_size(10.5).text_color(t.dim).child(lineDay))
+    : box);
   // A stalled or cached price dims with its activity, so nothing beside it looks current; its ink stays foreground.
   const dimmed = detailDimmed(q, session, now);
   const dim = (el) => (dimmed ? el.opacity(DIM_OPACITY) : el);
@@ -138,10 +144,10 @@ export function detailView(view, t) {
         .child(view.tx(mark.limit === "up" ? "detail.limitUp" : "detail.limitDown"))))),
     // The box only when its chart draws something (chartShape: a rule, a line or the price's dot), else nothing. The
     // crosshair's card text dims with the detail, and over a cached line, which is not current.
-    shape !== null && chart(q, color, t, {
-      width: "full", height: CHART_H, fill: true, dot: 6, date: lineDate(q, now, view.lang),
+    shape !== null && dated(chart(q, color, t, {
+      width: "full", height: CHART_H, fill: true, dot: 6,
       crosshair: traced ? crosshairOption(view, t, q, shape, now, dimmed || Boolean(q.chartCached)) : null,
-    }),
+    })),
     isCryptoPair(q.symbol)
       ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))
         .child(stat("detail.low24h", q.low))

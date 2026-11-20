@@ -776,3 +776,10 @@ test("the crosshair's card stays opaque: only its text dims", () => {
   assert.match(layers, /mark\.level/);
   assert.doesNotMatch(layers, / · /);
 });
+test("an earlier day's date stands below the detail's chart, never over its line", () => {
+  const parts = code(read(new URL("ui/parts.js", MOD)));
+  assert.doesNotMatch(parts.match(/export function chart\([^)]*\)/)?.[0] ?? "", /\bdate\b/);
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  assert.match(detail, /lineDate\(q, now, view\.lang\)/);
+  assert.doesNotMatch(detail, /date: lineDate/);
+});
