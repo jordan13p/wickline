@@ -143,9 +143,9 @@ test("own tab: a new Wickline pane in the moving copy's own tab is not the moved
   assert.deepEqual(sameTab.closed, []);
 });
 
-// The office layout, ids only: Wickline docked as one tab of the collapsible panel's stack.
+// A typical docked layout, ids only: Wickline docked as one tab of the collapsible panel's stack.
 const block = (id, content) => ({ id, type: "block", content });
-const office = (wicklineProps = { card: true }) => ({
+const dockedLayout = (wicklineProps = { card: true }) => ({
   id: "root",
   type: "row",
   children: [
@@ -187,11 +187,11 @@ const office = (wicklineProps = { card: true }) => ({
 const byId = (node, id) => (node.id === id ? node : (node.children ?? []).map((c) => byId(c, id)).find(Boolean));
 
 test("dockOf: the card block, its stack and the panel that collapses", () => {
-  assert.deepEqual(dockOf(office(), "wickline"), { block: "wickline", stack: "panel-body", collapse: "panel" });
+  assert.deepEqual(dockOf(dockedLayout(), "wickline"), { block: "wickline", stack: "panel-body", collapse: "panel" });
 });
 
 test("dockOf: the panel is found by structure, even when it carries no hidden key", () => {
-  const tree = office();
+  const tree = dockedLayout();
   delete byId(tree, "panel").hidden;
   assert.deepEqual(dockOf(tree, "wickline"), { block: "wickline", stack: "panel-body", collapse: "panel" });
 });
@@ -233,13 +233,13 @@ test("dockOf: nothing to collapse when every node up to the root is a lone child
 });
 
 test("dockOf: a copy without the card prop is not a docked block", () => {
-  assert.equal(dockOf(office({}), "wickline"), null);
-  assert.equal(dockOf(office({ card: false }), "wickline"), null);
+  assert.equal(dockOf(dockedLayout({}), "wickline"), null);
+  assert.equal(dockOf(dockedLayout({ card: false }), "wickline"), null);
   assert.equal(dockOf(null, "wickline"), null);
 });
 
 test("isShown: the panel is open and Wickline is the stack's active child", () => {
-  const tree = office();
+  const tree = dockedLayout();
   const dock = dockOf(tree, "wickline");
   // The panel is hidden.
   assert.equal(isShown(tree, dock), false);
@@ -254,7 +254,7 @@ test("isShown: the panel is open and Wickline is the stack's active child", () =
 });
 
 test("isShown: a stack with no active child shows its first one", () => {
-  const tree = office();
+  const tree = dockedLayout();
   byId(tree, "panel").hidden = false;
   const dock = dockOf(tree, "wickline");
   const stack = byId(tree, "panel-body");

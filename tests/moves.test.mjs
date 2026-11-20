@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { DOCK_TAB_KEY } from "../mods/wickline/panes.js";
 import { backFromYield, onScreen, ownTabAction, syncDock } from "../mods/wickline/moves.js";
 
-// The office layout, ids only: Wickline docked as one tab of the collapsible panel's stack.
+// A typical docked layout, ids only: Wickline docked as one tab of the collapsible panel's stack.
 const block = (id, content) => ({ id, type: "block", content });
-const office = ({ hidden = false, active = "wickline" } = {}) => ({
+const dockedLayout = ({ hidden = false, active = "wickline" } = {}) => ({
   id: "root",
   type: "row",
   children: [
@@ -40,7 +40,7 @@ const byId = (node, id) => (node.id === id ? node : (node.children ?? []).map((c
 // Herdr as moves.js sees it: the layout, the panes, the shared store, and every command run, in order.
 // `later(n, change)` applies `change` on the n-th look at panes() or layout() from now: Herdr shows the
 // result of a command a little after run() returns.
-function fakeHost({ tree = office(), panes = [] } = {}) {
+function fakeHost({ tree = dockedLayout(), panes = [] } = {}) {
   const host = { tree, list: panes, store: {}, ran: [], looks: 0, pending: [] };
   const look = () => {
     host.looks++;
@@ -231,7 +231,10 @@ test("⤢ from a block: a tab that never shows up records nothing and hides noth
 
 test("back to the panel: waits until the block is shown before closing the tab's pane", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
-  const host = fakeHost({ tree: office({ hidden: true, active: "files" }), panes: [{ pane: "p1", tab: "t1" }, tab] });
+  const host = fakeHost({
+    tree: dockedLayout({ hidden: true, active: "files" }),
+    panes: [{ pane: "p1", tab: "t1" }, tab],
+  });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true });
   const action = ownTabAction(host, v);
@@ -244,7 +247,7 @@ test("back to the panel: waits until the block is shown before closing the tab's
   ]);
   // The panel opens on Wickline a few looks later.
   host.later(3, () => {
-    host.tree = office();
+    host.tree = dockedLayout();
   });
   await cx.sleep();
   assert.equal(commands(host).includes("pane.close"), false);
@@ -261,13 +264,13 @@ test("back to the panel: waits until the block is shown before closing the tab's
 test("back to the panel: returns to the tab the person moved Wickline from, then closes the tab's pane", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
   const host = fakeHost({
-    tree: office({ hidden: true }),
+    tree: dockedLayout({ hidden: true }),
     panes: [{ pane: "p1", tab: "t1" }, { pane: "p2", tab: "t2" }, tab],
   });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true, from: "t1" });
   host.later(2, () => {
-    host.tree = office();
+    host.tree = dockedLayout();
   });
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
@@ -282,11 +285,11 @@ test("back to the panel: returns to the tab the person moved Wickline from, then
 
 test("back to the panel: a tab it came from that is gone is not selected", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
-  const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p2", tab: "t2" }, tab] });
+  const host = fakeHost({ tree: dockedLayout({ hidden: true }), panes: [{ pane: "p2", tab: "t2" }, tab] });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true, from: "t1" });
   host.later(2, () => {
-    host.tree = office();
+    host.tree = dockedLayout();
   });
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
@@ -297,7 +300,7 @@ test("back to the panel: a tab it came from that is gone is not selected", async
 
 test("back to the panel: a refused tab.select still closes the tab's pane", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
-  const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p1", tab: "t1" }, tab] });
+  const host = fakeHost({ tree: dockedLayout({ hidden: true }), panes: [{ pane: "p1", tab: "t1" }, tab] });
   const run = host.run;
   host.run = (command, args) => {
     run(command, args);
@@ -306,7 +309,7 @@ test("back to the panel: a refused tab.select still closes the tab's pane", asyn
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true, from: "t1" });
   host.later(2, () => {
-    host.tree = office();
+    host.tree = dockedLayout();
   });
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
@@ -332,7 +335,7 @@ test("⤢ from a block: with no focused tab, the new tab carries no `from`", asy
 
 test("back to the panel: a panel that never shows closes nothing", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
-  const host = fakeHost({ tree: office({ hidden: true }), panes: [tab] });
+  const host = fakeHost({ tree: dockedLayout({ hidden: true }), panes: [tab] });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true });
   const cx = fakeCx();
@@ -361,11 +364,14 @@ test("a click while a move waits does nothing", async () => {
 
 test("the yield view's way back closes the dock tab's pane and keeps the block's buttons working", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: false };
-  const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p1", tab: "t1", focused: true }, tab] });
+  const host = fakeHost({
+    tree: dockedLayout({ hidden: true }),
+    panes: [{ pane: "p1", tab: "t1", focused: true }, tab],
+  });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ card: true });
   host.later(2, () => {
-    host.tree = office();
+    host.tree = dockedLayout();
   });
   const cx = fakeCx();
   backFromYield(host, v, cx);
