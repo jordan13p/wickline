@@ -197,13 +197,6 @@ Wickline 修改自 [fatwang2/Pulse](https://github.com/fatwang2/Pulse)（MIT）�
 
 ## 開發
 
-```sh
-npm ci            # Biome：格式化與 lint 工具
-npm run lint
-npm test          # node --test tests/
-herdr-app check "$PWD/mods/wickline"
-```
-
-`package.json`、`package-lock.json` 與 `biome.jsonc` 僅供開發使用，不屬於 mod 本身；Wickline 本身沒有任何相依套件。`npm run format` 會格式化程式碼。
+[CONTRIBUTING.md](CONTRIBUTING.md) 說明如何執行檢查（`npm ci`、`npm test`、`npm run lint`、`herdr-app check`）並列出程式碼地圖；[CHANGELOG.md](CHANGELOG.md) 依版本列出變更（兩者皆為英文）。`package.json`、`package-lock.json` 與 `biome.jsonc` 僅供開發使用，不屬於 mod 本身；Wickline 本身沒有任何相依套件。
 
 `RECIPE.md` 是完整的建構說明：Wickline 畫出什麼、如何運作，以及由哪些檔案組成；它連到的 `RECIPE-sources.md` 收錄各資料來源的請求、讀取的欄位與詳細規則，`RECIPE-internals.md` 收錄其餘欄位層級的建構細節。
