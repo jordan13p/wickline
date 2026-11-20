@@ -1,7 +1,6 @@
-// TWSE MIS: the exchange's unofficial market-info feed, seconds behind, laid over Yahoo's delayed
-// Taiwan quotes. Off until the person turns it on and consents. This file holds
-// the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
-// dialog. No Herdr imports, so tests run it under Node.
+// TWSE MIS: the exchange's unofficial market-info feed, seconds behind, laid over Yahoo's delayed Taiwan quotes.
+// Off until the user turns it on and consents. This file holds the feed's host, limits and decoder; the switch and
+// consent live in settings.js and the settings dialog.
 import {
   BOOK_LEVELS,
   HEADERS,
@@ -19,13 +18,13 @@ import { fastPace } from "../markets.js";
 
 export const MIS_URL = "https://mis.twse.com.tw/stock/api/getStockInfo.jsp";
 export const MIS_BATCH = 50;
-// Raise it with any change in substance to the statement or consent text (zh-TW prevails):
-// a consent given to an older text no longer turns MIS on.
+// Raise it with any change in substance to the statement or consent text (zh-TW prevails), so a consent given to an
+// older text no longer turns MIS on.
 export const MIS_CONSENT_VERSION = 2;
 
 /** @typedef {import("./provider.js").Provider} Provider */
 
-/** `2330.TW` → `tse_2330.tw`, `6488.TWO` → `otc_6488.tw`; a code with letters keeps its case, or MIS returns nothing. */
+/** A symbol's MIS channel: `2330.TW` → `tse_2330.tw`, `6488.TWO` → `otc_6488.tw`. Letters keep their case. */
 export function misChannel(symbol) {
   const dot = symbol.lastIndexOf(".");
   return `${symbol.slice(dot + 1) === "TWO" ? "otc" : "tse"}_${symbol.slice(0, dot)}.tw`;
@@ -39,10 +38,9 @@ const best = (value) =>
 const MARKET_PRICE = /^0(\.0+)?$/;
 
 /**
- * One side of the book, in the order sent: `prices` ("2170.0000_2165.0000_…") zipped with `sizes` ("2280_208_…", in
- * lots) as `{ price, size }`, a level without a positive size or without a price (`-`) skipped; a market order
- * (`0.0000` with a size) has `price` null and keeps its place (first, ahead of the limit orders). At most BOOK_LEVELS.
- * None for anything but a string.
+ * One side of the book, in the order sent, at most BOOK_LEVELS: `prices` ("2170.0000_2165.0000_…") zipped with
+ * `sizes` ("2280_208_…", in lots) as `{ price, size }`. A level without a positive size or a price (`-`) is skipped.
+ * A market order (`0.0000` with a size) has a null `price` and keeps its place, ahead of the limit orders.
  */
 function levels(prices, sizes) {
   if (typeof prices !== "string") return [];
@@ -60,9 +58,9 @@ function levels(prices, sizes) {
 }
 
 /**
- * The price from the order book when the snapshot had no trade: the midpoint of the best bid and ask; with
- * orders on one side only, the stock's limit when that side waits at it (asks only at limit-down, bids only
- * at limit-up), as a stock locked at its limit trades only there. Anything else has no price.
+ * The price from the order book when the snapshot had no trade: the midpoint of the best bid and ask. With orders on
+ * one side only, the stock's limit when that side waits at it (asks only at limit-down, bids only at limit-up), as a
+ * stock locked at its limit trades only there. Anything else has no price.
  */
 function bookPrice(bid, ask, up, down) {
   if (bid && ask) return (bid + ask) / 2;
@@ -73,19 +71,17 @@ function bookPrice(bid, ask, up, down) {
 }
 
 /**
- * Overlays by requested symbol. The price is the last trade (`z`); when the last 5-second snapshot
- * had none (`-`), the order book's (bookPrice), marked `fromBook`: its time is the snapshot's, not a trade's.
- * A row with neither, or without a time, has no overlay and no error. A row MIS sent for a symbol that was
- * not asked for is ignored. A row MIS flags as in a call auction (`ts` "1" with a snapshot time, as from 08:30 to
- * the open and from 13:25 to the close, whatever its trial price `pz` reads: an auction whose orders do not cross
- * has none) has no overlay and no error either: its book is the auction's, never a price. A name-only row carries
- * no `ts`. Its symbol goes in `auction`, mapped to the flagged snapshot's time, and its levels, when it has any, in
- * `auctionBook` as `{ bids, asks, auction: true }`. A priced quote carries its own `book`, `{ bids, asks }` (levels,
- * either side possibly empty). A named row neither flagged nor priced whose bids and asks give no priced level goes in
- * `noLevels` (true): MIS answered, with no order yet. Each of the three keys is there only when not empty.
+ * One MIS answer, by requested symbol; a row for a symbol not asked for is ignored.
+ * - `quotes`: the last trade (`z`), or, when the 5-second snapshot had none, the book's price (bookPrice), marked
+ *   `fromBook` and timed by the snapshot. Each carries its own `book`, `{ bids, asks }`.
+ * - `auction`: each symbol MIS flags as in a call auction (`ts` "1" with a snapshot time, 08:30 to the open and
+ *   13:25 to the close), mapped to the snapshot's time. Its book is the auction's, never a price, whatever its trial
+ *   price `pz` reads; its levels, if any, go in `auctionBook` as `{ bids, asks, auction: true }`.
+ * - `noLevels`: a named row neither flagged nor priced, with no priced level: MIS answered before any order.
+ * A row with no price or no time gets no quote and no error. Each optional key is there only when not empty.
  */
 function decodeMis(symbols, response, now) {
-  // MIS does not document a rate limit; Herdr's fetch has no Retry-After either: wait at least a minute.
+  // MIS does not document a rate limit, and Herdr's fetch gives no Retry-After.
   if (response.status === 429) throw new QuoteError("mis.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   if (!response.ok) throw new QuoteError("mis.http", { status: response.status });
   const body = parseJson(response.text, "mis.unreadable");

@@ -1,5 +1,4 @@
 // Yahoo Finance: stocks, ETFs, indices and currencies, one ticker per request.
-// No Herdr imports, so tests run it under Node.
 import {
   HEADERS,
   QuoteError,
@@ -32,8 +31,8 @@ const finite = (value) => typeof value === "number" && Number.isFinite(value);
 export const period = (value) =>
   finite(value?.start) && finite(value?.end) && value.end > value.start ? [value.start * 1000, value.end * 1000] : null;
 
-// The day's volume: none for an index or a cryptocurrency (exchange `CCC`, whose volume is in the quote currency, not
-// units), lots for a Taiwan stock (Yahoo Finance counts shares), else shares.
+// The day's volume: none for an index or a cryptocurrency (exchange `CCC` gives it in the quote currency, not units);
+// lots for a Taiwan stock, which Yahoo Finance counts in shares; else shares.
 function volumeOf(symbol, meta) {
   if (kindOf(symbol) === "index" || meta.exchangeName === "CCC" || !positive(meta.regularMarketVolume)) return {};
   return marketOf(symbol) === "tw"
@@ -41,9 +40,8 @@ function volumeOf(symbol, meta) {
     : sized(meta.regularMarketVolume, "share");
 }
 
-/** `response` is `{ status, ok, text }` with the body already read. */
+/** One Yahoo Finance answer as a quote; throws a QuoteError. `response` is `{ status, ok, text }`, its body read. */
 export function decodeYahoo(symbol, response, now) {
-  // Herdr's fetch does not expose headers, so Retry-After is unknown: wait at least a minute.
   if (response.status === 429) throw new QuoteError("yahoo.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   if (response.status === 404) throw new QuoteError("yahoo.notFound");
   if (!response.ok) throw new QuoteError("yahoo.http", { status: response.status });

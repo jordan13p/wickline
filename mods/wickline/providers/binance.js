@@ -1,5 +1,4 @@
 // Binance Spot market data: pairs written BASE/QUOTE, in batches, plus a 24-hour line per pair.
-// No Herdr imports, so tests run it under Node.
 import { HEADERS, QuoteError, changePercent, cleanTimedSeries, positive, positiveOrNull, sized } from "../quotes.js";
 import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 
@@ -7,7 +6,7 @@ import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 export const BINANCE_URL = "https://data-api.binance.vision";
 const BINANCE_BATCH = 100;
 
-// `base` is the saved Binance URL (the public market-data mirror unless the person set another).
+// `base` is the saved Binance URL: the public market-data mirror unless the user set another.
 const endpoint = (base, path) => `${base.replace(/\/+$/, "")}/api/v3/${path}`;
 
 /** @typedef {import("./provider.js").Provider} Provider */
@@ -24,7 +23,7 @@ export function binanceUrl(base, pairs) {
 export function decodeBinance(pairs, response, now) {
   // -1121 Invalid symbol: one unknown or delisted pair fails the whole batch.
   if (response.status === 400) throw new QuoteError("binance.invalidPair", {}, { invalidSymbol: true });
-  // No headers in Herdr's fetch, so no Retry-After: wait at least a minute.
+  // 418 is Binance's ban for requests sent on after a 429.
   if (response.status === 429 || response.status === 418)
     throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: RATE_LIMIT_RETRY_MS });
   // Unavailable for legal reasons: Binance refuses this region.
@@ -69,8 +68,8 @@ export function binanceKlinesUrl(base, pair) {
 }
 
 /**
- * Closing prices, oldest first, with each bar's open time (`times`, absent when none is kept or not every one is
- * usable); throws when Binance answers with anything else.
+ * A pair's line: closing prices, oldest first, with each bar's open time as `times` when every kept bar has one.
+ * Throws when Binance answers with anything else.
  */
 export function decodeKlines(response) {
   // Rate limited as the tickers are: the same backoff.
@@ -92,7 +91,7 @@ export const binance = {
   markets: ["crypto"],
   kinds: ["pair"],
   spacingMs: () => 0,
-  // Tickers; a pair's line is asked again only once `linesMs` has passed.
+  // A pair's line is asked again only once `linesMs` has passed.
   intervalMs: () => 15_000,
   linesMs: () => 60_000,
   // Per batch: its quote request, then a line request per pair of that batch.

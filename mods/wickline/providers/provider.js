@@ -1,5 +1,4 @@
 // What every provider shares: the JSDoc types, the two helpers their decoders use at the boundary, and the retry wait.
-// No Herdr imports, so tests run it under Node.
 import { QuoteError } from "../quotes.js";
 
 /**
@@ -7,7 +6,12 @@ import { QuoteError } from "../quotes.js";
  * @typedef {{ url: string, headers: Record<string, string>, symbols: string[], kind: "quote"|"line" }} ProviderRequest
  * @typedef {{ status: number, ok: boolean, text: string }} ProviderResponse
  * @typedef {object} Quote  What decodeYahoo / decodeBinance return, with `source` naming the provider.
- * @typedef {{ quotes: Record<string, Quote>, errors: Record<string, QuoteError>, lines?: Record<string, { series: number[], times?: number[] } | { day: number, series: number[], times?: number[] }>, names?: Record<string, string> }} ProviderResult
+ * @typedef {{
+ *   quotes: Record<string, Quote>,
+ *   errors: Record<string, QuoteError>,
+ *   lines?: Record<string, { day?: number, series: number[], times?: number[] }>,
+ *   names?: Record<string, string>,
+ * }} ProviderResult
  * @typedef {{
  *   id: "yahoo"|"binance"|"mis"|"yahootw"|"finnhub",
  *   markets: string[],
@@ -22,20 +26,20 @@ import { QuoteError } from "../quotes.js";
  *   requests(symbols: string[], config: object): ProviderRequest[],
  *   decode(request: ProviderRequest, response: ProviderResponse, now: number): ProviderResult,
  * }} Provider
- * `markets` are the markets (markets.js) whose symbols it quotes. `spacingMs` is the gap between
- * this provider's quote requests in one round. `intervalMs` is the wait between rounds, given the
- * busiest session among its symbols ("open" while unknown). A provider with `kind: "line"`
- * requests asks each line again only once `linesMs(session)` has passed; with `linesPerRound`, its line
- * requests follow all its quote requests and a round sends at most that many due ones, longest-waiting
- * first. An `overlay` provider (Yahoo 奇摩股市,
- * TWSE MIS) is off until the person turns it on, and lays its prices over the base quote instead of replacing it;
- * its line, if any, is `{ day, series, times }`, drawn only with a price (`quote.day`) of the same trading day.
- * `cap` limits it to that many of its symbols, in list order; `manualRefresh: false` keeps Refresh
- * from starting an extra round (a request budget). `decode` does not throw
- * for an HTTP or body problem: the request's symbols each get that error instead.
+ * - `markets`: the markets whose symbols it quotes.
+ * - `spacingMs`: the gap between its quote requests in one round.
+ * - `intervalMs`: the wait between rounds, given the busiest session among its symbols.
+ * - `linesMs`: a line is asked again only once this has passed.
+ * - `linesPerRound`: its line requests follow all its quote requests, and a round sends at most that many due ones,
+ *   longest-waiting first.
+ * - `overlay`: off until the user turns it on; lays its prices over the base quote. Its line, if any, is
+ *   `{ day, series, times }`, drawn only with a price of the same trading day.
+ * - `cap`: how many of its symbols it quotes, in list order.
+ * - `manualRefresh: false`: Refresh starts no extra round, as it spends a request budget.
+ * - `decode`: does not throw for an HTTP or body problem; the request's symbols each get that error instead.
  */
 
-// Herdr's fetch gives no headers, so no Retry-After: a rate-limited provider waits a minute.
+// Herdr's fetch gives no headers, so no Retry-After: a rate-limited provider waits at least a minute.
 export const RATE_LIMIT_RETRY_MS = 60_000;
 
 /** `JSON.parse` for an answer's body; a body that is not JSON is the provider's `*.unreadable` error. */
