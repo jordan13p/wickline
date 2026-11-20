@@ -1,7 +1,16 @@
 // Days in Taipei: the calendar day, a future's trading day, and the days TWSE lists as closed, for every module that
 // needs one. No Herdr imports.
 import {
-  DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, dayStart, kindOf, localDay, tradesOn,
+  DAY_MS,
+  DAY_SESSION,
+  MINUTE_MS,
+  NIGHT_SESSION,
+  TAIFEX_HOURS,
+  TWSE_HOURS,
+  dayStart,
+  kindOf,
+  localDay,
+  tradesOn,
 } from "./markets.js";
 import { cleanText } from "./quotes.js";
 
@@ -46,7 +55,8 @@ const NIGHT_END_MIN = NIGHT_SESSION.to - 24 * 60;
 
 const isWeekday = (day) => tradesOn(TAIFEX_HOURS, day);
 /** Minutes since Taipei midnight of a time in ms. */
-export const taipeiMinute = (ms) => Math.floor((ms - taipeiDay(ms) * DAY_MS + TAIFEX_HOURS.offsetMin * MINUTE_MS) / MINUTE_MS);
+export const taipeiMinute = (ms) =>
+  Math.floor((ms - taipeiDay(ms) * DAY_MS + TAIFEX_HOURS.offsetMin * MINUTE_MS) / MINUTE_MS);
 /** `minute` (Taipei, since midnight) of Taipei day `day`, in ms. */
 export const taipeiAt = (day, minute) => dayStart(TAIFEX_HOURS.offsetMin, day) + minute * MINUTE_MS;
 /** The Taipei midnight after `now`, in ms. */
@@ -121,7 +131,10 @@ export const INFER_DELAYED_MS = 1_800_000;
 export const INFER_RECENT_MS = 120_000;
 
 // An answer's deadline after the open, by whether its source is real time.
-const INFER_DEADLINES = new Map([[true, INFER_REALTIME_MS], [false, INFER_DELAYED_MS]]);
+const INFER_DEADLINES = new Map([
+  [true, INFER_REALTIME_MS],
+  [false, INFER_DELAYED_MS],
+]);
 
 // The answers that may yet name a closure of a session: none once it traded (see closureOf).
 const quietAnswers = (observation) => (!observation || observation.traded ? [] : observation.answers);
@@ -139,10 +152,14 @@ export const twMarket = (symbol) => (kindOf(symbol) === "future" ? "future" : "s
 export function closureOf(market, now, listed, seen) {
   const open = currentOpen(market, now);
   const observation = open === null ? undefined : seen(market, open);
-  const { closure, until } = observation?.traded ? { closure: null, until: null } : closureRule(market, now, open, listed, seen);
+  const { closure, until } = observation?.traded
+    ? { closure: null, until: null }
+    : closureRule(market, now, open, listed, seen);
   // The open plus an answer's delay, for each answer, while the session has no trade; and the mark's end, which no
   // answer of its own announces.
-  const ahead = quietAnswers(observation).map(({ realtime }) => open + INFER_DEADLINES.get(realtime)).filter((at) => at > now);
+  const ahead = quietAnswers(observation)
+    .map(({ realtime }) => open + INFER_DEADLINES.get(realtime))
+    .filter((at) => at > now);
   if (until !== null && until > now) ahead.push(until);
   return { closure, deadline: ahead.length ? Math.min(...ahead) : null, until };
 }
@@ -153,7 +170,10 @@ export function closureOf(market, now, listed, seen) {
  * reading only from its row's hand-over, drops the mark there), each when there is one.
  */
 export const withClosure = (quote, { closure, deadline, until }) => ({
-  ...quote, closure, ...(deadline !== null && { closureDeadline: deadline }), ...(until !== null && { closureUntil: until }),
+  ...quote,
+  closure,
+  ...(deadline !== null && { closureDeadline: deadline }),
+  ...(until !== null && { closureUntil: until }),
 });
 
 /**
@@ -208,15 +228,17 @@ function closureRule(market, now, open, listed, seen) {
   const reason = listed(today);
   // The source that says the session of `market` that opened at `start` has no trade, or null: the first answer that is
   // recent (INFER_RECENT_MS) at its deadline while `now` is at or past it.
-  const quietSince = (start) => quietAnswers(seen(market, start)).find(({ at, realtime }) => {
-    const deadline = start + INFER_DEADLINES.get(realtime);
-    return now >= deadline && at >= deadline - INFER_RECENT_MS;
-  })?.source ?? null;
+  const quietSince = (start) =>
+    quietAnswers(seen(market, start)).find(({ at, realtime }) => {
+      const deadline = start + INFER_DEADLINES.get(realtime);
+      return now >= deadline && at >= deadline - INFER_RECENT_MS;
+    })?.source ?? null;
   const tradedSince = (other, start) => Boolean(seen(other, start)?.traded);
   const dayOpen = (day) => taipeiAt(day, DAY_SESSION.from);
-  const dayTraded = (day) => tradedSince("future", dayOpen(day))
-    || seen("future", taipeiAt(day, NIGHT_SESSION.from))?.newest >= dayOpen(day)
-    || tradedSince("stock", taipeiAt(day, TWSE_HOURS.from));
+  const dayTraded = (day) =>
+    tradedSince("future", dayOpen(day)) ||
+    seen("future", taipeiAt(day, NIGHT_SESSION.from))?.newest >= dayOpen(day) ||
+    tradedSince("stock", taipeiAt(day, TWSE_HOURS.from));
   // Where each row's reading ends (see above); the cap is the night's deadline (its open + INFER_REALTIME_MS: only
   // real-time sources price futures).
   const midnight = nextTaipeiMidnight(now);
@@ -231,23 +253,23 @@ function closureRule(market, now, open, listed, seen) {
   // closes it.
   const runningNight = market === "future" && minute < NIGHT_END_MIN && isWeekday(before) && !listed(before);
   const nightSource = runningNight ? quietSince(open) : null;
-  if (runningNight && !nightSource) return ruled(null);                                       // 4, else 9
-  if (reason) return ruled({ kind: "listed", reason }, listedEnd);                            // 1, 3–5, 6
+  if (runningNight && !nightSource) return ruled(null); // 4, else 9
+  if (reason) return ruled({ kind: "listed", reason }, listedEnd); // 1, 3–5, 6
   if (market === "stock") {
     const source = open !== null && !dayTraded(today) && quietSince(open);
-    return ruled(source ? noTrades(source) : null, midnight);                                 // 2, else 9
+    return ruled(source ? noTrades(source) : null, midnight); // 2, else 9
   }
   if (minute < NIGHT_END_MIN) {
-    if (runningNight) return ruled(nightReading(before, nightSource), nightEnd);              // 4
-    return ruled(isWeekday(before) ? { kind: "nightRemoved" } : null, nightEnd);              // 3, 5
+    if (runningNight) return ruled(nightReading(before, nightSource), nightEnd); // 4
+    return ruled(isWeekday(before) ? { kind: "nightRemoved" } : null, nightEnd); // 3, 5
   }
-  if (open === null) return ruled(null);                                                      // 9
+  if (open === null) return ruled(null); // 9
   if (minute < NIGHT_SESSION.from) {
     const source = !dayTraded(today) && quietSince(open);
-    return ruled(source ? noTrades(source) : null, cap);                                      // 7, else 9
+    return ruled(source ? noTrades(source) : null, cap); // 7, else 9
   }
   const night = quietSince(open);
-  if (night) return ruled(nightReading(today, night), taipeiAt(today + 1, NIGHT_END_MIN));    // 8
+  if (night) return ruled(nightReading(today, night), taipeiAt(today + 1, NIGHT_END_MIN)); // 8
   const day = now < cap && !dayTraded(today) && quietSince(dayOpen(today));
-  return ruled(day ? noTrades(day) : null, cap);                                              // 8b, else 9
+  return ruled(day ? noTrades(day) : null, cap); // 8b, else 9
 }

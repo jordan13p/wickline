@@ -9,12 +9,24 @@ const FILE = `${DIR}/secrets.json`;
 // The calls secrets.js makes on Herdr's `fs/promises`; `files` maps a path to its text. `log` keeps their order.
 function fakeFs(files = {}, log = []) {
   const fs = {
-    files, dirs: [], writes: 0, log,
+    files,
+    dirs: [],
+    writes: 0,
+    log,
     exists: async (path) => path in fs.files,
     readFile: async (path) => fs.files[path],
-    mkdir: async (path, options) => { fs.dirs.push([path, options]); },
-    writeFile: async (path, text) => { fs.writes++; log.push(["write", path]); fs.files[path] = text; },
-    unlink: async (path) => { log.push(["unlink", path]); delete fs.files[path]; },
+    mkdir: async (path, options) => {
+      fs.dirs.push([path, options]);
+    },
+    writeFile: async (path, text) => {
+      fs.writes++;
+      log.push(["write", path]);
+      fs.files[path] = text;
+    },
+    unlink: async (path) => {
+      log.push(["unlink", path]);
+      delete fs.files[path];
+    },
   };
   return fs;
 }
@@ -23,7 +35,8 @@ function fakeFs(files = {}, log = []) {
 // answering with `answer` (or throwing it).
 function fakeSystem(platform = "macos", answer = { code: 0, stdout: "", stderr: "" }, log = []) {
   const system = {
-    runs: [], log,
+    runs: [],
+    log,
     platform: () => platform,
     chmod: async (path) => {
       system.runs.push(path);
@@ -83,7 +96,14 @@ test("save: on macOS and Linux the file is made owner-only right after it is wri
     const system = fakeSystem(platform, undefined, log);
     assert.equal(await saveSecret(fakeFs({}, log), system, DIR, "finnhub.key", "test-key"), true, platform);
     assert.deepEqual(system.runs, [FILE], platform);
-    assert.deepEqual(log, [["write", FILE], ["chmod", FILE]], platform);
+    assert.deepEqual(
+      log,
+      [
+        ["write", FILE],
+        ["chmod", FILE],
+      ],
+      platform,
+    );
   }
 });
 
@@ -123,7 +143,10 @@ test("remove: other keys stay, written again and made owner-only", async () => {
   assert.equal(await removeSecret(fs, system, DIR, "finnhub.key"), true);
   assert.equal(fs.files[FILE], '{\n  "other": "x"\n}\n');
   assert.deepEqual(system.runs, [FILE]);
-  assert.equal(await removeSecret(fakeFs({ [FILE]: '{"other":"x"}' }), fakeSystem("macos", new Error("x")), DIR, "finnhub.key"), false);
+  assert.equal(
+    await removeSecret(fakeFs({ [FILE]: '{"other":"x"}' }), fakeSystem("macos", new Error("x")), DIR, "finnhub.key"),
+    false,
+  );
 });
 
 test("remove: an unreadable file rejects and is left as it is", async () => {

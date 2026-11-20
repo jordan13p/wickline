@@ -3,14 +3,32 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { USER_AGENT, priceLimit } from "../mods/wickline/quotes.js";
 import {
-  YAHOOTW_BASE, YAHOOTW_BATCH, YAHOOTW_CONSENT_VERSION, decodeStockList, decodeTick, ownPeriods, yahootw,
+  YAHOOTW_BASE,
+  YAHOOTW_BATCH,
+  YAHOOTW_CONSENT_VERSION,
+  decodeStockList,
+  decodeTick,
+  ownPeriods,
+  yahootw,
 } from "../mods/wickline/providers/yahootw.js";
 import { taipeiDay, tradingDay } from "../mods/wickline/calendar.js";
 import { t } from "../mods/wickline/i18n.js";
 import { freshness, sessionOf } from "../mods/wickline/freshness.js";
 import {
-  CLOSE_0509, EARLIER_ROWS, EARLIER_TICK, FUTURES_NIGHT_ROWS, FUTURES_NIGHT_TICK, FUTURES_ROWS, FUTURES_TICK, FUT_NOW, LINE_PERIODS, NIGHT, at, day,
-  jsonFixture, ok,
+  CLOSE_0509,
+  EARLIER_ROWS,
+  EARLIER_TICK,
+  FUTURES_NIGHT_ROWS,
+  FUTURES_NIGHT_TICK,
+  FUTURES_ROWS,
+  FUTURES_TICK,
+  FUT_NOW,
+  LINE_PERIODS,
+  NIGHT,
+  at,
+  day,
+  jsonFixture,
+  ok,
 } from "./helpers.mjs";
 
 // A recorded price answer (2026-11-09, during trading hours), trimmed to the fields Wickline reads. Its last two
@@ -58,10 +76,19 @@ test("requests: batches of 50 to the fixed host, then one line request per symbo
   const requests = all.filter((r) => r.kind === "quote");
   assert.deepEqual(all.slice(0, 2), requests);
   assert.equal(requests.length, 2);
-  assert.deepEqual(requests.map((r) => r.symbols.length), [50, 1]);
+  assert.deepEqual(
+    requests.map((r) => r.symbols.length),
+    [50, 1],
+  );
   const lines = all.slice(2);
-  assert.deepEqual(lines.map((r) => [r.kind, r.symbols]), symbols.map((symbol) => ["line", [symbol]]));
-  assert.equal(lines[0].url, YAHOOTW_BASE + "FinanceChartService.ApacLibraCharts;type=tick;symbols=%5B%221101.TW%22%5D");
+  assert.deepEqual(
+    lines.map((r) => [r.kind, r.symbols]),
+    symbols.map((symbol) => ["line", [symbol]]),
+  );
+  assert.equal(
+    lines[0].url,
+    YAHOOTW_BASE + "FinanceChartService.ApacLibraCharts;type=tick;symbols=%5B%221101.TW%22%5D",
+  );
   for (const request of lines) assert.equal(request.headers["User-Agent"], USER_AGENT);
   assert.equal(requests[0].url, YAHOOTW_BASE + "StockServices.stockList;symbols=" + symbols.slice(0, 50).join(","));
   for (const request of requests) {
@@ -69,12 +96,16 @@ test("requests: batches of 50 to the fixed host, then one line request per symbo
     assert.equal(request.headers["User-Agent"], USER_AGENT);
   }
   // A TW-only symbol may be priced from an earlier day: the batch's own ones ride on its price request.
-  assert.deepEqual(yahootw.requests(["2330.TW", "^TWOII"], { anyDay: ["^TWOII", "^TWZZ"] }).map((r) => r.anyDay),
-    [["^TWOII"], undefined, undefined]);
+  assert.deepEqual(
+    yahootw.requests(["2330.TW", "^TWOII"], { anyDay: ["^TWOII", "^TWZZ"] }).map((r) => r.anyDay),
+    [["^TWOII"], undefined, undefined],
+  );
   assert.deepEqual(yahootw.requests(["2330.TW"])[0].anyDay, []);
   // The host is fixed: no address in the settings changes it.
-  assert.equal(yahootw.requests(["2330.TW"], { misUrl: "https://mirror.test" })[0].url,
-    "https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.stockList;symbols=2330.TW");
+  assert.equal(
+    yahootw.requests(["2330.TW"], { misUrl: "https://mirror.test" })[0].url,
+    "https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.stockList;symbols=2330.TW",
+  );
 });
 
 // An index's symbol starts with ^, which a URL must not carry bare.
@@ -102,8 +133,21 @@ test("prices today's rows with the answer's newest trade as their time", () => {
   const { quotes } = decode(ok(ROWS));
   const newest = Date.parse("2026-11-09T01:41:13Z");
   assert.deepEqual(quotes["2330.TW"], {
-    symbol: "2330.TW", source: "yahootw", name: "台積電", price: 2240, previousClose: 2135, open: 2210, high: 2240, low: 2190,
-    limitUp: 2345, limitDown: 1925, exchange: null, currency: "TWD", timestamp: newest, tradeTime: newest, day: taipeiDay(NOW),
+    symbol: "2330.TW",
+    source: "yahootw",
+    name: "台積電",
+    price: 2240,
+    previousClose: 2135,
+    open: 2210,
+    high: 2240,
+    low: 2190,
+    limitUp: 2345,
+    limitDown: 1925,
+    exchange: null,
+    currency: "TWD",
+    timestamp: newest,
+    tradeTime: newest,
+    day: taipeiDay(NOW),
     fetchedAt: NOW,
   });
   // A quiet stock is as current as the feed; its own last trade is kept apart.
@@ -136,10 +180,12 @@ test("a price above limit-up is refused with a reason", () => {
 });
 
 test("yesterday's row and delayed data give no overlay, and do not move the feed time", () => {
-  const { quotes, errors } = decode(changed({
-    "2330.TW": { regularMarketTime: "2026-11-08T05:30:00Z" },
-    "0050.TW": { exchangeDataDelayedBy: 1200 },
-  }));
+  const { quotes, errors } = decode(
+    changed({
+      "2330.TW": { regularMarketTime: "2026-11-08T05:30:00Z" },
+      "0050.TW": { exchangeDataDelayedBy: 1200 },
+    }),
+  );
   for (const symbol of ["2330.TW", "0050.TW"]) {
     assert.equal(quotes[symbol], undefined, symbol);
     assert.equal(errors[symbol], undefined, symbol);
@@ -148,13 +194,17 @@ test("yesterday's row and delayed data give no overlay, and do not move the feed
 });
 
 test("an answer with prices but none accepted says so; one with no price at all does not", () => {
-  const delayed = decode(changed(Object.fromEntries(SYMBOLS.map((symbol) => [symbol, { exchangeDataDelayedBy: 1200 }]))));
+  const delayed = decode(
+    changed(Object.fromEntries(SYMBOLS.map((symbol) => [symbol, { exchangeDataDelayedBy: 1200 }]))),
+  );
   assert.deepEqual(delayed.quotes, {});
   assert.deepEqual(delayed.errors, {});
   assert.equal(delayed.noLive.code, "yahootw.noLiveRows");
   assert.equal(t("zh-TW", "yahootw.noLiveRows"), "Yahoo 奇摩股市回傳的報價都不是即時資料。");
   assert.equal(t("en", "yahootw.noLiveRows"), "Yahoo TW Stock returned no real-time prices.");
-  const yesterday = decode(changed(Object.fromEntries(SYMBOLS.map((symbol) => [symbol, { regularMarketTime: "2026-11-08T05:30:00Z" }]))));
+  const yesterday = decode(
+    changed(Object.fromEntries(SYMBOLS.map((symbol) => [symbol, { regularMarketTime: "2026-11-08T05:30:00Z" }]))),
+  );
   assert.equal(yesterday.noLive.code, "yahootw.noLiveRows");
   // Before the open, or every stock halted: placeholders only.
   assert.equal(decode(ok([ROWS[1]])).noLive, undefined);
@@ -176,7 +226,10 @@ test("a symbol missing from the answer has no overlay and no error", () => {
 });
 
 test("403 and 429 back off with their own codes", () => {
-  for (const [status, code] of [[403, "yahootw.refused"], [429, "yahootw.rateLimited"]]) {
+  for (const [status, code] of [
+    [403, "yahootw.refused"],
+    [429, "yahootw.rateLimited"],
+  ]) {
     const { quotes, errors } = decode({ status, ok: false, text: "" });
     assert.deepEqual(quotes, {});
     for (const symbol of SYMBOLS) {
@@ -197,21 +250,42 @@ test("an unreadable answer", () => {
 });
 
 test("decodeStockList throws what the round shows for each symbol", () => {
-  assert.throws(() => decodeStockList(SYMBOLS, { status: 200, ok: true, text: "<html>" }, NOW), (e) => e.code === "yahootw.unreadable");
+  assert.throws(
+    () => decodeStockList(SYMBOLS, { status: 200, ok: true, text: "<html>" }, NOW),
+    (e) => e.code === "yahootw.unreadable",
+  );
   assert.equal(decodeStockList(SYMBOLS, ok(ROWS), NOW).quotes["2330.TW"].price, 2240);
 });
 
 // A line answer: one minute per close from 09:00 Taipei on the clock's day (`start`, epoch seconds).
 const TODAY_0900 = 1794186000;
-const tick = (symbol, closes, start = TODAY_0900, answered = symbol) => ok([{
-  symbol, chart: { meta: { symbol: answered }, timestamp: closes.map((_, i) => start + i * 60), indicators: { quote: [{ close: closes }] } },
-}]);
-const lineOf = (symbol, response) => yahootw.decode(yahootw.requests([symbol]).find((r) => r.kind === "line"), response, NOW);
+const tick = (symbol, closes, start = TODAY_0900, answered = symbol) =>
+  ok([
+    {
+      symbol,
+      chart: {
+        meta: { symbol: answered },
+        timestamp: closes.map((_, i) => start + i * 60),
+        indicators: { quote: [{ close: closes }] },
+      },
+    },
+  ]);
+const lineOf = (symbol, response) =>
+  yahootw.decode(
+    yahootw.requests([symbol]).find((r) => r.kind === "line"),
+    response,
+    NOW,
+  );
 
 test("keeps today's minutes, carrying the last close over quiet minutes", () => {
-  assert.deepEqual(lineOf("2330.TW", tick("2330.TW", [null, 10.05, null, null, 10.10])).lines,
-    { "2330.TW": { day: taipeiDay(NOW), series: [10.05, 10.05, 10.05, 10.10], times: [1, 2, 3, 4].map((m) => (TODAY_0900 + m * 60) * 1000),
-      lastAt: (TODAY_0900 + 240) * 1000 } });
+  assert.deepEqual(lineOf("2330.TW", tick("2330.TW", [null, 10.05, null, null, 10.1])).lines, {
+    "2330.TW": {
+      day: taipeiDay(NOW),
+      series: [10.05, 10.05, 10.05, 10.1],
+      times: [1, 2, 3, 4].map((m) => (TODAY_0900 + m * 60) * 1000),
+      lastAt: (TODAY_0900 + 240) * 1000,
+    },
+  });
 });
 
 test("the liquid fixture", () => {
@@ -230,9 +304,15 @@ test("the liquid fixture", () => {
 });
 
 test("the quiet fixture", () => {
-  assert.deepEqual(lineOf("0050.TW", ok(jsonFixture("yahootw-tick-quiet"))).lines,
-    { "0050.TW": { day: taipeiDay(NOW), series: [10.05], times: [Date.parse("2026-11-09T01:18:00Z")], lastAt: Date.parse("2026-11-09T01:18:00Z"),
-      endAt: Date.parse("2026-11-09T05:30:00Z") } }); // its regular session ends at 13:30
+  assert.deepEqual(lineOf("0050.TW", ok(jsonFixture("yahootw-tick-quiet"))).lines, {
+    "0050.TW": {
+      day: taipeiDay(NOW),
+      series: [10.05],
+      times: [Date.parse("2026-11-09T01:18:00Z")],
+      lastAt: Date.parse("2026-11-09T01:18:00Z"),
+      endAt: Date.parse("2026-11-09T05:30:00Z"),
+    },
+  }); // its regular session ends at 13:30
 });
 
 test("yesterday's points are dropped", () => {
@@ -240,10 +320,23 @@ test("yesterday's points are dropped", () => {
   assert.deepEqual(errors, {});
   assert.equal(lines?.["2330.TW"], undefined);
   // Yesterday's last close is not carried into today's first quiet minute.
-  assert.deepEqual(decodeTick("2330.TW", ok([{ symbol: "2330.TW", chart: {
-    meta: { symbol: "2330.TW" }, timestamp: [TODAY_0900 - 86_400, TODAY_0900, TODAY_0900 + 60],
-    indicators: { quote: [{ close: [2200, null, 2210] }] },
-  } }]), NOW).lines["2330.TW"].series, [2210]);
+  assert.deepEqual(
+    decodeTick(
+      "2330.TW",
+      ok([
+        {
+          symbol: "2330.TW",
+          chart: {
+            meta: { symbol: "2330.TW" },
+            timestamp: [TODAY_0900 - 86_400, TODAY_0900, TODAY_0900 + 60],
+            indicators: { quote: [{ close: [2200, null, 2210] }] },
+          },
+        },
+      ]),
+      NOW,
+    ).lines["2330.TW"].series,
+    [2210],
+  );
 });
 
 test("another symbol is refused", () => {
@@ -263,7 +356,8 @@ test("404 gives yahootw.http", () => {
   const { errors } = lineOf("2330.TW", { status: 404, ok: false, text: "" });
   assert.deepEqual([errors["2330.TW"].code, errors["2330.TW"].params], ["yahootw.http", { status: 404 }]);
   assert.equal(errors["2330.TW"].retryAfterMs, undefined);
-  for (const status of [403, 429]) assert.equal(lineOf("2330.TW", { status, ok: false, text: "" }).errors["2330.TW"].retryAfterMs, 60_000);
+  for (const status of [403, 429])
+    assert.equal(lineOf("2330.TW", { status, ok: false, text: "" }).errors["2330.TW"].retryAfterMs, 60_000);
 });
 
 // The recorded answer has 6488.TWO at its limit-up (563/563) and 2330.TW at +4.9%, short of its 2345 (+9.84%, not 10%).
@@ -288,17 +382,38 @@ const twOnly = (symbols, response, now, anyDay = ["^TWOII"]) =>
 test("a line answer gives its trading periods, also without a point from today", () => {
   const S = TODAY_0900;
   const E = TODAY_0900 + 16_200;
-  const answer = (start) => ok([{ symbol: "^TWOII", chart: {
-    meta: { symbol: "^TWOII", currentTradingPeriod: { pre: { start: S, end: S }, regular: { start: S, end: E }, post: { start: E, end: E } } },
-    timestamp: [start], indicators: { quote: [{ close: [321.97] }] },
-  } }]);
+  const answer = (start) =>
+    ok([
+      {
+        symbol: "^TWOII",
+        chart: {
+          meta: {
+            symbol: "^TWOII",
+            currentTradingPeriod: {
+              pre: { start: S, end: S },
+              regular: { start: S, end: E },
+              post: { start: E, end: E },
+            },
+          },
+          timestamp: [start],
+          indicators: { quote: [{ close: [321.97] }] },
+        },
+      },
+    ]);
   for (const start of [TODAY_0900, TODAY_0900 - 86_400]) {
     const { periods } = lineOf("^TWOII", answer(start));
     assert.deepEqual(periods["^TWOII"], { pre: null, regular: [S * 1000, E * 1000], post: null }, String(start));
   }
-  const recorded = yahootw.decode(yahootw.requests(["^TWOII"]).find((r) => r.kind === "line"), ok(EARLIER_TICK), NIGHT);
+  const recorded = yahootw.decode(
+    yahootw.requests(["^TWOII"]).find((r) => r.kind === "line"),
+    ok(EARLIER_TICK),
+    NIGHT,
+  );
   assert.equal(recorded.lines, undefined);
-  assert.deepEqual(recorded.periods["^TWOII"].regular, [Date.parse("2026-11-09T01:00:00Z"), Date.parse("2026-11-09T05:30:00Z")]);
+  assert.deepEqual(recorded.periods["^TWOII"].regular, [
+    Date.parse("2026-11-09T01:00:00Z"),
+    Date.parse("2026-11-09T05:30:00Z"),
+  ]);
   // Without periods, none.
   assert.equal(lineOf("2330.TW", tick("2330.TW", [2200])).periods, undefined);
 });
@@ -340,12 +455,19 @@ test("a TW-only row with a price but no trade time says it is not real time; a s
   assert.equal(sole.errors["2330.TW"], undefined);
   assert.equal(sole.quotes["2330.TW"], undefined);
   // A row with no price at all is a name-only answer: no error.
-  assert.equal(twOnly(["^TWOII"], changed({ "^TWOII": { price: "-", regularMarketTime: "-" } }), NOW).errors["^TWOII"], undefined);
+  assert.equal(
+    twOnly(["^TWOII"], changed({ "^TWOII": { price: "-", regularMarketTime: "-" } }), NOW).errors["^TWOII"],
+    undefined,
+  );
 });
 
 test("earlier-day rows keep their own time and leave feed time and noLive alone", () => {
   const yesterday = "2026-11-08T05:31:00Z";
-  const { quotes, noLive } = twOnly(["2330.TW", "^TWOII"], changed({ "^TWOII": { regularMarketTime: yesterday } }), NOW);
+  const { quotes, noLive } = twOnly(
+    ["2330.TW", "^TWOII"],
+    changed({ "^TWOII": { regularMarketTime: yesterday } }),
+    NOW,
+  );
   assert.equal(quotes["2330.TW"].timestamp, Date.parse("2026-11-09T01:41:13Z"));
   assert.equal(quotes["^TWOII"].timestamp, Date.parse(yesterday));
   assert.equal(quotes["^TWOII"].day, taipeiDay(Date.parse(yesterday)));
@@ -357,7 +479,8 @@ test("earlier-day rows keep their own time and leave feed time and noLive alone"
 });
 
 const FUTURES = ["WTX&", "WTX@", "WMT&", "WTF&", "WTE&"];
-const futures = (response, now = FUT_NOW, symbols = FUTURES) => yahootw.decode(yahootw.requests(symbols, { anyDay: symbols })[0], response, now);
+const futures = (response, now = FUT_NOW, symbols = FUTURES) =>
+  yahootw.decode(yahootw.requests(symbols, { anyDay: symbols })[0], response, now);
 
 test("a priced row refused as delayed or far ahead says why for a symbol only this source prices, never for an overlay", () => {
   const delayed = futures(changed({ "WTX&": { exchangeDataDelayedBy: 15 } }, FUTURES_ROWS));
@@ -386,7 +509,8 @@ test("a future's trading day starts at 15:00 in Taipei, and Friday night is Mond
     "2026-11-15T14:00:00Z", // Sun 22:00
     "2026-11-15T16:30:00Z", // Mon 00:30
     "2026-11-16T01:00:00Z", // Mon 09:00
-  ]) assert.equal(tradingDay("WTX&", at(iso)), monday, iso);
+  ])
+    assert.equal(tradingDay("WTX&", at(iso)), monday, iso);
   assert.equal(tradingDay("WTX&", at("2026-11-13T06:59:59Z")), taipeiDay(at("2026-11-13T06:59:59Z"))); // Fri 14:59:59 → Fri's
   assert.equal(tradingDay("2330.TW", at("2026-11-09T07:00:00Z")), taipeiDay(at("2026-11-09T07:00:00Z")));
   assert.equal(tradingDay("2330.TW", at("2026-11-14T02:00:00Z")), taipeiDay(at("2026-11-14T02:00:00Z"))); // a stock keeps Saturday
@@ -398,9 +522,22 @@ test("futures rows from TAIFEX are priced, timed at TAIFEX's newest trade", () =
   assert.deepEqual(Object.keys(quotes).sort(), [...FUTURES].sort());
   assert.deepEqual(errors, {});
   assert.deepEqual(quotes["WTX&"], {
-    symbol: "WTX&", source: "yahootw", name: "台指期近一", price: 42604, previousClose: 41478, open: 41240, high: 43108, low: 40715,
-    limitUp: 45625, limitDown: 37331, exchange: "TFE", currency: "TWD", timestamp: newest, tradeTime: newest,
-    day: tradingDay("WTX&", FUT_NOW), fetchedAt: FUT_NOW,
+    symbol: "WTX&",
+    source: "yahootw",
+    name: "台指期近一",
+    price: 42604,
+    previousClose: 41478,
+    open: 41240,
+    high: 43108,
+    low: 40715,
+    limitUp: 45625,
+    limitDown: 37331,
+    exchange: "TFE",
+    currency: "TWD",
+    timestamp: newest,
+    tradeTime: newest,
+    day: tradingDay("WTX&", FUT_NOW),
+    fetchedAt: FUT_NOW,
   });
   assert.equal(quotes["WTF&"].timestamp, newest);
   assert.equal(quotes["WTF&"].tradeTime, at("2026-11-10T05:33:19Z"));
@@ -412,9 +549,15 @@ test("a future past its reported limit is shown, not discarded, and not lit", ()
   assert.equal(above.errors["WTX&"], undefined);
   assert.equal(priceLimit(above.quotes["WTX&"]), null);
   assert.equal(futures(changed({ "WTX&": { price: { raw: "36000" } } }, FUTURES_ROWS)).quotes["WTX&"].price, 36000);
-  assert.equal(priceLimit(futures(changed({ "WTX&": { price: { raw: "45625" } } }, FUTURES_ROWS)).quotes["WTX&"]), "up");
+  assert.equal(
+    priceLimit(futures(changed({ "WTX&": { price: { raw: "45625" } } }, FUTURES_ROWS)).quotes["WTX&"]),
+    "up",
+  );
   // A stock is still checked.
-  assert.equal(decode(changed({ "2330.TW": { price: { raw: "2400" } } })).errors["2330.TW"].code, "yahootw.outOfLimits");
+  assert.equal(
+    decode(changed({ "2330.TW": { price: { raw: "2400" } } })).errors["2330.TW"].code,
+    "yahootw.outOfLimits",
+  );
 });
 
 test("a futures-form row not on TAIFEX gives nothing, not even its name", () => {
@@ -431,14 +574,20 @@ test("quiet rows keep their own market's clock: a 20:00 future never times a sto
   const now = at("2026-11-10T12:00:05Z"); // 20:00:05 in Taipei
   const stock = { ...ROWS[0], exchange: "TAI", regularMarketTime: "2026-11-10T05:30:00Z" };
   const future = { ...FUTURES_ROWS[0], regularMarketTime: "2026-11-10T12:00:00Z" };
-  const { quotes } = yahootw.decode(yahootw.requests(["2330.TW", "WTX&"], { anyDay: ["WTX&"] })[0], ok([stock, future]), now);
+  const { quotes } = yahootw.decode(
+    yahootw.requests(["2330.TW", "WTX&"], { anyDay: ["WTX&"] })[0],
+    ok([stock, future]),
+    now,
+  );
   assert.equal(quotes["2330.TW"].timestamp, at("2026-11-10T05:30:00Z"));
   assert.equal(quotes["WTX&"].timestamp, at("2026-11-10T12:00:00Z"));
 });
 
 // It fails an implementation that groups the feed time by exchange.
 test("a quiet TPEx stock still takes the batch's newest stock trade", () => {
-  const { quotes } = decode(changed({ "2330.TW": { exchange: "TAI" }, "0050.TW": { exchange: "TAI" }, "6488.TWO": { exchange: "TWO" } }));
+  const { quotes } = decode(
+    changed({ "2330.TW": { exchange: "TAI" }, "0050.TW": { exchange: "TAI" }, "6488.TWO": { exchange: "TWO" } }),
+  );
   assert.equal(quotes["6488.TWO"].timestamp, at("2026-11-09T01:41:13Z"));
   assert.equal(quotes["6488.TWO"].tradeTime, at("2026-11-09T01:28:59Z"));
   assert.equal(quotes["0050.TW"].timestamp, at("2026-11-09T01:41:13Z"));
@@ -461,7 +610,11 @@ test("the night's first rows: a new trading day with new limits, and a stock bes
 
 test("a night trade stamped just past 15:00 by Yahoo's clock counts while the local clock still reads 14:59", () => {
   const now = at("2026-11-10T06:59:58Z"); // 14:59:58 locally
-  const { quotes, noLive } = futures(changed({ "WTX&": { regularMarketTime: "2026-11-10T07:00:01Z" } }, FUTURES_ROWS), now, ["WTX&"]);
+  const { quotes, noLive } = futures(
+    changed({ "WTX&": { regularMarketTime: "2026-11-10T07:00:01Z" } }, FUTURES_ROWS),
+    now,
+    ["WTX&"],
+  );
   assert.equal(quotes["WTX&"].day, tradingDay("WTX&", now) + 1);
   assert.equal(quotes["WTX&"].timestamp, at("2026-11-10T07:00:01Z"));
   assert.equal(noLive, undefined);
@@ -478,37 +631,66 @@ test("a futures trade far ahead of the local clock is not today's and never sets
 // The bound holds on the trading day too: 04:00 Wednesday is Wednesday's trading day as 16:00 Tuesday is, and still a bad time.
 test("a futures trade far ahead of the local clock on today's trading day is refused and never sets the feed time", () => {
   const now = at("2026-11-10T08:00:00Z"); // 16:00 Tuesday, Wednesday's trading day
-  const { quotes } = futures(changed({
-    "WTX&": { regularMarketTime: "2026-11-10T20:00:00Z" }, // 04:00 Wednesday
-    "WMT&": { regularMarketTime: "2026-11-10T07:59:50Z" },
-  }, FUTURES_ROWS), now);
+  const { quotes } = futures(
+    changed(
+      {
+        "WTX&": { regularMarketTime: "2026-11-10T20:00:00Z" }, // 04:00 Wednesday
+        "WMT&": { regularMarketTime: "2026-11-10T07:59:50Z" },
+      },
+      FUTURES_ROWS,
+    ),
+    now,
+  );
   assert.equal(quotes["WTX&"], undefined);
   assert.equal(quotes["WMT&"].timestamp, at("2026-11-10T07:59:50Z"));
 });
 
 test("a night trade after midnight is the same trading day: priced live, no noLive", () => {
   const now = at("2026-11-10T16:00:30Z"); // 00:00:30 Wednesday
-  const { quotes, noLive } = futures(changed({ "WTX&": { regularMarketTime: "2026-11-10T15:59:50Z" } }, FUTURES_ROWS), now, ["WTX&"]);
+  const { quotes, noLive } = futures(
+    changed({ "WTX&": { regularMarketTime: "2026-11-10T15:59:50Z" } }, FUTURES_ROWS),
+    now,
+    ["WTX&"],
+  );
   assert.equal(quotes["WTX&"].day, tradingDay("WTX&", now));
   assert.equal(quotes["WTX&"].timestamp, at("2026-11-10T15:59:50Z"));
   assert.equal(noLive, undefined);
 });
 
 test("a future's line keeps its trading day from 15:00, also after midnight", () => {
-  const recorded = yahootw.decode(yahootw.requests(["WTX&"]).find((r) => r.kind === "line"), ok(FUTURES_TICK), FUT_NOW);
+  const recorded = yahootw.decode(
+    yahootw.requests(["WTX&"]).find((r) => r.kind === "line"),
+    ok(FUTURES_TICK),
+    FUT_NOW,
+  );
   const { day, series, times, lastAt } = recorded.lines["WTX&"];
   assert.equal(day, tradingDay("WTX&", FUT_NOW));
   assert.deepEqual([series.length, series[0], series.at(-1), lastAt], [1132, 41235, 42599, 1794288960000]);
   assert.equal(times.length, series.length);
   // One minute apart, but for the night/day break.
-  assert.deepEqual([...new Set(times.slice(1).map((t, i) => t - times[i]))].sort((a, b) => a - b), [60_000, 13_500_000]);
+  assert.deepEqual(
+    [...new Set(times.slice(1).map((t, i) => t - times[i]))].sort((a, b) => a - b),
+    [60_000, 13_500_000],
+  );
   assert.deepEqual(recorded.periods["WTX&"].regular, LINE_PERIODS.regular);
   // 01:00: ten hours of night minutes since 15:00 the day before, none cut at midnight.
   const one = at("2026-11-09T17:00:00Z");
   const start = at("2026-11-09T07:00:00Z") / 1000;
   const closes = Array.from({ length: 600 }, (_, i) => 42000 + i);
-  const night = decodeTick("WTX&", ok([{ symbol: "WTX&", chart: { meta: { symbol: "WTX&" },
-    timestamp: closes.map((_, i) => start + i * 60), indicators: { quote: [{ close: closes }] } } }]), one);
+  const night = decodeTick(
+    "WTX&",
+    ok([
+      {
+        symbol: "WTX&",
+        chart: {
+          meta: { symbol: "WTX&" },
+          timestamp: closes.map((_, i) => start + i * 60),
+          indicators: { quote: [{ close: closes }] },
+        },
+      },
+    ]),
+    one,
+  );
   assert.deepEqual([night.lines["WTX&"].series.length, night.lines["WTX&"].series[0]], [600, 42000]);
   assert.equal(night.lines["WTX&"].day, tradingDay("WTX&", one));
 });
@@ -519,7 +701,8 @@ test("a line ends at its last close at or before now, never at the minutes still
   const request = yahootw.requests(["WTX&"]).find((r) => r.kind === "line");
   const chart = FUTURES_NIGHT_TICK[0].chart;
   const closes = chart.indicators.quote[0].close;
-  for (const now of [at("2026-11-10T14:17:30Z"), at("2026-11-10T14:20:30Z")]) { // 22:17:30, 22:20:30
+  for (const now of [at("2026-11-10T14:17:30Z"), at("2026-11-10T14:20:30Z")]) {
+    // 22:17:30, 22:20:30
     const label = new Date(now).toISOString();
     const { series, lastAt } = yahootw.decode(request, ok(FUTURES_NIGHT_TICK), now).lines["WTX&"];
     const last = chart.timestamp.findLastIndex((seconds, i) => seconds * 1000 <= now && closes[i] !== null);
@@ -550,12 +733,22 @@ test("a line's last trade is its last close, not the minutes filled up to now", 
   assert.equal(series.length, last + 30 - first + 1);
   assert.deepEqual(series.slice(-31), Array(31).fill(closes[last]));
   // The carried minutes keep their own minute.
-  assert.deepEqual(times.slice(-31).slice(1).map((t, i) => t - times.at(-31 + i)), Array(30).fill(60_000));
+  assert.deepEqual(
+    times
+      .slice(-31)
+      .slice(1)
+      .map((t, i) => t - times.at(-31 + i)),
+    Array(30).fill(60_000),
+  );
   assert.ok(times.at(-1) <= now);
 });
 
 test("a future's line gives its sessions from sourceTradingPeriods", () => {
-  const { periods } = yahootw.decode(yahootw.requests(["WTX&"]).find((r) => r.kind === "line"), ok(FUTURES_TICK), FUT_NOW);
+  const { periods } = yahootw.decode(
+    yahootw.requests(["WTX&"]).find((r) => r.kind === "line"),
+    ok(FUTURES_TICK),
+    FUT_NOW,
+  );
   assert.deepEqual(periods["WTX&"], LINE_PERIODS);
 });
 
@@ -563,7 +756,13 @@ test("a future's line gives its sessions from sourceTradingPeriods", () => {
 // the TAIFEX hours decide, and a feed that stops at the day close reads stalled in the night, never closed.
 test("a future's line segments are read only on their own trading day", () => {
   const close = at("2026-11-10T05:44:59Z"); // 13:44:59 Tuesday
-  const quote = { symbol: "WTX&", day: tradingDay("WTX&", close), tradeTime: close, timestamp: close, source: "yahootw" };
+  const quote = {
+    symbol: "WTX&",
+    day: tradingDay("WTX&", close),
+    tradeTime: close,
+    timestamp: close,
+    source: "yahootw",
+  };
   // The 13:45–15:00 break: Tuesday's own segments, closed.
   const two = at("2026-11-10T06:00:00Z");
   assert.equal(ownPeriods(quote, LINE_PERIODS, two), LINE_PERIODS);
@@ -578,15 +777,32 @@ test("a future's line segments are read only on their own trading day", () => {
   // Friday's day session, seen on Saturday: Monday's trading day, and the TAIFEX hours read closed.
   const friday = at("2026-11-13T05:44:59Z");
   const fridayQuote = { ...quote, day: tradingDay("WTX&", friday), tradeTime: friday, timestamp: friday };
-  const fridayPeriods = { pre: null, regular: [at("2026-11-12T07:00:00Z"), at("2026-11-13T05:45:00Z")], post: null,
-    segments: [[at("2026-11-12T07:00:00Z"), at("2026-11-12T21:00:00Z")], [at("2026-11-13T00:45:00Z"), at("2026-11-13T05:45:00Z")]] };
+  const fridayPeriods = {
+    pre: null,
+    regular: [at("2026-11-12T07:00:00Z"), at("2026-11-13T05:45:00Z")],
+    post: null,
+    segments: [
+      [at("2026-11-12T07:00:00Z"), at("2026-11-12T21:00:00Z")],
+      [at("2026-11-13T00:45:00Z"), at("2026-11-13T05:45:00Z")],
+    ],
+  };
   const saturday = at("2026-11-14T02:00:00Z");
-  assert.equal(sessionOf({ ...fridayQuote, periods: ownPeriods(fridayQuote, fridayPeriods, saturday) }, saturday), "closed");
+  assert.equal(
+    sessionOf({ ...fridayQuote, periods: ownPeriods(fridayQuote, fridayPeriods, saturday) }, saturday),
+    "closed",
+  );
   // Friday night's segments are Monday's trading day's, so on Sunday they still hold.
   const lastNight = at("2026-11-13T20:59:59Z");
   const nightQuote = { ...quote, day: tradingDay("WTX&", lastNight), tradeTime: lastNight, timestamp: lastNight };
-  const mondayPeriods = { pre: null, regular: [at("2026-11-13T07:00:00Z"), at("2026-11-16T05:45:00Z")], post: null,
-    segments: [[at("2026-11-13T07:00:00Z"), at("2026-11-13T21:00:00Z")], [at("2026-11-16T00:45:00Z"), at("2026-11-16T05:45:00Z")]] };
+  const mondayPeriods = {
+    pre: null,
+    regular: [at("2026-11-13T07:00:00Z"), at("2026-11-16T05:45:00Z")],
+    post: null,
+    segments: [
+      [at("2026-11-13T07:00:00Z"), at("2026-11-13T21:00:00Z")],
+      [at("2026-11-16T00:45:00Z"), at("2026-11-16T05:45:00Z")],
+    ],
+  };
   const sunday = at("2026-11-15T14:00:00Z");
   assert.equal(ownPeriods(nightQuote, mondayPeriods, sunday), mondayPeriods);
 });
@@ -599,20 +815,34 @@ test("a future's line periods belong to its trading day, which began at 15:00 th
 });
 
 test("a stock list reports each clock's newest trade, any day, real-time rows only", () => {
-  const rows = (time, fields = {}) => ok([...EARLIER_ROWS, ...FUTURES_ROWS].map((row) => ({ ...row,
-    ...(row.regularMarketTime && { regularMarketTime: new Date(time).toISOString() }), ...fields })));
+  const rows = (time, fields = {}) =>
+    ok(
+      [...EARLIER_ROWS, ...FUTURES_ROWS].map((row) => ({
+        ...row,
+        ...(row.regularMarketTime && { regularMarketTime: new Date(time).toISOString() }),
+        ...fields,
+      })),
+    );
   const now = at("2026-11-11T01:10:00Z");
   const yesterday = at("2026-11-10T05:30:00Z");
   const { newestTrade } = decodeStockList(["^TWII", "^TWOII", "WTX&"], rows(yesterday), now);
   assert.deepEqual(newestTrade, { stock: yesterday, future: yesterday });
-  assert.equal(decodeStockList(["^TWII"], rows(yesterday, { exchangeDataDelayedBy: 1200 }), now).newestTrade, undefined);
+  assert.equal(
+    decodeStockList(["^TWII"], rows(yesterday, { exchangeDataDelayedBy: 1200 }), now).newestTrade,
+    undefined,
+  );
   assert.equal(decodeStockList(["^TWII"], rows(yesterday, { price: { raw: "-" } }), now).newestTrade, undefined);
 });
 
 test("a futures trade timed too far ahead is no trade: the decoder refuses it, so it never lifts a closure", () => {
   const now = at("2026-12-25T02:00:00Z"); // 10:00 Taipei on a listed Friday
-  const ahead = (ms) => ok(FUTURES_ROWS.filter((row) => row.symbol === "WTX&")
-    .map((row) => ({ ...row, regularMarketTime: new Date(now + ms).toISOString() })));
+  const ahead = (ms) =>
+    ok(
+      FUTURES_ROWS.filter((row) => row.symbol === "WTX&").map((row) => ({
+        ...row,
+        regularMarketTime: new Date(now + ms).toISOString(),
+      })),
+    );
   const refused = decodeStockList(["WTX&"], ahead(3 * 86_400_000), now);
   assert.deepEqual(refused.quotes, {});
   assert.equal(refused.newestTrade, undefined);
@@ -622,8 +852,13 @@ test("a futures trade timed too far ahead is no trade: the decoder refuses it, s
 
 test("a stock trade timed on a later Taipei day is no trade either", () => {
   const now = at("2026-12-25T02:00:00Z"); // 10:00 Taipei on a listed Friday
-  const timed = (ms) => ok(ROWS.filter((row) => row.symbol === "2330.TW")
-    .map((row) => ({ ...row, regularMarketTime: new Date(ms).toISOString() })));
+  const timed = (ms) =>
+    ok(
+      ROWS.filter((row) => row.symbol === "2330.TW").map((row) => ({
+        ...row,
+        regularMarketTime: new Date(ms).toISOString(),
+      })),
+    );
   const refused = decodeStockList(["2330.TW"], timed(now + 3 * 86_400_000), now);
   assert.deepEqual(refused.quotes, {});
   assert.equal(refused.newestTrade, undefined);
@@ -633,8 +868,7 @@ test("a stock trade timed on a later Taipei day is no trade either", () => {
 
 // 2026-11-18 14:05 in Taipei, after the close: recorded rows of the day (see their keys for the volumes).
 const DETAIL_NOW = at("2026-11-18T06:05:00Z");
-const detailDecode = (name, symbols) =>
-  decodeStockList(symbols, ok(jsonFixture(name)), DETAIL_NOW).quotes;
+const detailDecode = (name, symbols) => decodeStockList(symbols, ok(jsonFixture(name)), DETAIL_NOW).quotes;
 
 test("Yahoo 奇摩股市's volume in lots and contracts", () => {
   const close = detailDecode("ytw-detail-close", ["2330.TW"]);
@@ -662,7 +896,12 @@ const withFields = (fields, rows = CLOSE_ROWS) => rows.map((row) => ({ ...row, .
 test("a volume of 0 or none is absent", () => {
   for (const volumeK of [0, "-", undefined, null]) {
     // Without any count, no unit either.
-    const rows = jsonFixture("ytw-detail-close").map((row) => ({ ...row, volumeK, previousVolumeK: volumeK, singleVolumeK: volumeK }));
+    const rows = jsonFixture("ytw-detail-close").map((row) => ({
+      ...row,
+      volumeK,
+      previousVolumeK: volumeK,
+      singleVolumeK: volumeK,
+    }));
     const quote = decodeStockList(["2330.TW"], ok(rows), DETAIL_NOW).quotes["2330.TW"];
     assert.ok(quote, String(volumeK));
     assert.equal("volume" in quote, false, String(volumeK));
@@ -679,13 +918,18 @@ test("a count without the day's volume keeps its unit", () => {
 
 test("A Taiwan stock from Yahoo 奇摩股市 (activity)", () => {
   const q = detailQuote(CLOSE_ROWS, "2330.TW");
-  assert.deepEqual([q.volume, q.previousVolume, Math.round(q.turnover), q.avgPrice, q.lastSize, q.inner, q.outer, q.sizeUnit],
-    [42_269, 54_723, 92_047_260_000, 2_177, 4_869, 15_147, 23_585, "lot"]);
+  assert.deepEqual(
+    [q.volume, q.previousVolume, Math.round(q.turnover), q.avgPrice, q.lastSize, q.inner, q.outer, q.sizeUnit],
+    [42_269, 54_723, 92_047_260_000, 2_177, 4_869, 15_147, 23_585, "lot"],
+  );
 });
 
 test("A future counts in contracts (activity)", () => {
   const q = detailQuote(jsonFixture("ytw-detail-mixed"), "WTX&");
-  assert.deepEqual([q.volume, q.inner, q.outer, q.sizeUnit, q.lastSize, q.previousVolume], [82_587, 41_343, 40_603, "contract", 3, 170_139]);
+  assert.deepEqual(
+    [q.volume, q.inner, q.outer, q.sizeUnit, q.lastSize, q.previousVolume],
+    [82_587, 41_343, 40_603, "contract", 3, 170_139],
+  );
   assert.equal("turnover" in q, false);
   assert.equal("avgPrice" in q, false);
 });
@@ -713,7 +957,13 @@ test("totals that are not numbers are none, never 0", () => {
 });
 
 test("zero turnover and a dash average are absent", () => {
-  for (const [turnoverM, avgPrice] of [["0", "-"], [0, "0"], [undefined, undefined], [null, null], ["-", ""]]) {
+  for (const [turnoverM, avgPrice] of [
+    ["0", "-"],
+    [0, "0"],
+    [undefined, undefined],
+    [null, null],
+    ["-", ""],
+  ]) {
     const q = detailQuote(withFields({ turnoverM, avgPrice }), "2330.TW");
     assert.ok(q, String(turnoverM));
     assert.equal("turnover" in q, false, String(turnoverM));
@@ -729,10 +979,18 @@ test("an inner volume of 0 is kept", () => {
 
 test("an index row carries no activity", () => {
   const rows = ROWS.filter((row) => row.symbol === "^TWII").map((row) => ({
-    ...row, previousVolumeK: 5_000, turnoverM: "1000", avgPrice: "20000", singleVolumeK: "3", inMarket: 1, outMarket: 2, totalMarketVolK: 3,
+    ...row,
+    previousVolumeK: 5_000,
+    turnoverM: "1000",
+    avgPrice: "20000",
+    singleVolumeK: "3",
+    inMarket: 1,
+    outMarket: 2,
+    totalMarketVolK: 3,
   }));
   const q = decodeStockList(["^TWII"], ok(rows), NOW, ["^TWII"]).quotes["^TWII"];
-  for (const field of ["previousVolume", "turnover", "avgPrice", "lastSize", "inner", "outer"]) assert.equal(field in q, false, field);
+  for (const field of ["previousVolume", "turnover", "avgPrice", "lastSize", "inner", "outer"])
+    assert.equal(field in q, false, field);
 });
 
 // The best five levels: a side is kept only when its sizes add up to the answer's own total for it.
@@ -741,8 +999,20 @@ const sizeSum = (levels) => levels.reduce((sum, level) => sum + level.size, 0);
 
 test("A Taiwan stock from Yahoo 奇摩股市 (book)", () => {
   const { book } = detailQuote(CLOSE_ROWS, "2330.TW");
-  assert.deepEqual(levelPairs(book.bids), [[2170, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]);
-  assert.deepEqual(levelPairs(book.asks), [[2175, 503], [2180, 1248], [2185, 571], [2190, 362], [2195, 361]]);
+  assert.deepEqual(levelPairs(book.bids), [
+    [2170, 2280],
+    [2165, 208],
+    [2160, 394],
+    [2155, 467],
+    [2150, 1280],
+  ]);
+  assert.deepEqual(levelPairs(book.asks), [
+    [2175, 503],
+    [2180, 1248],
+    [2185, 571],
+    [2190, 362],
+    [2195, 361],
+  ]);
 });
 
 test("A future counts in contracts (book)", () => {
@@ -770,7 +1040,10 @@ test("an orderbook with no level gives an empty book", () => {
 const askless = (fields) => CLOSE_ROWS[0].orderbook.map((level) => ({ ...level, ...fields }));
 
 test("a one-sided Yahoo 奇摩股市 book is kept", () => {
-  const q = detailQuote(withFields({ orderbook: askless({ ask: "-", askVol: 0, askVolK: 0 }), sumAskVolK: "0" }), "2330.TW");
+  const q = detailQuote(
+    withFields({ orderbook: askless({ ask: "-", askVol: 0, askVolK: 0 }), sumAskVolK: "0" }),
+    "2330.TW",
+  );
   assert.deepEqual(q.book.asks, []);
   assert.equal(q.book.bids.length, 5);
 });
@@ -795,7 +1068,12 @@ test("a priced level without a readable size, or a total that is not a number, d
 });
 
 test("an index row carries no book", () => {
-  const rows = ROWS.filter((row) => row.symbol === "^TWII").map((row) => ({ ...row, orderbook: [], sumBidVolK: 0, sumAskVolK: 0 }));
+  const rows = ROWS.filter((row) => row.symbol === "^TWII").map((row) => ({
+    ...row,
+    orderbook: [],
+    sumBidVolK: 0,
+    sumAskVolK: 0,
+  }));
   assert.equal("book" in decodeStockList(["^TWII"], ok(rows), NOW, ["^TWII"]).quotes["^TWII"], false);
 });
 
@@ -811,36 +1089,88 @@ test("an opening-auction answer gives each stock's book as an auction book, neve
   assert.equal("noLive" in result, false);
   const tsmc = result.auctionBook["2330.TW"];
   assert.equal(tsmc.auction, true);
-  assert.deepEqual(tsmc.bids.map(({ price, size }) => [price, size]), [[2175, 39], [2170, 41], [2165, 21], [2160, 71], [2155, 36]]);
-  assert.deepEqual(tsmc.asks.map(({ price, size }) => [price, size]), [[2180, 10], [2185, 11], [2190, 10], [2195, 48], [2200, 166]]);
+  assert.deepEqual(
+    tsmc.bids.map(({ price, size }) => [price, size]),
+    [
+      [2175, 39],
+      [2170, 41],
+      [2165, 21],
+      [2160, 71],
+      [2155, 36],
+    ],
+  );
+  assert.deepEqual(
+    tsmc.asks.map(({ price, size }) => [price, size]),
+    [
+      [2180, 10],
+      [2185, 11],
+      [2190, 10],
+      [2195, 48],
+      [2200, 166],
+    ],
+  );
   assert.deepEqual(Object.keys(result.auctionBook).sort(), ["0050.TW", "2330.TW", "6488.TWO"]);
 });
 
 test("an opening-auction book that does not add up, or a row not preopen, gives none", () => {
-  const rows = PREOPEN.map((row) => (row.symbol === "2330.TW" ? { ...row, sumBidVolK: 207 }
-    : row.symbol === "0050.TW" ? { ...row, marketStatus: "open" } : row));
+  const rows = PREOPEN.map((row) =>
+    row.symbol === "2330.TW"
+      ? { ...row, sumBidVolK: 207 }
+      : row.symbol === "0050.TW"
+        ? { ...row, marketStatus: "open" }
+        : row,
+  );
   const result = decodeStockList(PREOPEN_SYMBOLS, ok(rows), PREOPEN_AT);
   assert.deepEqual(Object.keys(result.auctionBook), ["6488.TWO"]);
   // A delayed row gives none either.
-  const delayed = decodeStockList(["6488.TWO"], ok(PREOPEN.map((row) => ({ ...row, exchangeDataDelayedBy: 20 }))), PREOPEN_AT);
+  const delayed = decodeStockList(
+    ["6488.TWO"],
+    ok(PREOPEN.map((row) => ({ ...row, exchangeDataDelayedBy: 20 }))),
+    PREOPEN_AT,
+  );
   assert.equal("auctionBook" in delayed, false);
 });
 
 test("A locked stock's market order", () => {
   // Recorded 2026-11-19 13:24:00: 6488.TWO locked at limit-down 490, no bids, a market sell of 171 first, ask total 420.
-  const result = decodeStockList(["6488.TWO", "2330.TW"], ok(jsonFixture("ytw-locked-1324")), at("2026-11-19T05:24:00Z"));
+  const result = decodeStockList(
+    ["6488.TWO", "2330.TW"],
+    ok(jsonFixture("ytw-locked-1324")),
+    at("2026-11-19T05:24:00Z"),
+  );
   const { book } = result.quotes["6488.TWO"];
   assert.deepEqual(book.bids, []);
-  assert.deepEqual(levelPairs(book.asks), [[null, 171], [490, 244], [490.5, 1], [491, 2], [491.5, 2]]);
+  assert.deepEqual(levelPairs(book.asks), [
+    [null, 171],
+    [490, 244],
+    [490.5, 1],
+    [491, 2],
+    [491.5, 2],
+  ]);
   assert.equal(sizeSum(book.asks), 420);
   assert.ok(result.quotes["2330.TW"].book.bids.length > 0);
   // A level with no price and a size of 0 or `-` is empty: not shown, counts 0; a priced one without a size still fails.
-  const rows = jsonFixture("ytw-locked-1324").map((row) => (row.symbol !== "6488.TWO" ? row : { ...row,
-    orderbook: [...row.orderbook, { ask: "-", askVolK: "-", bid: "-", bidVolK: "-" }] }));
-  assert.equal(decodeStockList(["6488.TWO"], ok(rows), at("2026-11-19T05:24:00Z")).quotes["6488.TWO"].book.asks.length, 5);
+  const rows = jsonFixture("ytw-locked-1324").map((row) =>
+    row.symbol !== "6488.TWO"
+      ? row
+      : { ...row, orderbook: [...row.orderbook, { ask: "-", askVolK: "-", bid: "-", bidVolK: "-" }] },
+  );
+  assert.equal(
+    decodeStockList(["6488.TWO"], ok(rows), at("2026-11-19T05:24:00Z")).quotes["6488.TWO"].book.asks.length,
+    5,
+  );
   // An unpriced level whose size the check cannot read counts 0, so it is never shown as a market order either.
-  const odd = jsonFixture("ytw-locked-1324").map((row) => (row.symbol !== "6488.TWO" ? row : { ...row,
-    orderbook: [{ ask: "-", askVolK: " 7", bid: "-", bidVolK: 0 }, ...row.orderbook] }));
+  const odd = jsonFixture("ytw-locked-1324").map((row) =>
+    row.symbol !== "6488.TWO"
+      ? row
+      : { ...row, orderbook: [{ ask: "-", askVolK: " 7", bid: "-", bidVolK: 0 }, ...row.orderbook] },
+  );
   const oddAsks = decodeStockList(["6488.TWO"], ok(odd), at("2026-11-19T05:24:00Z")).quotes["6488.TWO"].book.asks;
-  assert.deepEqual(levelPairs(oddAsks), [[null, 171], [490, 244], [490.5, 1], [491, 2], [491.5, 2]]);
+  assert.deepEqual(levelPairs(oddAsks), [
+    [null, 171],
+    [490, 244],
+    [490.5, 1],
+    [491, 2],
+    [491.5, 2],
+  ]);
 });

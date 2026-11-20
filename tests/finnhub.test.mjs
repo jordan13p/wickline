@@ -49,7 +49,10 @@ test("key in header, not URL", () => {
   assert.equal(request.kind, "quote");
   // One request per symbol; the person's address is used without a trailing slash.
   const two = finnhub.requests(["AAPL", "BRK-B"], { finnhubUrl: "https://finnhub.io/api/v2/", finnhubKey: "k" });
-  assert.deepEqual(two.map((r) => r.url), ["https://finnhub.io/api/v2/quote?symbol=AAPL", "https://finnhub.io/api/v2/quote?symbol=BRK.B"]);
+  assert.deepEqual(
+    two.map((r) => r.url),
+    ["https://finnhub.io/api/v2/quote?symbol=AAPL", "https://finnhub.io/api/v2/quote?symbol=BRK.B"],
+  );
 });
 
 test("symbol mapping", () => {
@@ -61,8 +64,15 @@ test("decodes a quote", () => {
   const result = decode("AAPL", ok(QUOTE), 42);
   assert.deepEqual(result.errors, {});
   assert.deepEqual(result.quotes.AAPL, {
-    symbol: "AAPL", source: "finnhub", price: 231.2, previousClose: 228, open: 229, high: 232, low: 227.5,
-    timestamp: 1_760_000_000_000, fetchedAt: 42,
+    symbol: "AAPL",
+    source: "finnhub",
+    price: 231.2,
+    previousClose: 228,
+    open: 229,
+    high: 232,
+    low: 227.5,
+    timestamp: 1_760_000_000_000,
+    fetchedAt: 42,
   });
   // Finnhub answers an unknown symbol with zeros: no quote, no error.
   assert.deepEqual(decode("AAPL", ok({ ...QUOTE, c: 0 })), { quotes: {}, errors: {} });
@@ -89,7 +99,12 @@ test("HTML answer fails visibly", () => {
 });
 
 test("a saved Finnhub address off https://finnhub.io sends no request: the key never leaves", async () => {
-  for (const finnhubUrl of ["http://finnhub.io/api/v1", "https://evil.test", "https://finnhub.io.evil.test/api/v1", "https://user@finnhub.io/api/v1"]) {
+  for (const finnhubUrl of [
+    "http://finnhub.io/api/v1",
+    "https://evil.test",
+    "https://finnhub.io.evil.test/api/v1",
+    "https://user@finnhub.io/api/v1",
+  ]) {
     const host = usHost({ finnhubUrl });
     const w = new Watchlist(host);
     w.add("AAPL");
@@ -100,20 +115,31 @@ test("a saved Finnhub address off https://finnhub.io sends no request: the key n
     assert.ok(host.requests.length > 0, "Yahoo still asked");
     assert.equal(w.shown("AAPL").source, "yahoo", finnhubUrl);
     // On the status line and the US card (the dialog shows problems()).
-    assert.deepEqual(w.problems().filter((p) => p.provider === "finnhub"), [{ provider: "finnhub", code: "finnhub.badUrl", params: {}, stopped: true }], finnhubUrl);
+    assert.deepEqual(
+      w.problems().filter((p) => p.provider === "finnhub"),
+      [{ provider: "finnhub", code: "finnhub.badUrl", params: {}, stopped: true }],
+      finnhubUrl,
+    );
     // Fixed in Settings: Finnhub runs.
     host.prefs = finnhubOn({ finnhubUrl: FINNHUB_URL });
     w.sync();
     await advance(host, 65_000);
     assert.ok(finnhubCount(host) > 0, finnhubUrl);
-    assert.deepEqual(w.problems().filter((p) => p.provider === "finnhub"), []);
+    assert.deepEqual(
+      w.problems().filter((p) => p.provider === "finnhub"),
+      [],
+    );
     await stop(w, host, runs);
   }
   for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.badUrl"], lang);
 });
 
 test("an answer from another address stops Finnhub: the key is not sent again", async () => {
-  for (const finalUrl of ["https://evil.test/quote?symbol=AAPL", "http://finnhub.io/api/v1/quote?symbol=AAPL", "https://finnhub.io.evil.test/x"]) {
+  for (const finalUrl of [
+    "https://evil.test/quote?symbol=AAPL",
+    "http://finnhub.io/api/v1/quote?symbol=AAPL",
+    "https://finnhub.io.evil.test/x",
+  ]) {
     const error = decode("AAPL", { ...ok(QUOTE), url: finalUrl }).errors.AAPL;
     assert.equal(error.code, "finnhub.redirected", finalUrl);
     assert.equal(error.stopsSource, true);
@@ -129,12 +155,16 @@ test("an answer from another address stops Finnhub: the key is not sent again", 
   const host = usHost();
   host.finnhub = (url) => ({ ...ok(QUOTE), url: url.replace("https://finnhub.io", "https://evil.test") });
   const w = new Watchlist(host);
-  w.add("MSFT"); w.add("AAPL");
+  w.add("MSFT");
+  w.add("AAPL");
   const runs = start(w, host);
   await advance(host, 120_000);
   assert.equal(finnhubCount(host), 1);
   assert.equal(w.sources.finnhub.disabled, true);
-  assert.deepEqual(w.problems().find((p) => p.provider === "finnhub"), { provider: "finnhub", code: "finnhub.redirected", params: {}, stopped: true });
+  assert.deepEqual(
+    w.problems().find((p) => p.provider === "finnhub"),
+    { provider: "finnhub", code: "finnhub.redirected", params: {}, stopped: true },
+  );
   await stop(w, host, runs);
   assert.ok("finnhub.redirected" in MESSAGES_EN);
   for (const lang of Object.keys(STRINGS)) assert.ok(STRINGS[lang]["finnhub.redirected"], lang);
@@ -148,7 +178,8 @@ test("cap of 15 at the default budget", async () => {
   const w = new Watchlist(host);
   const us = ["AAPL", "MSFT", "NVDA", "BRK-B", ...Array.from({ length: 12 }, (_, i) => `T${i}`)];
   // An index and a Taiwan stock in between do not count.
-  w.add("^GSPC"); w.add("2330.TW");
+  w.add("^GSPC");
+  w.add("2330.TW");
   // Each add goes to the top, so add them last to first to list them in order.
   for (const symbol of [...us].reverse()) w.add(symbol);
   const runs = start(w, host);
@@ -184,7 +215,8 @@ test("adding past the cap names the symbol it pushed out", async () => {
   assert.deepEqual(w.add("2330.TW"), { code: "notice.added", params: { symbol: "2330.TW" } });
   assert.deepEqual(w.add("BTC/USDT"), { code: "notice.added", params: { symbol: "BTC/USDT" } });
   for (const lang of Object.keys(STRINGS)) {
-    for (const code of ["notice.overCap", "notice.overCapPushed", "finnhub.overCap"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
+    for (const code of ["notice.overCap", "notice.overCapPushed", "finnhub.overCap"])
+      assert.ok(STRINGS[lang][code], `${lang} ${code}`);
   }
   await stop(w, host, runs);
 });
@@ -202,11 +234,23 @@ test("only a US symbol is pushed past the cap, and only US symbols count toward 
     return notice;
   };
   // Cap 3: the third US symbol loses its place; cap 5 has room.
-  assert.deepEqual(await addTo(12, ["AAPL", "MSFT", "NVDA"], "TSLA"), { code: "notice.overCapPushed", params: { symbol: "TSLA", pushed: "NVDA", cap: 3 } });
-  assert.deepEqual(await addTo(20, ["AAPL", "MSFT", "NVDA"], "TSLA"), { code: "notice.added", params: { symbol: "TSLA" } });
+  assert.deepEqual(await addTo(12, ["AAPL", "MSFT", "NVDA"], "TSLA"), {
+    code: "notice.overCapPushed",
+    params: { symbol: "TSLA", pushed: "NVDA", cap: 3 },
+  });
+  assert.deepEqual(await addTo(20, ["AAPL", "MSFT", "NVDA"], "TSLA"), {
+    code: "notice.added",
+    params: { symbol: "TSLA" },
+  });
   // Cap 2: a Taiwan stock in between neither counts nor gets pushed.
-  assert.deepEqual(await addTo(8, ["AAPL", "2330.TW", "MSFT"], "NVDA"), { code: "notice.overCapPushed", params: { symbol: "NVDA", pushed: "MSFT", cap: 2 } });
-  assert.deepEqual(await addTo(8, ["AAPL", "MSFT"], "0050.TW"), { code: "notice.added", params: { symbol: "0050.TW" } });
+  assert.deepEqual(await addTo(8, ["AAPL", "2330.TW", "MSFT"], "NVDA"), {
+    code: "notice.overCapPushed",
+    params: { symbol: "NVDA", pushed: "MSFT", cap: 2 },
+  });
+  assert.deepEqual(await addTo(8, ["AAPL", "MSFT"], "0050.TW"), {
+    code: "notice.added",
+    params: { symbol: "0050.TW" },
+  });
   // An empty list: nobody to push.
   assert.deepEqual(await addTo(8, [], "NVDA"), { code: "notice.added", params: { symbol: "NVDA" } });
 });
@@ -218,7 +262,10 @@ test("the 16th US symbol at the default budget pushes the old 15th", async () =>
   await advance(host, 1);
   const us = Array.from({ length: 16 }, (_, i) => `T${i}`);
   for (const symbol of us.slice(0, 15).reverse()) w.add(symbol);
-  assert.deepEqual(w.add(us[15]), { code: "notice.overCapPushed", params: { symbol: us[15], pushed: us[14], cap: 15 } });
+  assert.deepEqual(w.add(us[15]), {
+    code: "notice.overCapPushed",
+    params: { symbol: us[15], pushed: us[14], cap: 15 },
+  });
   assert.deepEqual(w.finnhubSymbols(), [us[15], ...us.slice(0, 14)]);
   await stop(w, host, runs);
 });
@@ -242,7 +289,8 @@ test("with room under the cap, adding says nothing about it; with Finnhub off, n
   await stop(w, host, runs);
   const off = fakeHost(() => ok({}));
   const v = new Watchlist(off);
-  for (const symbol of ["AAPL", "MSFT", "NVDA", "BRK-B", "T1", "T2"]) assert.equal(v.add(symbol).code, "notice.added", symbol);
+  for (const symbol of ["AAPL", "MSFT", "NVDA", "BRK-B", "T1", "T2"])
+    assert.equal(v.add(symbol).code, "notice.added", symbol);
 });
 
 test("Finnhub stays off without its choice and a key", async () => {
@@ -275,7 +323,9 @@ test("an unreadable secrets file is a visible problem", async () => {
   const runs = start(w, host);
   await advance(host, 31_000);
   assert.equal(finnhubCount(host), 0);
-  assert.deepEqual(w.problems(), [{ provider: "finnhub", code: "finnhub.secretUnreadable", params: {}, stopped: true }]);
+  assert.deepEqual(w.problems(), [
+    { provider: "finnhub", code: "finnhub.secretUnreadable", params: {}, stopped: true },
+  ]);
   assert.ok(STRINGS.en["finnhub.secretUnreadable"]);
   await stop(w, host, runs);
 });
@@ -283,7 +333,8 @@ test("an unreadable secrets file is a visible problem", async () => {
 test("Finnhub overlays Yahoo with the key in the header", async () => {
   const host = usHost();
   const w = new Watchlist(host);
-  w.add("BRK-B"); w.add("AAPL");
+  w.add("BRK-B");
+  w.add("AAPL");
   const runs = start(w, host);
   // Two symbols: spread over the 15 s interval.
   await advance(host, 7_501);
@@ -308,7 +359,8 @@ test("401 stops Finnhub until the key changes", async () => {
     const host = usHost();
     host.finnhub = () => ({ status, ok: false, text: "" });
     const w = new Watchlist(host);
-    w.add("AAPL"); w.add("MSFT");
+    w.add("AAPL");
+    w.add("MSFT");
     const runs = start(w, host);
     await advance(host, 1_001);
     // Refused: the source cannot run until its settings change, which the settings dialog reads.
@@ -436,22 +488,38 @@ test("only Finnhub's requests carry the key", async () => {
     if (url.includes("/quote?symbol=")) return ok(QUOTE);
     if (url.includes("mis.twse")) return { status: 500, ok: false, text: "" };
     if (url.includes("ticker/24hr")) {
-      return ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1]))
-        .map((symbol) => ({ symbol, lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 })));
+      return ok(
+        JSON.parse(decodeURIComponent(url.split("symbols=")[1])).map((symbol) => ({
+          symbol,
+          lastPrice: "65000",
+          prevClosePrice: "64000",
+          closeTime: 5,
+        })),
+      );
     }
     if (url.includes("klines")) return ok([[1, "1", "2", "0.5", "1.5"]]);
     return yahooUs(chartSymbol(url));
   });
-  host.prefs = { version: 1, keyRev: 0, sources: { us: { provider: "finnhub" }, tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
+  host.prefs = {
+    version: 1,
+    keyRev: 0,
+    sources: { us: { provider: "finnhub" }, tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } },
+  };
   host.secrets = { [SECRET_KEY_FINNHUB]: KEY };
   const saved = [];
   const save = host.save;
-  host.save = (p) => { saved.push(JSON.stringify(p)); save(p); };
+  host.save = (p) => {
+    saved.push(JSON.stringify(p));
+    save(p);
+  };
   // What each other provider is handed to build its requests.
   const given = [];
   const originals = [yahoo, mis, binance].map((provider) => [provider, provider.requests]);
   for (const [provider, requests] of originals) {
-    provider.requests = (symbols, config) => { given.push([provider.id, JSON.stringify(config)]); return requests(symbols, config); };
+    provider.requests = (symbols, config) => {
+      given.push([provider.id, JSON.stringify(config)]);
+      return requests(symbols, config);
+    };
   }
   try {
     const w = new Watchlist(host);
@@ -459,14 +527,19 @@ test("only Finnhub's requests carry the key", async () => {
     const runs = start(w, host);
     await advance(host, 61_000);
     assert.ok(finnhubCount(host) > 0);
-    for (const id of ["yahoo", "mis", "binance"]) assert.ok(given.some(([p]) => p === id), id);
+    for (const id of ["yahoo", "mis", "binance"])
+      assert.ok(
+        given.some(([p]) => p === id),
+        id,
+      );
     for (const [id, config] of given) assert.ok(!config.includes(KEY), id);
     for (const [i, url] of host.requests.entries()) {
       assert.ok(!url.includes(KEY), url);
       if (!url.includes("/quote?symbol=")) assert.ok(!JSON.stringify(host.headers[i]).includes(KEY), url);
     }
     assert.ok(Object.keys(w.overlayErrors).length > 0);
-    for (const exposed of [w.problems(), w.errors, w.overlayErrors, saved]) assert.ok(!JSON.stringify(exposed).includes(KEY));
+    for (const exposed of [w.problems(), w.errors, w.overlayErrors, saved])
+      assert.ok(!JSON.stringify(exposed).includes(KEY));
     await stop(w, host, runs);
   } finally {
     for (const [provider, requests] of originals) provider.requests = requests;
@@ -527,7 +600,10 @@ test("choosing Finnhub again with the same saved key starts it at once", async (
 // An index is not a stock: once Yahoo names its exchange it counts as US, but Finnhub never asks for it, and it
 // never takes a place under the cap.
 test("an index never takes Finnhub's place", async () => {
-  const host = usHost({ budgetPerMinute: 4 }, { yahoo: (symbol) => yahooUs(symbol, symbol === "^DJI" ? { exchangeName: "DJI" } : {}) });
+  const host = usHost(
+    { budgetPerMinute: 4 },
+    { yahoo: (symbol) => yahooUs(symbol, symbol === "^DJI" ? { exchangeName: "DJI" } : {}) },
+  );
   host.store = { version: 1, symbols: ["^DJI", "AAPL"], paused: false };
   assert.equal(finnhubCap(4), 1);
   const w = new Watchlist(host);
@@ -535,7 +611,10 @@ test("an index never takes Finnhub's place", async () => {
   await advance(host, 62_000);
   assert.equal(w.exchangeOf("^DJI"), "DJI");
   assert.ok(finnhubUrls(host).length > 0);
-  assert.ok(finnhubUrls(host).every((url) => url.endsWith("symbol=AAPL")), finnhubUrls(host).join(" "));
+  assert.ok(
+    finnhubUrls(host).every((url) => url.endsWith("symbol=AAPL")),
+    finnhubUrls(host).join(" "),
+  );
   assert.equal(w.overCap("AAPL"), false);
   assert.equal(w.overCap("^DJI"), false);
   assert.equal(w.add("^GSPC").code, "notice.added");
@@ -547,7 +626,8 @@ test("a row past the cap shows its Yahoo quote as live", async () => {
   const meta = { exchangeName: "NMS", currentTradingPeriod: { regular: { start: 0, end: 100_000 } } };
   const host = usHost({ budgetPerMinute: 8 }, { yahoo: (symbol) => yahooUs(symbol, meta) });
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("MSFT"); // each add goes to the top
+  w.add("AAPL");
+  w.add("MSFT"); // each add goes to the top
   const runs = start(w, host);
   await advance(host, 20_000);
   assert.equal(w.shown("AAPL", host.clock).source, "finnhub");
@@ -564,9 +644,15 @@ test("a row past the cap shows its Yahoo quote as live", async () => {
 test("a Finnhub price held back gives way to a fresh Yahoo quote", () => {
   const w = new Watchlist(usHost());
   const now = at("2026-11-10T15:00:00Z"); // 10:00 in New York
-  w.quotes.AAPL = { ...yq("AAPL", "NMS", now - 10_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")), price: 230.1, fetchedAt: now };
+  w.quotes.AAPL = {
+    ...yq("AAPL", "NMS", now - 10_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    price: 230.1,
+    fetchedAt: now,
+  };
   // Finnhub in a rate limit's cooldown: its last price, 3 minutes old, stays among the overlays.
-  w.overlays.AAPL = { finnhub: { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 180_000, fetchedAt: now - 180_000 } };
+  w.overlays.AAPL = {
+    finnhub: { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 180_000, fetchedAt: now - 180_000 },
+  };
   const shown = w.shown("AAPL", now);
   assert.deepEqual([shown.source, shown.price], ["yahoo", 230.1]);
   assert.equal(freshness(shown, sessionOf(shown, now), now).state, "live");
@@ -575,30 +661,60 @@ test("a Finnhub price held back gives way to a fresh Yahoo quote", () => {
 test("the detail's line under a live Finnhub price takes its state from the Yahoo quote it came from", () => {
   const now = at("2026-11-10T15:00:00Z"); // 10:00 in New York
   const fetchedAt = now - 360_000; // Yahoo not fetched for 6 minutes
-  const base = { ...yq("AAPL", "NMS", fetchedAt - 10_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")), fetchedAt, series: [229, 230] };
-  const merged = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 10_000, fetchedAt: now - 9_000 });
+  const base = {
+    ...yq("AAPL", "NMS", fetchedAt - 10_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    fetchedAt,
+    series: [229, 230],
+  };
+  const merged = mergeOverlay(base, {
+    symbol: "AAPL",
+    source: "finnhub",
+    price: 231.2,
+    timestamp: now - 10_000,
+    fetchedAt: now - 9_000,
+  });
   const say = (key, params) => t("en", key, params);
   const stopped = t("en", "freshness.stalled", { time: formatTime(base.timestamp) });
-  assert.deepEqual(detailSource(merged, "open", now, say), [["Price: Live · Finnhub"], [`Line: ${stopped} · Yahoo Finance`]]);
+  assert.deepEqual(detailSource(merged, "open", now, say), [
+    ["Price: Live · Finnhub"],
+    [`Line: ${stopped} · Yahoo Finance`],
+  ]);
   // Fetched a minute ago: the line reads live again.
-  const fresh = mergeOverlay({ ...base, timestamp: now - 70_000, fetchedAt: now - 60_000 }, { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 10_000, fetchedAt: now - 9_000 });
+  const fresh = mergeOverlay(
+    { ...base, timestamp: now - 70_000, fetchedAt: now - 60_000 },
+    { symbol: "AAPL", source: "finnhub", price: 231.2, timestamp: now - 10_000, fetchedAt: now - 9_000 },
+  );
   assert.deepEqual(detailSource(fresh, "open", now, say), [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
 });
 
 test("a Finnhub round starts at 09:30 New York", async () => {
   const open = at("2026-11-10T14:30:00Z");
-  const meta = { exchangeName: "NMS", currentTradingPeriod: { pre: { start: at("2026-11-10T09:00:00Z") / 1000, end: open / 1000 },
-    regular: { start: open / 1000, end: at("2026-11-10T21:00:00Z") / 1000 } } };
-  const host = usHost({}, { yahoo: (symbol) => yahooUs(symbol, { ...meta, regularMarketTime: Math.floor(host.clock / 1000) }) });
+  const meta = {
+    exchangeName: "NMS",
+    currentTradingPeriod: {
+      pre: { start: at("2026-11-10T09:00:00Z") / 1000, end: open / 1000 },
+      regular: { start: open / 1000, end: at("2026-11-10T21:00:00Z") / 1000 },
+    },
+  };
+  const host = usHost(
+    {},
+    { yahoo: (symbol) => yahooUs(symbol, { ...meta, regularMarketTime: Math.floor(host.clock / 1000) }) },
+  );
   host.clock = open - 40_000; // 09:29:20, pre-market: Finnhub at 60 s
   const asked = [];
   const finnhub = host.finnhub;
-  host.finnhub = (url) => { asked.push(host.clock); return finnhub(url); };
+  host.finnhub = (url) => {
+    asked.push(host.clock);
+    return finnhub(url);
+  };
   const w = new Watchlist(host);
   w.add("AAPL");
   const runs = start(w, host);
   await advance(host, open + 5_000);
-  assert.ok(asked.some((time) => time >= open && time <= open + 1_000), asked.join());
+  assert.ok(
+    asked.some((time) => time >= open && time <= open + 1_000),
+    asked.join(),
+  );
   await stop(w, host, runs);
 });
 
@@ -609,15 +725,20 @@ function finnhubOn(us = {}, keyRev = 0) {
 }
 
 // Yahoo Finance's answer for `symbol`, with `fields` added to its meta.
-const yahooUs = (symbol, fields = {}) => chart({
-  symbol, regularMarketPrice: 230.1, regularMarketTime: 1, previousClose: 228, currency: "USD",
-  currentTradingPeriod: { regular: { start: 0, end: 100_000 } }, ...fields,
-});
+const yahooUs = (symbol, fields = {}) =>
+  chart({
+    symbol,
+    regularMarketPrice: 230.1,
+    regularMarketTime: 1,
+    previousClose: 228,
+    currency: "USD",
+    currentTradingPeriod: { regular: { start: 0, end: 100_000 } },
+    ...fields,
+  });
 
 // `yahoo` answers Yahoo Finance per symbol.
 function usHost(us = {}, { yahoo = (symbol) => yahooUs(symbol) } = {}) {
-  const host = fakeHost((url) => (url.includes("/quote?symbol=") ? host.finnhub(url)
-    : host.yahoo(chartSymbol(url))));
+  const host = fakeHost((url) => (url.includes("/quote?symbol=") ? host.finnhub(url) : host.yahoo(chartSymbol(url))));
   host.finnhub = () => ok(QUOTE);
   host.yahoo = yahoo;
   host.prefs = finnhubOn(us);

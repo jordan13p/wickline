@@ -43,7 +43,8 @@ export function decodeFinnhub(symbol, response, now) {
     throw new QuoteError("finnhub.redirected", {}, { stopsSource: true });
   }
   // The key was refused: no point asking again until it changes.
-  if (response.status === 401 || response.status === 403) throw new QuoteError("finnhub.invalidKey", {}, { stopsSource: true });
+  if (response.status === 401 || response.status === 403)
+    throw new QuoteError("finnhub.invalidKey", {}, { stopsSource: true });
   // No Retry-After in Herdr's fetch: wait at least a minute.
   if (response.status === 429) throw new QuoteError("finnhub.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("finnhub.http", { status: response.status });
@@ -85,7 +86,10 @@ export const finnhub = {
     const base = finnhubUrl.replace(/\/+$/, "");
     const headers = { ...HEADERS, "X-Finnhub-Token": finnhubKey };
     return symbols.map((symbol) => ({
-      url: `${base}/quote?symbol=${encodeURIComponent(finnhubSymbol(symbol))}`, headers, symbols: [symbol], kind: "quote",
+      url: `${base}/quote?symbol=${encodeURIComponent(finnhubSymbol(symbol))}`,
+      headers,
+      symbols: [symbol],
+      kind: "quote",
     }));
   },
   decode(request, response, now) {

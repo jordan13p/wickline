@@ -14,7 +14,12 @@ test("normalizes symbols", () => {
   assert.equal(normalizeSymbol("wtx&"), "WTX&");
   assert.equal(normalizeSymbol(" wtx@ "), "WTX@");
   assert.equal(normalizeSymbol("wtx"), "WTX");
-  for (const bad of ["TXF1&", "WTX&&", "&", "ABCDEFG&", "WTX &", "^WTX&"]) assert.throws(() => normalizeSymbol(bad), (e) => e.code === "symbol.invalid", bad);
+  for (const bad of ["TXF1&", "WTX&&", "&", "ABCDEFG&", "WTX &", "^WTX&"])
+    assert.throws(
+      () => normalizeSymbol(bad),
+      (e) => e.code === "symbol.invalid",
+      bad,
+    );
 });
 
 test("identity", () => {
@@ -35,19 +40,41 @@ test("a price is at a limit only when it equals its own source's limit", () => {
 });
 
 test("cleanTimedSeries cleans values exactly as cleanSeries does", () => {
-  for (const values of [[1, null, 0, -2, 3, NaN, "4", 5], [], undefined, "x", Array.from({ length: 450 }, (_, i) => (i % 7 ? i + 1 : null))]) {
+  for (const values of [
+    [1, null, 0, -2, 3, NaN, "4", 5],
+    [],
+    undefined,
+    "x",
+    Array.from({ length: 450 }, (_, i) => (i % 7 ? i + 1 : null)),
+  ]) {
     assert.deepEqual(cleanTimedSeries(values, null).series, cleanSeries(values));
   }
 });
 
 test("cleanTimedSeries drops a value's time with it and caps both", () => {
   assert.deepEqual(cleanTimedSeries([10, null, 12], [100, 200, 300]), { series: [10, 12], times: [100, 300] });
-  const long = cleanTimedSeries(Array.from({ length: 401 }, (_, i) => i + 1), Array.from({ length: 401 }, (_, i) => i * 1000));
-  assert.deepEqual([long.series.length, long.times.length, long.series[0], long.times[0], long.times.at(-1)], [400, 400, 2, 1000, 400_000]);
+  const long = cleanTimedSeries(
+    Array.from({ length: 401 }, (_, i) => i + 1),
+    Array.from({ length: 401 }, (_, i) => i * 1000),
+  );
+  assert.deepEqual(
+    [long.series.length, long.times.length, long.series[0], long.times[0], long.times.at(-1)],
+    [400, 400, 2, 1000, 400_000],
+  );
 });
 
 test("cleanTimedSeries keeps no times it cannot align", () => {
-  for (const times of [undefined, null, "x", [100, 200], [100, 200, 300, 400], [100, NaN, 300], [100, "200", 300], [100, null, 300], [100, 0, 300]]) {
+  for (const times of [
+    undefined,
+    null,
+    "x",
+    [100, 200],
+    [100, 200, 300, 400],
+    [100, NaN, 300],
+    [100, "200", 300],
+    [100, null, 300],
+    [100, 0, 300],
+  ]) {
     assert.deepEqual(cleanTimedSeries([10, 11, 12], times), { series: [10, 11, 12], times: null }, String(times));
   }
   // A missing value's bad time goes with it.

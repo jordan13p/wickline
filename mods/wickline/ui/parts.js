@@ -31,32 +31,74 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
   const layer = (path, paint) => window.paint_path(path, paint).absolute().top(0).left(0).size_full();
   const lined = g.points.length > 1;
   let line = PathBuilder.stroke(stroke);
-  g.points.forEach(([x, y], i) => { line = i ? line.line_to(`${x}%`, `${y}%`) : line.move_to(`${x}%`, `${y}%`); });
+  g.points.forEach(([x, y], i) => {
+    line = i ? line.line_to(`${x}%`, `${y}%`) : line.move_to(`${x}%`, `${y}%`);
+  });
   const end = lined ? g.points[g.points.length - 1][0] : 0;
   const half = dot / 2;
   const mark = crosshair?.mark ?? null;
-  return sized
-    .when(Boolean(crosshair), (el) => el.id(crosshair.id)
-      .on_mouse_move((event, cx) => {
-        if (!event.bounds || event.bounds.width <= 0) return;
-        crosshair.move(Math.min(1, Math.max(0, event.local_position.x / event.bounds.width)), event.bounds.width, cx);
+  return (
+    sized
+      .when(Boolean(crosshair), (el) =>
+        el
+          .id(crosshair.id)
+          .on_mouse_move((event, cx) => {
+            if (!event.bounds || event.bounds.width <= 0) return;
+            crosshair.move(
+              Math.min(1, Math.max(0, event.local_position.x / event.bounds.width)),
+              event.bounds.width,
+              cx,
+            );
+          })
+          .on_hover((hovered, cx) => {
+            if (!hovered) crosshair.leave(cx);
+          }),
+      )
+      .when(g.reference !== null, (el) =>
+        el.child(
+          layer(
+            PathBuilder.stroke(1)
+              .dash_array([3, 3])
+              .move_to("0%", `${g.reference}%`)
+              .line_to("100%", `${g.reference}%`)
+              .build(),
+            t.border,
+          ),
+        ),
+      )
+      .when(lined && Boolean(fill), (el) => {
+        let area = PathBuilder.fill().move_to("0%", "100%");
+        for (const [x, y] of g.points) area = area.line_to(`${x}%`, `${y}%`);
+        return el.child(
+          layer(area.line_to(`${end}%`, "100%").close().build(), Background.solid(color).opacity(AREA_OPACITY)),
+        );
       })
-      .on_hover((hovered, cx) => { if (!hovered) crosshair.leave(cx); }))
-    .when(g.reference !== null, (el) => el.child(layer(
-      PathBuilder.stroke(1).dash_array([3, 3]).move_to("0%", `${g.reference}%`).line_to("100%", `${g.reference}%`).build(),
-      t.border)))
-    .when(lined && Boolean(fill), (el) => {
-      let area = PathBuilder.fill().move_to("0%", "100%");
-      for (const [x, y] of g.points) area = area.line_to(`${x}%`, `${y}%`);
-      return el.child(layer(area.line_to(`${end}%`, "100%").close().build(),
-        Background.solid(color).opacity(AREA_OPACITY)));
-    })
-    .when(lined, (el) => el.child(layer(line.build(), color)))
-    // Inset by half the dot across, so a dot at either end stays whole inside the box.
-    .when(g.dot !== null, (el) => el.child(div().absolute().top(0).bottom(0).left(half).right(half)
-      .child(div().absolute().left(`${g.dot[0]}%`).top(`${g.dot[1]}%`).ml(-half).mt(-half).w(dot).h(dot).rounded_full()
-        .bg(color))))
-    .when(Boolean(mark), (el) => el.children(crosshairLayers(t, mark)));
+      .when(lined, (el) => el.child(layer(line.build(), color)))
+      // Inset by half the dot across, so a dot at either end stays whole inside the box.
+      .when(g.dot !== null, (el) =>
+        el.child(
+          div()
+            .absolute()
+            .top(0)
+            .bottom(0)
+            .left(half)
+            .right(half)
+            .child(
+              div()
+                .absolute()
+                .left(`${g.dot[0]}%`)
+                .top(`${g.dot[1]}%`)
+                .ml(-half)
+                .mt(-half)
+                .w(dot)
+                .h(dot)
+                .rounded_full()
+                .bg(color),
+            ),
+        ),
+      )
+      .when(Boolean(mark), (el) => el.children(crosshairLayers(t, mark)))
+  );
 }
 
 // The crosshair's three layers over the full box (positioned, so none takes room): the vertical line and the dot
@@ -65,11 +107,24 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
 // change color (12 px on a 16 px line); the fixed line heights make the card exactly as tall as crosshairLevel
 // assumes. The plate stays opaque, so the line never shows through; only its text dims.
 function crosshairLayers(t, mark) {
-  const card = v_flex().absolute().gap(2).px(6).py(4).rounded(3).bg(t.background).whitespace_nowrap()
+  const card = v_flex()
+    .absolute()
+    .gap(2)
+    .px(6)
+    .py(4)
+    .rounded(3)
+    .bg(t.background)
+    .whitespace_nowrap()
     .child(div().opacity(mark.opacity).line_height("14px").text_size(11).text_color(t.dim).child(mark.time))
-    .child(h_flex().opacity(mark.opacity).line_height("16px").gap(6).text_size(12)
-      .child(div().font_semibold().text_color(t.foreground).child(mark.price))
-      .when(Boolean(mark.change), (el) => el.child(div().text_color(mark.changeColor).child(mark.change))));
+    .child(
+      h_flex()
+        .opacity(mark.opacity)
+        .line_height("16px")
+        .gap(6)
+        .text_size(12)
+        .child(div().font_semibold().text_color(t.foreground).child(mark.price))
+        .when(Boolean(mark.change), (el) => el.child(div().text_color(mark.changeColor).child(mark.change))),
+    );
   const across = "left" in mark.spot ? card.left(mark.spot.left) : card.right(mark.spot.right);
   return [
     div().absolute().top(0).bottom(0).left(`${mark.x}%`).ml(-0.5).w(1).bg(t.dim),
@@ -82,29 +137,60 @@ function crosshairLayers(t, mark) {
 // the unit 3 px after the value in 10.5 px `dim`; a place without a cell stays empty and keeps its column.
 export function statCell(t, cell) {
   if (!cell) return div().flex_1();
-  return v_flex().flex_1().gap(2)
+  return v_flex()
+    .flex_1()
+    .gap(2)
     .child(div().text_size(10.5).text_color(t.dim).child(cell.label))
-    .child(h_flex().items_end().child(div().font_semibold().child(cell.value))
-      .when(Boolean(cell.unit), (el) => el.child(div().ml(3).text_size(10.5).text_color(t.dim).child(cell.unit))));
+    .child(
+      h_flex()
+        .items_end()
+        .child(div().font_semibold().child(cell.value))
+        .when(Boolean(cell.unit), (el) => el.child(div().ml(3).text_size(10.5).text_color(t.dim).child(cell.unit))),
+    );
 }
 
 // Cells (statCell) two to a row, as the detail's activity grid; an odd last cell keeps its column.
 export function statGrid(t, cells) {
   const rows = [];
-  for (let i = 0; i < cells.length; i += 2) rows.push(h_flex().gap(12).child(statCell(t, cells[i])).child(statCell(t, cells[i + 1] ?? null)));
+  for (let i = 0; i < cells.length; i += 2)
+    rows.push(
+      h_flex()
+        .gap(12)
+        .child(statCell(t, cells[i]))
+        .child(statCell(t, cells[i + 1] ?? null)),
+    );
   return v_flex().gap(10).children(rows);
 }
 
 // The inner/outer line (format.js innerOuter) over a 4 px bar of two parts 2 px apart, sized by their shares: inner in
 // `innerColor`, outer in `outerColor`. A side with no share draws no part.
 export function innerOuterBar(flow, innerColor, outerColor) {
-  return v_flex().gap(6)
-    .child(h_flex().justify_between().gap(8).text_size(11)
-      .child(div().whitespace_nowrap().child(flow.left)).child(div().whitespace_nowrap().child(flow.right)))
-    .child(h_flex().h(4).gap(2)
-      .when(flow.innerShare > 0, (el) => el.child(div().flex_none().h_full().rounded(2).bg(innerColor)
-        .w(`${Math.round(flow.innerShare * 1000) / 10}%`)))
-      .when(flow.outerShare > 0, (el) => el.child(div().flex_1().h_full().rounded(2).bg(outerColor))));
+  return v_flex()
+    .gap(6)
+    .child(
+      h_flex()
+        .justify_between()
+        .gap(8)
+        .text_size(11)
+        .child(div().whitespace_nowrap().child(flow.left))
+        .child(div().whitespace_nowrap().child(flow.right)),
+    )
+    .child(
+      h_flex()
+        .h(4)
+        .gap(2)
+        .when(flow.innerShare > 0, (el) =>
+          el.child(
+            div()
+              .flex_none()
+              .h_full()
+              .rounded(2)
+              .bg(innerColor)
+              .w(`${Math.round(flow.innerShare * 1000) / 10}%`),
+          ),
+        )
+        .when(flow.outerShare > 0, (el) => el.child(div().flex_1().h_full().rounded(2).bg(outerColor))),
+    );
 }
 
 // 6px: filled for a live quote, a 1px ring when the price may not be current, none for a session.
@@ -117,14 +203,36 @@ export function dot(t, state) {
 // `a · b · c` that wraps only between parts: each part stays whole, the `·` ends the line it is on.
 export function segments(t, parts) {
   const shown = parts.filter(Boolean);
-  return h_flex().flex_wrap().gap_x(4).text_size(11).text_color(t.dim)
-    .children(shown.map((part, i) => div().whitespace_nowrap().child(i < shown.length - 1 ? `${part} ·` : part)));
+  return h_flex()
+    .flex_wrap()
+    .gap_x(4)
+    .text_size(11)
+    .text_color(t.dim)
+    .children(
+      shown.map((part, i) =>
+        div()
+          .whitespace_nowrap()
+          .child(i < shown.length - 1 ? `${part} ·` : part),
+      ),
+    );
 }
 
 export function button(t, id, label, onClick) {
-  return h_flex().id(id).flex_none().h(22).px(8).items_center().rounded(5).border_1().border_color(t.border)
-    .text_size(11).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-    .on_click((_e, cx) => onClick(cx)).child(label);
+  return h_flex()
+    .id(id)
+    .flex_none()
+    .h(22)
+    .px(8)
+    .items_center()
+    .rounded(5)
+    .border_1()
+    .border_color(t.border)
+    .text_size(11)
+    .text_color(t.muted)
+    .cursor_pointer()
+    .hover((s) => s.bg(t.hover).text_color(t.foreground))
+    .on_click((_e, cx) => onClick(cx))
+    .child(label);
 }
 
 /** A price's ink when it is not lit: `dim` while cached (kept through a failed refresh), else `foreground`. */
@@ -144,51 +252,140 @@ export function failureText(quote, error, say, tx) {
  * block in the limit's color, the text in `mark.ink`, the limit in words on hover.
  */
 export function priceBox(id, text, color, mark, { pad = 4 } = {}) {
-  return div().id(id).flex_none().whitespace_nowrap().px(pad).mx(-pad).rounded(3).text_color(mark ? mark.ink : color)
-    .when(Boolean(mark), (el) => el.bg(mark.color).tooltip(mark.tip)).child(text);
+  return div()
+    .id(id)
+    .flex_none()
+    .whitespace_nowrap()
+    .px(pad)
+    .mx(-pad)
+    .rounded(3)
+    .text_color(mark ? mark.ink : color)
+    .when(Boolean(mark), (el) => el.bg(mark.color).tooltip(mark.tip))
+    .child(text);
 }
 
 // A text link: `muted`, `foreground` under the pointer.
 export function link(t, id, label, onClick) {
-  return div().id(id).flex_none().cursor_pointer().text_color(t.muted).hover((s) => s.text_color(t.foreground))
-    .on_click((_e, cx) => onClick(cx)).child(label);
+  return div()
+    .id(id)
+    .flex_none()
+    .cursor_pointer()
+    .text_color(t.muted)
+    .hover((s) => s.text_color(t.foreground))
+    .on_click((_e, cx) => onClick(cx))
+    .child(label);
 }
 
 // A header action: a 16 px single-color icon in a 28 × 28 target, named by its tooltip.
 export function iconButton(t, id, name, label, onClick, spinning = false) {
-  return h_flex().id(id).flex_none().w(28).h(28).items_center().justify_center().rounded(6)
-    .text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-    .tooltip(label).on_click((_e, cx) => onClick(cx))
-    .child(svg(icon(name)).w(16).h(16).when(spinning, (el) => el.spin(SPIN_MS)));
+  return h_flex()
+    .id(id)
+    .flex_none()
+    .w(28)
+    .h(28)
+    .items_center()
+    .justify_center()
+    .rounded(6)
+    .text_color(t.muted)
+    .cursor_pointer()
+    .hover((s) => s.bg(t.hover).text_color(t.foreground))
+    .tooltip(label)
+    .on_click((_e, cx) => onClick(cx))
+    .child(
+      svg(icon(name))
+        .w(16)
+        .h(16)
+        .when(spinning, (el) => el.spin(SPIN_MS)),
+    );
 }
 
 // One group of choices: the chosen one filled, the rest muted.
 export function segmented(t, id, choices, current, onPick) {
-  return h_flex().flex_none().rounded(6).border_1().border_color(t.border).overflow_hidden()
-    .children(choices.map(([value, label]) => h_flex().id(`${id}-${value}`).h(28).px(12).items_center().cursor_pointer()
-      .text_color(value === current ? t.foreground : t.muted).when(value === current, (el) => el.bg(t.hover).font_semibold())
-      .hover((s) => s.text_color(t.foreground))
-      .on_click((_e, cx) => { onPick(value); cx.notify(); }).child(label)));
+  return h_flex()
+    .flex_none()
+    .rounded(6)
+    .border_1()
+    .border_color(t.border)
+    .overflow_hidden()
+    .children(
+      choices.map(([value, label]) =>
+        h_flex()
+          .id(`${id}-${value}`)
+          .h(28)
+          .px(12)
+          .items_center()
+          .cursor_pointer()
+          .text_color(value === current ? t.foreground : t.muted)
+          .when(value === current, (el) => el.bg(t.hover).font_semibold())
+          .hover((s) => s.text_color(t.foreground))
+          .on_click((_e, cx) => {
+            onPick(value);
+            cx.notify();
+          })
+          .child(label),
+      ),
+    );
 }
 
 // A box drawn in the theme (accent-filled while ticked) and its label; a click on either toggles it.
 export function checkbox(t, id, checked, label, onChange) {
-  return Checkbox.new(id).w_full().min_w(0).checked(checked).cursor_pointer()
-    .on_change((value, cx) => { onChange(value); cx.notify(); })
-    .child(h_flex().w_full().min_w(0).gap(8).items_start()
-      .child(div().flex_none().mt(2).w(14).h(14).rounded(3).border_1().border_color(checked ? t.accent : t.border)
-        .flex().items_center().justify_center().text_size(10).text_color(t.background)
-        .when(checked, (el) => el.bg(t.accent).child("✓")))
-      .child(div().flex_1().min_w(0).font_semibold().child(label)));
+  return Checkbox.new(id)
+    .w_full()
+    .min_w(0)
+    .checked(checked)
+    .cursor_pointer()
+    .on_change((value, cx) => {
+      onChange(value);
+      cx.notify();
+    })
+    .child(
+      h_flex()
+        .w_full()
+        .min_w(0)
+        .gap(8)
+        .items_start()
+        .child(
+          div()
+            .flex_none()
+            .mt(2)
+            .w(14)
+            .h(14)
+            .rounded(3)
+            .border_1()
+            .border_color(checked ? t.accent : t.border)
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(10)
+            .text_color(t.background)
+            .when(checked, (el) => el.bg(t.accent).child("✓")),
+        )
+        .child(div().flex_1().min_w(0).font_semibold().child(label)),
+    );
 }
 
 // A switch drawn in the theme: a 28 × 16 track, `accent` with the knob at the right while on, `border` with
 // it at the left while off. It draws no label of its own, so `label` is what a screen reader announces.
 export function toggle(t, id, on, label, onChange) {
-  return Switch.new(id).flex_none().checked(on).accessibility_label(label).cursor_pointer()
-    .on_change((value, cx) => { onChange(value); cx.notify(); })
-    .child(h_flex().w(28).h(16).p(2).rounded_full().bg(on ? t.accent : t.border).when(on, (el) => el.justify_end())
-      .child(div().flex_none().w(12).h(12).rounded_full().bg(t.background)));
+  return Switch.new(id)
+    .flex_none()
+    .checked(on)
+    .accessibility_label(label)
+    .cursor_pointer()
+    .on_change((value, cx) => {
+      onChange(value);
+      cx.notify();
+    })
+    .child(
+      h_flex()
+        .w(28)
+        .h(16)
+        .p(2)
+        .rounded_full()
+        .bg(on ? t.accent : t.border)
+        .when(on, (el) => el.justify_end())
+        .child(div().flex_none().w(12).h(12).rounded_full().bg(t.background)),
+    );
 }
 
 export function note(t, text) {

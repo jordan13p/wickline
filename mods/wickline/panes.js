@@ -53,7 +53,10 @@ export function newWickline(before, after, tab = null) {
  */
 export function newWicklineTab(before, after) {
   const tabs = new Set(before.map((p) => p.tab));
-  return newWickline(before, after.filter((p) => !tabs.has(p.tab)));
+  return newWickline(
+    before,
+    after.filter((p) => !tabs.has(p.tab)),
+  );
 }
 
 // How often and how long a wait looks: Herdr lists a new pane in panes() a little after run() returns,
@@ -80,7 +83,15 @@ export async function waitUntil(check, host) {
  * True once closed; false when the new copy never showed up, and then nothing closes.
  */
 export async function closeOnceOpened(before, me, host, tab = null) {
-  const opened = await waitUntil(() => newWickline(before, host.panes().filter((p) => p.tab !== me.tab), tab), host);
+  const opened = await waitUntil(
+    () =>
+      newWickline(
+        before,
+        host.panes().filter((p) => p.tab !== me.tab),
+        tab,
+      ),
+    host,
+  );
   if (opened) host.close(me.pane);
   return opened;
 }
@@ -130,7 +141,9 @@ const shownChild = (stack) => stack.active ?? stack.children?.[0]?.id;
 export function isShown(tree, dock) {
   const path = pathTo(tree, (n) => n.id === dock.block);
   if (!path) return false;
-  return path.every((node, i) => node.hidden !== true && (node.type !== "stack" || shownChild(node) === path[i + 1]?.id));
+  return path.every(
+    (node, i) => node.hidden !== true && (node.type !== "stack" || shownChild(node) === path[i + 1]?.id),
+  );
 }
 
 // Shared state: `{ tab }`, the tab a docked block moved Wickline to (see moves.js); `{ tab: null }` once

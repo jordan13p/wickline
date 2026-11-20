@@ -6,7 +6,8 @@ import { marketOf, readFilter, resolvedMarket } from "../mods/wickline/markets.j
 
 const ghost = (symbol, before) => ({ symbol, before });
 // The rows as the panel asks for them: the filter read once, as a render reads it.
-const rows = (symbols, filter, ghosts) => rowsWithGhosts(symbols, readFilter(symbols, filter, marketOf), ghosts, marketOf);
+const rows = (symbols, filter, ghosts) =>
+  rowsWithGhosts(symbols, readFilter(symbols, filter, marketOf), ghosts, marketOf);
 const names = (entries) => entries.map(({ symbol, ghost: g }) => (g ? `~${symbol}` : symbol));
 
 test("a ghost sits where its row was: in front of the symbol that followed it", () => {
@@ -45,7 +46,12 @@ test("a ghost is drawn only when its market is the one shown", () => {
 
 test("the row that took the market's last symbol away is drawn once the filter is All again", () => {
   const symbols = ["AAPL", "NVDA", "BTC/USDT"];
-  assert.deepEqual(names(rows(symbols, "all", [ghost("2330.TW", "BTC/USDT")])), ["AAPL", "NVDA", "~2330.TW", "BTC/USDT"]);
+  assert.deepEqual(names(rows(symbols, "all", [ghost("2330.TW", "BTC/USDT")])), [
+    "AAPL",
+    "NVDA",
+    "~2330.TW",
+    "BTC/USDT",
+  ]);
 });
 
 test("the offset a dropped row starts from is how far it moved, by the rows' heights", () => {
@@ -85,6 +91,8 @@ test("a removed index fades under its resolved market", () => {
   const marketFor = (symbol) => resolvedMarket(symbol, exchanges[symbol]);
   const symbols = ["AAPL", "2330.TW", "0050.TW", "NVDA", "BTC/USDT", "ETH/USDT", "MSFT", "2317.TW"];
   const ghosts = [{ symbol: "^DJI", before: "NVDA" }];
-  const drawn = rowsWithGhosts(symbols, readFilter(symbols, "us", marketFor, "en"), ghosts, marketFor).map(({ symbol }) => symbol);
+  const drawn = rowsWithGhosts(symbols, readFilter(symbols, "us", marketFor, "en"), ghosts, marketFor).map(
+    ({ symbol }) => symbol,
+  );
   assert.deepEqual(drawn, ["AAPL", "^DJI", "NVDA", "MSFT"]);
 });

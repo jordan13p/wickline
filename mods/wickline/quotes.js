@@ -10,7 +10,8 @@ export const STARTER_SYMBOLS = ["AAPL", "NVDA", "^GSPC", "BTC/USDT"];
 
 /** English text by error code; `{name}` is filled from the error's params. */
 export const MESSAGES_EN = {
-  "symbol.invalid": "Enter a ticker, such as AAPL, 0700.HK or ^GSPC, a Taiwan future, such as WTX&, or a pair, such as BTC/USDT.",
+  "symbol.invalid":
+    "Enter a ticker, such as AAPL, 0700.HK or ^GSPC, a Taiwan future, such as WTX&, or a pair, such as BTC/USDT.",
   "yahoo.rateLimited": "Yahoo rate limited requests.",
   "yahoo.notFound": "Ticker not found on Yahoo Finance.",
   "yahoo.http": "Yahoo returned HTTP {status}.",
@@ -44,13 +45,15 @@ export const MESSAGES_EN = {
   "finnhub.http": "Finnhub returned HTTP {status}.",
   "finnhub.unreadable": "Finnhub returned an unreadable response.",
   "finnhub.unreachable": "Could not reach Finnhub.",
-  "finnhub.redirected": "Finnhub's answer came from another address. The key is not sent again until you change the US settings in Settings.",
+  "finnhub.redirected":
+    "Finnhub's answer came from another address. The key is not sent again until you change the US settings in Settings.",
   // `{source}` is a provider id; the view shows its name.
   "request.timeout": "{source} did not answer within {seconds}s.",
 };
 
 /** Fills `{name}` from params; an unknown name stays as written. */
-export const fill = (text, params) => text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match);
+export const fill = (text, params) =>
+  text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match));
 
 export class QuoteError extends Error {
   constructor(code, params = {}, options = {}) {
@@ -74,7 +77,9 @@ export const isFutureForm = (symbol) => /^[A-Z]{1,6}[&@]$/.test(symbol);
 
 /** Yahoo tickers, Binance pairs or Taiwan futures, never company names or URLs. Throws a message for people. */
 export function normalizeSymbol(input) {
-  let symbol = String(input ?? "").trim().toUpperCase();
+  let symbol = String(input ?? "")
+    .trim()
+    .toUpperCase();
   if (isCryptoPair(symbol) || isFutureForm(symbol)) return symbol;
   if (!/^[A-Z0-9^][A-Z0-9.^=\-]{0,31}$/.test(symbol)) {
     throw new QuoteError("symbol.invalid");
@@ -97,7 +102,17 @@ export const positiveOrNull = (value) => {
 export const sized = (volume, sizeUnit) => (positive(volume) ? { volume, sizeUnit } : {});
 
 // What a quote carries about the day's trading, which only the source that gives its price may speak for.
-export const ACTIVITY_FIELDS = ["volume", "previousVolume", "turnover", "avgPrice", "lastSize", "inner", "outer", "book", "sizeUnit"];
+export const ACTIVITY_FIELDS = [
+  "volume",
+  "previousVolume",
+  "turnover",
+  "avgPrice",
+  "lastSize",
+  "inner",
+  "outer",
+  "book",
+  "sizeUnit",
+];
 
 /** `quote` without its activity (ACTIVITY_FIELDS); null stays null. */
 export function withoutActivity(quote) {
@@ -124,16 +139,16 @@ export function priceLimit(quote) {
   return null;
 }
 
-export const limitPair = (up, down) => (hasLimits(up, down) ? { limitUp: up, limitDown: down } : { limitUp: null, limitDown: null });
+export const limitPair = (up, down) =>
+  hasLimits(up, down) ? { limitUp: up, limitDown: down } : { limitUp: null, limitDown: null };
 
 /** A price within its source's limits; a stock without limits has none to check. */
 export function withinLimits(price, up, down) {
   return !hasLimits(up, down) || (down <= price && price <= up);
 }
 
-export const cleanText = (value) => typeof value === "string"
-  ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 100) || null
-  : null;
+export const cleanText = (value) =>
+  typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").slice(0, 100) || null : null;
 
 /**
  * Whether a quote's time is a trade's: every source times a quote by a trade, except a MIS price taken from the order

@@ -24,7 +24,8 @@ const readUrl = (value, fallback) => (typeof value === "string" && value.trim() 
 const section = (sources, name) => (isPlainObject(sources) && isPlainObject(sources[name]) ? sources[name] : {});
 
 // The consent the person gave, by the version of the text they read; anything else is none.
-const readAck = (value) => (isPlainObject(value) && Number.isInteger(value.version) ? { version: value.version } : null);
+const readAck = (value) =>
+  isPlainObject(value) && Number.isInteger(value.version) ? { version: value.version } : null;
 
 /** Any object is read one field at a time; a field that is missing or unreadable gets its default. */
 export function readSettings(value) {
@@ -47,7 +48,8 @@ export function readSettings(value) {
       us: {
         provider: us.provider === "finnhub" ? "finnhub" : "yahoo",
         finnhubUrl: readUrl(us.finnhubUrl, FINNHUB_URL),
-        budgetPerMinute: Number.isInteger(us.budgetPerMinute) && us.budgetPerMinute > 0 ? us.budgetPerMinute : DEFAULT_FINNHUB_BUDGET,
+        budgetPerMinute:
+          Number.isInteger(us.budgetPerMinute) && us.budgetPerMinute > 0 ? us.budgetPerMinute : DEFAULT_FINNHUB_BUDGET,
       },
       tw: {
         // For going back to 0.3.1, which reads only this key; it follows `mis`.
@@ -156,9 +158,20 @@ export function marketState(settings, market, { keyAvailable = false, failing = 
 // The settings each source reads, as [section, field]: its problem holds while they are as saved. Yahoo
 // Finance reads none, so no edit drops its problem; Finnhub also reads the key (`keyEdited`).
 const SOURCE_FIELDS = {
-  yahootw: [["tw", "yahootw"], ["tw", "yahootwAck"]],
-  mis: [["tw", "mis"], ["tw", "misAck"], ["tw", "misUrl"]],
-  finnhub: [["us", "provider"], ["us", "finnhubUrl"], ["us", "budgetPerMinute"]],
+  yahootw: [
+    ["tw", "yahootw"],
+    ["tw", "yahootwAck"],
+  ],
+  mis: [
+    ["tw", "mis"],
+    ["tw", "misAck"],
+    ["tw", "misUrl"],
+  ],
+  finnhub: [
+    ["us", "provider"],
+    ["us", "finnhubUrl"],
+    ["us", "budgetPerMinute"],
+  ],
   binance: [["crypto", "binanceUrl"]],
 };
 /**
@@ -167,7 +180,8 @@ const SOURCE_FIELDS = {
  * Remove pressed (or, in a dialog left open after Save, a key written or removed).
  */
 export function currentHealth({ health, saved, draft, keyEdited }) {
-  const same = ([section, field]) => JSON.stringify(saved.sources[section][field]) === JSON.stringify(draft.sources[section][field]);
+  const same = ([section, field]) =>
+    JSON.stringify(saved.sources[section][field]) === JSON.stringify(draft.sources[section][field]);
   return health.filter((entry) => {
     if (entry.provider !== "finnhub") return (SOURCE_FIELDS[entry.provider] ?? []).every(same);
     if (!entry.stopped) return !keyEdited && SOURCE_FIELDS.finnhub.every(same);
@@ -233,15 +247,18 @@ export function validateSettings(settings, { finnhubKey, keySaved = false } = {}
     if (value === null) continue;
     const url = value.trim();
     if (!/^https:\/\//i.test(url)) errors[path] = "url.notHttps";
-    else if (path === "sources.us.finnhubUrl") { if (!finnhubAddressOk(url)) errors[path] = "url.finnhubHost"; }
-    else if (!HTTPS_ADDRESS.test(url)) errors[path] = "url.invalid";
+    else if (path === "sources.us.finnhubUrl") {
+      if (!finnhubAddressOk(url)) errors[path] = "url.finnhubHost";
+    } else if (!HTTPS_ADDRESS.test(url)) errors[path] = "url.invalid";
   }
   if (settings.sources.us?.provider === "finnhub") {
     const budget = settings.sources.us.budgetPerMinute;
-    if (!Number.isInteger(budget) || budget < MIN_FINNHUB_BUDGET) errors["sources.us.budgetPerMinute"] = "budget.tooSmall";
+    if (!Number.isInteger(budget) || budget < MIN_FINNHUB_BUDGET)
+      errors["sources.us.budgetPerMinute"] = "budget.tooSmall";
     const key = typeof finnhubKey === "string" ? finnhubKey.trim() : null;
     if (key === "" && !keySaved) errors["sources.us.key"] = "finnhub.keyNeeded";
-    else if (key && (KEY_BAD_CHARACTER.test(key) || key.length > KEY_MAX_LENGTH)) errors["sources.us.key"] = "finnhub.keyInvalid";
+    else if (key && (KEY_BAD_CHARACTER.test(key) || key.length > KEY_MAX_LENGTH))
+      errors["sources.us.key"] = "finnhub.keyInvalid";
   }
   // Neither Taiwan source can be saved on without ticking its own consent box.
   if (settings.sources.tw && misReconfirm(settings)) errors["sources.tw.misAck"] = "mis.consentNeeded";
@@ -267,7 +284,11 @@ export function mergeSettings(raw, change) {
 }
 
 // The address fields in `sources`, as [source, key].
-const URL_KEYS = [["us", "finnhubUrl"], ["tw", "misUrl"], ["crypto", "binanceUrl"]];
+const URL_KEYS = [
+  ["us", "finnhubUrl"],
+  ["tw", "misUrl"],
+  ["crypto", "binanceUrl"],
+];
 
 // Each source keeps the keys a newer copy added to it, and whole sources this build lacks.
 function mergeSources(old, known, change) {

@@ -4,18 +4,51 @@ import assert from "node:assert/strict";
 import { REQUEST_TIMEOUT_MS, Watchlist } from "../mods/wickline/watchlist.js";
 import { LIVE_MAX_AGE_MS, freshness, sessionOf } from "../mods/wickline/freshness.js";
 import {
-  BOTH_ON, MIS_2330_1324, MIS_ON, advance, at, chart, chartSymbol, fakeHost, isLine, jsonFixture, lineSymbol, misFlagged, ok, start, stop, taipei,
-  withTZ, zhLabel,
+  BOTH_ON,
+  MIS_2330_1324,
+  MIS_ON,
+  advance,
+  at,
+  chart,
+  chartSymbol,
+  fakeHost,
+  isLine,
+  jsonFixture,
+  lineSymbol,
+  misFlagged,
+  ok,
+  start,
+  stop,
+  taipei,
+  withTZ,
+  zhLabel,
 } from "./helpers.mjs";
 import { binance } from "../mods/wickline/providers/binance.js";
 import { yahoo } from "../mods/wickline/providers/yahoo.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { YAHOOTW_BASE, YAHOOTW_CONSENT_VERSION } from "../mods/wickline/providers/yahootw.js";
 
-const AAPL = { symbol: "AAPL", regularMarketPrice: 230.1, regularMarketTime: 1_760_000_000, previousClose: 225, currency: "USD" };
-const ticker = (url) => ok(JSON.parse(decodeURIComponent(url.split("symbols=")[1]))
-  .map((symbol) => ({ symbol, lastPrice: "65000", prevClosePrice: "64000", closeTime: 5 })));
-const lines = () => ok([[1, "1", "2", "0.5", "1.5"], [2, "1.5", "2", "1", "1.75"]]);
+const AAPL = {
+  symbol: "AAPL",
+  regularMarketPrice: 230.1,
+  regularMarketTime: 1_760_000_000,
+  previousClose: 225,
+  currency: "USD",
+};
+const ticker = (url) =>
+  ok(
+    JSON.parse(decodeURIComponent(url.split("symbols=")[1])).map((symbol) => ({
+      symbol,
+      lastPrice: "65000",
+      prevClosePrice: "64000",
+      closeTime: 5,
+    })),
+  );
+const lines = () =>
+  ok([
+    [1, "1", "2", "0.5", "1.5"],
+    [2, "1.5", "2", "1", "1.75"],
+  ]);
 const yahooChart = (url) => chart({ ...AAPL, symbol: chartSymbol(url) });
 const never = () => new Promise(() => {});
 
@@ -36,7 +69,8 @@ test("a hung Yahoo does not delay Binance", async () => {
     return Promise.resolve({ ...r, text: async () => r.text });
   };
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const runs = start(w, host);
   await advance(host, 31_000);
   assert.ok(count(host, "ticker/24hr") >= 3, `${count(host, "ticker/24hr")} ticker requests`);
@@ -50,7 +84,12 @@ test("a request times out after 10 s", async () => {
   const host = fakeHost(() => ok({}));
   host.fetch = (url) => {
     host.requests.push(url);
-    return new Promise((resolve) => { answer = () => { const r = yahooChart(url); resolve({ ...r, text: async () => r.text }); }; });
+    return new Promise((resolve) => {
+      answer = () => {
+        const r = yahooChart(url);
+        resolve({ ...r, text: async () => r.text });
+      };
+    });
   };
   const w = new Watchlist(host);
   w.add("AAPL");
@@ -59,7 +98,9 @@ test("a request times out after 10 s", async () => {
   assert.equal(w.errors.AAPL, undefined);
   await advance(host, 10_000);
   assert.equal(w.errors.AAPL.code, "request.timeout");
-  assert.deepEqual(w.problems(), [{ provider: "yahoo", code: "request.timeout", params: { source: "yahoo", seconds: 10 } }]);
+  assert.deepEqual(w.problems(), [
+    { provider: "yahoo", code: "request.timeout", params: { source: "yahoo", seconds: 10 } },
+  ]);
   answer();
   await advance(host, 10_001);
   assert.equal(w.quotes.AAPL, undefined);
@@ -68,9 +109,10 @@ test("a request times out after 10 s", async () => {
 });
 
 test("backoff is per provider", async () => {
-  const host = fakeHost((url) => url.includes("binance") ? { status: 429, ok: false, text: "" } : yahooChart(url));
+  const host = fakeHost((url) => (url.includes("binance") ? { status: 429, ok: false, text: "" } : yahooChart(url)));
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const runs = start(w, host);
   await advance(host, 1);
   assert.deepEqual(w.problems(), [{ provider: "binance", code: "binance.rateLimited", params: {} }]);
@@ -85,9 +127,11 @@ test("backoff is per provider", async () => {
 });
 
 test("451 says the region is blocked", async () => {
-  const host = fakeHost((url) => url.includes("binance") ? { status: 451, ok: false, text: "" } : yahooChart(url));
+  const host = fakeHost((url) => (url.includes("binance") ? { status: 451, ok: false, text: "" } : yahooChart(url)));
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT"); w.add("ETH/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
+  w.add("ETH/USDT");
   const runs = start(w, host);
   await advance(host, 1);
   assert.equal(w.errors["BTC/USDT"].code, "binance.region");
@@ -108,7 +152,8 @@ test("recovers after an outage", async () => {
     return { ...r, text: async () => r.text };
   };
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const runs = start(w, host);
   await advance(host, 1);
   assert.equal(w.errors.AAPL.code, "yahoo.unreachable");
@@ -124,7 +169,8 @@ test("recovers after an outage", async () => {
 
 test("the busiest session sets the cadence", async () => {
   const w = new Watchlist(fakeHost(() => ok({})));
-  w.add("AAPL"); w.add("MSFT");
+  w.add("AAPL");
+  w.add("MSFT");
   const day = { pre: [0, 100], regular: [100, 200], post: [200, 300] };
   w.quotes.AAPL = { symbol: "AAPL", periods: day };
   w.quotes.MSFT = { symbol: "MSFT", periods: day };
@@ -141,14 +187,20 @@ test("the busiest session sets the cadence", async () => {
 });
 
 test("each loop asks its provider for the interval of its busiest session", async () => {
-  const host = fakeHost((url) => url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url));
+  const host = fakeHost((url) =>
+    url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url),
+  );
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const asked = { yahoo: [], binance: [] };
   const original = {};
   for (const provider of [yahoo, binance]) {
     original[provider.id] = provider.intervalMs;
-    provider.intervalMs = (session) => { asked[provider.id].push(session); return original[provider.id](session); };
+    provider.intervalMs = (session) => {
+      asked[provider.id].push(session);
+      return original[provider.id](session);
+    };
   }
   try {
     const runs = start(w, host);
@@ -164,7 +216,7 @@ test("each loop asks its provider for the interval of its busiest session", asyn
 });
 
 test("a paused list redraws when a live quote turns stale", async () => {
-  const host = fakeHost((url) => url.includes("ticker/24hr") ? ticker(url) : lines());
+  const host = fakeHost((url) => (url.includes("ticker/24hr") ? ticker(url) : lines()));
   const redraws = [];
   host.changed = () => redraws.push(host.clock);
   const w = new Watchlist(host);
@@ -187,13 +239,20 @@ test("a paused list redraws when a live quote turns stale", async () => {
 
 test("a hung source ends its round at the first timeout", async () => {
   const host = fakeHost(() => ok({}));
-  host.fetch = (url) => { host.requests.push(url); return never(); };
+  host.fetch = (url) => {
+    host.requests.push(url);
+    return never();
+  };
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("MSFT"); w.add("NVDA");
+  w.add("AAPL");
+  w.add("MSFT");
+  w.add("NVDA");
   const runs = start(w, host);
   await advance(host, 69_999);
   assert.equal(count(host, "yahoo"), 1);
-  assert.deepEqual(w.problems(), [{ provider: "yahoo", code: "request.timeout", params: { source: "yahoo", seconds: 10 } }]);
+  assert.deepEqual(w.problems(), [
+    { provider: "yahoo", code: "request.timeout", params: { source: "yahoo", seconds: 10 } },
+  ]);
   for (const symbol of ["AAPL", "MSFT", "NVDA"]) assert.equal(w.errors[symbol].code, "request.timeout", symbol);
   // The next round runs one interval after the failed one ended.
   await advance(host, 70_000);
@@ -203,7 +262,9 @@ test("a hung source ends its round at the first timeout", async () => {
 
 test("a rate-limit cooldown still redraws when a live quote turns stale", async () => {
   let limited = false;
-  const host = fakeHost((url) => limited ? { status: 429, ok: false, text: "" } : url.includes("ticker/24hr") ? ticker(url) : lines());
+  const host = fakeHost((url) =>
+    limited ? { status: 429, ok: false, text: "" } : url.includes("ticker/24hr") ? ticker(url) : lines(),
+  );
   const redraws = [];
   host.changed = () => redraws.push(host.clock);
   const w = new Watchlist(host);
@@ -233,9 +294,10 @@ test("a rate-limit cooldown still redraws when a live quote turns stale", async 
 
 test("a rate-limited line request backs Binance off and ends the round", async () => {
   for (const status of [429, 418]) {
-    const host = fakeHost((url) => url.includes("klines") ? { status, ok: false, text: "" } : ticker(url));
+    const host = fakeHost((url) => (url.includes("klines") ? { status, ok: false, text: "" } : ticker(url)));
     const w = new Watchlist(host);
-    w.add("BTC/USDT"); w.add("ETH/USDT");
+    w.add("BTC/USDT");
+    w.add("ETH/USDT");
     const runs = start(w, host);
     await advance(host, 1);
     // No second line request that round.
@@ -284,10 +346,11 @@ test("an unexpected error in a loop shows as the source's problem and the loop g
 });
 
 test("a hidden docked copy sends nothing", async () => {
-  const host = fakeHost((url) => url.includes("binance") ? ticker(url) : yahooChart(url));
+  const host = fakeHost((url) => (url.includes("binance") ? ticker(url) : yahooChart(url)));
   host.shown = () => false;
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const runs = start(w, host);
   await advance(host, 300_000);
   assert.equal(host.requests.length, 0);
@@ -295,11 +358,14 @@ test("a hidden docked copy sends nothing", async () => {
 });
 
 test("shown again, only the stale sources fetch at once", async () => {
-  const host = fakeHost((url) => url.includes("binance") ? (url.includes("klines") ? lines() : ticker(url)) : yahooChart(url));
+  const host = fakeHost((url) =>
+    url.includes("binance") ? (url.includes("klines") ? lines() : ticker(url)) : yahooChart(url),
+  );
   let shown = true;
   host.shown = () => shown;
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const runs = start(w, host);
   await advance(host, 1);
   assert.equal(count(host, "yahoo"), 1);
@@ -324,7 +390,10 @@ test("shown again, only the stale sources fetch at once", async () => {
 test("a render with no round missed does not ask whether the copy is shown", async () => {
   const host = fakeHost((url) => yahooChart(url));
   let asked = 0;
-  host.shown = () => { asked++; return true; };
+  host.shown = () => {
+    asked++;
+    return true;
+  };
   const w = new Watchlist(host);
   w.add("AAPL");
   const runs = start(w, host);
@@ -366,7 +435,10 @@ test("shown again while a round just ended, nothing fetches early", async () => 
 // A shown copy redraws after every change, a little later, and as a card does, asks to catch up on each render.
 function rendering(host, w) {
   const seen = { changes: 0 };
-  host.changed = () => { seen.changes++; setImmediate(() => w.wakeMissed()); };
+  host.changed = () => {
+    seen.changes++;
+    setImmediate(() => w.wakeMissed());
+  };
   return seen;
 }
 
@@ -415,7 +487,10 @@ test("a round that threw is not asked again on every render", async () => {
   // A bug in the first round, once its quote is in (the round's own redraw).
   host.changed = () => {
     redraw();
-    if (w.quotes.AAPL && !threw) { threw = true; throw new Error("bug"); }
+    if (w.quotes.AAPL && !threw) {
+      threw = true;
+      throw new Error("bug");
+    }
   };
   const runs = start(w, host);
   await advance(host, 59_000);
@@ -453,20 +528,30 @@ function heldFetch(host) {
   const held = [];
   host.fetch = (url) => {
     host.requests.push(url);
-    return new Promise((resolve) => held.push(() => {
-      const r = url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url);
-      resolve({ url, ...r, text: async () => r.text });
-    }));
+    return new Promise((resolve) =>
+      held.push(() => {
+        const r = url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url);
+        resolve({ url, ...r, text: async () => r.text });
+      }),
+    );
   };
   // A round asks several times (quote, then line): answer until none is left.
-  return { release: async () => { for (let i = 0; i < 10 && held.length; i++) { held.shift()(); await advance(host, host.clock + 1_100); } } };
+  return {
+    release: async () => {
+      for (let i = 0; i < 10 && held.length; i++) {
+        held.shift()();
+        await advance(host, host.clock + 1_100);
+      }
+    },
+  };
 }
 
 test("a refresh asked for during a running round joins it, in every source", async () => {
   const host = fakeHost(() => ok({}));
   const gate = heldFetch(host);
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const runs = start(w, host);
   await advance(host, 0);
   assert.equal(count(host, "yahoo"), 1);
@@ -485,9 +570,12 @@ test("a refresh asked for during a running round joins it, in every source", asy
 });
 
 test("two clicks at once run one round per source", async () => {
-  const host = fakeHost((url) => (url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url)));
+  const host = fakeHost((url) =>
+    url.includes("ticker/24hr") ? ticker(url) : url.includes("klines") ? lines() : yahooChart(url),
+  );
   const w = new Watchlist(host);
-  w.add("AAPL"); w.add("BTC/USDT");
+  w.add("AAPL");
+  w.add("BTC/USDT");
   const runs = start(w, host);
   await advance(host, 1_000);
   const [yahooBefore, binanceBefore] = [count(host, "yahoo"), count(host, "ticker/24hr")];
@@ -536,13 +624,19 @@ test("the wake-up when a Yahoo 奇摩股市 price turns stale shows MIS", async 
   // turns stale between two rounds; MIS answers every round with a fresh trade.
   const start0 = 1794188480000;
   const frozen = start0 - 5_000;
-  const host = fakeHost((url) => url.startsWith(YAHOOTW_BASE) ? ok([{ ...row2330, regularMarketTime: new Date(frozen).toISOString() }])
-    : url.startsWith(MIS_URL) ? ok({ msgArray: [{ ...misRow, z: "2250.0000", tlong: String(host.clock) }] })
-    : chart({ ...AAPL, symbol: "2330.TW", currency: "TWD" }));
+  const host = fakeHost((url) =>
+    url.startsWith(YAHOOTW_BASE)
+      ? ok([{ ...row2330, regularMarketTime: new Date(frozen).toISOString() }])
+      : url.startsWith(MIS_URL)
+        ? ok({ msgArray: [{ ...misRow, z: "2250.0000", tlong: String(host.clock) }] })
+        : chart({ ...AAPL, symbol: "2330.TW", currency: "TWD" }),
+  );
   host.clock = start0;
   host.prefs = BOTH_ON;
   let redraws = 0;
-  host.changed = () => { redraws++; };
+  host.changed = () => {
+    redraws++;
+  };
   const w = new Watchlist(host);
   w.add("2330.TW");
   const runs = start(w, host);
@@ -574,17 +668,41 @@ function yahootwHost(symbols, sources = YAHOOTW_ON) {
     if (isLine(url)) return host.line(lineSymbol(url));
     if (url.startsWith(YAHOOTW_BASE)) {
       const time = new Date(host.clock - 5_000).toISOString();
-      return ok(url.split("symbols=")[1].split(",").filter((symbol) => !host.missing.includes(symbol))
-        .map((symbol) => ({ ...TW_ROW, symbol, regularMarketTime: time })));
+      return ok(
+        url
+          .split("symbols=")[1]
+          .split(",")
+          .filter((symbol) => !host.missing.includes(symbol))
+          .map((symbol) => ({ ...TW_ROW, symbol, regularMarketTime: time })),
+      );
     }
-    if (url.startsWith(MIS_URL)) return ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(host.clock - 5_000) }] });
-    return chart({ symbol: chartSymbol(url), regularMarketPrice: 2200,
-      regularMarketTime: Math.floor(host.clock / 1000) - 1_200, previousClose: 2135, currency: "TWD", currentTradingPeriod: TW_PERIODS });
+    if (url.startsWith(MIS_URL))
+      return ok({ msgArray: [{ ...MIS_ROW, z: "2250.0000", tlong: String(host.clock - 5_000) }] });
+    return chart({
+      symbol: chartSymbol(url),
+      regularMarketPrice: 2200,
+      regularMarketTime: Math.floor(host.clock / 1000) - 1_200,
+      previousClose: 2135,
+      currency: "TWD",
+      currentTradingPeriod: TW_PERIODS,
+    });
   });
   const minute = Math.floor(TW_START / 60_000) * 60;
   Object.assign(host, {
-    clock: TW_START, missing: [], prefs: { version: 1, sources },
-    line: (symbol) => ok([{ symbol, chart: { meta: { symbol }, timestamp: [minute - 60, minute], indicators: { quote: [{ close: [2200, 2205] }] } } }]),
+    clock: TW_START,
+    missing: [],
+    prefs: { version: 1, sources },
+    line: (symbol) =>
+      ok([
+        {
+          symbol,
+          chart: {
+            meta: { symbol },
+            timestamp: [minute - 60, minute],
+            indicators: { quote: [{ close: [2200, 2205] }] },
+          },
+        },
+      ]),
   });
   host.store = { version: 1, symbols, paused: false };
   return host;
@@ -595,7 +713,10 @@ test("30 symbols: one price request and at most 3 line requests per round, oldes
   const host = yahootwHost(symbols);
   const at = [];
   const fetch = host.fetch;
-  host.fetch = (url, headers) => { if (isLine(url)) at.push(host.clock); return fetch(url, headers); };
+  host.fetch = (url, headers) => {
+    if (isLine(url)) at.push(host.clock);
+    return fetch(url, headers);
+  };
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, TW_START);
@@ -607,7 +728,10 @@ test("30 symbols: one price request and at most 3 line requests per round, oldes
   assert.deepEqual(asked.slice(0, 30), symbols);
   assert.deepEqual(asked.slice(30, 60), symbols);
   const perRound = Object.values(Object.groupBy(at, (time) => time)).map((times) => times.length);
-  assert.ok(perRound.every((n) => n <= 3), perRound.join());
+  assert.ok(
+    perRound.every((n) => n <= 3),
+    perRound.join(),
+  );
   await stop(w, host, runs);
 });
 
@@ -635,7 +759,10 @@ test("a symbol the price answer did not price is never asked for a line", async 
   const runs = start(w, host);
   await advance(host, TW_START + 300_000);
   assert.ok(lineSymbols(host).includes("2330.TW"));
-  assert.ok(host.requests.filter(isLine).every((url) => !url.includes("2936")), host.requests.join());
+  assert.ok(
+    host.requests.filter(isLine).every((url) => !url.includes("2936")),
+    host.requests.join(),
+  );
   await stop(w, host, runs);
 });
 
@@ -643,7 +770,10 @@ test("a line is asked again only after 2 minutes while open", async () => {
   const host = yahootwHost(["2330.TW"]);
   const at = [];
   const fetch = host.fetch;
-  host.fetch = (url, headers) => { if (isLine(url)) at.push(host.clock - TW_START); return fetch(url, headers); };
+  host.fetch = (url, headers) => {
+    if (isLine(url)) at.push(host.clock - TW_START);
+    return fetch(url, headers);
+  };
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, TW_START + 250_000);
@@ -660,7 +790,7 @@ test("one 404 line drops only that line, no backoff", async () => {
   await advance(host, TW_START);
   assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["0050.TW", "2330.TW", "6488.TWO"]);
   const line = host.line;
-  host.line = (symbol) => symbol === "0050.TW" ? { status: 404, ok: false, text: "" } : line(symbol);
+  host.line = (symbol) => (symbol === "0050.TW" ? { status: 404, ok: false, text: "" } : line(symbol));
   await advance(host, TW_START + 120_000);
   assert.equal(count(host, "ApacLibraCharts"), 6);
   assert.deepEqual(Object.keys(w.lines.yahootw).sort(), ["2330.TW", "6488.TWO"]);
@@ -676,7 +806,7 @@ test("a 429 on a line backs the whole source off and hands its rows on", async (
     tw: { ...YAHOOTW_ON.tw, mis: true, misAck: { version: MIS_CONSENT_VERSION } },
   });
   const line = host.line;
-  host.line = (symbol) => symbol === "0050.TW" ? { status: 429, ok: false, text: "" } : line(symbol);
+  host.line = (symbol) => (symbol === "0050.TW" ? { status: 429, ok: false, text: "" } : line(symbol));
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, TW_START);
@@ -710,7 +840,9 @@ test("a hung line costs one timeout per round, and the next price round keeps it
   assert.deepEqual(prices, [0, 20_000, 40_000]);
   assert.deepEqual(lineSymbols(host), ["2330.TW", "0050.TW", "6488.TWO"]);
   assert.equal(w.sources.yahootw.retryAt, 0);
-  assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } }]);
+  assert.deepEqual(w.problems(), [
+    { provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } },
+  ]);
   await stop(w, host, runs);
 });
 
@@ -731,7 +863,9 @@ test("a hung line after a backoff still ends it, so the next 429 waits 60 s agai
   // At 60 s the prices come in and the first line hangs until 70 s.
   await advance(host, TW_START + 70_000);
   assert.ok(w.overlays["2330.TW"]?.yahootw);
-  assert.deepEqual(w.problems(), [{ provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } }]);
+  assert.deepEqual(w.problems(), [
+    { provider: "yahootw", code: "request.timeout", params: { source: "yahootw", seconds: 10 } },
+  ]);
   limited = true;
   await advance(host, TW_START + 80_000);
   assert.equal(w.sources.yahootw.retryAt, TW_START + 80_000 + 60_000);
@@ -745,9 +879,20 @@ test("after the close, today's line is not asked again; a missing one still is",
   host.clock = closed;
   // Its price traded 5 s before the clock, so today's line ends in the clock's minute.
   const line = (symbol, minute = Math.floor(host.clock / 60_000) * 60) =>
-    ok([{ symbol, chart: { meta: { symbol }, timestamp: [minute - 60, minute], indicators: { quote: [{ close: [2200, 2205] }] } } }]);
+    ok([
+      {
+        symbol,
+        chart: { meta: { symbol }, timestamp: [minute - 60, minute], indicators: { quote: [{ close: [2200, 2205] }] } },
+      },
+    ]);
   // The first answer has only yesterday's minutes, so no line is stored.
-  host.line = (symbol) => ok([{ symbol, chart: { meta: { symbol }, timestamp: [1794186000 - 86_400], indicators: { quote: [{ close: [2200] }] } } }]);
+  host.line = (symbol) =>
+    ok([
+      {
+        symbol,
+        chart: { meta: { symbol }, timestamp: [1794186000 - 86_400], indicators: { quote: [{ close: [2200] }] } },
+      },
+    ]);
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, closed);
@@ -783,7 +928,7 @@ test("a line that always fails stays the problem through the rounds between, unt
   const symbols = ["2330.TW", "0050.TW", "6488.TWO", "1101.TW", "1102.TW"];
   const host = yahootwHost(symbols);
   const line = host.line;
-  host.line = (symbol) => symbol === "2330.TW" ? { status: 404, ok: false, text: "" } : line(symbol);
+  host.line = (symbol) => (symbol === "2330.TW" ? { status: 404, ok: false, text: "" } : line(symbol));
   const w = new Watchlist(host);
   const runs = start(w, host);
   const failing = [{ provider: "yahootw", code: "yahootw.http", params: { status: 404 } }];
@@ -859,7 +1004,7 @@ test("an answer of placeholders only, or delayed prices outside the session, say
 test("a failing line's problem goes with its symbol", async () => {
   const host = yahootwHost(["2330.TW", "0050.TW"]);
   const line = host.line;
-  host.line = (symbol) => symbol === "2330.TW" ? { status: 404, ok: false, text: "" } : line(symbol);
+  host.line = (symbol) => (symbol === "2330.TW" ? { status: 404, ok: false, text: "" } : line(symbol));
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, TW_START);
@@ -872,9 +1017,19 @@ test("a failing line's problem goes with its symbol", async () => {
 
 const NOON_HK = at("2026-11-10T04:00:00Z");
 function hkHost() {
-  const host = fakeHost((url) => chart({ symbol: chartSymbol(url), regularMarketPrice: 400, regularMarketTime: Math.floor(host.clock / 1000) - 900,
-    previousClose: 398, currency: "HKD", exchangeName: "HKG",
-    currentTradingPeriod: { regular: { start: at("2026-11-10T01:30:00Z") / 1000, end: at("2026-11-10T08:00:00Z") / 1000 } } }));
+  const host = fakeHost((url) =>
+    chart({
+      symbol: chartSymbol(url),
+      regularMarketPrice: 400,
+      regularMarketTime: Math.floor(host.clock / 1000) - 900,
+      previousClose: 398,
+      currency: "HKD",
+      exchangeName: "HKG",
+      currentTradingPeriod: {
+        regular: { start: at("2026-11-10T01:30:00Z") / 1000, end: at("2026-11-10T08:00:00Z") / 1000 },
+      },
+    }),
+  );
   host.clock = NOON_HK - 30_000;
   host.store = { version: 1, symbols: ["0700.HK"], paused: false };
   host.redraws = [];
@@ -887,7 +1042,10 @@ test("0700.HK on Yahoo reads 午休 within a second of 12:00", async () => {
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, NOON_HK + 5_000);
-  assert.ok(host.redraws.some((time) => time >= NOON_HK && time <= NOON_HK + 1_000), host.redraws.join());
+  assert.ok(
+    host.redraws.some((time) => time >= NOON_HK && time <= NOON_HK + 1_000),
+    host.redraws.join(),
+  );
   assert.equal(sessionOf(w.shown("0700.HK", NOON_HK + 1), NOON_HK + 1), "lunch");
   await stop(w, host, runs);
 });
@@ -897,7 +1055,7 @@ test("0700.HK on Yahoo reads 午休 within a second of 12:00", async () => {
 // round (11:59:30) out of [12:00, 12:00:01].
 test("a docked copy hidden after a round does not wake for a boundary", async () => {
   const host = hkHost();
-  host.clock = NOON_HK - 90_000;                 // 11:58:30
+  host.clock = NOON_HK - 90_000; // 11:58:30
   let shown = true;
   host.shown = () => shown;
   const w = new Watchlist(host);
@@ -913,11 +1071,21 @@ test("a docked copy hidden after a round does not wake for a boundary", async ()
 
 // AAPL on Yahoo Finance alone, its Friday 11/13 answer (built as hkHost() builds 0700.HK's, redraw times in
 // host.redraws): `exchangeName: "NMS"`, `regularMarketTime` 2026-11-13T21:00Z, regular 2026-11-13T14:30Z-21:00Z.
-const SUN_MIDNIGHT = at("2026-11-14T16:00:00Z");                  // 00:00 Sunday 11/15, Taipei
+const SUN_MIDNIGHT = at("2026-11-14T16:00:00Z"); // 00:00 Sunday 11/15, Taipei
 function aaplHost() {
-  const host = fakeHost((url) => chart({ symbol: chartSymbol(url), regularMarketPrice: 230, regularMarketTime: at("2026-11-13T21:00:00Z") / 1000,
-    previousClose: 228, currency: "USD", exchangeName: "NMS",
-    currentTradingPeriod: { regular: { start: at("2026-11-13T14:30:00Z") / 1000, end: at("2026-11-13T21:00:00Z") / 1000 } } }));
+  const host = fakeHost((url) =>
+    chart({
+      symbol: chartSymbol(url),
+      regularMarketPrice: 230,
+      regularMarketTime: at("2026-11-13T21:00:00Z") / 1000,
+      previousClose: 228,
+      currency: "USD",
+      exchangeName: "NMS",
+      currentTradingPeriod: {
+        regular: { start: at("2026-11-13T14:30:00Z") / 1000, end: at("2026-11-13T21:00:00Z") / 1000 },
+      },
+    }),
+  );
   host.store = { version: 1, symbols: ["AAPL"], paused: false };
   host.redraws = [];
   host.changed = () => host.redraws.push(host.clock);
@@ -935,9 +1103,12 @@ test("an AAPL row on a Taipei clock gains its date at local midnight, without a 
     assert.equal(zhLabel(w.shown("AAPL", host.clock), host.clock), "已收盤 · 05:00");
     const asked = host.requests.length;
     await advance(host, SUN_MIDNIGHT + 1_000);
-    assert.ok(host.redraws.some((time) => time >= SUN_MIDNIGHT && time <= SUN_MIDNIGHT + 1_000), host.redraws.join());
+    assert.ok(
+      host.redraws.some((time) => time >= SUN_MIDNIGHT && time <= SUN_MIDNIGHT + 1_000),
+      host.redraws.join(),
+    );
     assert.equal(zhLabel(w.shown("AAPL", host.clock), host.clock), "已收盤 · 11/14 05:00");
-    assert.equal(host.requests.length, asked);                    // no round for the midnight edge
+    assert.equal(host.requests.length, asked); // no round for the midnight edge
     await stop(w, host, runs);
   });
 });
@@ -971,9 +1142,15 @@ function auctionHost(misRow, yahooTime) {
       host.misAt.push(host.clock);
       return ok({ msgArray: [misRow(host.clock)] });
     }
-    return chart({ symbol: chartSymbol(url), regularMarketPrice: 2180, regularMarketTime: yahooTime / 1000, previousClose: 2215,
-      currency: "TWD", exchangeName: "TAI",
-      currentTradingPeriod: { regular: { start: taipei("09:00:00") / 1000, end: taipei("13:30:00") / 1000 } } });
+    return chart({
+      symbol: chartSymbol(url),
+      regularMarketPrice: 2180,
+      regularMarketTime: yahooTime / 1000,
+      previousClose: 2215,
+      currency: "TWD",
+      exchangeName: "TAI",
+      currentTradingPeriod: { regular: { start: taipei("09:00:00") / 1000, end: taipei("13:30:00") / 1000 } },
+    });
   });
   host.misAt = [];
   host.redraws = [];
@@ -986,17 +1163,26 @@ const sessionAt = (w, time) => sessionOf(w.shown("2330.TW", time), time);
 
 test("MIS polls every 10 s in the closing auction, 60 s in the trial match", async () => {
   // The closing auction: MIS priced the row until 13:25, then flags it.
-  const afternoon = auctionHost((time) => (time < taipei("13:25:00") ? traded(time - 1_000) : misFlagged(time - 2_000)), taipei("13:04:00"));
+  const afternoon = auctionHost(
+    (time) => (time < taipei("13:25:00") ? traded(time - 1_000) : misFlagged(time - 2_000)),
+    taipei("13:04:00"),
+  );
   afternoon.clock = taipei("13:24:30");
   let w = new Watchlist(afternoon);
   let runs = start(w, afternoon);
   await advance(afternoon, taipei("13:28:00"));
   assert.equal(sessionAt(w, taipei("13:27:00")), "auction");
   const late = afternoon.misAt.filter((time) => time >= taipei("13:27:00"));
-  assert.deepEqual(late.slice(1).map((time, i) => time - late[i]), Array(6).fill(10_000));   // 13:27:00 … 13:28:00
+  assert.deepEqual(
+    late.slice(1).map((time, i) => time - late[i]),
+    Array(6).fill(10_000),
+  ); // 13:27:00 … 13:28:00
   await stop(w, afternoon, runs);
   // The trial match: MIS flags the row until the open; Yahoo Finance holds Monday's close.
-  const morning = auctionHost((time) => (time < taipei("09:00:00") ? misFlagged(time - 2_000) : traded(time - 1_000)), at("2026-11-16T05:30:00Z"));
+  const morning = auctionHost(
+    (time) => (time < taipei("09:00:00") ? misFlagged(time - 2_000) : traded(time - 1_000)),
+    at("2026-11-16T05:30:00Z"),
+  );
   morning.clock = taipei("08:40:30");
   w = new Watchlist(morning);
   runs = start(w, morning);
@@ -1010,14 +1196,20 @@ test("MIS polls every 10 s in the closing auction, 60 s in the trial match", asy
 
 test("The closing auction begins", async () => {
   // MIS prices the row live every 10 s (13:24:03, …, 13:24:53, 13:25:03); the auction begins between two rounds.
-  const host = auctionHost((time) => (time < taipei("13:25:00") ? traded(time - 1_000) : misFlagged(time - 2_000)), taipei("13:04:00"));
+  const host = auctionHost(
+    (time) => (time < taipei("13:25:00") ? traded(time - 1_000) : misFlagged(time - 2_000)),
+    taipei("13:04:00"),
+  );
   host.clock = taipei("13:24:03");
   const w = new Watchlist(host);
   const runs = start(w, host);
   await advance(host, taipei("13:24:59"));
   assert.equal(zhLabel(w.shown("2330.TW", host.clock), host.clock), "即時");
   await advance(host, taipei("13:25:01"));
-  assert.ok(host.redraws.some((time) => time >= taipei("13:25:00") && time <= taipei("13:25:01")), host.redraws.join());
+  assert.ok(
+    host.redraws.some((time) => time >= taipei("13:25:00") && time <= taipei("13:25:01")),
+    host.redraws.join(),
+  );
   assert.ok(!host.misAt.some((time) => time >= taipei("13:25:00") && time <= taipei("13:25:01")), host.misAt.join());
   assert.equal(zhLabel(w.shown("2330.TW", taipei("13:25:00")), taipei("13:25:00")), "試撮中");
   await stop(w, host, runs);

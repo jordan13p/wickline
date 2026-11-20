@@ -10,7 +10,8 @@ import { t } from "../mods/wickline/i18n.js";
 
 export const ok = (body) => ({ status: 200, ok: true, text: JSON.stringify(body) });
 // A recorded answer under tests/fixtures/, parsed.
-export const jsonFixture = (name) => JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
+export const jsonFixture = (name) =>
+  JSON.parse(readFileSync(new URL(`fixtures/${name}.json`, import.meta.url), "utf8"));
 // A Yahoo 奇摩股市 line request, and the one symbol it asks for.
 export const isLine = (url) => url.startsWith(YAHOOTW_BASE) && url.includes("ApacLibraCharts");
 export const lineSymbol = (url) => JSON.parse(decodeURIComponent(url.split("symbols=")[1]))[0];
@@ -20,7 +21,13 @@ export const chart = (meta) => ok({ chart: { result: [{ meta }], error: null } }
 // Fixed clocks in UTC, a regular session between two of them as Yahoo's periods, and a Yahoo Finance quote.
 export const at = (iso) => Date.parse(iso);
 export const day = (open, close) => ({ pre: null, regular: [at(open), at(close)], post: null });
-export const yq = (symbol, exchange, timestamp, periods = null) => ({ symbol, source: "yahoo", exchange, timestamp, periods });
+export const yq = (symbol, exchange, timestamp, periods = null) => ({
+  symbol,
+  source: "yahoo",
+  exchange,
+  timestamp,
+  periods,
+});
 // A clock time on the Taipei clock (UTC+8), on Tuesday 2026-11-17 (the call-auction recordings' day) unless `date` says.
 export const taipei = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`);
 
@@ -31,7 +38,10 @@ export const taipei = (time, date = "2026-11-17") => at(`${date}T${time}+08:00`)
 export function withTZ(zone, run) {
   const before = process.env.TZ;
   // Assigning undefined would store the string "undefined": an unset zone is deleted instead.
-  const restore = () => { if (before === undefined) delete process.env.TZ; else process.env.TZ = before; };
+  const restore = () => {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  };
   process.env.TZ = zone;
   let result;
   try {
@@ -67,7 +77,10 @@ export const FUTURES_TICK = jsonFixture("yahootw-tick-futures");
 export const FUTURES_NIGHT_TICK = jsonFixture("yahootw-tick-futures-night");
 // That line's sessions for Tuesday 2026-11-10's trading day: Monday 15:00 → Tuesday 05:00, 08:45 → 13:45 (Taipei); and
 // its periods as decoded, with those segments.
-export const SEGMENTS = [[1794207600000, 1794258000000], [1794271500000, 1794289500000]];
+export const SEGMENTS = [
+  [1794207600000, 1794258000000],
+  [1794271500000, 1794289500000],
+];
 export const LINE_PERIODS = { pre: null, regular: [1794207600000, 1794289500000], post: null, segments: SEGMENTS };
 // Yahoo 奇摩股市 rows probed at 15:19 in Taipei on 2026-11-10, the night session open: WTX& 42 459 (15:19:54) and WMT&
 // 42 456 (15:19:52), their limits reset to the new trading day (46 910 / 38 382, previous close 42 646), and 2330.TW at
@@ -82,15 +95,27 @@ export const listed2026 = (day) => LISTED_2026[day] ?? null;
 // A session's observation as closureOf's `seen` gives it (Watchlist#observed): no trade and no answer unless `fields`
 // say, `realtime` and `delayed` each a source's latest answer of that kind as `{ at, source }`, real-time ones first.
 export const observation = ({ realtime = [], delayed = [], ...fields } = {}) => ({
-  traded: false, newest: null, ...fields,
-  answers: [...realtime.map((answer) => ({ ...answer, realtime: true })), ...delayed.map((answer) => ({ ...answer, realtime: false }))],
+  traded: false,
+  newest: null,
+  ...fields,
+  answers: [
+    ...realtime.map((answer) => ({ ...answer, realtime: true })),
+    ...delayed.map((answer) => ({ ...answer, realtime: false })),
+  ],
 });
 
 // Saved settings with TWSE MIS on (consent given), and with both MIS and Yahoo 奇摩股市 on.
 export const MIS_ON = { version: 1, sources: { tw: { mis: true, misAck: { version: MIS_CONSENT_VERSION } } } };
-export const BOTH_ON = { version: 1, sources: { tw: {
-  ...MIS_ON.sources.tw, yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION },
-} } };
+export const BOTH_ON = {
+  version: 1,
+  sources: {
+    tw: {
+      ...MIS_ON.sources.tw,
+      yahootw: true,
+      yahootwAck: { version: YAHOOTW_CONSENT_VERSION },
+    },
+  },
+};
 // TWSE MIS's 2330 row as recorded at 13:24 on 2026-11-17 (mis-auction-1324), and that row as a snapshot at `time`
 // flagged in a call auction (`ts` "1", trial price `pz` 2150).
 export const MIS_2330_1324 = jsonFixture("mis-auction-1324").msgArray.find((row) => row.c === "2330");
@@ -106,12 +131,18 @@ export const CLOSE_1224 = at("2026-12-24T05:30:00Z");
 
 export function fakeHost(respond) {
   const host = {
-    store: { version: 1, symbols: [], paused: false }, clock: 0, sleeps: [], requests: [], headers: [],
+    store: { version: 1, symbols: [], paused: false },
+    clock: 0,
+    sleeps: [],
+    requests: [],
+    headers: [],
     load: () => host.store,
     // The saved settings (shared state in Herdr); nothing saved yet.
     prefs: undefined,
     settings: () => host.prefs,
-    save: (p) => { host.store = JSON.parse(JSON.stringify(p)); },
+    save: (p) => {
+      host.store = JSON.parse(JSON.stringify(p));
+    },
     now: () => host.clock,
     sleep: (ms) => new Promise((resolve) => host.sleeps.push({ at: host.clock + ms, resolve })),
     fetch: async (url, headers) => {
@@ -122,7 +153,9 @@ export function fakeHost(respond) {
       return { url, ...r, text: async () => r.text };
     },
     // The secrets file (main.js reads it from Herdr's data folder): `secret` by name, or a broken file.
-    secrets: {}, secretsBroken: false, secretReads: 0,
+    secrets: {},
+    secretsBroken: false,
+    secretReads: 0,
     loadSecret: async (name) => {
       host.secretReads++;
       if (host.secretsBroken) throw new SyntaxError("broken");

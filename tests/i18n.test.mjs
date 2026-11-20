@@ -47,20 +47,26 @@ test("every statement has four paragraphs and every summary three key points", (
     for (const source of ["yahootw", "mis"]) {
       const paragraphs = STRINGS[lang][`${source}.statement`].split("\n\n");
       assert.equal(paragraphs.length, 4, `${lang} ${source}.statement`);
-      for (const paragraph of paragraphs) assert.ok(paragraph.trim() === paragraph && paragraph && !paragraph.includes("\n"), `${lang} ${source}.statement`);
+      for (const paragraph of paragraphs)
+        assert.ok(
+          paragraph.trim() === paragraph && paragraph && !paragraph.includes("\n"),
+          `${lang} ${source}.statement`,
+        );
       const points = STRINGS[lang][`${source}.summary`].split("\n");
       assert.equal(points.length, 3, `${lang} ${source}.summary`);
       // List items, no full stop: a lone 。 wrapped onto a line of its own.
       for (const point of points) assert.match(point, /^• \S.*[^。.]$/, `${lang} ${source}.summary`);
     }
-    for (const key of ["settings.fullStatement", "settings.hideFullStatement"]) assert.ok(STRINGS[lang][key], `${lang} ${key}`);
+    for (const key of ["settings.fullStatement", "settings.hideFullStatement"])
+      assert.ok(STRINGS[lang][key], `${lang} ${key}`);
   }
 });
 
 // A lone 。 at the dialog's width wrapped onto a line of its own, as with the key points.
 test("the precedence notes end without a full stop in every language, which would wrap onto its own line", () => {
   for (const lang of LANGUAGES) {
-    for (const key of ["mis.prevails", "yahootw.prevails"]) assert.doesNotMatch(STRINGS[lang][key], /[。.]$/, `${lang} ${key}`);
+    for (const key of ["mis.prevails", "yahootw.prevails"])
+      assert.doesNotMatch(STRINGS[lang][key], /[。.]$/, `${lang} ${key}`);
   }
   // A two-sentence note keeps its inner stop.
   assert.ok(STRINGS.ja["mis.prevails"].includes("。"));
@@ -77,10 +83,14 @@ test("the Japanese consent boxes end without a full stop, which would wrap onto 
 test("the statement names what is queried by exchange, in the person's words", () => {
   // Sentence 3 names stock prices in every language: futures prices are never discarded (Q8).
   const stockPrices = {
-    en: "discards a stock price outside the day's price limits", "zh-TW": "超出當日漲跌停範圍的股票價格",
-    "zh-CN": "超出当日涨跌停范围的股票价格", ja: "当日の値幅制限を超える株式の価格", ko: "당일 가격 제한폭을 벗어난 주식 가격",
+    en: "discards a stock price outside the day's price limits",
+    "zh-TW": "超出當日漲跌停範圍的股票價格",
+    "zh-CN": "超出当日涨跌停范围的股票价格",
+    ja: "当日の値幅制限を超える株式の価格",
+    ko: "당일 가격 제한폭을 벗어난 주식 가격",
   };
-  for (const [lang, words] of Object.entries(stockPrices)) assert.ok(t(lang, "yahootw.statement").includes(words), lang);
+  for (const [lang, words] of Object.entries(stockPrices))
+    assert.ok(t(lang, "yahootw.statement").includes(words), lang);
   const exchanges = {
     en: ["Taiwan Stock Exchange (TWSE)", "Taipei Exchange (TPEx)", "Taiwan Futures Exchange (TAIFEX)"],
     "zh-TW": ["臺灣證券交易所", "證券櫃檯買賣中心", "臺灣期貨交易所"],
@@ -91,7 +101,13 @@ test("the statement names what is queried by exchange, in the person's words", (
   for (const [lang, names] of Object.entries(exchanges)) {
     for (const name of names) assert.ok(t(lang, "yahootw.statement").includes(name), `${lang} ${name}`);
   }
-  const words = { en: [/indices/, /futures/], "zh-TW": [/指數/, /期貨/], "zh-CN": [/指数/, /期货/], ja: [/指数/, /先物/], ko: [/지수/, /선물/] };
+  const words = {
+    en: [/indices/, /futures/],
+    "zh-TW": [/指數/, /期貨/],
+    "zh-CN": [/指数/, /期货/],
+    ja: [/指数/, /先物/],
+    ko: [/지수/, /선물/],
+  };
   for (const [lang, [index, future]] of Object.entries(words)) {
     for (const key of ["yahootw.statement", "yahootw.summary"]) {
       assert.match(t(lang, key), index, `${lang} ${key}`);
@@ -126,7 +142,8 @@ test("every text is filled in and other languages are translated", () => {
   for (const lang of LANGUAGES) {
     for (const [key, text] of Object.entries(STRINGS[lang])) assert.ok(text.trim().length > 0, `${lang} ${key}`);
   }
-  for (const lang of LANGUAGES.slice(1)) assert.notEqual(STRINGS[lang]["notice.added"], STRINGS.en["notice.added"], lang);
+  for (const lang of LANGUAGES.slice(1))
+    assert.notEqual(STRINGS[lang]["notice.added"], STRINGS.en["notice.added"], lang);
 });
 
 test("a failed settings save has its own text", () => {
@@ -143,7 +160,8 @@ test("falls back to English", () => {
 test("reviewed terms", () => {
   const tw = STRINGS["zh-TW"];
   // 開盤中 ("market open") is correct; only 盤中 as "intraday" was wrong.
-  for (const [key, text] of Object.entries(tw)) assert.ok(!text.replaceAll("開盤中", "").includes("盤中"), `zh-TW ${key}`);
+  for (const [key, text] of Object.entries(tw))
+    assert.ok(!text.replaceAll("開盤中", "").includes("盤中"), `zh-TW ${key}`);
   assert.ok(tw["disclaimer.sourcesStocks"].includes("一般交易時段"));
   assert.ok(tw["detail.sourceStock"].includes("一般交易時段"));
   assert.equal(tw["button.refresh"], "重新整理");
@@ -174,9 +192,22 @@ test("reviewed terms", () => {
 });
 
 test("icon tooltips, table labels and the source legend", () => {
-  const keys = ["button.ownTab", "button.backBeside", "button.remove", "status.updated", "table.symbol", "table.name",
-    "table.state", "table.line", "table.price", "table.change", "table.changePct",
-    "disclaimer.sourcesTitle", "disclaimer.sourcesStocks", "disclaimer.sourcesCrypto"];
+  const keys = [
+    "button.ownTab",
+    "button.backBeside",
+    "button.remove",
+    "status.updated",
+    "table.symbol",
+    "table.name",
+    "table.state",
+    "table.line",
+    "table.price",
+    "table.change",
+    "table.changePct",
+    "disclaimer.sourcesTitle",
+    "disclaimer.sourcesStocks",
+    "disclaimer.sourcesCrypto",
+  ];
   for (const key of keys) assert.ok(key in STRINGS.en, key);
   assert.equal(t("zh-TW", "button.ownTab"), "在自己的分頁開啟");
   assert.equal(t("zh-TW", "button.backBeside"), "回到側邊");
@@ -196,12 +227,24 @@ test("the language choice lives in the Display tab", () => {
   assert.equal(t("zh-TW", "display.languageHint"), "只改變介面文字，不影響報價。");
 });
 
-const ONLY_FILTER = { en: /nothing else is kept there/, "zh-TW": /只存這一項/, "zh-CN": /只存这一项/, ja: /これだけ/, ko: /이것만/ };
+const ONLY_FILTER = {
+  en: /nothing else is kept there/,
+  "zh-TW": /只存這一項/,
+  "zh-CN": /只存这一项/,
+  ja: /これだけ/,
+  ko: /이것만/,
+};
 test("the storage disclosure names every key and the per-copy filter in all five languages", () => {
   for (const lang of LANGUAGES) {
     const text = STRINGS[lang]["privacy.storage"];
-    for (const name of ["wickline.watchlist.v1", "wickline.settings.v1", "wickline.dockTab", "wickline.detail", "wickline.filter",
-      "localStorage"]) {
+    for (const name of [
+      "wickline.watchlist.v1",
+      "wickline.settings.v1",
+      "wickline.dockTab",
+      "wickline.detail",
+      "wickline.filter",
+      "localStorage",
+    ]) {
       assert.ok(text.includes(name), `${lang} ${name}`);
     }
     // The filter is the only thing kept in localStorage.
@@ -211,7 +254,8 @@ test("the storage disclosure names every key and the per-copy filter in all five
 
 test("every market has a label in all five languages", () => {
   for (const lang of LANGUAGES) {
-    for (const id of ["us", "tw", "hk", "cn", "jp", "kr", "crypto", "other"]) assert.ok(STRINGS[lang][`market.${id}`], `${lang} market.${id}`);
+    for (const id of ["us", "tw", "hk", "cn", "jp", "kr", "crypto", "other"])
+      assert.ok(STRINGS[lang][`market.${id}`], `${lang} market.${id}`);
     assert.ok(STRINGS[lang]["filter.all"], `${lang} filter.all`);
   }
   assert.equal(t("zh-TW", "market.tw"), "台股");
@@ -238,30 +282,49 @@ test("zh-CN Undo is 撤销, not the resume verb", () => {
 
 // The words a lit price says on hover, as each market's traders say them.
 test("a price at its limit is named in every language", () => {
-  const words = { en: ["Limit up 563.00", "Limit down 461.00"], "zh-TW": ["漲停 563.00", "跌停 461.00"], "zh-CN": ["涨停 563.00", "跌停 461.00"],
-    ja: ["ストップ高 563.00", "ストップ安 461.00"], ko: ["상한가 563.00", "하한가 461.00"] };
+  const words = {
+    en: ["Limit up 563.00", "Limit down 461.00"],
+    "zh-TW": ["漲停 563.00", "跌停 461.00"],
+    "zh-CN": ["涨停 563.00", "跌停 461.00"],
+    ja: ["ストップ高 563.00", "ストップ安 461.00"],
+    ko: ["상한가 563.00", "하한가 461.00"],
+  };
   for (const [lang, [up, down]] of Object.entries(words)) {
     assert.equal(t(lang, "quote.limitUp", { price: "563.00" }), up, lang);
     assert.equal(t(lang, "quote.limitDown", { price: "461.00" }), down, lang);
   }
 });
 
-
 test("a call auction is named in every language", () => {
-  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.auction")), ["Call auction", "試撮中", "试撮中", "板寄せ中", "단일가매매"]);
+  assert.deepEqual(
+    LANGUAGES.map((lang) => t(lang, "session.auction")),
+    ["Call auction", "試撮中", "试撮中", "板寄せ中", "단일가매매"],
+  );
   for (const lang of LANGUAGES) assert.ok("session.auction" in STRINGS[lang], lang);
 });
 
 test("the lunch break is named in every language", () => {
-  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.lunch")), ["Lunch", "午休", "午休", "昼休み", "점심 휴장"]);
+  assert.deepEqual(
+    LANGUAGES.map((lang) => t(lang, "session.lunch")),
+    ["Lunch", "午休", "午休", "昼休み", "점심 휴장"],
+  );
 });
 
 test("Finnhub is faster updates; Yahoo's US prices are not called delayed", () => {
   assert.equal(t("en", "sources.us.faster"), "Updates about every 15–30 s instead of every minute.");
   assert.equal(t("en", "settings.liveEveryMinute"), "Real time, updates every minute");
-  assert.equal(t("en", "sources.us.cap", { cap: 15 }), "Faster updates for up to 15 US symbols; the rest update every minute from Yahoo.");
-  assert.equal(t("en", "notice.overCap", { symbol: "AAPL", cap: 15 }), "Added AAPL. Finnhub's limit is 15 US symbols, so it updates every minute from Yahoo.");
-  assert.equal(t("en", "notice.overCapPushed", { symbol: "AAPL", pushed: "NVDA", cap: 15 }), "Added AAPL. NVDA now updates every minute from Yahoo: Finnhub's limit is 15 US symbols.");
+  assert.equal(
+    t("en", "sources.us.cap", { cap: 15 }),
+    "Faster updates for up to 15 US symbols; the rest update every minute from Yahoo.",
+  );
+  assert.equal(
+    t("en", "notice.overCap", { symbol: "AAPL", cap: 15 }),
+    "Added AAPL. Finnhub's limit is 15 US symbols, so it updates every minute from Yahoo.",
+  );
+  assert.equal(
+    t("en", "notice.overCapPushed", { symbol: "AAPL", pushed: "NVDA", cap: 15 }),
+    "Added AAPL. NVDA now updates every minute from Yahoo: Finnhub's limit is 15 US symbols.",
+  );
   assert.equal(t("en", "finnhub.overCap", { cap: 15 }), "Over the Finnhub limit of 15: updates every minute");
   // The person's wording for each source's pace, in Chinese.
   assert.equal(t("zh-TW", "settings.liveEveryMinute"), "即時，每分鐘更新");
@@ -271,7 +334,13 @@ test("Finnhub is faster updates; Yahoo's US prices are not called delayed", () =
 test("Yahoo 奇摩股市's no-real-time note claims no fallback, and its not-found names it", () => {
   assert.equal(t("en", "yahootw.noLiveRows"), "Yahoo TW Stock returned no real-time prices.");
   assert.equal(t("zh-TW", "yahootw.noLiveRows"), "Yahoo 奇摩股市回傳的報價都不是即時資料。");
-  const fallback = { en: /other sources/, "zh-TW": /其他來源/, "zh-CN": /其他来源/, ja: /ほかのソース/, ko: /다른 소스/ };
+  const fallback = {
+    en: /other sources/,
+    "zh-TW": /其他來源/,
+    "zh-CN": /其他来源/,
+    ja: /ほかのソース/,
+    ko: /다른 소스/,
+  };
   for (const [lang, words] of Object.entries(fallback)) assert.doesNotMatch(t(lang, "yahootw.noLiveRows"), words, lang);
   assert.equal(t("zh-TW", "yahootw.notFound"), "Yahoo 奇摩股市查無此代號。");
   assert.equal(t("en", "yahootw.notFound"), "Ticker not found on Yahoo TW Stock.");
@@ -281,66 +350,128 @@ test("futures texts in every language", () => {
   assert.equal(t("zh-TW", "yahootw.futuresNeedSource"), "期貨報價需要在設定開啟 Yahoo 奇摩股市。");
   assert.equal(t("en", "yahootw.futuresNeedSource"), "Futures quotes need Yahoo TW Stock turned on in Settings.");
   for (const lang of LANGUAGES) {
-    for (const key of ["symbol.invalid", "input.placeholder"]) assert.ok(t(lang, key).includes("WTX&"), `${lang} ${key}`);
+    for (const key of ["symbol.invalid", "input.placeholder"])
+      assert.ok(t(lang, key).includes("WTX&"), `${lang} ${key}`);
   }
 });
 
 test("the futures sessions are named in every language", () => {
-  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.day")), ["Day session open", "日盤交易中", "日盘交易中", "日中取引中", "주간 거래 중"]);
-  assert.deepEqual(LANGUAGES.map((lang) => t(lang, "session.night")), ["Night session open", "夜盤交易中", "夜盘交易中", "夜間取引中", "야간 거래 중"]);
+  assert.deepEqual(
+    LANGUAGES.map((lang) => t(lang, "session.day")),
+    ["Day session open", "日盤交易中", "日盘交易中", "日中取引中", "주간 거래 중"],
+  );
+  assert.deepEqual(
+    LANGUAGES.map((lang) => t(lang, "session.night")),
+    ["Night session open", "夜盤交易中", "夜盘交易中", "夜間取引中", "야간 거래 중"],
+  );
 });
 
 test("no language says the session is unknown, and an unconfirmed line names its source alone", () => {
   for (const lang of LANGUAGES) {
     assert.ok(!("session.unknown" in STRINGS[lang]), lang);
     for (const [key, text] of Object.entries(STRINGS[lang])) {
-      assert.doesNotMatch(text, /Session unknown|交易時段未知|交易时段未知|取引時間不明|거래 시간 알 수 없음/, `${lang} ${key}`);
+      assert.doesNotMatch(
+        text,
+        /Session unknown|交易時段未知|交易时段未知|取引時間不明|거래 시간 알 수 없음/,
+        `${lang} ${key}`,
+      );
     }
   }
-  assert.deepEqual(LANGUAGES.map((lang) => [t(lang, "detail.priceSource"), t(lang, "detail.lineSource")]), [
-    ["Price: {source}", "Line: {source}"], ["價格：{source}", "走勢：{source}"], ["价格：{source}", "走势：{source}"],
-    ["価格: {source}", "チャート: {source}"], ["가격: {source}", "차트: {source}"],
-  ]);
+  assert.deepEqual(
+    LANGUAGES.map((lang) => [t(lang, "detail.priceSource"), t(lang, "detail.lineSource")]),
+    [
+      ["Price: {source}", "Line: {source}"],
+      ["價格：{source}", "走勢：{source}"],
+      ["价格：{source}", "走势：{source}"],
+      ["価格: {source}", "チャート: {source}"],
+      ["가격: {source}", "차트: {source}"],
+    ],
+  );
 });
 
 test("the session times are worded in every language", () => {
-  assert.deepEqual(LANGUAGES.map((lang) => ["detail.sessionTimes", "detail.daySession", "detail.nightSession", "detail.allDay"].map((key) => t(lang, key))), [
-    ["Trading hours: {times}", "Day {times}", "Night {times}", "24 hours"],
-    ["交易時段：{times}", "日盤 {times}", "夜盤 {times}", "24 小時"],
-    ["交易时段：{times}", "日盘 {times}", "夜盘 {times}", "24 小时"],
-    ["取引時間：{times}", "日中 {times}", "夜間 {times}", "24時間"],
-    ["거래 시간: {times}", "주간 {times}", "야간 {times}", "24시간"],
-  ]);
+  assert.deepEqual(
+    LANGUAGES.map((lang) =>
+      ["detail.sessionTimes", "detail.daySession", "detail.nightSession", "detail.allDay"].map((key) => t(lang, key)),
+    ),
+    [
+      ["Trading hours: {times}", "Day {times}", "Night {times}", "24 hours"],
+      ["交易時段：{times}", "日盤 {times}", "夜盤 {times}", "24 小時"],
+      ["交易时段：{times}", "日盘 {times}", "夜盘 {times}", "24 小时"],
+      ["取引時間：{times}", "日中 {times}", "夜間 {times}", "24時間"],
+      ["거래 시간: {times}", "주간 {times}", "야간 {times}", "24시간"],
+    ],
+  );
 });
 
 test("a listed closed day, its detail and the holiday schedule's credit in every language", () => {
   const keys = ["session.holiday", "detail.closedToday", "detail.nightNotHeld", "disclaimer.sourcesHolidays"];
-  assert.deepEqual(LANGUAGES.map((lang) => keys.map((key) => t(lang, key))), [
-    ["No trading", "Closed today", "Night: no trading",
-      "Holiday data: Taiwan Stock Exchange OpenAPI (Open Government Data License, version 1.0)"],
-    ["休市", "今日休市", "夜盤休市", "休市日資料來源：臺灣證券交易所 OpenAPI（政府資料開放授權條款－第1版）"],
-    ["休市", "今日休市", "夜盘休市", "休市日数据来源：台湾证券交易所 OpenAPI（政府资料开放授权条款－第1版）"],
-    ["休場", "本日休場", "夜間休場", "休場日データ：台湾証券取引所 OpenAPI（政府資料開放授權條款 第1版）"],
-    ["휴장", "오늘 휴장", "야간 휴장", "휴장일 데이터: 대만증권거래소 OpenAPI(정부 자료 개방 이용 허락 조건 제1판)"],
-  ]);
+  assert.deepEqual(
+    LANGUAGES.map((lang) => keys.map((key) => t(lang, key))),
+    [
+      [
+        "No trading",
+        "Closed today",
+        "Night: no trading",
+        "Holiday data: Taiwan Stock Exchange OpenAPI (Open Government Data License, version 1.0)",
+      ],
+      ["休市", "今日休市", "夜盤休市", "休市日資料來源：臺灣證券交易所 OpenAPI（政府資料開放授權條款－第1版）"],
+      ["休市", "今日休市", "夜盘休市", "休市日数据来源：台湾证券交易所 OpenAPI（政府资料开放授权条款－第1版）"],
+      ["休場", "本日休場", "夜間休場", "休場日データ：台湾証券取引所 OpenAPI（政府資料開放授權條款 第1版）"],
+      ["휴장", "오늘 휴장", "야간 휴장", "휴장일 데이터: 대만증권거래소 OpenAPI(정부 자료 개방 이용 허락 조건 제1판)"],
+    ],
+  );
   for (const lang of LANGUAGES) assert.ok(t(lang, "privacy.hosts").includes("openapi.twse.com.tw"), lang);
 });
 
 test("the no-trades wording, in every language", () => {
-  const keys = ["session.noTrades", "detail.noTradesToday", "detail.nightNoTrades", "closure.noTradesToday", "closure.noTradesNight"];
-  assert.deepEqual(LANGUAGES.map((lang) => keys.map((key) => t(lang, key))), [
-    ["No trades today", "No trades yet today; the market may be closed", "Night: no trades yet", "{source} has no trades today yet.", "{source} has no night-session trades yet."],
-    ["今日無成交", "今日尚無成交，可能休市", "夜盤尚無成交", "{source} 今天尚無成交。", "{source} 夜盤尚無成交。"],
-    ["今日无成交", "今日尚无成交，可能休市", "夜盘尚无成交", "{source} 今天尚无成交。", "{source} 夜盘尚无成交。"],
-    ["本日約定なし", "本日はまだ約定がなく、休場の可能性があります", "夜間はまだ約定なし", "{source} では本日の約定がまだありません。", "{source} では夜間取引の約定がまだありません。"],
-    ["오늘 체결 없음", "오늘 아직 체결이 없어 휴장일 수 있습니다", "야간 체결 아직 없음", "{source}에 오늘 체결이 아직 없습니다.", "{source}에 야간 거래 체결이 아직 없습니다."],
-  ]);
+  const keys = [
+    "session.noTrades",
+    "detail.noTradesToday",
+    "detail.nightNoTrades",
+    "closure.noTradesToday",
+    "closure.noTradesNight",
+  ];
+  assert.deepEqual(
+    LANGUAGES.map((lang) => keys.map((key) => t(lang, key))),
+    [
+      [
+        "No trades today",
+        "No trades yet today; the market may be closed",
+        "Night: no trades yet",
+        "{source} has no trades today yet.",
+        "{source} has no night-session trades yet.",
+      ],
+      ["今日無成交", "今日尚無成交，可能休市", "夜盤尚無成交", "{source} 今天尚無成交。", "{source} 夜盤尚無成交。"],
+      ["今日无成交", "今日尚无成交，可能休市", "夜盘尚无成交", "{source} 今天尚无成交。", "{source} 夜盘尚无成交。"],
+      [
+        "本日約定なし",
+        "本日はまだ約定がなく、休場の可能性があります",
+        "夜間はまだ約定なし",
+        "{source} では本日の約定がまだありません。",
+        "{source} では夜間取引の約定がまだありません。",
+      ],
+      [
+        "오늘 체결 없음",
+        "오늘 아직 체결이 없어 휴장일 수 있습니다",
+        "야간 체결 아직 없음",
+        "{source}에 오늘 체결이 아직 없습니다.",
+        "{source}에 야간 거래 체결이 아직 없습니다.",
+      ],
+    ],
+  );
 });
 
 test("the cached-chart note in five languages, with its reason", () => {
-  const expected = { en: "Cached chart · R", "zh-TW": "走勢圖為快取 · R", "zh-CN": "走势图为缓存 · R",
-    ja: "チャートはキャッシュ表示 · R", ko: "캐시된 차트 · R" };
-  for (const [lang, text] of Object.entries(expected)) assert.equal(t(lang, "quote.chartCached", { reason: "R" }), text);
+  const expected = {
+    en: "Cached chart · R",
+    "zh-TW": "走勢圖為快取 · R",
+    "zh-CN": "走势图为缓存 · R",
+    ja: "チャートはキャッシュ表示 · R",
+    ko: "캐시된 차트 · R",
+  };
+  for (const [lang, text] of Object.entries(expected))
+    assert.equal(t(lang, "quote.chartCached", { reason: "R" }), text);
 });
 
 test("no language words a missing line: the detail draws its box instead", () => {
@@ -349,11 +480,46 @@ test("no language words a missing line: the detail draws its box instead", () =>
 
 test("the volume labels and units are in every language", () => {
   const expected = {
-    en: { "detail.volume": "Volume", "detail.volume24h": "24h volume", "unit.lot.one": "lot", "unit.lot.other": "lots", "unit.contract.one": "contract", "unit.contract.other": "contracts" },
-    "zh-TW": { "detail.volume": "成交量", "detail.volume24h": "24 小時成交量", "unit.lot.one": "張", "unit.lot.other": "張", "unit.contract.one": "口", "unit.contract.other": "口" },
-    "zh-CN": { "detail.volume": "成交量", "detail.volume24h": "24 小时成交量", "unit.lot.one": "张", "unit.lot.other": "张", "unit.contract.one": "口", "unit.contract.other": "口" },
-    ja: { "detail.volume": "出来高", "detail.volume24h": "24時間出来高", "unit.lot.one": "千株", "unit.lot.other": "千株", "unit.contract.one": "枚", "unit.contract.other": "枚" },
-    ko: { "detail.volume": "거래량", "detail.volume24h": "24시간 거래량", "unit.lot.one": "천주", "unit.lot.other": "천주", "unit.contract.one": "계약", "unit.contract.other": "계약" },
+    en: {
+      "detail.volume": "Volume",
+      "detail.volume24h": "24h volume",
+      "unit.lot.one": "lot",
+      "unit.lot.other": "lots",
+      "unit.contract.one": "contract",
+      "unit.contract.other": "contracts",
+    },
+    "zh-TW": {
+      "detail.volume": "成交量",
+      "detail.volume24h": "24 小時成交量",
+      "unit.lot.one": "張",
+      "unit.lot.other": "張",
+      "unit.contract.one": "口",
+      "unit.contract.other": "口",
+    },
+    "zh-CN": {
+      "detail.volume": "成交量",
+      "detail.volume24h": "24 小时成交量",
+      "unit.lot.one": "张",
+      "unit.lot.other": "张",
+      "unit.contract.one": "口",
+      "unit.contract.other": "口",
+    },
+    ja: {
+      "detail.volume": "出来高",
+      "detail.volume24h": "24時間出来高",
+      "unit.lot.one": "千株",
+      "unit.lot.other": "千株",
+      "unit.contract.one": "枚",
+      "unit.contract.other": "枚",
+    },
+    ko: {
+      "detail.volume": "거래량",
+      "detail.volume24h": "24시간 거래량",
+      "unit.lot.one": "천주",
+      "unit.lot.other": "천주",
+      "unit.contract.one": "계약",
+      "unit.contract.other": "계약",
+    },
   };
   for (const [lang, keys] of Object.entries(expected)) {
     for (const [key, text] of Object.entries(keys)) assert.equal(STRINGS[lang][key], text, `${lang} ${key}`);
@@ -368,21 +534,106 @@ test("the activity labels are in every language", () => {
     ja: ["前日出来高", "売買代金", "直近約定数量", "平均価格", "値幅率", "売り約定", "買い約定"],
     ko: ["전일 거래량", "거래대금", "최근 체결량", "평균가", "변동폭", "매도 체결", "매수 체결"],
   };
-  const keys = ["detail.previousVolume", "detail.turnover", "detail.lastSize", "detail.avgPrice", "detail.amplitude", "detail.inner", "detail.outer"];
+  const keys = [
+    "detail.previousVolume",
+    "detail.turnover",
+    "detail.lastSize",
+    "detail.avgPrice",
+    "detail.amplitude",
+    "detail.inner",
+    "detail.outer",
+  ];
   for (const [lang, texts] of Object.entries(expected)) {
     keys.forEach((key, i) => assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`));
   }
 });
 
 test("the book's labels are in every language", () => {
-  const keys = ["detail.book", "detail.auctionBook", "detail.bookEmpty", "detail.bookNone", "detail.bidSize", "detail.bidPrice",
-    "detail.askPrice", "detail.askSize", "detail.bidTotal", "detail.askTotal", "detail.bookDiff", "detail.bookRatio"];
+  const keys = [
+    "detail.book",
+    "detail.auctionBook",
+    "detail.bookEmpty",
+    "detail.bookNone",
+    "detail.bidSize",
+    "detail.bidPrice",
+    "detail.askPrice",
+    "detail.askSize",
+    "detail.bidTotal",
+    "detail.askTotal",
+    "detail.bookDiff",
+    "detail.bookRatio",
+  ];
   const expected = {
-    en: ["Best 5", "Trial match", "No orders yet", "No order book", "Bid size", "Bid", "Ask", "Ask size", "Bids", "Asks", "Bids − asks", "Bids / asks"],
-    "zh-TW": ["最佳五檔", "試撮五檔", "尚無委託資料", "無五檔資料", "買量", "買價", "賣價", "賣量", "委買", "委賣", "委買賣差", "委買賣比"],
-    "zh-CN": ["最佳五档", "试撮五档", "暂无委托数据", "无五档数据", "买量", "买价", "卖价", "卖量", "委买", "委卖", "委买卖差", "委买卖比"],
-    ja: ["板（5本）", "板寄せ気配", "注文はまだありません", "気配情報なし", "買数量", "買気配", "売気配", "売数量", "買い合計", "売り合計", "買い−売り", "買い/売り"],
-    ko: ["5단계 호가", "단일가 호가", "아직 주문이 없습니다", "호가 정보 없음", "매수량", "매수호가", "매도호가", "매도량", "매수 잔량", "매도 잔량", "매수−매도", "매수/매도"],
+    en: [
+      "Best 5",
+      "Trial match",
+      "No orders yet",
+      "No order book",
+      "Bid size",
+      "Bid",
+      "Ask",
+      "Ask size",
+      "Bids",
+      "Asks",
+      "Bids − asks",
+      "Bids / asks",
+    ],
+    "zh-TW": [
+      "最佳五檔",
+      "試撮五檔",
+      "尚無委託資料",
+      "無五檔資料",
+      "買量",
+      "買價",
+      "賣價",
+      "賣量",
+      "委買",
+      "委賣",
+      "委買賣差",
+      "委買賣比",
+    ],
+    "zh-CN": [
+      "最佳五档",
+      "试撮五档",
+      "暂无委托数据",
+      "无五档数据",
+      "买量",
+      "买价",
+      "卖价",
+      "卖量",
+      "委买",
+      "委卖",
+      "委买卖差",
+      "委买卖比",
+    ],
+    ja: [
+      "板（5本）",
+      "板寄せ気配",
+      "注文はまだありません",
+      "気配情報なし",
+      "買数量",
+      "買気配",
+      "売気配",
+      "売数量",
+      "買い合計",
+      "売り合計",
+      "買い−売り",
+      "買い/売り",
+    ],
+    ko: [
+      "5단계 호가",
+      "단일가 호가",
+      "아직 주문이 없습니다",
+      "호가 정보 없음",
+      "매수량",
+      "매수호가",
+      "매도호가",
+      "매도량",
+      "매수 잔량",
+      "매도 잔량",
+      "매수−매도",
+      "매수/매도",
+    ],
   };
   for (const [lang, texts] of Object.entries(expected)) {
     keys.forEach((key, i) => assert.equal(STRINGS[lang][key], texts[i], `${lang} ${key}`));

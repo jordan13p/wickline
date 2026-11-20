@@ -16,20 +16,27 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
   if (points.length < 2 && rule === null && !dot) return null;
   let min = Infinity;
   let max = -Infinity;
-  const widen = (value) => { min = Math.min(min, value); max = Math.max(max, value); };
+  const widen = (value) => {
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  };
   for (const value of points) widen(value);
   if (rule !== null) widen(rule);
   if (dot) widen(dot.price);
-  if (max - min < max * 1e-9) { min -= 1; max += 1; }
+  if (max - min < max * 1e-9) {
+    min -= 1;
+    max += 1;
+  }
   // 8% headroom keeps the stroke inside the box.
   const pad = (max - min) * 0.08;
-  min -= pad; max += pad;
+  min -= pad;
+  max += pad;
   const pct = (share) => Math.round(share * 10000) / 100;
   const y = (value) => pct(1 - (value - min) / (max - min));
   const width = extent ?? 1;
   const last = points.length - 1;
   return {
-    points: points.map((value, index) => [last ? pct(index / last * width) : 0, y(value)]),
+    points: points.map((value, index) => [last ? pct((index / last) * width) : 0, y(value)]),
     reference: rule === null ? null : y(rule),
     dot: dot ? [pct(dot.x), y(dot.price)] : null,
   };
@@ -55,7 +62,8 @@ const CROSSHAIR_GAP_PX = 6;
  */
 export function crosshairAt(geometry, times, xShare) {
   const points = geometry?.points ?? [];
-  if (points.length < 2 || !Array.isArray(times) || times.length !== points.length || !Number.isFinite(xShare)) return null;
+  if (points.length < 2 || !Array.isArray(times) || times.length !== points.length || !Number.isFinite(xShare))
+    return null;
   const target = Math.min(1, Math.max(0, xShare)) * 100;
   let index = 0;
   // x never decreases along the line, so `<=` keeps the later point on a tie.
@@ -73,7 +81,7 @@ export function crosshairAt(geometry, times, xShare) {
 export function crosshairLabel(quote, index, lang) {
   const time = quote.times[index];
   const value = quote.series[index];
-  const percent = positive(quote.previousClose) ? (value - quote.previousClose) / quote.previousClose * 100 : null;
+  const percent = positive(quote.previousClose) ? ((value - quote.previousClose) / quote.previousClose) * 100 : null;
   const change = percent === null ? null : formatChange(percent);
   return { time: stamp(formatDate(time, lang), time), price: number(quote, value), change, percent };
 }
@@ -85,10 +93,11 @@ export function crosshairLabel(quote, index, lang) {
  */
 export function crosshairSpot(x, label, widthPx) {
   const time = label.time.length * CROSSHAIR_TIME_CHAR_PX;
-  const value = (label.price.length + (label.change?.length ?? 0)) * CROSSHAIR_VALUE_CHAR_PX
-    + (label.change ? CROSSHAIR_VALUE_GAP_PX : 0);
+  const value =
+    (label.price.length + (label.change?.length ?? 0)) * CROSSHAIR_VALUE_CHAR_PX +
+    (label.change ? CROSSHAIR_VALUE_GAP_PX : 0);
   const w = Math.max(time, value) + CROSSHAIR_PAD_PX;
-  const px = x / 100 * widthPx;
+  const px = (x / 100) * widthPx;
   if (px + CROSSHAIR_GAP_PX + w <= widthPx) return { left: px + CROSSHAIR_GAP_PX };
   if (px - CROSSHAIR_GAP_PX - w >= 0) return { right: widthPx - px + CROSSHAIR_GAP_PX };
   return { left: 0 };
@@ -99,7 +108,7 @@ export function crosshairSpot(x, label, widthPx) {
  * `{ top }` in px, held at the top (`{ top: 0 }`) and at the bottom by its own bottom edge (`{ bottom: 0 }`).
  */
 export function crosshairLevel(y, heightPx) {
-  const top = y * heightPx / 100 - CROSSHAIR_CARD_PX / 2;
+  const top = (y * heightPx) / 100 - CROSSHAIR_CARD_PX / 2;
   if (top <= 0 || heightPx <= CROSSHAIR_CARD_PX) return { top: 0 };
   return top + CROSSHAIR_CARD_PX >= heightPx ? { bottom: 0 } : { top };
 }
@@ -123,7 +132,9 @@ export function formatPrice(quote) {
 
 /** The currency the compact band names: none for USD or a pair's own quote currency. */
 export function bandCurrency(quote) {
-  return !quote.currency || quote.currency === "USD" || quote.symbol.endsWith(`/${quote.currency}`) ? null : quote.currency;
+  return !quote.currency || quote.currency === "USD" || quote.symbol.endsWith(`/${quote.currency}`)
+    ? null
+    : quote.currency;
 }
 
 // `value` (the price by default) without its currency, for a fixed right-aligned column.
@@ -172,11 +183,42 @@ export function formatAmount(n) {
 
 // Large numbers by language, largest unit first: English counts by thousands (inline), the others by 10,000.
 const COMPACT_UNITS = {
-  en: { step: 1_000, units: [["B", 1e9], ["M", 1e6], ["K", 1e3]] },
-  "zh-TW": { step: 10_000, units: [["億", 1e8], ["萬", 1e4]] },
-  "zh-CN": { step: 10_000, units: [["亿", 1e8], ["万", 1e4]] },
-  ja: { step: 10_000, units: [["億", 1e8], ["万", 1e4]] },
-  ko: { step: 10_000, units: [["억", 1e8], ["만", 1e4]] },
+  en: {
+    step: 1_000,
+    units: [
+      ["B", 1e9],
+      ["M", 1e6],
+      ["K", 1e3],
+    ],
+  },
+  "zh-TW": {
+    step: 10_000,
+    units: [
+      ["億", 1e8],
+      ["萬", 1e4],
+    ],
+  },
+  "zh-CN": {
+    step: 10_000,
+    units: [
+      ["亿", 1e8],
+      ["万", 1e4],
+    ],
+  },
+  ja: {
+    step: 10_000,
+    units: [
+      ["億", 1e8],
+      ["万", 1e4],
+    ],
+  },
+  ko: {
+    step: 10_000,
+    units: [
+      ["억", 1e8],
+      ["만", 1e4],
+    ],
+  },
 };
 
 /**
@@ -223,11 +265,13 @@ export const formatShare = (percent, places = 1) => `${percent.toFixed(places)}%
 /** The day's amplitude in percent, (high − low) / previous close × 100; null without all three. */
 export function amplitude(quote) {
   return positive(quote.high) && positive(quote.low) && positive(quote.previousClose)
-    ? (quote.high - quote.low) / quote.previousClose * 100 : null;
+    ? ((quote.high - quote.low) / quote.previousClose) * 100
+    : null;
 }
 
 // A count the quote carries as a cell in its size unit, or null without one.
-const sizeCell = (quote, key, n, lang, tx) => (positive(n) ? { label: tx(key), ...formatSize(n, quote.sizeUnit, lang, tx) } : null);
+const sizeCell = (quote, key, n, lang, tx) =>
+  positive(n) ? { label: tx(key), ...formatSize(n, quote.sizeUnit, lang, tx) } : null;
 
 // A two-column detail's place with no value keeps its label and reads `—`.
 const emptyCell = (key, tx) => ({ label: tx(key), value: "—", unit: "" });
@@ -237,7 +281,9 @@ const emptyCell = (key, tx) => ({ label: tx(key), value: "—", unit: "" });
  * decimals: `920.47 億`, `92.05B`) and the last trade's size; a value the quote does not carry reads `—`.
  */
 export function activityCells(quote, lang, tx) {
-  const turnover = positive(quote.turnover) ? { label: tx("detail.turnover"), ...compact(quote.turnover, lang, 2) } : null;
+  const turnover = positive(quote.turnover)
+    ? { label: tx("detail.turnover"), ...compact(quote.turnover, lang, 2) }
+    : null;
   return [
     sizeCell(quote, "detail.volume", quote.volume, lang, tx) ?? emptyCell("detail.volume", tx),
     sizeCell(quote, "detail.previousVolume", quote.previousVolume, lang, tx) ?? emptyCell("detail.previousVolume", tx),
@@ -256,7 +302,12 @@ export function innerOuter(quote, tx) {
   const innerShare = inner / (inner + outer);
   const outerShare = outer / (inner + outer);
   const side = (key, n, share) => `${tx(key)} ${formatShare(share * 100)} ${formatCount(n)}`;
-  return { left: side("detail.inner", inner, innerShare), right: side("detail.outer", outer, outerShare), innerShare, outerShare };
+  return {
+    left: side("detail.inner", inner, innerShare),
+    right: side("detail.outer", outer, outerShare),
+    innerShare,
+    outerShare,
+  };
 }
 
 const levelCount = (book) => book.bids.length + book.asks.length;
@@ -271,18 +322,25 @@ const levelCount = (book) => book.bids.length + book.asks.length;
 export function detailBook(quote, auction) {
   const book = quote.book ?? null;
   const matches = book !== null && Boolean(book.auction) === auction;
-  if (matches && levelCount(book) > 0) return { title: auction ? "detail.auctionBook" : "detail.book", book, line: null };
+  if (matches && levelCount(book) > 0)
+    return { title: auction ? "detail.auctionBook" : "detail.book", book, line: null };
   const reason = quote.fallback ?? (quote.cached ? quote.error : null);
-  return { title: "detail.book", book: null, line: reason ? "reason" : matches ? "detail.bookEmpty" : "detail.bookNone" };
+  return {
+    title: "detail.book",
+    book: null,
+    line: reason ? "reason" : matches ? "detail.bookEmpty" : "detail.bookNone",
+  };
 }
 
 // A level as a ladder rung, with its change % against `previousClose`; a market order (no price) has none and is marked.
-const rung = (level, previousClose) => level && {
-  price: level.price,
-  size: level.size,
-  change: level.price !== null && positive(previousClose) ? (level.price - previousClose) / previousClose * 100 : null,
-  ...(level.price === null && { market: true }),
-};
+const rung = (level, previousClose) =>
+  level && {
+    price: level.price,
+    size: level.size,
+    change:
+      level.price !== null && positive(previousClose) ? ((level.price - previousClose) / previousClose) * 100 : null,
+    ...(level.price === null && { market: true }),
+  };
 
 /**
  * The ladder's rows, best first, at most 5: each `{ bid, ask }`, a side without a level at that row null. A rung is
@@ -324,9 +382,12 @@ export function secondRow(quote, wide, lang, tx) {
   const plain = (label, value) => ({ label: tx(label), value, unit: "" });
   const swing = amplitude(quote);
   const first = wide
-    ? (positive(quote.avgPrice) ? plain("detail.avgPrice", number(quote, quote.avgPrice)) : null)
+    ? positive(quote.avgPrice)
+      ? plain("detail.avgPrice", number(quote, quote.avgPrice))
+      : null
     : sizeCell(quote, pair ? "detail.volume24h" : "detail.volume", quote.volume, lang, tx);
-  const limit = (label, value) => (hasLimits(quote.limitUp, quote.limitDown) ? plain(label, number(quote, value)) : null);
+  const limit = (label, value) =>
+    hasLimits(quote.limitUp, quote.limitDown) ? plain(label, number(quote, value)) : null;
   const places = [first, limit("detail.limitUpPrice", quote.limitUp), limit("detail.limitDownPrice", quote.limitDown)];
   if (!pair) places.push(wide && swing !== null ? plain("detail.amplitude", formatShare(swing, 2)) : null);
   if (wide) {
@@ -425,7 +486,7 @@ const LOCAL_NAME_LANGUAGES = ["zh-TW", "zh-CN"];
 
 /** The instrument name a row shows: an overlay's local name (MIS) in Chinese, else the base's. */
 export function displayName(quote, lang) {
-  return LOCAL_NAME_LANGUAGES.includes(lang) && quote.localName ? quote.localName : quote.name ?? null;
+  return LOCAL_NAME_LANGUAGES.includes(lang) && quote.localName ? quote.localName : (quote.name ?? null);
 }
 
 const two = (n) => String(n).padStart(2, "0");
@@ -466,14 +527,16 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
     case "unconfirmed":
       return tx(`src.${quote.source}`);
     case "delayed":
-      return fresh.delayMinutes === null ? tx("freshness.delayed")
+      return fresh.delayMinutes === null
+        ? tx("freshness.delayed")
         : tx("freshness.delayedMinutes", { minutes: fresh.delayMinutes });
     case "closed":
     case "holiday":
     case "noTrades": {
       const word = tx(`session.${fresh.state}`);
       const traded = timedByTrade(quote);
-      const date = traded && fresh.state === "noTrades" ? formatDate(quote.timestamp, lang) : formatStaleDate(quote, now, lang);
+      const date =
+        traded && fresh.state === "noTrades" ? formatDate(quote.timestamp, lang) : formatStaleDate(quote, now, lang);
       if (!traded) return date ? `${word} · ${date}` : word;
       return `${word} · ${stamp(date, quote.timestamp)}`;
     }
@@ -488,10 +551,15 @@ export function freshnessLabel(quote, fresh, now, lang, tx) {
  */
 export function detailTimes(quote, now, lang, tx) {
   const date = formatStaleDate(quote, now, lang);
-  const lastTrade = quote.tradeTime && quote.tradeTime !== quote.timestamp
-    ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })] : [];
-  return [tx("detail.quoted", { time: stamp(date, quote.timestamp, true) }), ...lastTrade,
-    tx("detail.fetched", { time: formatTime(quote.fetchedAt, true) })];
+  const lastTrade =
+    quote.tradeTime && quote.tradeTime !== quote.timestamp
+      ? [tx("detail.lastTrade", { time: formatTime(quote.tradeTime, true) })]
+      : [];
+  return [
+    tx("detail.quoted", { time: stamp(date, quote.timestamp, true) }),
+    ...lastTrade,
+    tx("detail.fetched", { time: formatTime(quote.fetchedAt, true) }),
+  ];
 }
 
 const timeRange = ([start, end]) => `${formatTime(start)}–${formatTime(end)}`;
@@ -509,7 +577,8 @@ function hoursParts(times, lang, tx) {
     case "noTradesToday":
       return [tx("detail.noTradesToday")];
     case "futures": {
-      const night = times.night ? tx("detail.nightSession", { times: timeRange(times.night) })
+      const night = times.night
+        ? tx("detail.nightSession", { times: timeRange(times.night) })
         : tx(times.nightNoTrades ? "detail.nightNoTrades" : "detail.nightNotHeld");
       return [tx("detail.daySession", { times: timeRange(times.day) }), night];
     }

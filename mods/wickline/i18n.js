@@ -55,7 +55,8 @@ export const STRINGS = {
     "footer.short": "Quotes for reference only. Not investment advice.",
     "disclaimer.sourcesStocks": "Yahoo Finance · Regular-session quotes · Exchange delays vary",
     "disclaimer.sourcesCrypto": "Binance Spot · Crypto pairs: 24h change",
-    "disclaimer.sourcesHolidays": "Holiday data: Taiwan Stock Exchange OpenAPI (Open Government Data License, version 1.0)",
+    "disclaimer.sourcesHolidays":
+      "Holiday data: Taiwan Stock Exchange OpenAPI (Open Government Data License, version 1.0)",
     "disclaimer.sourcesTitle": "Sources",
     "detail.open": "Open",
     "detail.high": "High",
@@ -168,10 +169,12 @@ export const STRINGS = {
     "settings.noFallback": "No other source is used when Binance is unavailable.",
     "settings.advanced": "Advanced",
     "sources.other.title": "Other markets",
-    "sources.other.body": "Hong Kong, China, Japan and Korea stocks and indices use Yahoo Finance only, as do currencies and other exchanges; there is nothing to set.",
+    "sources.other.body":
+      "Hong Kong, China, Japan and Korea stocks and indices use Yahoo Finance only, as do currencies and other exchanges; there is nothing to set.",
     "sources.crypto.title": "Crypto",
     "sources.crypto.url": "Binance URL",
-    "sources.crypto.region": "Binance may be unavailable in some regions, such as the United States. If so, enter an address that serves the same API.",
+    "sources.crypto.region":
+      "Binance may be unavailable in some regions, such as the United States. If so, enter an address that serves the same API.",
     "url.notHttps": "Enter an https:// address.",
     "url.invalid": "The address needs a host, and no ? or # part.",
     "display.language": "Language",
@@ -180,21 +183,28 @@ export const STRINGS = {
     "display.colors.auto": "Automatic",
     "display.colors.redUp": "Red up",
     "display.colors.greenUp": "Green up",
-    "display.colorsHint": "Colors follow you, not the market: one rule for the whole list. Hong Kong usually uses green-up.",
+    "display.colorsHint":
+      "Colors follow you, not the market: one rule for the whole list. Hong Kong usually uses green-up.",
     "display.appearance": "Open Herdr appearance settings",
     "display.appearanceHint": "Light and dark themes are set in Herdr; Wickline has no setting of its own.",
     "disclaimer.title": "Disclaimer",
     "disclaimer.data": "Quotes come from third parties and are not guaranteed to be accurate, timely or available.",
     "disclaimer.advice": "Nothing shown here is investment advice.",
-    "disclaimer.sources": "Turning on a source that is not public, or entering a key, is your own act and is governed by that source's terms.",
-    "disclaimer.direct": "Requests go directly from this computer to each source. Wickline has no server and sends no telemetry.",
+    "disclaimer.sources":
+      "Turning on a source that is not public, or entering a key, is your own act and is governed by that source's terms.",
+    "disclaimer.direct":
+      "Requests go directly from this computer to each source. Wickline has no server and sends no telemetry.",
     "disclaimer.key": "A Finnhub key you save is stored in plaintext on this computer.",
     "disclaimer.prevails": "The English text prevails over its translations.",
     "privacy.title": "Privacy",
-    "privacy.hosts": "Hosts: query1.finance.yahoo.com (Yahoo Finance), data-api.binance.vision (Binance Spot), and the Binance address you set. While your list holds a Taiwan symbol: openapi.twse.com.tw (TWSE's published market holiday list), once a day per open copy by GET, retried hourly after a failure, with no key; nothing from it is stored. Only after you turn on Yahoo TW Stock for Taiwan and tick its consent box: tw.stock.yahoo.com (Yahoo TW Stock, not a public interface), for the Taiwan stocks, indices and futures on your list. Only after you turn on TWSE MIS for Taiwan and tick its consent box: mis.twse.com.tw (TWSE MIS, unofficial), or the MIS address you set. Only after you choose Finnhub for US stocks and save a key: finnhub.io (Finnhub), the only host the key is sent to; only the path of the Finnhub URL can be changed.",
-    "privacy.programs": "Programs: after you save an API key, its file is set so only your account can read it (macOS and Linux). No other programs run.",
-    "privacy.storage": "Storage: the watchlist (wickline.watchlist.v1), these settings (wickline.settings.v1) and the tab a docked panel opened Wickline in (wickline.dockTab, so the panel can step aside while it is open) are kept in Herdr's shared state on this computer. While a detail is open, wickline.detail holds its quote with its line, activity and book in the shared state, saved to disk, rewritten by the copy that opened it whenever its row changes and cleared when it closes; a value left by quitting Herdr stays until the next detail opens. The detail sends no request of its own. Each open copy also remembers its chosen market filter (wickline.filter) in its own localStorage, a file under data/wickline/ in Herdr's folder; nothing else is kept there. A Finnhub key you save is kept in plaintext in data/wickline/secrets.json in Herdr's folder on this computer, readable only by your account on macOS and Linux, never in the shared state. Use a free-plan key. No other file is read or written. To remove the key, press Remove on the United States page and save, or delete that file; backups such as Time Machine may still hold an old key, so to revoke it for good, regenerate the key on Finnhub.",
-    "privacy.finnhub": "Finnhub: only the first US stocks your budget covers are asked (15 at the default 60 requests per minute). Every open copy of Wickline sends its own requests, so two copies use the budget twice as fast: keep one copy shown.",
+    "privacy.hosts":
+      "Hosts: query1.finance.yahoo.com (Yahoo Finance), data-api.binance.vision (Binance Spot), and the Binance address you set. While your list holds a Taiwan symbol: openapi.twse.com.tw (TWSE's published market holiday list), once a day per open copy by GET, retried hourly after a failure, with no key; nothing from it is stored. Only after you turn on Yahoo TW Stock for Taiwan and tick its consent box: tw.stock.yahoo.com (Yahoo TW Stock, not a public interface), for the Taiwan stocks, indices and futures on your list. Only after you turn on TWSE MIS for Taiwan and tick its consent box: mis.twse.com.tw (TWSE MIS, unofficial), or the MIS address you set. Only after you choose Finnhub for US stocks and save a key: finnhub.io (Finnhub), the only host the key is sent to; only the path of the Finnhub URL can be changed.",
+    "privacy.programs":
+      "Programs: after you save an API key, its file is set so only your account can read it (macOS and Linux). No other programs run.",
+    "privacy.storage":
+      "Storage: the watchlist (wickline.watchlist.v1), these settings (wickline.settings.v1) and the tab a docked panel opened Wickline in (wickline.dockTab, so the panel can step aside while it is open) are kept in Herdr's shared state on this computer. While a detail is open, wickline.detail holds its quote with its line, activity and book in the shared state, saved to disk, rewritten by the copy that opened it whenever its row changes and cleared when it closes; a value left by quitting Herdr stays until the next detail opens. The detail sends no request of its own. Each open copy also remembers its chosen market filter (wickline.filter) in its own localStorage, a file under data/wickline/ in Herdr's folder; nothing else is kept there. A Finnhub key you save is kept in plaintext in data/wickline/secrets.json in Herdr's folder on this computer, readable only by your account on macOS and Linux, never in the shared state. Use a free-plan key. No other file is read or written. To remove the key, press Remove on the United States page and save, or delete that file; backups such as Time Machine may still hold an old key, so to revoke it for good, regenerate the key on Finnhub.",
+    "privacy.finnhub":
+      "Finnhub: only the first US stocks your budget covers are asked (15 at the default 60 requests per minute). Every open copy of Wickline sends its own requests, so two copies use the budget twice as fast: keep one copy shown.",
     "src.mis": "TWSE MIS",
     "quote.fallback": "Showing {source} · {reason}",
     "detail.priceFrom": "Price: {state} · {source}",
@@ -203,27 +213,38 @@ export const STRINGS = {
     "detail.lineSource": "Line: {source}",
     "sources.tw.title": "Taiwan",
     "sources.tw.url": "TWSE MIS URL",
-    "mis.statement": "TWSE MIS (mis.twse.com.tw) is the Taiwan Stock Exchange's Market Information System website, made for viewing the market, not an API for programs. Wickline is not affiliated with or authorized by the Taiwan Stock Exchange.\n\nOnce enabled, Wickline requests quotes for the Taiwan stocks on your watchlist directly from MIS, from this computer, about every 10 seconds during trading hours. These replace Yahoo Finance's prices, which are delayed by about 20 minutes; intraday charts still come from Yahoo Finance.\n\nThe data may be delayed, inaccurate or interrupted, and MIS may change or stop it at any time. Wickline discards a price outside that stock's daily price limits; the accuracy of any other price cannot be guaranteed.\n\nYou alone decide whether to use it and whether your use complies with the Taiwan Stock Exchange website's terms of use, and you bear all consequences of using this data. The data is for personal reference only and is not investment advice.",
-    "mis.summary": "• Unofficial use: MIS is the Taiwan Stock Exchange's website for watching the market, not an API for programs; Wickline is not affiliated with the exchange\n• Requests quotes for the Taiwan stocks on your watchlist about every 10 seconds during trading hours, replacing quotes delayed by about 20 minutes\n• You decide whether to use it and bear the consequences; this is not investment advice",
-    "mis.consent": "I have read and understood the statement above. I accept responsibility for using TWSE MIS data and will comply with the Taiwan Stock Exchange website's terms of use.",
+    "mis.statement":
+      "TWSE MIS (mis.twse.com.tw) is the Taiwan Stock Exchange's Market Information System website, made for viewing the market, not an API for programs. Wickline is not affiliated with or authorized by the Taiwan Stock Exchange.\n\nOnce enabled, Wickline requests quotes for the Taiwan stocks on your watchlist directly from MIS, from this computer, about every 10 seconds during trading hours. These replace Yahoo Finance's prices, which are delayed by about 20 minutes; intraday charts still come from Yahoo Finance.\n\nThe data may be delayed, inaccurate or interrupted, and MIS may change or stop it at any time. Wickline discards a price outside that stock's daily price limits; the accuracy of any other price cannot be guaranteed.\n\nYou alone decide whether to use it and whether your use complies with the Taiwan Stock Exchange website's terms of use, and you bear all consequences of using this data. The data is for personal reference only and is not investment advice.",
+    "mis.summary":
+      "• Unofficial use: MIS is the Taiwan Stock Exchange's website for watching the market, not an API for programs; Wickline is not affiliated with the exchange\n• Requests quotes for the Taiwan stocks on your watchlist about every 10 seconds during trading hours, replacing quotes delayed by about 20 minutes\n• You decide whether to use it and bear the consequences; this is not investment advice",
+    "mis.consent":
+      "I have read and understood the statement above. I accept responsibility for using TWSE MIS data and will comply with the Taiwan Stock Exchange website's terms of use.",
     "mis.prevails": "If the Traditional Chinese and English versions differ, the Traditional Chinese version prevails",
     "mis.consentNeeded": "Tick the box to use TWSE MIS.",
-    "mis.reconfirm": "The TWSE MIS statement has been updated. Confirm it again in Settings; TWSE MIS quotes are paused until you do.",
+    "mis.reconfirm":
+      "The TWSE MIS statement has been updated. Confirm it again in Settings; TWSE MIS quotes are paused until you do.",
     "src.yahootw": "Yahoo TW Stock",
-    "yahootw.statement": "Yahoo TW Stock (tw.stock.yahoo.com) provides its quote data for its own website only. It is not offered to other programs, and the site's robots.txt does not allow automated access. Wickline is not affiliated with or authorized by Yahoo.\n\nOnce enabled, Wickline requests quotes directly from Yahoo TW Stock, from this computer, for these instruments on your watchlist: listed stocks, ETFs and the TAIEX on the Taiwan Stock Exchange (TWSE), OTC stocks and the TPEx Index on the Taipei Exchange (TPEx), and futures on the Taiwan Futures Exchange (TAIFEX). During trading hours, quotes update about every 10 seconds and intraday charts about every 2 minutes; at other times, they slow to about every 60 seconds and 10 minutes respectively. These quotes replace Yahoo Finance's, which are delayed by about 20 minutes; indices and futures that Yahoo Finance does not carry come from Yahoo TW Stock alone.\n\nThe data may be delayed, inaccurate or interrupted, and Yahoo may change, restrict or stop it at any time. Wickline discards a stock price outside the day's price limits; a price from an earlier day is used only for instruments Yahoo Finance does not carry, and is shown with its date. The accuracy of any other price cannot be guaranteed.\n\nYou alone decide whether to use it and whether your use complies with Yahoo's terms of service, and you bear all consequences of using this data. The data is for personal reference only and is not investment advice.",
-    "yahootw.summary": "• Unofficial source: Wickline is not affiliated with Yahoo, and the data may be delayed, inaccurate or interrupted\n• Requests quotes for the Taiwan stocks, indices and futures on your watchlist about every 10 seconds during trading hours\n• You decide whether to use it and bear the consequences; this is not investment advice",
-    "yahootw.consent": "I have read and understood the statement above. I accept responsibility for using Yahoo TW Stock data and will comply with Yahoo's terms of service.",
-    "yahootw.prevails": "If the Traditional Chinese and English versions differ, the Traditional Chinese version prevails",
+    "yahootw.statement":
+      "Yahoo TW Stock (tw.stock.yahoo.com) provides its quote data for its own website only. It is not offered to other programs, and the site's robots.txt does not allow automated access. Wickline is not affiliated with or authorized by Yahoo.\n\nOnce enabled, Wickline requests quotes directly from Yahoo TW Stock, from this computer, for these instruments on your watchlist: listed stocks, ETFs and the TAIEX on the Taiwan Stock Exchange (TWSE), OTC stocks and the TPEx Index on the Taipei Exchange (TPEx), and futures on the Taiwan Futures Exchange (TAIFEX). During trading hours, quotes update about every 10 seconds and intraday charts about every 2 minutes; at other times, they slow to about every 60 seconds and 10 minutes respectively. These quotes replace Yahoo Finance's, which are delayed by about 20 minutes; indices and futures that Yahoo Finance does not carry come from Yahoo TW Stock alone.\n\nThe data may be delayed, inaccurate or interrupted, and Yahoo may change, restrict or stop it at any time. Wickline discards a stock price outside the day's price limits; a price from an earlier day is used only for instruments Yahoo Finance does not carry, and is shown with its date. The accuracy of any other price cannot be guaranteed.\n\nYou alone decide whether to use it and whether your use complies with Yahoo's terms of service, and you bear all consequences of using this data. The data is for personal reference only and is not investment advice.",
+    "yahootw.summary":
+      "• Unofficial source: Wickline is not affiliated with Yahoo, and the data may be delayed, inaccurate or interrupted\n• Requests quotes for the Taiwan stocks, indices and futures on your watchlist about every 10 seconds during trading hours\n• You decide whether to use it and bear the consequences; this is not investment advice",
+    "yahootw.consent":
+      "I have read and understood the statement above. I accept responsibility for using Yahoo TW Stock data and will comply with Yahoo's terms of service.",
+    "yahootw.prevails":
+      "If the Traditional Chinese and English versions differ, the Traditional Chinese version prevails",
     "yahootw.consentNeeded": "Tick the box to use Yahoo TW Stock.",
-    "yahootw.reconfirm": "The Yahoo TW Stock statement has been updated. Confirm it again in Settings; Yahoo TW Stock quotes are paused until you do.",
+    "yahootw.reconfirm":
+      "The Yahoo TW Stock statement has been updated. Confirm it again in Settings; Yahoo TW Stock quotes are paused until you do.",
     "yahootw.notFound": "Ticker not found on Yahoo TW Stock.",
     "yahootw.futuresNeedSource": "Futures quotes need Yahoo TW Stock turned on in Settings.",
     "src.finnhub": "Finnhub",
     "notice.overCap": "Added {symbol}. Finnhub's limit is {cap} US symbols, so it updates every minute from Yahoo.",
-    "notice.overCapPushed": "Added {symbol}. {pushed} now updates every minute from Yahoo: Finnhub's limit is {cap} US symbols.",
+    "notice.overCapPushed":
+      "Added {symbol}. {pushed} now updates every minute from Yahoo: Finnhub's limit is {cap} US symbols.",
     "finnhub.overCap": "Over the Finnhub limit of {cap}: updates every minute",
     "finnhub.noKey": "Finnhub has no API key. US stocks use Yahoo until you save one in Settings.",
-    "finnhub.secretUnreadable": "Could not read the saved Finnhub key file. US stocks use Yahoo until you save the key again in Settings.",
+    "finnhub.secretUnreadable":
+      "Could not read the saved Finnhub key file. US stocks use Yahoo until you save the key again in Settings.",
     "finnhub.keyNeeded": "Enter your Finnhub API key.",
     "sources.us.keyRemoveHint": "With Finnhub chosen it needs a key: type a new one, or turn Finnhub off to remove it.",
     "finnhub.keyInvalid": "A key has no spaces inside and at most 128 characters.",
@@ -233,8 +254,10 @@ export const STRINGS = {
     "sources.us.keyKeep": "Keep",
     "sources.us.keyReplace": "Leave the field empty to keep the saved key; a key typed here replaces it when you save.",
     "url.finnhubHost": "The Finnhub address must start with https://finnhub.io/ and only the path after it can change.",
-    "finnhub.badUrl": "The saved Finnhub address does not start with https://finnhub.io/ so the key is not sent. US stocks use Yahoo until you fix the address in Settings.",
-    "finnhub.keyUnprotected": "The settings and the key are saved, but chmod 600 failed on data/wickline/secrets.json, so other accounts on this computer may be able to read it. Run chmod 600 on that file yourself. Save or Cancel closes this dialog; nothing more is lost either way.",
+    "finnhub.badUrl":
+      "The saved Finnhub address does not start with https://finnhub.io/ so the key is not sent. US stocks use Yahoo until you fix the address in Settings.",
+    "finnhub.keyUnprotected":
+      "The settings and the key are saved, but chmod 600 failed on data/wickline/secrets.json, so other accounts on this computer may be able to read it. Run chmod 600 on that file yourself. Save or Cancel closes this dialog; nothing more is lost either way.",
     "budget.tooSmall": "Enter a whole number of at least 4.",
     "error.saveKey": "Could not save the Finnhub key.",
     "sources.us.title": "United States",
@@ -245,9 +268,12 @@ export const STRINGS = {
     "sources.us.budget": "Requests per minute",
     "sources.us.faster": "Updates about every 15–30 s instead of every minute.",
     "sources.us.cap": "Faster updates for up to {cap} US symbols; the rest update every minute from Yahoo.",
-    "sources.us.keyNote": "The key is stored in plaintext on this computer, in data/wickline/secrets.json in Herdr's folder, never in Herdr's shared state. Use a free-plan key.",
-    "sources.us.keyRemove": "With Finnhub off the saved key stays. To remove it, press Remove and save, or delete data/wickline/secrets.json.",
-    "sources.us.copies": "Every open copy of Wickline sends its own requests: with two copies open, the budget runs out twice as fast.",
+    "sources.us.keyNote":
+      "The key is stored in plaintext on this computer, in data/wickline/secrets.json in Herdr's folder, never in Herdr's shared state. Use a free-plan key.",
+    "sources.us.keyRemove":
+      "With Finnhub off the saved key stays. To remove it, press Remove and save, or delete data/wickline/secrets.json.",
+    "sources.us.copies":
+      "Every open copy of Wickline sends its own requests: with two copies open, the budget runs out twice as fast.",
   },
   "zh-TW": {
     "symbol.invalid": "請輸入代號，例如 AAPL、0700.HK、^GSPC 或台指期 WTX&，或交易對，例如 BTC/USDT。",
@@ -424,7 +450,8 @@ export const STRINGS = {
     "settings.noFallback": "Binance 無法使用時沒有替代來源。",
     "settings.advanced": "進階",
     "sources.other.title": "其他市場",
-    "sources.other.body": "港股、陸股、日股、韓股的股票與指數，以及匯率與其他交易所，只使用 Yahoo Finance，沒有可調整的設定。",
+    "sources.other.body":
+      "港股、陸股、日股、韓股的股票與指數，以及匯率與其他交易所，只使用 Yahoo Finance，沒有可調整的設定。",
     "sources.crypto.title": "加密貨幣",
     "sources.crypto.url": "Binance 網址",
     "sources.crypto.region": "部分地區（例如美國）可能無法使用 Binance。若無法連線，可改填提供相同 API 的網址。",
@@ -447,10 +474,13 @@ export const STRINGS = {
     "disclaimer.key": "你儲存的 Finnhub API 金鑰以明文存放在這台電腦上。",
     "disclaimer.prevails": "一般免責聲明以英文版為準，其他語言僅為翻譯。",
     "privacy.title": "隱私",
-    "privacy.hosts": "連線主機：query1.finance.yahoo.com（Yahoo Finance）、data-api.binance.vision（Binance Spot），以及你設定的 Binance 網址。清單中有台灣商品時：openapi.twse.com.tw（臺灣證券交易所公布的休市日期），每個開啟的 copy 每天以 GET 查詢一次，失敗後每小時重試，不需金鑰，也不儲存任何資料。只有在你開啟 Yahoo 奇摩股市並勾選同意後，才會連線 tw.stock.yahoo.com（Yahoo 奇摩股市，非公開介面），查詢你清單中的台股、指數與期貨。只有在你開啟證交所 MIS 並勾選同意後，才會連線 mis.twse.com.tw（證交所 MIS，非官方）或你設定的 MIS 網址。只有在你將美股改為 Finnhub 並儲存 API 金鑰後，才會連線 finnhub.io（Finnhub），這也是 API 金鑰唯一會送往的主機；Finnhub 網址只能修改路徑。",
+    "privacy.hosts":
+      "連線主機：query1.finance.yahoo.com（Yahoo Finance）、data-api.binance.vision（Binance Spot），以及你設定的 Binance 網址。清單中有台灣商品時：openapi.twse.com.tw（臺灣證券交易所公布的休市日期），每個開啟的 copy 每天以 GET 查詢一次，失敗後每小時重試，不需金鑰，也不儲存任何資料。只有在你開啟 Yahoo 奇摩股市並勾選同意後，才會連線 tw.stock.yahoo.com（Yahoo 奇摩股市，非公開介面），查詢你清單中的台股、指數與期貨。只有在你開啟證交所 MIS 並勾選同意後，才會連線 mis.twse.com.tw（證交所 MIS，非官方）或你設定的 MIS 網址。只有在你將美股改為 Finnhub 並儲存 API 金鑰後，才會連線 finnhub.io（Finnhub），這也是 API 金鑰唯一會送往的主機；Finnhub 網址只能修改路徑。",
     "privacy.programs": "程式：儲存 API 金鑰後，會把金鑰檔設成只有你的帳號能讀取（macOS、Linux）。不執行其他任何程式。",
-    "privacy.storage": "儲存：自選清單（wickline.watchlist.v1）、這些設定（wickline.settings.v1）與停靠面板把 Wickline 開在哪個分頁（wickline.dockTab，讓面板在該分頁開著時讓位），都存放在這台電腦上 Herdr 的共用狀態中。詳細資料開著時，wickline.detail 在共用狀態中存放它的報價（含走勢、成交資料與五檔），會寫入磁碟；開啟它的那個 Wickline 在列的資料變動時改寫，詳細資料關閉時清除；結束 Herdr 留下的值，會留到下次開啟詳細資料時取代。詳細資料不會自行發出任何請求。每個開啟的 Wickline 另在自己的 localStorage（Herdr 資料夾內 data/wickline/ 下的檔案）記住所選的市場篩選（wickline.filter），localStorage 只存這一項。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 data/wickline/secrets.json，在 macOS 與 Linux 上只有你的帳號能讀取，不會寫入共用狀態。建議使用免費方案的 API 金鑰。不讀寫其他檔案。若要移除 API 金鑰，請在「美股」頁按「移除」後儲存，或刪除該檔案；Time Machine 等備份可能仍留有舊的 API 金鑰，若要徹底撤銷，請到 Finnhub 重新產生 API 金鑰。",
-    "privacy.finnhub": "Finnhub：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 Wickline copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍：請只顯示一個 copy。",
+    "privacy.storage":
+      "儲存：自選清單（wickline.watchlist.v1）、這些設定（wickline.settings.v1）與停靠面板把 Wickline 開在哪個分頁（wickline.dockTab，讓面板在該分頁開著時讓位），都存放在這台電腦上 Herdr 的共用狀態中。詳細資料開著時，wickline.detail 在共用狀態中存放它的報價（含走勢、成交資料與五檔），會寫入磁碟；開啟它的那個 Wickline 在列的資料變動時改寫，詳細資料關閉時清除；結束 Herdr 留下的值，會留到下次開啟詳細資料時取代。詳細資料不會自行發出任何請求。每個開啟的 Wickline 另在自己的 localStorage（Herdr 資料夾內 data/wickline/ 下的檔案）記住所選的市場篩選（wickline.filter），localStorage 只存這一項。你儲存的 Finnhub API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 data/wickline/secrets.json，在 macOS 與 Linux 上只有你的帳號能讀取，不會寫入共用狀態。建議使用免費方案的 API 金鑰。不讀寫其他檔案。若要移除 API 金鑰，請在「美股」頁按「移除」後儲存，或刪除該檔案；Time Machine 等備份可能仍留有舊的 API 金鑰，若要徹底撤銷，請到 Finnhub 重新產生 API 金鑰。",
+    "privacy.finnhub":
+      "Finnhub：只會查詢額度所能涵蓋的前幾檔美股（預設每分鐘 60 次即 15 檔）。每個開啟的 Wickline copy 都會各自發出請求，開兩個 copy 額度就會用得快一倍：請只顯示一個 copy。",
     "mis.rateLimited": "證交所 MIS 限制了請求頻率。",
     "mis.http": "證交所 MIS 回應 HTTP {status}。",
     "mis.unreadable": "證交所 MIS 回應的資料無法解讀。",
@@ -472,15 +502,20 @@ export const STRINGS = {
     "detail.lineSource": "走勢：{source}",
     "sources.tw.title": "台股",
     "sources.tw.url": "證交所 MIS 網址",
-    "mis.statement": "證交所 MIS（mis.twse.com.tw）是臺灣證券交易所的「基本市況報導網站」，不是提供給程式使用的 API。Wickline 與臺灣證券交易所沒有任何關係，也未取得授權。\n\n開啟後，Wickline 會從這台電腦直接向 MIS 查詢你清單中的台股，交易時段約每 10 秒一次，取代 Yahoo Finance 延遲約 20 分鐘的價格；走勢圖仍來自 Yahoo Finance。\n\n資料可能延遲、有誤或中斷，MIS 也可能隨時變更或停止提供。Wickline 會捨棄超出該股當日漲跌停範圍的價格；其餘價格是否正確，無法保證。\n\n是否使用，以及使用方式是否符合臺灣證券交易所網站的使用條款，由你自行判斷；使用這些資料的一切後果，由你自行承擔。資料僅供個人參考，不構成投資建議。",
-    "mis.summary": "• 非官方用法：MIS 是證交所的看盤網站，不是提供給程式的 API；Wickline 與證交所沒有任何關係\n• 查詢你清單中的台股，交易時段約每 10 秒一次，取代延遲約 20 分鐘的報價\n• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議",
-    "mis.consent": "我已閱讀並了解以上說明，願意自行承擔使用證交所 MIS 資料的責任，並遵守臺灣證券交易所網站的使用條款。",
+    "mis.statement":
+      "證交所 MIS（mis.twse.com.tw）是臺灣證券交易所的「基本市況報導網站」，不是提供給程式使用的 API。Wickline 與臺灣證券交易所沒有任何關係，也未取得授權。\n\n開啟後，Wickline 會從這台電腦直接向 MIS 查詢你清單中的台股，交易時段約每 10 秒一次，取代 Yahoo Finance 延遲約 20 分鐘的價格；走勢圖仍來自 Yahoo Finance。\n\n資料可能延遲、有誤或中斷，MIS 也可能隨時變更或停止提供。Wickline 會捨棄超出該股當日漲跌停範圍的價格；其餘價格是否正確，無法保證。\n\n是否使用，以及使用方式是否符合臺灣證券交易所網站的使用條款，由你自行判斷；使用這些資料的一切後果，由你自行承擔。資料僅供個人參考，不構成投資建議。",
+    "mis.summary":
+      "• 非官方用法：MIS 是證交所的看盤網站，不是提供給程式的 API；Wickline 與證交所沒有任何關係\n• 查詢你清單中的台股，交易時段約每 10 秒一次，取代延遲約 20 分鐘的報價\n• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議",
+    "mis.consent":
+      "我已閱讀並了解以上說明，願意自行承擔使用證交所 MIS 資料的責任，並遵守臺灣證券交易所網站的使用條款。",
     "mis.prevails": "如中英文版本有歧異，以繁體中文版為準",
     "mis.consentNeeded": "勾選同意後才能使用證交所 MIS。",
     "mis.reconfirm": "證交所 MIS 的說明已更新，請到設定重新確認；確認前暫停使用其報價。",
     "src.yahootw": "Yahoo 奇摩股市",
-    "yahootw.statement": "Yahoo 奇摩股市（tw.stock.yahoo.com）的報價資料只供該網站自己使用，並未開放給其他程式，網站的 robots.txt 也不允許程式自動存取。Wickline 與 Yahoo 沒有任何關係，也未取得 Yahoo 的授權。\n\n開啟後，Wickline 會從這台電腦直接向 Yahoo 奇摩股市查詢你清單中的以下商品：上市股票、ETF 與加權指數（臺灣證券交易所），上櫃股票與櫃買指數（證券櫃檯買賣中心），以及期貨（臺灣期貨交易所）。交易時段約每 10 秒更新報價、每 2 分鐘更新走勢圖，其他時段則放慢為約 60 秒與 10 分鐘。這些報價會取代 Yahoo Finance 延遲約 20 分鐘的報價；Yahoo Finance 沒有的指數與期貨，只由 Yahoo 奇摩股市提供。\n\n資料可能延遲、有誤或中斷，Yahoo 也可能隨時變更、限制或停止提供。Wickline 會捨棄超出當日漲跌停範圍的股票價格；非當日的價格只用於 Yahoo Finance 沒有的商品，並會標示日期。其餘價格是否正確，無法保證。\n\n是否使用，以及使用方式是否符合 Yahoo 的服務條款，由你自行判斷；使用這些資料的一切後果，由你自行承擔。資料僅供個人參考，不構成投資建議。",
-    "yahootw.summary": "• 非官方資料來源：Wickline 與 Yahoo 沒有任何關係，資料可能延遲、有誤或中斷\n• 查詢你清單中的台股、指數與期貨，交易時段約每 10 秒一次\n• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議",
+    "yahootw.statement":
+      "Yahoo 奇摩股市（tw.stock.yahoo.com）的報價資料只供該網站自己使用，並未開放給其他程式，網站的 robots.txt 也不允許程式自動存取。Wickline 與 Yahoo 沒有任何關係，也未取得 Yahoo 的授權。\n\n開啟後，Wickline 會從這台電腦直接向 Yahoo 奇摩股市查詢你清單中的以下商品：上市股票、ETF 與加權指數（臺灣證券交易所），上櫃股票與櫃買指數（證券櫃檯買賣中心），以及期貨（臺灣期貨交易所）。交易時段約每 10 秒更新報價、每 2 分鐘更新走勢圖，其他時段則放慢為約 60 秒與 10 分鐘。這些報價會取代 Yahoo Finance 延遲約 20 分鐘的報價；Yahoo Finance 沒有的指數與期貨，只由 Yahoo 奇摩股市提供。\n\n資料可能延遲、有誤或中斷，Yahoo 也可能隨時變更、限制或停止提供。Wickline 會捨棄超出當日漲跌停範圍的股票價格；非當日的價格只用於 Yahoo Finance 沒有的商品，並會標示日期。其餘價格是否正確，無法保證。\n\n是否使用，以及使用方式是否符合 Yahoo 的服務條款，由你自行判斷；使用這些資料的一切後果，由你自行承擔。資料僅供個人參考，不構成投資建議。",
+    "yahootw.summary":
+      "• 非官方資料來源：Wickline 與 Yahoo 沒有任何關係，資料可能延遲、有誤或中斷\n• 查詢你清單中的台股、指數與期貨，交易時段約每 10 秒一次\n• 是否使用由你自行判斷，後果由你自行承擔；不構成投資建議",
     "yahootw.consent": "我已閱讀並了解以上說明，願意自行承擔使用 Yahoo 奇摩股市資料的責任，並遵守 Yahoo 的服務條款。",
     "yahootw.prevails": "如中英文版本有歧異，以繁體中文版為準",
     "yahootw.consentNeeded": "勾選同意後才能使用 Yahoo 奇摩股市。",
@@ -497,7 +532,8 @@ export const STRINGS = {
     "notice.overCapPushed": "已加入 {symbol}。{pushed} 改由 Yahoo 每分鐘更新：Finnhub 上限為 {cap} 檔美股。",
     "finnhub.overCap": "超出 Finnhub 上限（{cap} 檔）：每分鐘更新",
     "finnhub.noKey": "Finnhub 尚未設定 API 金鑰。在你於設定中儲存之前，美股使用 Yahoo。",
-    "finnhub.secretUnreadable": "無法讀取已儲存的 Finnhub API 金鑰檔案。在你於設定中重新儲存 API 金鑰之前，美股使用 Yahoo。",
+    "finnhub.secretUnreadable":
+      "無法讀取已儲存的 Finnhub API 金鑰檔案。在你於設定中重新儲存 API 金鑰之前，美股使用 Yahoo。",
     "finnhub.keyNeeded": "請輸入你的 Finnhub API 金鑰。",
     "sources.us.keyRemoveHint": "選擇 Finnhub 時需要 API 金鑰：請輸入新的 API 金鑰，或關閉 Finnhub 以移除它。",
     "finnhub.keyInvalid": "API 金鑰中間不可有空白，且最多 128 個字元。",
@@ -507,9 +543,11 @@ export const STRINGS = {
     "sources.us.keyKeep": "保留",
     "sources.us.keyReplace": "欄位留空即保留已儲存的 API 金鑰；在此輸入新的 API 金鑰，儲存後會取代原本的。",
     "url.finnhubHost": "Finnhub 網址必須以 https://finnhub.io/ 開頭，只能修改後面的路徑。",
-    "finnhub.badUrl": "已儲存的 Finnhub 網址不是以 https://finnhub.io/ 開頭，因此不會送出 API 金鑰。在你於設定中修正網址之前，美股使用 Yahoo。",
+    "finnhub.badUrl":
+      "已儲存的 Finnhub 網址不是以 https://finnhub.io/ 開頭，因此不會送出 API 金鑰。在你於設定中修正網址之前，美股使用 Yahoo。",
     "finnhub.redirected": "Finnhub 的回應來自其他網址。在你於設定中變更美股設定之前，不會再送出 API 金鑰。",
-    "finnhub.keyUnprotected": "設定與 API 金鑰都已儲存，但對 data/wickline/secrets.json 執行 chmod 600 失敗，這台電腦上的其他帳號可能讀得到它。請自行對該檔案執行 chmod 600。按「儲存」或「取消」都會關閉此視窗，不會再遺失任何內容。",
+    "finnhub.keyUnprotected":
+      "設定與 API 金鑰都已儲存，但對 data/wickline/secrets.json 執行 chmod 600 失敗，這台電腦上的其他帳號可能讀得到它。請自行對該檔案執行 chmod 600。按「儲存」或「取消」都會關閉此視窗，不會再遺失任何內容。",
     "budget.tooSmall": "請輸入 4 以上的整數。",
     "error.saveKey": "無法儲存 Finnhub API 金鑰。",
     "sources.us.title": "美股",
@@ -520,8 +558,10 @@ export const STRINGS = {
     "sources.us.budget": "每分鐘請求數",
     "sources.us.faster": "約每 15–30 秒更新一次，而非每分鐘一次。",
     "sources.us.cap": "最多 {cap} 檔美股可更快更新，其餘由 Yahoo 每分鐘更新。",
-    "sources.us.keyNote": "API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 data/wickline/secrets.json，不會寫入 Herdr 的共用狀態。建議使用免費方案的 API 金鑰。",
-    "sources.us.keyRemove": "關閉 Finnhub 時仍保留已儲存的 API 金鑰。若要移除，請按「移除」後儲存，或刪除 data/wickline/secrets.json。",
+    "sources.us.keyNote":
+      "API 金鑰以明文存放在這台電腦上 Herdr 資料夾內的 data/wickline/secrets.json，不會寫入 Herdr 的共用狀態。建議使用免費方案的 API 金鑰。",
+    "sources.us.keyRemove":
+      "關閉 Finnhub 時仍保留已儲存的 API 金鑰。若要移除，請按「移除」後儲存，或刪除 data/wickline/secrets.json。",
     "sources.us.copies": "每個開啟的 Wickline copy 都會各自發出請求：開兩個 copy，額度就會用得快一倍。",
   },
   "zh-CN": {
@@ -699,7 +739,8 @@ export const STRINGS = {
     "settings.noFallback": "Binance 无法使用时没有替代数据源。",
     "settings.advanced": "高级",
     "sources.other.title": "其他市场",
-    "sources.other.body": "港股、A股、日股、韩股的股票与指数，以及汇率与其他交易所，只使用 Yahoo Finance，没有可调整的设置。",
+    "sources.other.body":
+      "港股、A股、日股、韩股的股票与指数，以及汇率与其他交易所，只使用 Yahoo Finance，没有可调整的设置。",
     "sources.crypto.title": "加密货币",
     "sources.crypto.url": "Binance 网址",
     "sources.crypto.region": "部分地区（例如美国）可能无法使用 Binance。若无法连接，可改填提供相同 API 的网址。",
@@ -722,10 +763,14 @@ export const STRINGS = {
     "disclaimer.key": "你保存的 Finnhub 密钥以明文保存在这台电脑上。",
     "disclaimer.prevails": "通用免责声明以英文版为准，其他语言仅为译文。",
     "privacy.title": "隐私",
-    "privacy.hosts": "连接的主机：query1.finance.yahoo.com（Yahoo Finance）、data-api.binance.vision（Binance Spot），以及你设置的 Binance 网址。列表中有台湾商品时：openapi.twse.com.tw（台湾证券交易所公布的休市日期），每个打开的副本每天以 GET 查询一次，失败后每小时重试，无需密钥，也不保存任何数据。只有在你开启 Yahoo 奇摩股市并勾选同意后，才会连接 tw.stock.yahoo.com（Yahoo 奇摩股市，非公开接口），查询你列表中的台股、指数与期货。只有在你开启台湾证交所 MIS 并勾选同意后，才会连接 mis.twse.com.tw（台湾证交所 MIS，非官方）或你设置的 MIS 网址。只有在你将美股改为 Finnhub 并保存密钥后，才会连接 finnhub.io（Finnhub），这也是密钥唯一会发送到的主机；Finnhub 网址只能修改路径。",
-    "privacy.programs": "程序：保存 API 密钥后，会把密钥文件设为只有你的账户能读取（macOS、Linux）。不运行其他任何程序。",
-    "privacy.storage": "存储：自选列表（wickline.watchlist.v1）、这些设置（wickline.settings.v1）与停靠面板把 Wickline 打开在哪个标签页（wickline.dockTab，让面板在该标签页开着时让位），都保存在这台电脑上 Herdr 的共享状态中。详情打开时，wickline.detail 在共享状态中保存它的报价（含走势、成交数据与五档），会写入磁盘；打开它的那个 Wickline 在该行数据变动时改写，详情关闭时清除；退出 Herdr 留下的值，会保留到下次打开详情时被取代。详情不会自行发出任何请求。每个打开的 Wickline 另在自己的 localStorage（Herdr 文件夹内 data/wickline/ 下的文件）记住所选的市场筛选（wickline.filter），localStorage 只存这一项。你保存的 Finnhub 密钥以明文保存在这台电脑上 Herdr 文件夹内的 data/wickline/secrets.json，在 macOS 与 Linux 上只有你的账户能读取，不会写入共享状态。建议使用免费套餐的密钥。不读写其他文件。如需删除密钥，请在“美股”页点击“删除”后保存，或删除该文件；Time Machine 等备份可能仍留有旧密钥，如需彻底撤销，请到 Finnhub 重新生成密钥。",
-    "privacy.finnhub": "Finnhub：只会查询额度所能覆盖的前几只美股（默认每分钟 60 次即 15 只）。每个打开的 Wickline 副本都会各自发出请求，打开两个副本额度就会用得快一倍：请只显示一个副本。",
+    "privacy.hosts":
+      "连接的主机：query1.finance.yahoo.com（Yahoo Finance）、data-api.binance.vision（Binance Spot），以及你设置的 Binance 网址。列表中有台湾商品时：openapi.twse.com.tw（台湾证券交易所公布的休市日期），每个打开的副本每天以 GET 查询一次，失败后每小时重试，无需密钥，也不保存任何数据。只有在你开启 Yahoo 奇摩股市并勾选同意后，才会连接 tw.stock.yahoo.com（Yahoo 奇摩股市，非公开接口），查询你列表中的台股、指数与期货。只有在你开启台湾证交所 MIS 并勾选同意后，才会连接 mis.twse.com.tw（台湾证交所 MIS，非官方）或你设置的 MIS 网址。只有在你将美股改为 Finnhub 并保存密钥后，才会连接 finnhub.io（Finnhub），这也是密钥唯一会发送到的主机；Finnhub 网址只能修改路径。",
+    "privacy.programs":
+      "程序：保存 API 密钥后，会把密钥文件设为只有你的账户能读取（macOS、Linux）。不运行其他任何程序。",
+    "privacy.storage":
+      "存储：自选列表（wickline.watchlist.v1）、这些设置（wickline.settings.v1）与停靠面板把 Wickline 打开在哪个标签页（wickline.dockTab，让面板在该标签页开着时让位），都保存在这台电脑上 Herdr 的共享状态中。详情打开时，wickline.detail 在共享状态中保存它的报价（含走势、成交数据与五档），会写入磁盘；打开它的那个 Wickline 在该行数据变动时改写，详情关闭时清除；退出 Herdr 留下的值，会保留到下次打开详情时被取代。详情不会自行发出任何请求。每个打开的 Wickline 另在自己的 localStorage（Herdr 文件夹内 data/wickline/ 下的文件）记住所选的市场筛选（wickline.filter），localStorage 只存这一项。你保存的 Finnhub 密钥以明文保存在这台电脑上 Herdr 文件夹内的 data/wickline/secrets.json，在 macOS 与 Linux 上只有你的账户能读取，不会写入共享状态。建议使用免费套餐的密钥。不读写其他文件。如需删除密钥，请在“美股”页点击“删除”后保存，或删除该文件；Time Machine 等备份可能仍留有旧密钥，如需彻底撤销，请到 Finnhub 重新生成密钥。",
+    "privacy.finnhub":
+      "Finnhub：只会查询额度所能覆盖的前几只美股（默认每分钟 60 次即 15 只）。每个打开的 Wickline 副本都会各自发出请求，打开两个副本额度就会用得快一倍：请只显示一个副本。",
     "mis.rateLimited": "台湾证交所 MIS 限制了请求频率。",
     "mis.http": "台湾证交所 MIS 返回 HTTP {status}。",
     "mis.unreadable": "台湾证交所 MIS 返回的数据无法解析。",
@@ -747,15 +792,20 @@ export const STRINGS = {
     "detail.lineSource": "走势：{source}",
     "sources.tw.title": "台股",
     "sources.tw.url": "台湾证交所 MIS 网址",
-    "mis.statement": "台湾证交所 MIS（mis.twse.com.tw）是台湾证券交易所的“基本市况报道网站”，并非面向程序提供的 API。Wickline 与台湾证券交易所不存在任何关联，也未获得其授权。\n\n开启后，Wickline 会从本机直接向 MIS 查询你自选列表中的台股，交易时段约每 10 秒一次，以取代 Yahoo Finance 延迟约 20 分钟的价格；走势图仍来自 Yahoo Finance。\n\n数据可能存在延迟、错误或中断，MIS 也可能随时变更或停止提供。Wickline 会剔除超出该股当日涨跌停范围的价格；其余价格的准确性无法保证。\n\n是否使用，以及使用方式是否符合台湾证券交易所网站的使用条款，由你自行判断；使用这些数据产生的一切后果，由你自行承担。数据仅供个人参考，不构成投资建议。",
-    "mis.summary": "• 非官方用法：MIS 是台湾证交所的看盘网站，并非面向程序的 API；Wickline 与台湾证交所不存在任何关联\n• 查询你自选列表中的台股，交易时段约每 10 秒一次，取代延迟约 20 分钟的行情\n• 是否使用由你自行判断，后果由你自行承担；不构成投资建议",
-    "mis.consent": "我已阅读并理解以上说明，愿意自行承担使用台湾证交所 MIS 数据的责任，并遵守台湾证券交易所网站的使用条款。",
+    "mis.statement":
+      "台湾证交所 MIS（mis.twse.com.tw）是台湾证券交易所的“基本市况报道网站”，并非面向程序提供的 API。Wickline 与台湾证券交易所不存在任何关联，也未获得其授权。\n\n开启后，Wickline 会从本机直接向 MIS 查询你自选列表中的台股，交易时段约每 10 秒一次，以取代 Yahoo Finance 延迟约 20 分钟的价格；走势图仍来自 Yahoo Finance。\n\n数据可能存在延迟、错误或中断，MIS 也可能随时变更或停止提供。Wickline 会剔除超出该股当日涨跌停范围的价格；其余价格的准确性无法保证。\n\n是否使用，以及使用方式是否符合台湾证券交易所网站的使用条款，由你自行判断；使用这些数据产生的一切后果，由你自行承担。数据仅供个人参考，不构成投资建议。",
+    "mis.summary":
+      "• 非官方用法：MIS 是台湾证交所的看盘网站，并非面向程序的 API；Wickline 与台湾证交所不存在任何关联\n• 查询你自选列表中的台股，交易时段约每 10 秒一次，取代延迟约 20 分钟的行情\n• 是否使用由你自行判断，后果由你自行承担；不构成投资建议",
+    "mis.consent":
+      "我已阅读并理解以上说明，愿意自行承担使用台湾证交所 MIS 数据的责任，并遵守台湾证券交易所网站的使用条款。",
     "mis.prevails": "本文为译文，仅供参考；如与繁体中文版本存在差异，以繁体中文版本为准",
     "mis.consentNeeded": "勾选同意后才能使用台湾证交所 MIS。",
     "mis.reconfirm": "台湾证交所 MIS 的说明已更新，请前往设置重新确认；确认前将暂停使用其行情。",
     "src.yahootw": "Yahoo 奇摩股市",
-    "yahootw.statement": "Yahoo 奇摩股市（tw.stock.yahoo.com）的行情数据仅供该网站自身使用，并未向其他程序开放，网站的 robots.txt 也不允许程序自动访问。Wickline 与 Yahoo 不存在任何关联，也未获得 Yahoo 的授权。\n\n开启后，Wickline 会从本机直接向 Yahoo 奇摩股市查询你自选列表中的以下品种：上市股票、ETF 与加权指数（台湾证券交易所），上柜股票与柜买指数（证券柜台买卖中心），以及期货（台湾期货交易所）。交易时段约每 10 秒更新一次行情、每 2 分钟更新一次走势图，其他时段放缓至约 60 秒与 10 分钟一次。这些行情将取代 Yahoo Finance 延迟约 20 分钟的行情；Yahoo Finance 未提供的指数与期货，仅由 Yahoo 奇摩股市提供。\n\n数据可能存在延迟、错误或中断，Yahoo 也可能随时变更、限制或停止提供。Wickline 会剔除超出当日涨跌停范围的股票价格；非当日的价格仅用于 Yahoo Finance 未提供的品种，并会标注日期。其余价格的准确性无法保证。\n\n是否使用，以及使用方式是否符合 Yahoo 的服务条款，由你自行判断；使用这些数据产生的一切后果，由你自行承担。数据仅供个人参考，不构成投资建议。",
-    "yahootw.summary": "• 非官方数据来源：Wickline 与 Yahoo 不存在任何关联，数据可能存在延迟、错误或中断\n• 查询你自选列表中的台股、指数与期货，交易时段约每 10 秒一次\n• 是否使用由你自行判断，后果由你自行承担；不构成投资建议",
+    "yahootw.statement":
+      "Yahoo 奇摩股市（tw.stock.yahoo.com）的行情数据仅供该网站自身使用，并未向其他程序开放，网站的 robots.txt 也不允许程序自动访问。Wickline 与 Yahoo 不存在任何关联，也未获得 Yahoo 的授权。\n\n开启后，Wickline 会从本机直接向 Yahoo 奇摩股市查询你自选列表中的以下品种：上市股票、ETF 与加权指数（台湾证券交易所），上柜股票与柜买指数（证券柜台买卖中心），以及期货（台湾期货交易所）。交易时段约每 10 秒更新一次行情、每 2 分钟更新一次走势图，其他时段放缓至约 60 秒与 10 分钟一次。这些行情将取代 Yahoo Finance 延迟约 20 分钟的行情；Yahoo Finance 未提供的指数与期货，仅由 Yahoo 奇摩股市提供。\n\n数据可能存在延迟、错误或中断，Yahoo 也可能随时变更、限制或停止提供。Wickline 会剔除超出当日涨跌停范围的股票价格；非当日的价格仅用于 Yahoo Finance 未提供的品种，并会标注日期。其余价格的准确性无法保证。\n\n是否使用，以及使用方式是否符合 Yahoo 的服务条款，由你自行判断；使用这些数据产生的一切后果，由你自行承担。数据仅供个人参考，不构成投资建议。",
+    "yahootw.summary":
+      "• 非官方数据来源：Wickline 与 Yahoo 不存在任何关联，数据可能存在延迟、错误或中断\n• 查询你自选列表中的台股、指数与期货，交易时段约每 10 秒一次\n• 是否使用由你自行判断，后果由你自行承担；不构成投资建议",
     "yahootw.consent": "我已阅读并理解以上说明，愿意自行承担使用 Yahoo 奇摩股市数据的责任，并遵守 Yahoo 的服务条款。",
     "yahootw.prevails": "本文为译文，仅供参考；如与繁体中文版本存在差异，以繁体中文版本为准",
     "yahootw.consentNeeded": "勾选同意后才能使用 Yahoo 奇摩股市。",
@@ -782,9 +832,11 @@ export const STRINGS = {
     "sources.us.keyKeep": "保留",
     "sources.us.keyReplace": "字段留空即保留已保存的密钥；在此输入新密钥，保存后会替换原来的。",
     "url.finnhubHost": "Finnhub 网址必须以 https://finnhub.io/ 开头，只能修改后面的路径。",
-    "finnhub.badUrl": "已保存的 Finnhub 网址不是以 https://finnhub.io/ 开头，因此不会发送密钥。在你于设置中修正网址之前，美股使用 Yahoo。",
+    "finnhub.badUrl":
+      "已保存的 Finnhub 网址不是以 https://finnhub.io/ 开头，因此不会发送密钥。在你于设置中修正网址之前，美股使用 Yahoo。",
     "finnhub.redirected": "Finnhub 的响应来自其他网址。在你于设置中更改美股设置之前，不会再发送密钥。",
-    "finnhub.keyUnprotected": "设置与密钥都已保存，但对 data/wickline/secrets.json 执行 chmod 600 失败，这台电脑上的其他账户可能读取到它。请自行对该文件执行 chmod 600。点击“保存”或“取消”都会关闭此窗口，不会再丢失任何内容。",
+    "finnhub.keyUnprotected":
+      "设置与密钥都已保存，但对 data/wickline/secrets.json 执行 chmod 600 失败，这台电脑上的其他账户可能读取到它。请自行对该文件执行 chmod 600。点击“保存”或“取消”都会关闭此窗口，不会再丢失任何内容。",
     "budget.tooSmall": "请输入不小于 4 的整数。",
     "error.saveKey": "无法保存 Finnhub key。",
     "sources.us.title": "美股",
@@ -795,12 +847,15 @@ export const STRINGS = {
     "sources.us.budget": "每分钟请求数",
     "sources.us.faster": "约每 15–30 秒更新一次，而非每分钟一次。",
     "sources.us.cap": "最多 {cap} 只美股可更快更新，其余由 Yahoo 每分钟更新。",
-    "sources.us.keyNote": "key 以明文保存在这台电脑上 Herdr 文件夹内的 data/wickline/secrets.json，不会写入 Herdr 的共享状态。建议使用免费套餐的 key。",
-    "sources.us.keyRemove": "关闭 Finnhub 时仍保留已保存的密钥。如需删除，请点击“删除”后保存，或删除 data/wickline/secrets.json。",
+    "sources.us.keyNote":
+      "key 以明文保存在这台电脑上 Herdr 文件夹内的 data/wickline/secrets.json，不会写入 Herdr 的共享状态。建议使用免费套餐的 key。",
+    "sources.us.keyRemove":
+      "关闭 Finnhub 时仍保留已保存的密钥。如需删除，请点击“删除”后保存，或删除 data/wickline/secrets.json。",
     "sources.us.copies": "每个打开的 Wickline 副本都会各自发出请求：打开两个副本，额度就会用得快一倍。",
   },
   ja: {
-    "symbol.invalid": "AAPL、0700.HK、^GSPC、台湾指数先物 WTX& などの銘柄コード、または BTC/USDT などのペアを入力してください。",
+    "symbol.invalid":
+      "AAPL、0700.HK、^GSPC、台湾指数先物 WTX& などの銘柄コード、または BTC/USDT などのペアを入力してください。",
     "yahoo.rateLimited": "Yahoo がリクエストを制限しました。",
     "yahoo.notFound": "Yahoo Finance にこの銘柄コードはありません。",
     "yahoo.http": "Yahoo が HTTP {status} を返しました。",
@@ -950,7 +1005,8 @@ export const STRINGS = {
     "table.price": "価格",
     "table.change": "前日比",
     "table.changePct": "騰落率",
-    "footer.long": "価格はサードパーティのデータで、参考情報です。投資助言ではありません。詳細は「免責事項とプライバシー」をご覧ください。",
+    "footer.long":
+      "価格はサードパーティのデータで、参考情報です。投資助言ではありません。詳細は「免責事項とプライバシー」をご覧ください。",
     "settings.title": "設定",
     "settings.tab.display": "表示",
     "settings.tab.disclaimer": "免責事項とプライバシー",
@@ -974,10 +1030,12 @@ export const STRINGS = {
     "settings.noFallback": "Binance が使えないときの代わりのソースはありません。",
     "settings.advanced": "詳細設定",
     "sources.other.title": "その他の市場",
-    "sources.other.body": "香港・中国・日本・韓国の株式と指数、為替、その他の取引所は Yahoo Finance のみを使います。設定項目はありません。",
+    "sources.other.body":
+      "香港・中国・日本・韓国の株式と指数、為替、その他の取引所は Yahoo Finance のみを使います。設定項目はありません。",
     "sources.crypto.title": "暗号資産",
     "sources.crypto.url": "Binance の URL",
-    "sources.crypto.region": "地域によっては（米国など）Binance を利用できない場合があります。その場合は、同じ API を提供する URL を入力してください。",
+    "sources.crypto.region":
+      "地域によっては（米国など）Binance を利用できない場合があります。その場合は、同じ API を提供する URL を入力してください。",
     "url.notHttps": "https:// で始まる URL を入力してください。",
     "url.invalid": "URL にはホスト名が必要で、? や # 以降は付けられません。",
     "display.language": "言語",
@@ -986,21 +1044,28 @@ export const STRINGS = {
     "display.colors.auto": "自動",
     "display.colors.redUp": "赤が上昇",
     "display.colors.greenUp": "緑が上昇",
-    "display.colorsHint": "色は市場ではなくあなたに合わせます。リスト全体で同じルールを使います。香港では通常、緑が上昇です。",
+    "display.colorsHint":
+      "色は市場ではなくあなたに合わせます。リスト全体で同じルールを使います。香港では通常、緑が上昇です。",
     "display.appearance": "Herdr の外観設定を開く",
     "display.appearanceHint": "ライト／ダークのテーマは Herdr 側で設定します。Wickline 独自の設定はありません。",
     "disclaimer.title": "免責事項",
     "disclaimer.data": "価格はサードパーティから取得したもので、正確性・即時性・提供の継続は保証されません。",
     "disclaimer.advice": "表示される内容はいずれも投資助言ではありません。",
-    "disclaimer.sources": "非公開のソースを有効にしたり、キーを入力したりすることは利用者自身の行為であり、そのソースの規約に従います。",
-    "disclaimer.direct": "リクエストはこのコンピュータから各ソースへ直接送られます。Wickline にはサーバーがなく、テレメトリも送信しません。",
+    "disclaimer.sources":
+      "非公開のソースを有効にしたり、キーを入力したりすることは利用者自身の行為であり、そのソースの規約に従います。",
+    "disclaimer.direct":
+      "リクエストはこのコンピュータから各ソースへ直接送られます。Wickline にはサーバーがなく、テレメトリも送信しません。",
     "disclaimer.key": "保存した Finnhub キーは、このコンピュータに平文で保存されます。",
     "disclaimer.prevails": "一般免責事項は英語版が優先され、他の言語は翻訳です。",
     "privacy.title": "プライバシー",
-    "privacy.hosts": "接続先: query1.finance.yahoo.com（Yahoo Finance）、data-api.binance.vision（Binance Spot）、および設定した Binance の URL。リストに台湾の銘柄がある間は、openapi.twse.com.tw（台湾証券取引所が公表する休場日）にも開いているコピーごとに 1 日 1 回 GET で照会し、失敗した場合は 1 時間ごとに再試行します（キーは不要で、何も保存しません）。台湾株で Yahoo 奇摩股市をオンにして同意にチェックを入れた場合に限り、tw.stock.yahoo.com（Yahoo 奇摩股市、非公開のインターフェース）にも接続し、リストの台湾株・指数・先物を照会します。台湾株で TWSE MIS をオンにして同意にチェックを入れた場合に限り、mis.twse.com.tw（TWSE MIS、非公式）または設定した MIS の URL にも接続します。米国株で Finnhub を選んでキーを保存した場合に限り、finnhub.io（Finnhub）にも接続します。キーを送るのはこのホストだけで、Finnhub の URL で変更できるのはパスだけです。",
-    "privacy.programs": "プログラム: API キーを保存すると、そのファイルをあなたのアカウントだけが読めるように設定します（macOS、Linux）。それ以外のプログラムは実行しません。",
-    "privacy.storage": "保存: ウォッチリスト（wickline.watchlist.v1）、これらの設定（wickline.settings.v1）、ドックしたパネルが Wickline を開いたタブ（wickline.dockTab。そのタブが開いている間、パネルは譲ります）は、このコンピュータ上の Herdr の共有状態に保存されます。詳細を開いている間、wickline.detail はその相場（チャート、売買データ、5 本の気配を含む）を共有状態に保持し、ディスクに保存します。行が変わるたびに、それを開いたコピーが書き直し、詳細を閉じると消去します。Herdr を終了して残った値は、次に詳細を開くまで残ります。詳細ダイアログからは、独自のリクエストは送りません。開いている各 Wickline は、選んだ市場フィルタ（wickline.filter）を、それぞれの localStorage（Herdr フォルダ内 data/wickline/ のファイル）にも記憶します。localStorage に保存するのはこれだけです。保存した Finnhub キーは、このコンピュータの Herdr フォルダ内 data/wickline/secrets.json に平文で保存され、macOS と Linux では自分のアカウントだけが読めます。共有状態には書き込まれません。無料プランのキーをおすすめします。ほかのファイルは読み書きしません。キーを削除するには、「米国」ページで「削除」を押して保存するか、そのファイルを削除してください。Time Machine などのバックアップに古いキーが残ることがあるため、完全に無効にするには Finnhub でキーを再発行してください。",
-    "privacy.finnhub": "Finnhub: 上限でカバーできる先頭の米国株だけを照会します（既定の 1 分あたり 60 回なら 15 銘柄）。開いている Wickline のコピーはそれぞれリクエストを送るため、2 つ開くと上限に 2 倍の速さで達します。表示するコピーは 1 つにしてください。",
+    "privacy.hosts":
+      "接続先: query1.finance.yahoo.com（Yahoo Finance）、data-api.binance.vision（Binance Spot）、および設定した Binance の URL。リストに台湾の銘柄がある間は、openapi.twse.com.tw（台湾証券取引所が公表する休場日）にも開いているコピーごとに 1 日 1 回 GET で照会し、失敗した場合は 1 時間ごとに再試行します（キーは不要で、何も保存しません）。台湾株で Yahoo 奇摩股市をオンにして同意にチェックを入れた場合に限り、tw.stock.yahoo.com（Yahoo 奇摩股市、非公開のインターフェース）にも接続し、リストの台湾株・指数・先物を照会します。台湾株で TWSE MIS をオンにして同意にチェックを入れた場合に限り、mis.twse.com.tw（TWSE MIS、非公式）または設定した MIS の URL にも接続します。米国株で Finnhub を選んでキーを保存した場合に限り、finnhub.io（Finnhub）にも接続します。キーを送るのはこのホストだけで、Finnhub の URL で変更できるのはパスだけです。",
+    "privacy.programs":
+      "プログラム: API キーを保存すると、そのファイルをあなたのアカウントだけが読めるように設定します（macOS、Linux）。それ以外のプログラムは実行しません。",
+    "privacy.storage":
+      "保存: ウォッチリスト（wickline.watchlist.v1）、これらの設定（wickline.settings.v1）、ドックしたパネルが Wickline を開いたタブ（wickline.dockTab。そのタブが開いている間、パネルは譲ります）は、このコンピュータ上の Herdr の共有状態に保存されます。詳細を開いている間、wickline.detail はその相場（チャート、売買データ、5 本の気配を含む）を共有状態に保持し、ディスクに保存します。行が変わるたびに、それを開いたコピーが書き直し、詳細を閉じると消去します。Herdr を終了して残った値は、次に詳細を開くまで残ります。詳細ダイアログからは、独自のリクエストは送りません。開いている各 Wickline は、選んだ市場フィルタ（wickline.filter）を、それぞれの localStorage（Herdr フォルダ内 data/wickline/ のファイル）にも記憶します。localStorage に保存するのはこれだけです。保存した Finnhub キーは、このコンピュータの Herdr フォルダ内 data/wickline/secrets.json に平文で保存され、macOS と Linux では自分のアカウントだけが読めます。共有状態には書き込まれません。無料プランのキーをおすすめします。ほかのファイルは読み書きしません。キーを削除するには、「米国」ページで「削除」を押して保存するか、そのファイルを削除してください。Time Machine などのバックアップに古いキーが残ることがあるため、完全に無効にするには Finnhub でキーを再発行してください。",
+    "privacy.finnhub":
+      "Finnhub: 上限でカバーできる先頭の米国株だけを照会します（既定の 1 分あたり 60 回なら 15 銘柄）。開いている Wickline のコピーはそれぞれリクエストを送るため、2 つ開くと上限に 2 倍の速さで達します。表示するコピーは 1 つにしてください。",
     "mis.rateLimited": "TWSE MIS がリクエストを制限しました。",
     "mis.http": "TWSE MIS が HTTP {status} を返しました。",
     "mis.unreadable": "TWSE MIS の応答を読み取れません。",
@@ -1022,19 +1087,27 @@ export const STRINGS = {
     "detail.lineSource": "チャート: {source}",
     "sources.tw.title": "台湾株",
     "sources.tw.url": "TWSE MIS の URL",
-    "mis.statement": "TWSE MIS（mis.twse.com.tw）は台湾証券取引所が運営する市況情報サイト（基本市況報導網站）であり、プログラム向けに提供されている API ではありません。Wickline は台湾証券取引所とは一切関係がなく、その許諾も得ていません。\n\n有効にすると、Wickline はお使いのコンピュータから MIS に直接アクセスし、ウォッチリストにある台湾株の価格を取引時間中は約 10 秒ごとに取得して、約 20 分遅れの Yahoo Finance の価格に代えて表示します。チャートは引き続き Yahoo Finance のものを使います。\n\nデータには遅延、誤り、中断が生じることがあり、MIS が随時、変更したり提供を停止したりする場合があります。Wickline は当該銘柄の当日の値幅制限を超える価格を破棄します。その他の価格の正確性は保証できません。\n\n利用するかどうか、またその利用方法が台湾証券取引所ウェブサイトの利用規約に適合するかどうかは、ご自身で判断してください。これらのデータの利用により生じる一切の結果は、ご自身の責任となります。データは個人的な参考情報にすぎず、投資助言ではありません。",
-    "mis.summary": "• 非公式の利用方法：MIS は台湾証券取引所の相場閲覧サイトで、プログラム向けの API ではありません。Wickline は同取引所とは一切関係がありません\n• ウォッチリストにある台湾株の価格を取引時間中は約 10 秒ごとに取得し、約 20 分遅れの価格に代えて表示します\n• 利用はご自身の判断と責任で行ってください。投資助言ではありません",
-    "mis.consent": "上記の説明を読み、内容を理解しました。TWSE MIS のデータの利用について自ら責任を負い、台湾証券取引所ウェブサイトの利用規約を遵守します",
+    "mis.statement":
+      "TWSE MIS（mis.twse.com.tw）は台湾証券取引所が運営する市況情報サイト（基本市況報導網站）であり、プログラム向けに提供されている API ではありません。Wickline は台湾証券取引所とは一切関係がなく、その許諾も得ていません。\n\n有効にすると、Wickline はお使いのコンピュータから MIS に直接アクセスし、ウォッチリストにある台湾株の価格を取引時間中は約 10 秒ごとに取得して、約 20 分遅れの Yahoo Finance の価格に代えて表示します。チャートは引き続き Yahoo Finance のものを使います。\n\nデータには遅延、誤り、中断が生じることがあり、MIS が随時、変更したり提供を停止したりする場合があります。Wickline は当該銘柄の当日の値幅制限を超える価格を破棄します。その他の価格の正確性は保証できません。\n\n利用するかどうか、またその利用方法が台湾証券取引所ウェブサイトの利用規約に適合するかどうかは、ご自身で判断してください。これらのデータの利用により生じる一切の結果は、ご自身の責任となります。データは個人的な参考情報にすぎず、投資助言ではありません。",
+    "mis.summary":
+      "• 非公式の利用方法：MIS は台湾証券取引所の相場閲覧サイトで、プログラム向けの API ではありません。Wickline は同取引所とは一切関係がありません\n• ウォッチリストにある台湾株の価格を取引時間中は約 10 秒ごとに取得し、約 20 分遅れの価格に代えて表示します\n• 利用はご自身の判断と責任で行ってください。投資助言ではありません",
+    "mis.consent":
+      "上記の説明を読み、内容を理解しました。TWSE MIS のデータの利用について自ら責任を負い、台湾証券取引所ウェブサイトの利用規約を遵守します",
     "mis.prevails": "本文は翻訳です。繁体字中国語版と内容に相違がある場合は、繁体字中国語版が優先します",
     "mis.consentNeeded": "TWSE MIS を使うには、チェックボックスにチェックを入れてください。",
-    "mis.reconfirm": "TWSE MIS の説明が更新されました。設定で再度ご確認ください。確認されるまで、TWSE MIS の価格の利用を停止します。",
+    "mis.reconfirm":
+      "TWSE MIS の説明が更新されました。設定で再度ご確認ください。確認されるまで、TWSE MIS の価格の利用を停止します。",
     "src.yahootw": "Yahoo 奇摩股市",
-    "yahootw.statement": "Yahoo 奇摩股市（tw.stock.yahoo.com）の価格データは同サイト自身が利用するためのもので、他のプログラムには公開されていません。また、同サイトの robots.txt はプログラムによる自動アクセスを許可していません。Wickline は Yahoo とは一切関係がなく、Yahoo の許諾も得ていません。\n\n有効にすると、Wickline はお使いのコンピュータから Yahoo 奇摩股市に直接アクセスし、ウォッチリストにある次の銘柄の価格を取得します。台湾証券取引所の上場株式・ETF・加権指数、台湾の店頭市場（TPEx）の店頭株式・TPEx 指数、台湾先物取引所の先物です。取引時間中は価格を約 10 秒ごと、チャートを約 2 分ごとに更新し、それ以外の時間帯は、更新間隔をそれぞれ約 60 秒、約 10 分に延ばします。これらの価格を、約 20 分遅れの Yahoo Finance の価格に代えて表示します。Yahoo Finance にない指数と先物は、Yahoo 奇摩股市からのみ取得します。\n\nデータには遅延、誤り、中断が生じることがあり、Yahoo が随時、変更・制限したり提供を停止したりする場合があります。Wickline は当日の値幅制限を超える株式の価格を破棄します。当日以外の価格は Yahoo Finance にない銘柄にのみ使い、日付を付けて表示します。その他の価格の正確性は保証できません。\n\n利用するかどうか、またその利用方法が Yahoo の利用規約に適合するかどうかは、ご自身で判断してください。これらのデータの利用により生じる一切の結果は、ご自身の責任となります。データは個人的な参考情報にすぎず、投資助言ではありません。",
-    "yahootw.summary": "• 非公式のデータソース：Wickline は Yahoo とは一切関係がなく、データには遅延、誤り、中断が生じることがあります\n• ウォッチリストにある台湾株・指数・先物の価格を、取引時間中は約 10 秒ごとに取得します\n• 利用はご自身の判断と責任で行ってください。投資助言ではありません",
-    "yahootw.consent": "上記の説明を読み、内容を理解しました。Yahoo 奇摩股市のデータの利用について自ら責任を負い、Yahoo の利用規約を遵守します",
+    "yahootw.statement":
+      "Yahoo 奇摩股市（tw.stock.yahoo.com）の価格データは同サイト自身が利用するためのもので、他のプログラムには公開されていません。また、同サイトの robots.txt はプログラムによる自動アクセスを許可していません。Wickline は Yahoo とは一切関係がなく、Yahoo の許諾も得ていません。\n\n有効にすると、Wickline はお使いのコンピュータから Yahoo 奇摩股市に直接アクセスし、ウォッチリストにある次の銘柄の価格を取得します。台湾証券取引所の上場株式・ETF・加権指数、台湾の店頭市場（TPEx）の店頭株式・TPEx 指数、台湾先物取引所の先物です。取引時間中は価格を約 10 秒ごと、チャートを約 2 分ごとに更新し、それ以外の時間帯は、更新間隔をそれぞれ約 60 秒、約 10 分に延ばします。これらの価格を、約 20 分遅れの Yahoo Finance の価格に代えて表示します。Yahoo Finance にない指数と先物は、Yahoo 奇摩股市からのみ取得します。\n\nデータには遅延、誤り、中断が生じることがあり、Yahoo が随時、変更・制限したり提供を停止したりする場合があります。Wickline は当日の値幅制限を超える株式の価格を破棄します。当日以外の価格は Yahoo Finance にない銘柄にのみ使い、日付を付けて表示します。その他の価格の正確性は保証できません。\n\n利用するかどうか、またその利用方法が Yahoo の利用規約に適合するかどうかは、ご自身で判断してください。これらのデータの利用により生じる一切の結果は、ご自身の責任となります。データは個人的な参考情報にすぎず、投資助言ではありません。",
+    "yahootw.summary":
+      "• 非公式のデータソース：Wickline は Yahoo とは一切関係がなく、データには遅延、誤り、中断が生じることがあります\n• ウォッチリストにある台湾株・指数・先物の価格を、取引時間中は約 10 秒ごとに取得します\n• 利用はご自身の判断と責任で行ってください。投資助言ではありません",
+    "yahootw.consent":
+      "上記の説明を読み、内容を理解しました。Yahoo 奇摩股市のデータの利用について自ら責任を負い、Yahoo の利用規約を遵守します",
     "yahootw.prevails": "本文は翻訳です。繁体字中国語版と内容に相違がある場合は、繁体字中国語版が優先します",
     "yahootw.consentNeeded": "Yahoo 奇摩股市を使うには、チェックボックスにチェックを入れてください。",
-    "yahootw.reconfirm": "Yahoo 奇摩股市の説明が更新されました。設定で再度ご確認ください。確認されるまで、Yahoo 奇摩股市の価格の利用を停止します。",
+    "yahootw.reconfirm":
+      "Yahoo 奇摩股市の説明が更新されました。設定で再度ご確認ください。確認されるまで、Yahoo 奇摩股市の価格の利用を停止します。",
     "yahootw.notFound": "Yahoo 奇摩股市にこの銘柄コードはありません。",
     "yahootw.futuresNeedSource": "先物の価格を表示するには、設定で Yahoo 奇摩股市を有効にしてください。",
     "finnhub.invalidKey": "Finnhub が API キーを拒否しました。設定で確認してください。",
@@ -1043,23 +1116,31 @@ export const STRINGS = {
     "finnhub.unreadable": "Finnhub の応答を読み取れません。",
     "finnhub.unreachable": "Finnhub に接続できません。",
     "src.finnhub": "Finnhub",
-    "notice.overCap": "{symbol} を追加しました。Finnhub の上限は米国株 {cap} 銘柄のため、この銘柄は Yahoo で 1 分ごとに更新します。",
-    "notice.overCapPushed": "{symbol} を追加しました。{pushed} は Yahoo で 1 分ごとに更新します: Finnhub の上限は米国株 {cap} 銘柄です。",
+    "notice.overCap":
+      "{symbol} を追加しました。Finnhub の上限は米国株 {cap} 銘柄のため、この銘柄は Yahoo で 1 分ごとに更新します。",
+    "notice.overCapPushed":
+      "{symbol} を追加しました。{pushed} は Yahoo で 1 分ごとに更新します: Finnhub の上限は米国株 {cap} 銘柄です。",
     "finnhub.overCap": "Finnhub の上限（{cap} 銘柄）超過: 1 分ごとに更新",
     "finnhub.noKey": "Finnhub の API キーが未設定です。設定で保存するまで、米国株は Yahoo を使います。",
-    "finnhub.secretUnreadable": "保存された Finnhub キーのファイルを読み取れません。設定でキーを保存し直すまで、米国株は Yahoo を使います。",
+    "finnhub.secretUnreadable":
+      "保存された Finnhub キーのファイルを読み取れません。設定でキーを保存し直すまで、米国株は Yahoo を使います。",
     "finnhub.keyNeeded": "Finnhub の API キーを入力してください。",
-    "sources.us.keyRemoveHint": "Finnhub を選んでいる間は API キーが必要です。新しいキーを入力するか、Finnhub をオフにして削除してください。",
+    "sources.us.keyRemoveHint":
+      "Finnhub を選んでいる間は API キーが必要です。新しいキーを入力するか、Finnhub をオフにして削除してください。",
     "finnhub.keyInvalid": "API キーには途中に空白を含めず、128 文字以内にしてください。",
     "sources.us.keySaved": "保存済み •••• {ending}",
     "sources.us.keyRemoving": "「保存」すると、保存済みの API キーを削除します。",
     "sources.us.keyRemoveButton": "削除",
     "sources.us.keyKeep": "残す",
-    "sources.us.keyReplace": "欄を空のままにすると保存済みの API キーを使い続けます。ここに入力したキーは保存時に置き換わります。",
+    "sources.us.keyReplace":
+      "欄を空のままにすると保存済みの API キーを使い続けます。ここに入力したキーは保存時に置き換わります。",
     "url.finnhubHost": "Finnhub の URL は https://finnhub.io/ で始めてください。変更できるのはその後のパスだけです。",
-    "finnhub.badUrl": "保存された Finnhub の URL が https://finnhub.io/ で始まらないため、API キーは送信しません。設定で URL を直すまで、米国株は Yahoo を使います。",
-    "finnhub.redirected": "Finnhub の応答が別のアドレスから返されました。設定で米国株の設定を変更するまで、API キーは再送信しません。",
-    "finnhub.keyUnprotected": "設定と API キーは保存されましたが、data/wickline/secrets.json への chmod 600 に失敗したため、このコンピュータの他のアカウントから読める可能性があります。このファイルに自分で chmod 600 を実行してください。「保存」でも「キャンセル」でもこのダイアログは閉じ、どちらでも失われるものはありません。",
+    "finnhub.badUrl":
+      "保存された Finnhub の URL が https://finnhub.io/ で始まらないため、API キーは送信しません。設定で URL を直すまで、米国株は Yahoo を使います。",
+    "finnhub.redirected":
+      "Finnhub の応答が別のアドレスから返されました。設定で米国株の設定を変更するまで、API キーは再送信しません。",
+    "finnhub.keyUnprotected":
+      "設定と API キーは保存されましたが、data/wickline/secrets.json への chmod 600 に失敗したため、このコンピュータの他のアカウントから読める可能性があります。このファイルに自分で chmod 600 を実行してください。「保存」でも「キャンセル」でもこのダイアログは閉じ、どちらでも失われるものはありません。",
     "budget.tooSmall": "4 以上の整数を入力してください。",
     "error.saveKey": "Finnhub キーを保存できませんでした。",
     "sources.us.title": "米国",
@@ -1070,9 +1151,12 @@ export const STRINGS = {
     "sources.us.budget": "1 分あたりのリクエスト数",
     "sources.us.faster": "1 分ごとではなく、約 15–30 秒ごとに更新します。",
     "sources.us.cap": "米国株は最大 {cap} 銘柄まで更新が速くなり、残りは Yahoo で 1 分ごとに更新します。",
-    "sources.us.keyNote": "キーはこのコンピュータの Herdr フォルダ内 data/wickline/secrets.json に平文で保存され、Herdr の共有状態には書き込まれません。無料プランのキーをおすすめします。",
-    "sources.us.keyRemove": "Finnhub をオフにしても保存済みのキーは残ります。削除するには、「削除」を押して保存するか、data/wickline/secrets.json を削除してください。",
-    "sources.us.copies": "開いている Wickline のコピーはそれぞれリクエストを送ります。2 つ開くと、上限に 2 倍の速さで達します。",
+    "sources.us.keyNote":
+      "キーはこのコンピュータの Herdr フォルダ内 data/wickline/secrets.json に平文で保存され、Herdr の共有状態には書き込まれません。無料プランのキーをおすすめします。",
+    "sources.us.keyRemove":
+      "Finnhub をオフにしても保存済みのキーは残ります。削除するには、「削除」を押して保存するか、data/wickline/secrets.json を削除してください。",
+    "sources.us.copies":
+      "開いている Wickline のコピーはそれぞれリクエストを送ります。2 つ開くと、上限に 2 倍の速さで達します。",
   },
   ko: {
     "symbol.invalid": "AAPL, 0700.HK, ^GSPC, 대만 지수 선물 WTX& 같은 종목 코드나 BTC/USDT 같은 페어를 입력하세요.",
@@ -1225,7 +1309,8 @@ export const STRINGS = {
     "table.price": "가격",
     "table.change": "변동",
     "table.changePct": "변동률",
-    "footer.long": "시세는 제3자 데이터이며 참고용입니다. 투자 조언이 아닙니다. 자세한 내용은 ‘면책 조항 및 개인정보’를 확인하세요.",
+    "footer.long":
+      "시세는 제3자 데이터이며 참고용입니다. 투자 조언이 아닙니다. 자세한 내용은 ‘면책 조항 및 개인정보’를 확인하세요.",
     "settings.title": "설정",
     "settings.tab.display": "표시",
     "settings.tab.disclaimer": "면책 조항 및 개인정보",
@@ -1249,10 +1334,12 @@ export const STRINGS = {
     "settings.noFallback": "Binance를 사용할 수 없을 때 대신할 소스는 없습니다.",
     "settings.advanced": "고급",
     "sources.other.title": "기타 시장",
-    "sources.other.body": "홍콩·중국·일본·한국의 주식과 지수, 환율, 기타 거래소는 Yahoo Finance만 사용하며 설정할 항목이 없습니다.",
+    "sources.other.body":
+      "홍콩·중국·일본·한국의 주식과 지수, 환율, 기타 거래소는 Yahoo Finance만 사용하며 설정할 항목이 없습니다.",
     "sources.crypto.title": "암호화폐",
     "sources.crypto.url": "Binance URL",
-    "sources.crypto.region": "일부 지역(예: 미국)에서는 Binance를 사용할 수 없을 수 있습니다. 그런 경우 같은 API를 제공하는 주소를 입력하세요.",
+    "sources.crypto.region":
+      "일부 지역(예: 미국)에서는 Binance를 사용할 수 없을 수 있습니다. 그런 경우 같은 API를 제공하는 주소를 입력하세요.",
     "url.notHttps": "https:// 로 시작하는 주소를 입력하세요.",
     "url.invalid": "주소에는 호스트 이름이 있어야 하며 ? 나 # 부분은 붙일 수 없습니다.",
     "display.language": "언어",
@@ -1261,21 +1348,28 @@ export const STRINGS = {
     "display.colors.auto": "자동",
     "display.colors.redUp": "빨강 상승",
     "display.colors.greenUp": "초록 상승",
-    "display.colorsHint": "색상은 시장이 아니라 사용자를 따릅니다. 목록 전체에 같은 규칙을 적용합니다. 홍콩은 보통 초록 상승을 씁니다.",
+    "display.colorsHint":
+      "색상은 시장이 아니라 사용자를 따릅니다. 목록 전체에 같은 규칙을 적용합니다. 홍콩은 보통 초록 상승을 씁니다.",
     "display.appearance": "Herdr 외관 설정 열기",
     "display.appearanceHint": "라이트/다크 테마는 Herdr에서 설정하며, Wickline에는 별도 설정이 없습니다.",
     "disclaimer.title": "면책 조항",
     "disclaimer.data": "시세는 제3자 소스에서 가져오며 정확성, 적시성, 제공 가능 여부를 보장하지 않습니다.",
     "disclaimer.advice": "표시되는 어떤 내용도 투자 조언이 아닙니다.",
-    "disclaimer.sources": "비공개 소스를 켜거나 키를 입력하는 것은 사용자 본인의 행위이며, 해당 소스의 약관을 따릅니다.",
-    "disclaimer.direct": "요청은 이 컴퓨터에서 각 소스로 직접 전송됩니다. Wickline에는 서버가 없으며 원격 분석 데이터도 보내지 않습니다.",
+    "disclaimer.sources":
+      "비공개 소스를 켜거나 키를 입력하는 것은 사용자 본인의 행위이며, 해당 소스의 약관을 따릅니다.",
+    "disclaimer.direct":
+      "요청은 이 컴퓨터에서 각 소스로 직접 전송됩니다. Wickline에는 서버가 없으며 원격 분석 데이터도 보내지 않습니다.",
     "disclaimer.key": "저장한 Finnhub 키는 이 컴퓨터에 평문으로 저장됩니다.",
     "disclaimer.prevails": "일반 면책 조항은 영어 원문이 우선하며, 다른 언어는 번역입니다.",
     "privacy.title": "개인정보",
-    "privacy.hosts": "접속 호스트: query1.finance.yahoo.com(Yahoo Finance), data-api.binance.vision(Binance Spot), 그리고 사용자가 설정한 Binance 주소. 목록에 대만 종목이 있는 동안에는 openapi.twse.com.tw(대만증권거래소가 공시한 휴장일)에도 열려 있는 사본마다 하루 한 번 GET으로 조회하고, 실패하면 1시간마다 다시 시도합니다(키는 필요 없으며 아무것도 저장하지 않습니다). 대만 종목에 Yahoo TW Stock을 켜고 동의 체크박스를 선택한 경우에만 tw.stock.yahoo.com(Yahoo TW Stock, 비공개 인터페이스)에도 접속해 목록의 대만 종목·지수·선물을 조회합니다. 대만 종목에 TWSE MIS를 켜고 동의 체크박스를 선택한 경우에만 mis.twse.com.tw(TWSE MIS, 비공식) 또는 사용자가 설정한 MIS 주소에도 접속합니다. 미국 종목에 Finnhub를 선택하고 키를 저장한 경우에만 finnhub.io(Finnhub)에도 접속합니다. 키를 보내는 호스트는 이곳뿐이며, Finnhub URL은 경로만 바꿀 수 있습니다.",
-    "privacy.programs": "프로그램: API 키를 저장하면 그 파일을 내 계정만 읽을 수 있도록 설정합니다(macOS, Linux). 그 밖의 프로그램은 실행하지 않습니다.",
-    "privacy.storage": "저장: 관심종목(wickline.watchlist.v1), 이 설정(wickline.settings.v1), 도킹한 패널이 Wickline을 연 탭(wickline.dockTab, 그 탭이 열려 있는 동안 패널은 비켜 줍니다)은 이 컴퓨터의 Herdr 공유 상태에 저장됩니다. 상세를 열어 둔 동안 wickline.detail은 그 시세(차트, 거래 정보, 5단계 호가 포함)를 공유 상태에 보관하며 디스크에 저장합니다. 행이 바뀔 때마다 상세를 연 사본이 다시 쓰고, 상세를 닫으면 지웁니다. Herdr를 종료해 남은 값은 다음에 상세를 열 때까지 남습니다. 상세 창에서는 자체 요청은 보내지 않습니다. 열려 있는 각 Wickline은 선택한 시장 필터(wickline.filter)도 자신의 localStorage(Herdr 폴더 안 data/wickline/의 파일)에 기억합니다. localStorage에는 이것만 저장됩니다. 저장한 Finnhub 키는 이 컴퓨터의 Herdr 폴더 안 data/wickline/secrets.json에 평문으로 저장되며, macOS와 Linux에서는 본인 계정만 읽을 수 있고 공유 상태에는 기록되지 않습니다. 무료 요금제 키를 권장합니다. 다른 파일은 읽거나 쓰지 않습니다. 키를 삭제하려면 미국 페이지에서 삭제를 누르고 저장하거나 해당 파일을 삭제하세요. Time Machine 같은 백업에 예전 키가 남아 있을 수 있으므로, 완전히 무효화하려면 Finnhub에서 키를 재발급하세요.",
-    "privacy.finnhub": "Finnhub: 한도로 처리할 수 있는 앞쪽 미국 주식만 조회합니다(기본값인 분당 60회 기준 15개). 열려 있는 Wickline 사본마다 각자 요청을 보내므로, 두 개를 열면 한도에 두 배 빨리 도달합니다. 사본은 하나만 표시하세요.",
+    "privacy.hosts":
+      "접속 호스트: query1.finance.yahoo.com(Yahoo Finance), data-api.binance.vision(Binance Spot), 그리고 사용자가 설정한 Binance 주소. 목록에 대만 종목이 있는 동안에는 openapi.twse.com.tw(대만증권거래소가 공시한 휴장일)에도 열려 있는 사본마다 하루 한 번 GET으로 조회하고, 실패하면 1시간마다 다시 시도합니다(키는 필요 없으며 아무것도 저장하지 않습니다). 대만 종목에 Yahoo TW Stock을 켜고 동의 체크박스를 선택한 경우에만 tw.stock.yahoo.com(Yahoo TW Stock, 비공개 인터페이스)에도 접속해 목록의 대만 종목·지수·선물을 조회합니다. 대만 종목에 TWSE MIS를 켜고 동의 체크박스를 선택한 경우에만 mis.twse.com.tw(TWSE MIS, 비공식) 또는 사용자가 설정한 MIS 주소에도 접속합니다. 미국 종목에 Finnhub를 선택하고 키를 저장한 경우에만 finnhub.io(Finnhub)에도 접속합니다. 키를 보내는 호스트는 이곳뿐이며, Finnhub URL은 경로만 바꿀 수 있습니다.",
+    "privacy.programs":
+      "프로그램: API 키를 저장하면 그 파일을 내 계정만 읽을 수 있도록 설정합니다(macOS, Linux). 그 밖의 프로그램은 실행하지 않습니다.",
+    "privacy.storage":
+      "저장: 관심종목(wickline.watchlist.v1), 이 설정(wickline.settings.v1), 도킹한 패널이 Wickline을 연 탭(wickline.dockTab, 그 탭이 열려 있는 동안 패널은 비켜 줍니다)은 이 컴퓨터의 Herdr 공유 상태에 저장됩니다. 상세를 열어 둔 동안 wickline.detail은 그 시세(차트, 거래 정보, 5단계 호가 포함)를 공유 상태에 보관하며 디스크에 저장합니다. 행이 바뀔 때마다 상세를 연 사본이 다시 쓰고, 상세를 닫으면 지웁니다. Herdr를 종료해 남은 값은 다음에 상세를 열 때까지 남습니다. 상세 창에서는 자체 요청은 보내지 않습니다. 열려 있는 각 Wickline은 선택한 시장 필터(wickline.filter)도 자신의 localStorage(Herdr 폴더 안 data/wickline/의 파일)에 기억합니다. localStorage에는 이것만 저장됩니다. 저장한 Finnhub 키는 이 컴퓨터의 Herdr 폴더 안 data/wickline/secrets.json에 평문으로 저장되며, macOS와 Linux에서는 본인 계정만 읽을 수 있고 공유 상태에는 기록되지 않습니다. 무료 요금제 키를 권장합니다. 다른 파일은 읽거나 쓰지 않습니다. 키를 삭제하려면 미국 페이지에서 삭제를 누르고 저장하거나 해당 파일을 삭제하세요. Time Machine 같은 백업에 예전 키가 남아 있을 수 있으므로, 완전히 무효화하려면 Finnhub에서 키를 재발급하세요.",
+    "privacy.finnhub":
+      "Finnhub: 한도로 처리할 수 있는 앞쪽 미국 주식만 조회합니다(기본값인 분당 60회 기준 15개). 열려 있는 Wickline 사본마다 각자 요청을 보내므로, 두 개를 열면 한도에 두 배 빨리 도달합니다. 사본은 하나만 표시하세요.",
     "mis.rateLimited": "TWSE MIS가 요청을 제한했습니다.",
     "mis.http": "TWSE MIS가 HTTP {status} 응답을 반환했습니다.",
     "mis.unreadable": "TWSE MIS 응답을 읽을 수 없습니다.",
@@ -1297,19 +1391,27 @@ export const STRINGS = {
     "detail.lineSource": "차트: {source}",
     "sources.tw.title": "대만",
     "sources.tw.url": "TWSE MIS URL",
-    "mis.statement": "TWSE MIS(mis.twse.com.tw)는 대만증권거래소의 '기본 시황 보도 웹사이트'로, 프로그램용으로 제공되는 API가 아닙니다. Wickline은 대만증권거래소와 아무런 관계가 없으며 승인을 받지 않았습니다.\n\n사용하도록 설정하면 Wickline은 이 컴퓨터에서 MIS에 직접 접속해 관심종목에 있는 대만 주식의 시세를 장중 약 10초마다 조회하여, 약 20분 지연되는 Yahoo Finance 가격 대신 표시합니다. 차트는 계속 Yahoo Finance에서 가져옵니다.\n\n데이터는 지연되거나 부정확하거나 중단될 수 있으며, MIS가 언제든지 변경하거나 제공을 중단할 수 있습니다. Wickline은 해당 종목의 당일 가격 제한폭을 벗어난 가격을 제외합니다. 그 밖의 가격은 정확성을 보장할 수 없습니다.\n\n사용 여부와 사용 방식이 대만증권거래소 웹사이트 이용약관에 부합하는지는 사용자가 직접 판단해야 하며, 이 데이터 사용으로 발생하는 모든 결과에 대한 책임은 사용자 본인에게 있습니다. 데이터는 개인 참고용이며 투자 조언이 아닙니다.",
-    "mis.summary": "• 비공식 사용: MIS는 대만증권거래소의 시세 조회 웹사이트로, 프로그램용 API가 아닙니다. Wickline은 대만증권거래소와 아무런 관계가 없습니다\n• 관심종목에 있는 대만 주식을 장중 약 10초마다 조회하여, 약 20분 지연되는 시세를 대신합니다\n• 사용 여부는 직접 판단하며, 그 결과에 대한 책임은 본인에게 있습니다. 투자 조언이 아닙니다",
-    "mis.consent": "위 안내를 읽고 이해했습니다. TWSE MIS 데이터 사용에 대한 책임을 스스로 지며, 대만증권거래소 웹사이트 이용약관을 준수하겠습니다.",
+    "mis.statement":
+      "TWSE MIS(mis.twse.com.tw)는 대만증권거래소의 '기본 시황 보도 웹사이트'로, 프로그램용으로 제공되는 API가 아닙니다. Wickline은 대만증권거래소와 아무런 관계가 없으며 승인을 받지 않았습니다.\n\n사용하도록 설정하면 Wickline은 이 컴퓨터에서 MIS에 직접 접속해 관심종목에 있는 대만 주식의 시세를 장중 약 10초마다 조회하여, 약 20분 지연되는 Yahoo Finance 가격 대신 표시합니다. 차트는 계속 Yahoo Finance에서 가져옵니다.\n\n데이터는 지연되거나 부정확하거나 중단될 수 있으며, MIS가 언제든지 변경하거나 제공을 중단할 수 있습니다. Wickline은 해당 종목의 당일 가격 제한폭을 벗어난 가격을 제외합니다. 그 밖의 가격은 정확성을 보장할 수 없습니다.\n\n사용 여부와 사용 방식이 대만증권거래소 웹사이트 이용약관에 부합하는지는 사용자가 직접 판단해야 하며, 이 데이터 사용으로 발생하는 모든 결과에 대한 책임은 사용자 본인에게 있습니다. 데이터는 개인 참고용이며 투자 조언이 아닙니다.",
+    "mis.summary":
+      "• 비공식 사용: MIS는 대만증권거래소의 시세 조회 웹사이트로, 프로그램용 API가 아닙니다. Wickline은 대만증권거래소와 아무런 관계가 없습니다\n• 관심종목에 있는 대만 주식을 장중 약 10초마다 조회하여, 약 20분 지연되는 시세를 대신합니다\n• 사용 여부는 직접 판단하며, 그 결과에 대한 책임은 본인에게 있습니다. 투자 조언이 아닙니다",
+    "mis.consent":
+      "위 안내를 읽고 이해했습니다. TWSE MIS 데이터 사용에 대한 책임을 스스로 지며, 대만증권거래소 웹사이트 이용약관을 준수하겠습니다.",
     "mis.prevails": "본 문서는 번역본입니다. 번체 중국어판과 내용이 다를 경우 번체 중국어판이 우선합니다",
     "mis.consentNeeded": "TWSE MIS를 사용하려면 체크박스를 선택하세요.",
-    "mis.reconfirm": "TWSE MIS 안내가 변경되었습니다. 설정에서 다시 확인해 주세요. 확인 전까지 해당 시세 사용을 중단합니다.",
+    "mis.reconfirm":
+      "TWSE MIS 안내가 변경되었습니다. 설정에서 다시 확인해 주세요. 확인 전까지 해당 시세 사용을 중단합니다.",
     "src.yahootw": "Yahoo TW Stock",
-    "yahootw.statement": "Yahoo TW Stock(Yahoo 奇摩股市, tw.stock.yahoo.com)의 시세 데이터는 해당 웹사이트 자체 용도로만 제공되며 다른 프로그램에는 공개되어 있지 않습니다. 또한 해당 웹사이트의 robots.txt는 프로그램의 자동 접근을 허용하지 않습니다. Wickline은 Yahoo와 아무런 관계가 없으며 Yahoo로부터 승인을 받지 않았습니다.\n\n사용하도록 설정하면 Wickline은 이 컴퓨터에서 Yahoo TW Stock에 직접 접속해 관심종목에 있는 다음 종목의 시세를 조회합니다. 대만증권거래소의 상장 주식·ETF·가권지수, 대만 장외시장(TPEx)의 주식·TPEx 지수, 대만선물거래소의 선물입니다. 장중에는 시세를 약 10초마다, 차트를 약 2분마다 업데이트하며, 그 외 시간에는 각각 약 60초, 약 10분마다 업데이트합니다. 이 시세는 약 20분 지연되는 Yahoo Finance 시세를 대신합니다. Yahoo Finance에 없는 지수와 선물은 Yahoo TW Stock에서만 가져옵니다.\n\n데이터는 지연되거나 부정확하거나 중단될 수 있으며, Yahoo가 언제든지 변경, 제한하거나 제공을 중단할 수 있습니다. Wickline은 당일 가격 제한폭을 벗어난 주식 가격을 제외합니다. 당일이 아닌 가격은 Yahoo Finance에 없는 종목에만 사용하며 날짜를 함께 표시합니다. 그 밖의 가격은 정확성을 보장할 수 없습니다.\n\n사용 여부와 사용 방식이 Yahoo 서비스 약관에 부합하는지는 사용자가 직접 판단해야 하며, 이 데이터 사용으로 발생하는 모든 결과에 대한 책임은 사용자 본인에게 있습니다. 데이터는 개인 참고용이며 투자 조언이 아닙니다.",
-    "yahootw.summary": "• 비공식 데이터 출처: Wickline은 Yahoo와 아무런 관계가 없으며, 데이터는 지연되거나 부정확하거나 중단될 수 있습니다\n• 관심종목에 있는 대만 주식, 지수, 선물을 장중 약 10초마다 조회합니다\n• 사용 여부는 직접 판단하며, 그 결과에 대한 책임은 본인에게 있습니다. 투자 조언이 아닙니다",
-    "yahootw.consent": "위 안내를 읽고 이해했습니다. Yahoo TW Stock 데이터 사용에 대한 책임을 스스로 지며, Yahoo 서비스 약관을 준수하겠습니다.",
+    "yahootw.statement":
+      "Yahoo TW Stock(Yahoo 奇摩股市, tw.stock.yahoo.com)의 시세 데이터는 해당 웹사이트 자체 용도로만 제공되며 다른 프로그램에는 공개되어 있지 않습니다. 또한 해당 웹사이트의 robots.txt는 프로그램의 자동 접근을 허용하지 않습니다. Wickline은 Yahoo와 아무런 관계가 없으며 Yahoo로부터 승인을 받지 않았습니다.\n\n사용하도록 설정하면 Wickline은 이 컴퓨터에서 Yahoo TW Stock에 직접 접속해 관심종목에 있는 다음 종목의 시세를 조회합니다. 대만증권거래소의 상장 주식·ETF·가권지수, 대만 장외시장(TPEx)의 주식·TPEx 지수, 대만선물거래소의 선물입니다. 장중에는 시세를 약 10초마다, 차트를 약 2분마다 업데이트하며, 그 외 시간에는 각각 약 60초, 약 10분마다 업데이트합니다. 이 시세는 약 20분 지연되는 Yahoo Finance 시세를 대신합니다. Yahoo Finance에 없는 지수와 선물은 Yahoo TW Stock에서만 가져옵니다.\n\n데이터는 지연되거나 부정확하거나 중단될 수 있으며, Yahoo가 언제든지 변경, 제한하거나 제공을 중단할 수 있습니다. Wickline은 당일 가격 제한폭을 벗어난 주식 가격을 제외합니다. 당일이 아닌 가격은 Yahoo Finance에 없는 종목에만 사용하며 날짜를 함께 표시합니다. 그 밖의 가격은 정확성을 보장할 수 없습니다.\n\n사용 여부와 사용 방식이 Yahoo 서비스 약관에 부합하는지는 사용자가 직접 판단해야 하며, 이 데이터 사용으로 발생하는 모든 결과에 대한 책임은 사용자 본인에게 있습니다. 데이터는 개인 참고용이며 투자 조언이 아닙니다.",
+    "yahootw.summary":
+      "• 비공식 데이터 출처: Wickline은 Yahoo와 아무런 관계가 없으며, 데이터는 지연되거나 부정확하거나 중단될 수 있습니다\n• 관심종목에 있는 대만 주식, 지수, 선물을 장중 약 10초마다 조회합니다\n• 사용 여부는 직접 판단하며, 그 결과에 대한 책임은 본인에게 있습니다. 투자 조언이 아닙니다",
+    "yahootw.consent":
+      "위 안내를 읽고 이해했습니다. Yahoo TW Stock 데이터 사용에 대한 책임을 스스로 지며, Yahoo 서비스 약관을 준수하겠습니다.",
     "yahootw.prevails": "본 문서는 번역본입니다. 번체 중국어판과 내용이 다를 경우 번체 중국어판이 우선합니다",
     "yahootw.consentNeeded": "Yahoo TW Stock을 사용하려면 체크박스를 선택하세요.",
-    "yahootw.reconfirm": "Yahoo TW Stock 안내가 변경되었습니다. 설정에서 다시 확인해 주세요. 확인 전까지 해당 시세 사용을 중단합니다.",
+    "yahootw.reconfirm":
+      "Yahoo TW Stock 안내가 변경되었습니다. 설정에서 다시 확인해 주세요. 확인 전까지 해당 시세 사용을 중단합니다.",
     "yahootw.notFound": "Yahoo TW Stock에 없는 종목 코드입니다.",
     "yahootw.futuresNeedSource": "선물 시세를 보려면 설정에서 Yahoo TW Stock을 켜세요.",
     "finnhub.invalidKey": "Finnhub가 API 키를 거부했습니다. 설정에서 확인하세요.",
@@ -1318,23 +1420,31 @@ export const STRINGS = {
     "finnhub.unreadable": "Finnhub 응답을 읽을 수 없습니다.",
     "finnhub.unreachable": "Finnhub에 연결할 수 없습니다.",
     "src.finnhub": "Finnhub",
-    "notice.overCap": "{symbol}을(를) 추가했습니다. Finnhub 한도는 미국 종목 {cap}개이므로 이 종목은 Yahoo에서 1분마다 업데이트됩니다.",
-    "notice.overCapPushed": "{symbol}을(를) 추가했습니다. {pushed}은(는) 이제 Yahoo에서 1분마다 업데이트됩니다: Finnhub 한도는 미국 종목 {cap}개입니다.",
+    "notice.overCap":
+      "{symbol}을(를) 추가했습니다. Finnhub 한도는 미국 종목 {cap}개이므로 이 종목은 Yahoo에서 1분마다 업데이트됩니다.",
+    "notice.overCapPushed":
+      "{symbol}을(를) 추가했습니다. {pushed}은(는) 이제 Yahoo에서 1분마다 업데이트됩니다: Finnhub 한도는 미국 종목 {cap}개입니다.",
     "finnhub.overCap": "Finnhub 한도({cap}개) 초과: 1분마다 업데이트",
     "finnhub.noKey": "Finnhub API 키가 설정되지 않았습니다. 설정에서 저장할 때까지 미국 종목은 Yahoo를 사용합니다.",
-    "finnhub.secretUnreadable": "저장된 Finnhub 키 파일을 읽을 수 없습니다. 설정에서 키를 다시 저장할 때까지 미국 종목은 Yahoo를 사용합니다.",
+    "finnhub.secretUnreadable":
+      "저장된 Finnhub 키 파일을 읽을 수 없습니다. 설정에서 키를 다시 저장할 때까지 미국 종목은 Yahoo를 사용합니다.",
     "finnhub.keyNeeded": "Finnhub API 키를 입력하세요.",
-    "sources.us.keyRemoveHint": "Finnhub를 선택한 동안에는 키가 필요합니다. 새 키를 입력하거나, Finnhub를 꺼서 삭제하세요.",
+    "sources.us.keyRemoveHint":
+      "Finnhub를 선택한 동안에는 키가 필요합니다. 새 키를 입력하거나, Finnhub를 꺼서 삭제하세요.",
     "finnhub.keyInvalid": "키에는 중간에 공백이 없어야 하며 최대 128자입니다.",
     "sources.us.keySaved": "저장됨 •••• {ending}",
     "sources.us.keyRemoving": "저장하면 저장된 키가 삭제됩니다.",
     "sources.us.keyRemoveButton": "삭제",
     "sources.us.keyKeep": "유지",
-    "sources.us.keyReplace": "입력란을 비워 두면 저장된 키를 유지합니다. 여기에 입력한 키는 저장할 때 기존 키를 대체합니다.",
+    "sources.us.keyReplace":
+      "입력란을 비워 두면 저장된 키를 유지합니다. 여기에 입력한 키는 저장할 때 기존 키를 대체합니다.",
     "url.finnhubHost": "Finnhub URL은 https://finnhub.io/ 로 시작해야 하며, 그 뒤의 경로만 바꿀 수 있습니다.",
-    "finnhub.badUrl": "저장된 Finnhub URL이 https://finnhub.io/ 로 시작하지 않으므로 키를 보내지 않습니다. 설정에서 URL을 고칠 때까지 미국 종목은 Yahoo를 사용합니다.",
-    "finnhub.redirected": "Finnhub 응답이 다른 주소에서 왔습니다. 설정에서 미국 종목 설정을 변경할 때까지 키를 다시 보내지 않습니다.",
-    "finnhub.keyUnprotected": "설정과 키는 저장되었지만 data/wickline/secrets.json에 대한 chmod 600이 실패하여 이 컴퓨터의 다른 계정이 읽을 수 있습니다. 해당 파일에 직접 chmod 600을 실행하세요. 저장이나 취소 중 무엇을 눌러도 이 창이 닫히며, 더 잃는 것은 없습니다.",
+    "finnhub.badUrl":
+      "저장된 Finnhub URL이 https://finnhub.io/ 로 시작하지 않으므로 키를 보내지 않습니다. 설정에서 URL을 고칠 때까지 미국 종목은 Yahoo를 사용합니다.",
+    "finnhub.redirected":
+      "Finnhub 응답이 다른 주소에서 왔습니다. 설정에서 미국 종목 설정을 변경할 때까지 키를 다시 보내지 않습니다.",
+    "finnhub.keyUnprotected":
+      "설정과 키는 저장되었지만 data/wickline/secrets.json에 대한 chmod 600이 실패하여 이 컴퓨터의 다른 계정이 읽을 수 있습니다. 해당 파일에 직접 chmod 600을 실행하세요. 저장이나 취소 중 무엇을 눌러도 이 창이 닫히며, 더 잃는 것은 없습니다.",
     "budget.tooSmall": "4 이상의 정수를 입력하세요.",
     "error.saveKey": "Finnhub 키를 저장할 수 없습니다.",
     "sources.us.title": "미국",
@@ -1345,8 +1455,10 @@ export const STRINGS = {
     "sources.us.budget": "분당 요청 수",
     "sources.us.faster": "1분마다가 아니라 약 15–30초마다 업데이트됩니다.",
     "sources.us.cap": "미국 종목은 최대 {cap}개까지 더 자주 업데이트되며, 나머지는 Yahoo에서 1분마다 업데이트됩니다.",
-    "sources.us.keyNote": "키는 이 컴퓨터의 Herdr 폴더 안 data/wickline/secrets.json에 평문으로 저장되며, Herdr 공유 상태에는 기록되지 않습니다. 무료 요금제 키를 권장합니다.",
-    "sources.us.keyRemove": "Finnhub를 꺼도 저장한 키는 남아 있습니다. 삭제하려면 삭제를 누르고 저장하거나 data/wickline/secrets.json을 삭제하세요.",
+    "sources.us.keyNote":
+      "키는 이 컴퓨터의 Herdr 폴더 안 data/wickline/secrets.json에 평문으로 저장되며, Herdr 공유 상태에는 기록되지 않습니다. 무료 요금제 키를 권장합니다.",
+    "sources.us.keyRemove":
+      "Finnhub를 꺼도 저장한 키는 남아 있습니다. 삭제하려면 삭제를 누르고 저장하거나 data/wickline/secrets.json을 삭제하세요.",
     "sources.us.copies": "열려 있는 Wickline 사본마다 각자 요청을 보냅니다. 두 개를 열면 한도에 두 배 빨리 도달합니다.",
   },
 };

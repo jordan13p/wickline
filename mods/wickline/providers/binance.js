@@ -22,7 +22,8 @@ export function decodeBinance(pairs, response, now) {
   // -1121 Invalid symbol: one unknown or delisted pair fails the whole batch.
   if (response.status === 400) throw new QuoteError("binance.invalidPair", {}, { invalidSymbol: true });
   // No headers in Herdr's fetch, so no Retry-After: wait at least a minute.
-  if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (response.status === 429 || response.status === 418)
+    throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
   // Unavailable for legal reasons: Binance refuses this region.
   if (response.status === 451) throw new QuoteError("binance.region");
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
@@ -42,7 +43,7 @@ export function decodeBinance(pairs, response, now) {
       name: "Binance Spot",
       price,
       // Against the price 24 hours before the last trade.
-      changePercent: positive(close) ? (price - close) / close * 100 : null,
+      changePercent: positive(close) ? ((price - close) / close) * 100 : null,
       currency: pair.split("/")[1],
       timestamp: time,
       fetchedAt: now,
@@ -70,12 +71,15 @@ export function binanceKlinesUrl(base, pair) {
  */
 export function decodeKlines(response) {
   // Rate limited as the tickers are: the same backoff.
-  if (response.status === 429 || response.status === 418) throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
+  if (response.status === 429 || response.status === 418)
+    throw new QuoteError("binance.rateLimited", {}, { retryAfterMs: 60_000 });
   if (!response.ok) throw new QuoteError("binance.http", { status: response.status });
   const body = parseJson(response.text, "binance.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("binance.unreadable");
-  const { series, times } = cleanTimedSeries(body.map((bar) => (Array.isArray(bar) ? Number(bar[4]) : NaN)),
-    body.map((bar) => (Array.isArray(bar) ? Number(bar[0]) : NaN)));
+  const { series, times } = cleanTimedSeries(
+    body.map((bar) => (Array.isArray(bar) ? Number(bar[4]) : NaN)),
+    body.map((bar) => (Array.isArray(bar) ? Number(bar[0]) : NaN)),
+  );
   return { series, ...(times?.length && { times }) };
 }
 
@@ -94,13 +98,15 @@ export const binance = {
     for (let i = 0; i < pairs.length; i += BINANCE_BATCH) {
       const batch = pairs.slice(i, i + BINANCE_BATCH);
       requests.push({ url: binanceUrl(base, batch), headers: HEADERS, symbols: batch, kind: "quote" });
-      for (const pair of batch) requests.push({ url: binanceKlinesUrl(base, pair), headers: HEADERS, symbols: [pair], kind: "line" });
+      for (const pair of batch)
+        requests.push({ url: binanceKlinesUrl(base, pair), headers: HEADERS, symbols: [pair], kind: "line" });
     }
     return requests;
   },
   decode(request, response, now) {
     try {
-      if (request.kind === "line") return { quotes: {}, errors: {}, lines: { [request.symbols[0]]: decodeKlines(response) } };
+      if (request.kind === "line")
+        return { quotes: {}, errors: {}, lines: { [request.symbols[0]]: decodeKlines(response) } };
       const quotes = decodeBinance(request.symbols, response, now);
       const errors = {};
       for (const pair of request.symbols) if (!quotes[pair]) errors[pair] = new QuoteError("binance.noQuote");

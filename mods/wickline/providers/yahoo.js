@@ -1,6 +1,17 @@
 // Yahoo Finance: stocks, ETFs, indices and currencies, one ticker per request.
 // No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanSeries, cleanText, cleanTimedSeries, currencyCode, exchangeCode, normalizeSymbol, positive, sized } from "../quotes.js";
+import {
+  HEADERS,
+  QuoteError,
+  cleanSeries,
+  cleanText,
+  cleanTimedSeries,
+  currencyCode,
+  exchangeCode,
+  normalizeSymbol,
+  positive,
+  sized,
+} from "../quotes.js";
 import { kindOf, marketOf } from "../markets.js";
 import { failEach, parseJson } from "./provider.js";
 
@@ -17,8 +28,8 @@ export function yahooUrl(symbol) {
 const finite = (value) => typeof value === "number" && Number.isFinite(value);
 
 /** A trading period, `{ start, end }` in seconds, as `[start, end]` in ms; null when missing or empty. */
-export const period = (value) => finite(value?.start) && finite(value?.end) && value.end > value.start
-  ? [value.start * 1000, value.end * 1000] : null;
+export const period = (value) =>
+  finite(value?.start) && finite(value?.end) && value.end > value.start ? [value.start * 1000, value.end * 1000] : null;
 
 // The day's volume: none for an index or a cryptocurrency (exchange `CCC`, whose volume is in the quote currency, not
 // units), lots for a Taiwan stock (Yahoo Finance counts shares), else shares.
@@ -40,7 +51,11 @@ export function decodeYahoo(symbol, response, now) {
   if (body?.chart?.error || !meta) throw new QuoteError("yahoo.noQuote");
   // Never show another instrument's response under the requested ticker.
   let returned = null;
-  try { returned = typeof meta.symbol === "string" ? normalizeSymbol(meta.symbol) : null; } catch { /* checked below */ }
+  try {
+    returned = typeof meta.symbol === "string" ? normalizeSymbol(meta.symbol) : null;
+  } catch {
+    /* checked below */
+  }
   if (returned !== symbol) throw new QuoteError("yahoo.otherTicker");
   if (!positive(meta.regularMarketPrice) || !positive(meta.regularMarketTime)) {
     throw new QuoteError("yahoo.incomplete");
@@ -59,7 +74,7 @@ export function decodeYahoo(symbol, response, now) {
     source: "yahoo",
     name: cleanText(meta.longName) ?? cleanText(meta.shortName) ?? symbol,
     price: meta.regularMarketPrice,
-    changePercent: positive(close) ? (meta.regularMarketPrice - close) / close * 100 : null,
+    changePercent: positive(close) ? ((meta.regularMarketPrice - close) / close) * 100 : null,
     currency: currencyCode(meta.currency),
     // The exchange Yahoo names (NMS, TAI, OSA…), which gives an index its market (resolvedMarket).
     exchange: exchangeCode(meta.exchangeName),
@@ -84,7 +99,8 @@ export const yahoo = {
   // Stock requests are spaced at least this far apart.
   spacingMs: () => 1_000,
   intervalMs: () => 60_000,
-  requests: (symbols) => symbols.map((symbol) => ({ url: yahooUrl(symbol), headers: HEADERS, symbols: [symbol], kind: "quote" })),
+  requests: (symbols) =>
+    symbols.map((symbol) => ({ url: yahooUrl(symbol), headers: HEADERS, symbols: [symbol], kind: "quote" })),
   decode(request, response, now) {
     const [symbol] = request.symbols;
     try {

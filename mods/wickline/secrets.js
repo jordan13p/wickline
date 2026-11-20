@@ -47,7 +47,11 @@ export async function loadSecretEnding(fs, dir, name) {
 // A file that cannot be read is replaced by one holding only this key. Resolves as writeSecrets.
 export async function saveSecret(fs, system, dir, name, value) {
   let secrets = {};
-  try { secrets = await readSecrets(fs, dir); } catch { /* Replaced below. */ }
+  try {
+    secrets = await readSecrets(fs, dir);
+  } catch {
+    /* Replaced below. */
+  }
   await fs.mkdir(dir, { recursive: true });
   return writeSecrets(fs, system, dir, { ...secrets, [name]: value });
 }

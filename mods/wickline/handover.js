@@ -13,9 +13,17 @@ export const makeToken = (now, random) => `${now.toString(36)}-${Math.floor(rand
 // A hand-over as written: `{ symbol, token, seq, quote }`. Anything else (`{}` once cleared, a malformed value from
 // another version) is no one's.
 function handedOver(stored) {
-  return stored !== null && typeof stored === "object" && typeof stored.symbol === "string" && typeof stored.token === "string"
-    && Number.isInteger(stored.seq) && stored.seq > 0 && stored.quote !== null && typeof stored.quote === "object"
-    && stored.quote.symbol === stored.symbol;
+  return (
+    stored !== null &&
+    typeof stored === "object" &&
+    typeof stored.symbol === "string" &&
+    typeof stored.token === "string" &&
+    Number.isInteger(stored.seq) &&
+    stored.seq > 0 &&
+    stored.quote !== null &&
+    typeof stored.quote === "object" &&
+    stored.quote.symbol === stored.symbol
+  );
 }
 
 /**
@@ -36,8 +44,12 @@ function contentKey(quote, paused) {
 export function packTimes(quote) {
   if (!("times" in quote)) return quote;
   const { times, ...rest } = quote;
-  if (!Array.isArray(times) || !times.length || !times.every((time) => Number.isInteger(time) && time % 1000 === 0)) return rest;
-  return { ...rest, timesPacked: { t0: times[0] / 1000, d: times.slice(1).map((time, i) => (time - times[i]) / 1000) } };
+  if (!Array.isArray(times) || !times.length || !times.every((time) => Number.isInteger(time) && time % 1000 === 0))
+    return rest;
+  return {
+    ...rest,
+    timesPacked: { t0: times[0] / 1000, d: times.slice(1).map((time, i) => (time - times[i]) / 1000) },
+  };
 }
 
 /**
@@ -47,7 +59,8 @@ export function packTimes(quote) {
 export function unpackTimes(quote) {
   const { timesPacked: packed, times: _times, ...rest } = quote;
   const { t0, d } = packed !== null && typeof packed === "object" ? packed : {};
-  if (!Number.isInteger(t0) || !Array.isArray(d) || !d.every(Number.isInteger) || d.length + 1 !== rest.series?.length) return rest;
+  if (!Number.isInteger(t0) || !Array.isArray(d) || !d.every(Number.isInteger) || d.length + 1 !== rest.series?.length)
+    return rest;
   const times = [t0 * 1000];
   let at = t0;
   for (const step of d) times.push((at += step) * 1000);

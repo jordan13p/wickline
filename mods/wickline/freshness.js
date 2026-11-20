@@ -4,8 +4,22 @@
 import { futuresDay, heldMarks, taipeiAt, taipeiDay, taipeiMinute } from "./calendar.js";
 import { formatStaleDate, nextDayTurn, stateText } from "./format.js";
 import {
-  DAY_MS, DAY_SESSION, MINUTE_MS, NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, US_HOURS, dayStart, exchangeRule, kindOf, localDay,
-  localWindow, resolvedMarket, tradesOn, usOffsetMin, weekdayOf,
+  DAY_MS,
+  DAY_SESSION,
+  MINUTE_MS,
+  NIGHT_SESSION,
+  TAIFEX_HOURS,
+  TWSE_HOURS,
+  US_HOURS,
+  dayStart,
+  exchangeRule,
+  kindOf,
+  localDay,
+  localWindow,
+  resolvedMarket,
+  tradesOn,
+  usOffsetMin,
+  weekdayOf,
 } from "./markets.js";
 import { isCryptoPair, priceLimit } from "./quotes.js";
 
@@ -20,8 +34,9 @@ const DELAYED_GRACE_S = 300;
 const FETCH_MAX_AGE_MS = 300_000;
 
 /** A real-time source, or Yahoo Finance for a real-time exchange. */
-export const isRealtime = (quote) => REALTIME_SOURCES.has(quote.source)
-  || (quote.source === "yahoo" && exchangeRule(quote.exchange, quote.symbol).realtime);
+export const isRealtime = (quote) =>
+  REALTIME_SOURCES.has(quote.source) ||
+  (quote.source === "yahoo" && exchangeRule(quote.exchange, quote.symbol).realtime);
 
 // How old a quote may get while its market is open before it has stalled, in ms; null: it never does.
 function staleAfterMs(quote) {
@@ -35,7 +50,7 @@ function staleAfterMs(quote) {
 // cached real-time quote never reads live by freshness()'s own rule. The line's quote (chartQuote) carries the
 // line's flag. One without a fetch time (every provider sets it) counts as fetched now, so its age still grows
 // rather than reading NaN, which would never stall.
-const fetchedAt = (quote, now) => (quote.cached ? now : quote.fetchedAt ?? now);
+const fetchedAt = (quote, now) => (quote.cached ? now : (quote.fetchedAt ?? now));
 
 // A quote's age against staleAfterMs. An overlay's (a real-time source's own) runs from its time to now. A
 // Yahoo Finance quote's is taken when it was fetched, so it does not grow with the time a long list takes
@@ -179,7 +194,8 @@ export const auctionFlagged = (auctionAt, now) => now - auctionAt < LIVE_MAX_AGE
 const auctionOf = (quote, now) => (quote.twRealtime && inTaiwanAuction(now)) || auctionFlagged(quote.auctionAt, now);
 
 // A Taiwan stock (not an index, not a future).
-const isTaiwanStock = (quote) => kindOf(quote.symbol) === "stock" && resolvedMarket(quote.symbol, quote.exchange) === "tw";
+const isTaiwanStock = (quote) =>
+  kindOf(quote.symbol) === "stock" && resolvedMarket(quote.symbol, quote.exchange) === "tw";
 
 const edge = (at) => ({ at, opening: false });
 const opening = (at) => ({ at, opening: true });
@@ -299,7 +315,12 @@ function taifexDay(day) {
 function regularSpans(quote, regular) {
   const [start, end] = regular;
   const lunch = lunchWithin(quote, regular, start);
-  return lunch ? [[start, lunch[0]], [lunch[1], end]] : [[start, end]];
+  return lunch
+    ? [
+        [start, lunch[0]],
+        [lunch[1], end],
+      ]
+    : [[start, end]];
 }
 
 // The spans of trading time in the trading day that `t` belongs to, as [start, end] in ms, or null when unknown. A future:
@@ -375,8 +396,10 @@ export function sessionTimes(quote, now) {
   if (kindOf(quote.symbol) === "future") {
     const { offsetMin } = TAIFEX_HOURS;
     return {
-      kind: "futures", day: localWindow({ offsetMin, ...DAY_SESSION }, now),
-      night: nightClosed(quote) ? null : localWindow({ offsetMin, ...NIGHT_SESSION }, now), nightNoTrades: closure === "nightNoTrades",
+      kind: "futures",
+      day: localWindow({ offsetMin, ...DAY_SESSION }, now),
+      night: nightClosed(quote) ? null : localWindow({ offsetMin, ...NIGHT_SESSION }, now),
+      nightNoTrades: closure === "nightNoTrades",
     };
   }
   const spans = (list) => ({ kind: "spans", spans: list });
@@ -565,12 +588,16 @@ function delayWords(quote, tx) {
 // A detail line's keys: with a state, and for the source alone when the state has no word (unconfirmed).
 const PRICE_KEYS = { from: "detail.priceFrom", alone: "detail.priceSource" };
 const LINE_KEYS = { from: "detail.lineFrom", alone: "detail.lineSource" };
-const sourceText = (keys, state, source, tx) => (state === null ? tx(keys.alone, { source }) : tx(keys.from, { state, source }));
+const sourceText = (keys, state, source, tx) =>
+  state === null ? tx(keys.alone, { source }) : tx(keys.from, { state, source });
 
 /** A row's line as a quote of its own source: its times and cached flag (`chartCached`), not the price's. */
 export function chartQuote(quote) {
   return {
-    ...quote, source: quote.chartSource, timestamp: quote.chartTimestamp, fetchedAt: quote.chartFetchedAt,
+    ...quote,
+    source: quote.chartSource,
+    timestamp: quote.chartTimestamp,
+    fetchedAt: quote.chartFetchedAt,
     cached: quote.chartCached,
   };
 }
@@ -589,7 +616,8 @@ export const DETAIL_WAKE_CAP_MS = 600_000;
 
 // A stale moment the open detail reads (staleAt), or null: none for a quote that already reads stalled, which stays so
 // until an edge (a cached price reads stalled at once; one still at the previous close, unconfirmed, still turns).
-const readStaleAt = (quote, session, now) => (freshness(quote, session, now).state === "stalled" ? null : staleAt(quote, session, now));
+const readStaleAt = (quote, session, now) =>
+  freshness(quote, session, now).state === "stalled" ? null : staleAt(quote, session, now);
 
 /**
  * The next moment after `now` at which the open detail of `quote`, with its marks as held at `now` (heldMarks), can
@@ -624,8 +652,14 @@ export async function followDetail(detail, { now, sleep, changed, woken }) {
     const time = now();
     const wake = detailWakeAt(detail(), time);
     const signal = woken();
-    if (wake === null) { await signal; continue; }
-    const reached = await Promise.race([sleep(Math.min(wake - time, DETAIL_WAKE_CAP_MS)).then(() => true), signal.then(() => false)]);
+    if (wake === null) {
+      await signal;
+      continue;
+    }
+    const reached = await Promise.race([
+      sleep(Math.min(wake - time, DETAIL_WAKE_CAP_MS)).then(() => true),
+      signal.then(() => false),
+    ]);
     if (reached && now() >= wake) changed();
   }
 }
@@ -645,7 +679,8 @@ export function detailSource(quote, session, now, tx) {
     const own = stateText(freshness(quote, session, now), tx);
     const price = sourceText(PRICE_KEYS, own, tx(`src.${quote.source}`), tx);
     if (!quote.chartSource) return [[price]];
-    if (quote.chartSource === quote.source) return [[price], [sourceText(LINE_KEYS, own, tx(`src.${quote.source}`), tx)]];
+    if (quote.chartSource === quote.source)
+      return [[price], [sourceText(LINE_KEYS, own, tx(`src.${quote.source}`), tx)]];
     const line = lineReading(quote);
     const state = line ? stateText(freshness(line, session, now), tx) : delayWords(chartQuote(quote), tx);
     return [[price], [sourceText(LINE_KEYS, state, tx(`src.${quote.chartSource}`), tx)]];

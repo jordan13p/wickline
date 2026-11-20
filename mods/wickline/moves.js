@@ -5,7 +5,17 @@
 // was opened from (view.from: by a pane or by the docked block).
 // `cx` is the click's; each wait runs in a task spawned from it that owns its own cx.
 import {
-  DOCK_TAB_KEY, MOD_ID, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWicklineTab, ownTabSource, returnPane, staleDockTab,
+  DOCK_TAB_KEY,
+  MOD_ID,
+  blockYields,
+  canOpenOwnTab,
+  closeOnceOpened,
+  dockOf,
+  isShown,
+  newWicklineTab,
+  ownTabSource,
+  returnPane,
+  staleDockTab,
   waitUntil,
 } from "./panes.js";
 
@@ -61,8 +71,16 @@ export function ownTabAction(host, view) {
   if (view.fromDock) {
     if (!dockOf(host.layout(), MOD_ID)) return null;
     return {
-      icon: "restore", label: "button.backToPanel",
-      go: (cx) => backToPanel(host, view, cx, host.panes().find((p) => p.mod === MOD_ID && p.focused), true),
+      icon: "restore",
+      label: "button.backToPanel",
+      go: (cx) =>
+        backToPanel(
+          host,
+          view,
+          cx,
+          host.panes().find((p) => p.mod === MOD_ID && p.focused),
+          true,
+        ),
     };
   }
   if (view.dock) return dockTabAction(host, view);
@@ -71,7 +89,8 @@ export function ownTabAction(host, view) {
   if (!view.from) {
     if (!canOpenOwnTab(all, shownTab)) return null;
     return {
-      icon: "zoom", label: "button.ownTab",
+      icon: "zoom",
+      label: "button.ownTab",
       go: (cx) => {
         if (view.moving) return;
         const before = host.panes();
@@ -84,7 +103,8 @@ export function ownTabAction(host, view) {
   }
   if (!returnPane(all, view.from, host.focused(), shownTab)) return null;
   return {
-    icon: "restore", label: "button.backBeside",
+    icon: "restore",
+    label: "button.backBeside",
     go: (cx) => {
       if (view.moving) return;
       const before = host.panes();
@@ -105,17 +125,24 @@ export function ownTabAction(host, view) {
 function dockTabAction(host, view) {
   if (!view.dockShown) return null;
   return {
-    icon: "zoom", label: "button.ownTab",
+    icon: "zoom",
+    label: "button.ownTab",
     go: (cx) => {
       if (view.moving) return;
       const before = host.panes();
       const { collapse } = view.dock;
       // The tab the person is on, to return to on the way back.
       const from = host.focused()?.tab;
-      host.run("tab.new", { mod: MOD_ID, name: "Wickline", props: { dock: true, ...(from && { from }), ...carried(view) } });
+      host.run("tab.new", {
+        mod: MOD_ID,
+        name: "Wickline",
+        props: { dock: true, ...(from && { from }), ...carried(view) },
+      });
       runMove(view, cx, async (cx) => {
         let tab = null;
-        const opened = await waitUntil(() => (tab = newWicklineTab(before, host.panes())), { sleep: (ms) => cx.sleep(ms) });
+        const opened = await waitUntil(() => (tab = newWicklineTab(before, host.panes())), {
+          sleep: (ms) => cx.sleep(ms),
+        });
         if (!opened) return false;
         host.setShared(DOCK_TAB_KEY, { tab: tab.tab });
         if (collapse) host.run("layout.hide", { id: collapse });
@@ -142,7 +169,7 @@ function backToPanel(host, view, cx, pane, leaving) {
   runMove(view, cx, async (cx) => {
     if (dock.stack) host.run("layout.select", { stack: dock.stack, child: dock.block });
     if (dock.collapse) host.run("layout.show", { id: dock.collapse });
-    if (!await waitUntil(() => isShown(host.layout(), dock), { sleep: (ms) => cx.sleep(ms) })) return false;
+    if (!(await waitUntil(() => isShown(host.layout(), dock), { sleep: (ms) => cx.sleep(ms) }))) return false;
     host.setShared(DOCK_TAB_KEY, { tab: null });
     // Closing the tab would hand the focus to its neighbour, so the tab copy first returns the person to
     // the tab they opened it from, while that tab is still there. A refused select still lets the pane close.
@@ -161,7 +188,13 @@ function backToPanel(host, view, cx, pane, leaving) {
 /** The yield view's button: the Wickline pane of the tab the block moved to (not the focused one). */
 export function backFromYield(host, view, cx) {
   const dockTab = host.shared(DOCK_TAB_KEY);
-  backToPanel(host, view, cx, host.panes().find((p) => p.mod === MOD_ID && p.tab === dockTab?.tab), false);
+  backToPanel(
+    host,
+    view,
+    cx,
+    host.panes().find((p) => p.mod === MOD_ID && p.tab === dockTab?.tab),
+    false,
+  );
 }
 
 /**
@@ -185,7 +218,16 @@ function runMove(view, cx, step) {
 
 /** Closes `me` once the new copy is seen (in `tab`, when given). */
 function finishMove(host, view, cx, before, me, tab = null) {
-  runMove(view, cx, (cx) => closeOnceOpened(before, me, {
-    panes: host.panes, sleep: (ms) => cx.sleep(ms), close: (pane) => host.run("pane.close", { pane }),
-  }, tab));
+  runMove(view, cx, (cx) =>
+    closeOnceOpened(
+      before,
+      me,
+      {
+        panes: host.panes,
+        sleep: (ms) => cx.sleep(ms),
+        close: (pane) => host.run("pane.close", { pane }),
+      },
+      tab,
+    ),
+  );
 }

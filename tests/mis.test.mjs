@@ -50,15 +50,25 @@ test("batches of 50 and none when empty", () => {
   const symbols = Array.from({ length: 51 }, (_, i) => `${1000 + i}.TW`);
   const requests = mis.requests(symbols, cfg);
   assert.equal(requests.length, 2);
-  assert.deepEqual(requests.map((r) => r.symbols.length), [50, 1]);
+  assert.deepEqual(
+    requests.map((r) => r.symbols.length),
+    [50, 1],
+  );
   for (const request of requests) {
     assert.ok(request.url.startsWith(cfg.misUrl + "?"), request.url);
     assert.equal(request.kind, "quote");
     assert.equal(request.headers["User-Agent"], USER_AGENT);
   }
-  assert.equal(mis.requests(["2330.TW", "6488.TWO"], cfg)[0].url, `${MIS_URL}?ex_ch=tse_2330.tw|otc_6488.tw&json=1&delay=0`);
+  assert.equal(
+    mis.requests(["2330.TW", "6488.TWO"], cfg)[0].url,
+    `${MIS_URL}?ex_ch=tse_2330.tw|otc_6488.tw&json=1&delay=0`,
+  );
   // The person's address is used as written.
-  assert.ok(mis.requests(["2330.TW"], { misUrl: "https://mirror.test/mis" })[0].url.startsWith("https://mirror.test/mis?ex_ch="));
+  assert.ok(
+    mis
+      .requests(["2330.TW"], { misUrl: "https://mirror.test/mis" })[0]
+      .url.startsWith("https://mirror.test/mis?ex_ch="),
+  );
 });
 
 test("decodes the recorded answer", () => {
@@ -73,27 +83,58 @@ test("decodes the recorded answer", () => {
   assert.equal(etf.price, Number(row.z));
   assert.equal(etf.timestamp, Number(row.tlong));
   assert.deepEqual(etf, {
-    symbol: "0050.TW", source: "mis", name: row.n, price: 98.7, previousClose: 99.85,
-    open: 99.4, high: 99.75, low: 97.6, limitUp: 109.8, limitDown: 89.9, volume: Number(row.v), sizeUnit: "lot", lastSize: Number(row.tv),
+    symbol: "0050.TW",
+    source: "mis",
+    name: row.n,
+    price: 98.7,
+    previousClose: 99.85,
+    open: 99.4,
+    high: 99.75,
+    low: 97.6,
+    limitUp: 109.8,
+    limitDown: 89.9,
+    volume: Number(row.v),
+    sizeUnit: "lot",
+    lastSize: Number(row.tv),
     book: {
-      bids: [[98.65, 170], [98.6, 235], [98.55, 150], [98.5, 1769], [98.45, 716]].map(([price, size]) => ({ price, size })),
-      asks: [[98.7, 294], [98.75, 2524], [98.8, 1828], [98.85, 489], [98.9, 472]].map(([price, size]) => ({ price, size })),
+      bids: [
+        [98.65, 170],
+        [98.6, 235],
+        [98.55, 150],
+        [98.5, 1769],
+        [98.45, 716],
+      ].map(([price, size]) => ({ price, size })),
+      asks: [
+        [98.7, 294],
+        [98.75, 2524],
+        [98.8, 1828],
+        [98.85, 489],
+        [98.9, 472],
+      ].map(([price, size]) => ({ price, size })),
     },
-    timestamp: Number(row.tlong), fetchedAt: 42,
+    timestamp: Number(row.tlong),
+    fetchedAt: 42,
   });
   // No trade in the last snapshot: the best bid/ask midpoint.
   assert.equal(result.quotes["2330.TW"].price, (2265 + 2270) / 2);
 });
 
 test("midpoint and no price", () => {
-  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "100.5_100_", a: "101.5_102_", u: "-", w: "-" })).quotes["2330.TW"].price, 101);
+  assert.equal(
+    decode(["2330.TW"], row2330({ z: "-", b: "100.5_100_", a: "101.5_102_", u: "-", w: "-" })).quotes["2330.TW"].price,
+    101,
+  );
   const none = decode(["2330.TW"], row2330({ z: "-", b: "-", a: "0.0000" }));
   // No price, but the name still comes through (see "a name without a price").
   const named = { "2330.TW": "台積電" };
   // Nor any priced level (a market order alone is no order book yet): MIS answered with no order yet.
   assert.deepEqual(none, { quotes: {}, errors: {}, names: named, noLevels: { "2330.TW": true } });
   // One side only is not a midpoint.
-  assert.deepEqual(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2270.0000_" })), { quotes: {}, errors: {}, names: named });
+  assert.deepEqual(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2270.0000_" })), {
+    quotes: {},
+    errors: {},
+    names: named,
+  });
   assert.deepEqual(decode(["2330.TW"], row2330({ tlong: "-" })), { quotes: {}, errors: {}, names: named });
 });
 
@@ -106,14 +147,21 @@ test("a stock locked at its limit is priced at that limit", () => {
   const up = decode(["2330.TW"], row2330({ z: "-", a: "-", b: "0.0000_2485.0000_2480.0000_" }));
   assert.equal(up.quotes["2330.TW"].price, 2485);
   // A limit order queue alone, without market orders, is a lock too.
-  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2035.0000_2040.0000_" })).quotes["2330.TW"].price, 2035);
+  assert.equal(
+    decode(["2330.TW"], row2330({ z: "-", b: "-", a: "2035.0000_2040.0000_" })).quotes["2330.TW"].price,
+    2035,
+  );
   // A side of market orders only is no side: asks waiting at limit-down still lock it.
-  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "0.0000_", a: "0.0000_2035.0000_" })).quotes["2330.TW"].price, 2035);
+  assert.equal(
+    decode(["2330.TW"], row2330({ z: "-", b: "0.0000_", a: "0.0000_2035.0000_" })).quotes["2330.TW"].price,
+    2035,
+  );
 });
 
 test("a one-sided book away from the limits, or without limits, has no price", () => {
   const named = { "2330.TW": "台積電" };
-  const none = (fields) => assert.deepEqual(decode(["2330.TW"], row2330(fields)), { quotes: {}, errors: {}, names: named });
+  const none = (fields) =>
+    assert.deepEqual(decode(["2330.TW"], row2330(fields)), { quotes: {}, errors: {}, names: named });
   // Asks only, above limit-down.
   none({ z: "-", b: "-", a: "0.0000_2040.0000_" });
   // Asks only at limit-up, bids only at limit-down: the wrong side.
@@ -125,8 +173,14 @@ test("a one-sided book away from the limits, or without limits, has no price", (
 });
 
 test("the midpoint skips market orders on either side", () => {
-  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "0.0000_2260.0000_", a: "2270.0000_" })).quotes["2330.TW"].price, 2265);
-  assert.equal(decode(["2330.TW"], row2330({ z: "-", b: "2260.0000_", a: "0.0000_2270.0000_" })).quotes["2330.TW"].price, 2265);
+  assert.equal(
+    decode(["2330.TW"], row2330({ z: "-", b: "0.0000_2260.0000_", a: "2270.0000_" })).quotes["2330.TW"].price,
+    2265,
+  );
+  assert.equal(
+    decode(["2330.TW"], row2330({ z: "-", b: "2260.0000_", a: "0.0000_2270.0000_" })).quotes["2330.TW"].price,
+    2265,
+  );
 });
 
 test("a name without a price: before the open MIS sends names only", () => {
@@ -164,8 +218,12 @@ test("a flagged row without a trial price is still no price", () => {
 
 test("a name-only row is never a flag", () => {
   const result = decode(["2330.TW", "6488.TWO"], auctionAnswer("0825"));
-  assert.deepEqual(result, { quotes: {}, errors: {}, names: { "2330.TW": "台積電", "6488.TWO": "環球晶" },
-    noLevels: { "2330.TW": true, "6488.TWO": true } });
+  assert.deepEqual(result, {
+    quotes: {},
+    errors: {},
+    names: { "2330.TW": "台積電", "6488.TWO": "環球晶" },
+    noLevels: { "2330.TW": true, "6488.TWO": true },
+  });
 });
 
 test("in-session answers deep-equal as before", () => {
@@ -192,14 +250,18 @@ test("every recorded auction answer is flagged", () => {
   const open = decode(["2330.TW"], auctionAnswer("0902"));
   assert.ok(!("auction" in open));
   const quote = open.quotes["2330.TW"];
-  assert.deepEqual([quote.price, quote.timestamp, quote.fromBook], [(2195 + 2200) / 2, at("2026-11-17T01:02:00Z"), true]);
+  assert.deepEqual(
+    [quote.price, quote.timestamp, quote.fromBook],
+    [(2195 + 2200) / 2, at("2026-11-17T01:02:00Z"), true],
+  );
 });
 
 test("TPEx flags like TWSE", () => {
   const result = decode(["2330.TW", "6488.TWO"], auctionAnswer("0831"));
   assert.deepEqual(result.quotes, {});
   assert.deepEqual(result.auction, {
-    "2330.TW": Number(auctionRow("0831", "2330").tlong), "6488.TWO": Number(auctionRow("0831", "6488").tlong),
+    "2330.TW": Number(auctionRow("0831", "2330").tlong),
+    "6488.TWO": Number(auctionRow("0831", "6488").tlong),
   });
 });
 
@@ -233,13 +295,33 @@ test("HTML answer fails visibly", () => {
 // ---- Overlay over Yahoo, and routing through the scheduler ----
 
 const YAHOO_2330 = {
-  symbol: "2330.TW", source: "yahoo", exchange: "TAI", name: "Taiwan Semiconductor", price: 2200, changePercent: -2.65, currency: "TWD",
-  timestamp: 1_000, fetchedAt: 2_000, series: [2190, 2200], open: 2250, high: 2260, low: 2180,
-  previousClose: 2260, periods: { pre: null, regular: [0, 10_000], post: null },
+  symbol: "2330.TW",
+  source: "yahoo",
+  exchange: "TAI",
+  name: "Taiwan Semiconductor",
+  price: 2200,
+  changePercent: -2.65,
+  currency: "TWD",
+  timestamp: 1_000,
+  fetchedAt: 2_000,
+  series: [2190, 2200],
+  open: 2250,
+  high: 2260,
+  low: 2180,
+  previousClose: 2260,
+  periods: { pre: null, regular: [0, 10_000], post: null },
 };
 const MIS_2330 = {
-  symbol: "2330.TW", source: "mis", name: "台積電", price: 2267.5, previousClose: 2260, open: 2250, high: 2285, low: null,
-  timestamp: 5_000, fetchedAt: 5_500,
+  symbol: "2330.TW",
+  source: "mis",
+  name: "台積電",
+  price: 2267.5,
+  previousClose: 2260,
+  open: 2250,
+  high: 2285,
+  low: null,
+  timestamp: 5_000,
+  fetchedAt: 5_500,
 };
 
 test("overlay merges over Yahoo", () => {
@@ -254,7 +336,7 @@ test("overlay merges over Yahoo", () => {
   assert.equal(merged.high, 2285);
   // A field MIS did not send keeps Yahoo's.
   assert.equal(merged.low, 2180);
-  assert.equal(merged.changePercent, (2267.5 - 2260) / 2260 * 100);
+  assert.equal(merged.changePercent, ((2267.5 - 2260) / 2260) * 100);
   assert.deepEqual(merged.series, YAHOO_2330.series);
   assert.deepEqual(merged.periods, YAHOO_2330.periods);
   assert.equal(merged.currency, "TWD");
@@ -279,24 +361,36 @@ test("a real-time overlay over a delayed Yahoo base keeps its 120 s", () => {
   assert.equal(merged.exchange, "TAI");
   assert.equal(msUntilStale(merged, "open", MIS_2330.timestamp), 120_001);
   assert.equal(freshness(merged, "open", MIS_2330.timestamp + 120_000).state, "live");
-  assert.deepEqual(freshness(merged, "open", MIS_2330.timestamp + 121_000), { state: "stalled", delayMinutes: null, stoppedAt: MIS_2330.timestamp });
+  assert.deepEqual(freshness(merged, "open", MIS_2330.timestamp + 121_000), {
+    state: "stalled",
+    delayMinutes: null,
+    stoppedAt: MIS_2330.timestamp,
+  });
 });
 
 test("an overlay's own line is drawn only on its price's Taipei day", () => {
   const own = { ...MIS_2330, source: "yahootw", day: 20_766 };
   const series = [2250, 2260];
   const today = mergeOverlay(YAHOO_2330, own, { day: own.day, series });
-  assert.deepEqual([today.series, today.chartSource, today.chartTimestamp], [[2250, 2260, 2267.5], "yahootw", own.timestamp]);
+  assert.deepEqual(
+    [today.series, today.chartSource, today.chartTimestamp],
+    [[2250, 2260, 2267.5], "yahootw", own.timestamp],
+  );
   // A copy hidden overnight: the line it kept is yesterday's, the price just arrived is today's.
   const overnight = mergeOverlay(YAHOO_2330, own, { day: own.day - 1, series });
   assert.deepEqual([overnight.series, overnight.chartSource], [YAHOO_2330.series, "yahoo"]);
 });
 
 const CONSENTED = { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION } } } };
-const yahooTw = (url) => chart({
-  symbol: chartSymbol(url), regularMarketPrice: 2200,
-  regularMarketTime: 1, previousClose: 2260, currency: "TWD", currentTradingPeriod: { regular: { start: 0, end: 100_000 } },
-});
+const yahooTw = (url) =>
+  chart({
+    symbol: chartSymbol(url),
+    regularMarketPrice: 2200,
+    regularMarketTime: 1,
+    previousClose: 2260,
+    currency: "TWD",
+    currentTradingPeriod: { regular: { start: 0, end: 100_000 } },
+  });
 const misCount = (host) => host.requests.filter((url) => url.startsWith(MIS_URL)).length;
 
 function twHost(prefs, misAnswer = () => answer(OPEN)) {
@@ -307,8 +401,11 @@ function twHost(prefs, misAnswer = () => answer(OPEN)) {
 }
 
 test("MIS stays off until the current consent is given", async () => {
-  for (const prefs of [undefined, { version: 1, sources: { tw: { provider: "mis", misAck: null } } },
-    { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION - 1 } } } }]) {
+  for (const prefs of [
+    undefined,
+    { version: 1, sources: { tw: { provider: "mis", misAck: null } } },
+    { version: 1, sources: { tw: { provider: "mis", misAck: { version: MIS_CONSENT_VERSION - 1 } } } },
+  ]) {
     const host = twHost(prefs);
     const w = new Watchlist(host);
     w.add("2330.TW");
@@ -317,7 +414,10 @@ test("MIS stays off until the current consent is given", async () => {
     assert.equal(misCount(host), 0, JSON.stringify(prefs));
     assert.equal(w.shown("2330.TW").source, "yahoo");
     const asked = prefs?.sources.tw.provider === "mis";
-    assert.deepEqual(w.problems(), asked ? [{ provider: "mis", code: "mis.reconfirm", params: {}, stopped: true }] : []);
+    assert.deepEqual(
+      w.problems(),
+      asked ? [{ provider: "mis", code: "mis.reconfirm", params: {}, stopped: true }] : [],
+    );
     await stop(w, host, runs);
   }
 });
@@ -325,11 +425,15 @@ test("MIS stays off until the current consent is given", async () => {
 test("MIS overlays Yahoo every 10 s, even while Yahoo hangs", async () => {
   const host = twHost(CONSENTED);
   const w = new Watchlist(host);
-  w.add("0050.TW"); w.add("2330.TW");
+  w.add("0050.TW");
+  w.add("2330.TW");
   const runs = start(w, host);
   await advance(host, 1);
   // One request for both symbols.
-  assert.equal(host.requests.filter((url) => url.startsWith(MIS_URL))[0], `${MIS_URL}?ex_ch=tse_2330.tw|tse_0050.tw&json=1&delay=0`);
+  assert.equal(
+    host.requests.filter((url) => url.startsWith(MIS_URL))[0],
+    `${MIS_URL}?ex_ch=tse_2330.tw|tse_0050.tw&json=1&delay=0`,
+  );
   const quote = w.shown("2330.TW");
   assert.deepEqual([quote.source, quote.price, quote.chartSource, quote.currency], ["mis", 2267.5, "yahoo", "TWD"]);
   assert.equal(w.quotes["2330.TW"].source, "yahoo");
@@ -338,7 +442,8 @@ test("MIS overlays Yahoo every 10 s, even while Yahoo hangs", async () => {
 
   const hung = twHost(CONSENTED);
   const fetch = hung.fetch;
-  hung.fetch = (url, headers) => (url.startsWith(MIS_URL) ? fetch(url, headers) : (hung.requests.push(url), new Promise(() => {})));
+  hung.fetch = (url, headers) =>
+    url.startsWith(MIS_URL) ? fetch(url, headers) : (hung.requests.push(url), new Promise(() => {}));
   const v = new Watchlist(hung);
   v.add("2330.TW");
   const hungRuns = start(v, hung);
@@ -356,7 +461,9 @@ test("any MIS failure drops the overlay at once", async () => {
   const runs = start(w, host);
   await advance(host, 1);
   assert.equal(w.shown("2330.TW").source, "mis");
-  host.mis = () => { throw new Error("offline"); };
+  host.mis = () => {
+    throw new Error("offline");
+  };
   await advance(host, 10_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");
   assert.equal(w.shown("2330.TW").price, 2200);
@@ -380,7 +487,8 @@ test("a price outside the limits falls back for that symbol only", async () => {
     return answer(JSON.stringify(body));
   });
   const w = new Watchlist(host);
-  w.add("0050.TW"); w.add("2330.TW");
+  w.add("0050.TW");
+  w.add("2330.TW");
   const runs = start(w, host);
   await advance(host, 1);
   assert.equal(w.shown("2330.TW").source, "yahoo");
@@ -452,10 +560,14 @@ test("an MIS address change is used at once", async () => {
 const rowsFor = (url) => {
   const template = jsonFixture("mis-open").msgArray[1];
   const channels = decodeURIComponent(url.split("ex_ch=")[1].split("&")[0]).split("|");
-  return answer(JSON.stringify({ msgArray: channels.map((channel) => {
-    const [ex, rest] = channel.split("_");
-    return { ...template, ex, c: rest.replace(/\.tw$/, "") };
-  }) }));
+  return answer(
+    JSON.stringify({
+      msgArray: channels.map((channel) => {
+        const [ex, rest] = channel.split("_");
+        return { ...template, ex, c: rest.replace(/\.tw$/, "") };
+      }),
+    }),
+  );
 };
 
 test("a MIS timeout drops the overlay", async () => {
@@ -467,12 +579,15 @@ test("a MIS timeout drops the overlay", async () => {
   assert.equal(w.shown("2330.TW").source, "mis");
   host.mis = () => new Promise(() => {});
   const fetch = host.fetch;
-  host.fetch = (url, headers) => (url.startsWith(MIS_URL) ? (host.requests.push(url), host.mis(url)) : fetch(url, headers));
+  host.fetch = (url, headers) =>
+    url.startsWith(MIS_URL) ? (host.requests.push(url), host.mis(url)) : fetch(url, headers);
   // The next round starts at 10 s and times out 10 s later.
   await advance(host, 20_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");
   assert.equal(w.overlayError("2330.TW").code, "request.timeout");
-  assert.deepEqual(w.problems(), [{ provider: "mis", code: "request.timeout", params: { source: "mis", seconds: 10 } }]);
+  assert.deepEqual(w.problems(), [
+    { provider: "mis", code: "request.timeout", params: { source: "mis", seconds: 10 } },
+  ]);
   await stop(w, host, runs);
 });
 
@@ -502,7 +617,12 @@ test("a MIS rate limit keeps Yahoo's quote for the whole cooldown", async () => 
 test("a later batch loses its overlays when an earlier one fails", async () => {
   const symbols = Array.from({ length: 51 }, (_, i) => `${1101 + i}.TW`);
   const failures = [
-    [() => { throw new Error("offline"); }, "mis.unreachable"],
+    [
+      () => {
+        throw new Error("offline");
+      },
+      "mis.unreachable",
+    ],
     [() => ({ status: 429, ok: false, text: "" }), "request.deferred"],
   ];
   for (const [failure, later] of failures) {
@@ -543,18 +663,34 @@ test("a Taiwan name follows the interface language", () => {
 test("the detail line puts the chart's delay on the chart", () => {
   const say = (lang) => (key, params) => t(lang, key, params);
   const merged = mergeOverlay(YAHOO_2330, MIS_2330);
-  assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
-  assert.deepEqual(detailSource(merged, "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: delayed 20 min · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(merged, "open", 5_000, say("zh-TW")), [
+    ["價格：即時 · 證交所 MIS"],
+    ["走勢：延遲 20 分鐘 · Yahoo Finance"],
+  ]);
+  assert.deepEqual(detailSource(merged, "open", 5_000, say("en")), [
+    ["Price: Live · TWSE MIS"],
+    ["Line: delayed 20 min · Yahoo Finance"],
+  ]);
   // The chart reads its base's exchange: NMS is live; no exchange, no delay known.
   const us = { ...YAHOO_2330, symbol: "AAPL", exchange: "NMS" };
   // Any real-time overlay over a US Yahoo quote (Finnhub's case).
   const over = { ...MIS_2330, symbol: "AAPL" };
-  assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), [["Price: Live · TWSE MIS"], ["Line: Live · Yahoo Finance"]]);
-  assert.deepEqual(detailSource(mergeOverlay({ ...us, exchange: null }, over), "open", 5_000, say("en"))[1], ["Line: delay not provided · Yahoo Finance"]);
+  assert.deepEqual(detailSource(mergeOverlay(us, over), "open", 5_000, say("en")), [
+    ["Price: Live · TWSE MIS"],
+    ["Line: Live · Yahoo Finance"],
+  ]);
+  assert.deepEqual(detailSource(mergeOverlay({ ...us, exchange: null }, over), "open", 5_000, say("en"))[1], [
+    "Line: delay not provided · Yahoo Finance",
+  ]);
   // A real-time price before Yahoo's first quote; a plain Yahoo row keeps its wording.
   assert.deepEqual(detailSource(mergeOverlay(undefined, MIS_2330), "unknown", 5_000, say("en")), [["Price: TWSE MIS"]]);
-  assert.deepEqual(detailSource(YAHOO_2330, "open", 5_000, say("en")), [["Yahoo Finance · regular session", "delayed 20 min"]]);
-  assert.deepEqual(detailSource({ ...YAHOO_2330, symbol: "BTC/USDT", source: "binance", periods: null }, "24h", 5_000, say("en")), [["Binance Spot · 24h"]]);
+  assert.deepEqual(detailSource(YAHOO_2330, "open", 5_000, say("en")), [
+    ["Yahoo Finance · regular session", "delayed 20 min"],
+  ]);
+  assert.deepEqual(
+    detailSource({ ...YAHOO_2330, symbol: "BTC/USDT", source: "binance", periods: null }, "24h", 5_000, say("en")),
+    [["Binance Spot · 24h"]],
+  );
 });
 
 test("a Chinese interface keeps the last MIS name while MIS fails", async () => {
@@ -565,7 +701,9 @@ test("a Chinese interface keeps the last MIS name while MIS fails", async () => 
   await advance(host, 1);
   const yahooName = w.quotes["2330.TW"].name;
   assert.equal(displayName(w.shown("2330.TW"), "zh-TW"), "台積電");
-  host.mis = () => { throw new Error("offline"); };
+  host.mis = () => {
+    throw new Error("offline");
+  };
   await advance(host, 10_001);
   assert.equal(w.shown("2330.TW").source, "yahoo");
   for (const lang of ["zh-TW", "zh-CN"]) assert.equal(displayName(w.shown("2330.TW"), lang), "台積電", lang);
@@ -604,7 +742,10 @@ test("a MIS overlay carries its own limits, and a locked stock is at its limit",
 
 test("half a tick short of the limit is not at it", () => {
   // No trade; bid 8.31 and ask 8.32 (limit-up) give the midpoint 8.315000000000001, within 0.005 of 8.32.
-  const quote = decode(["2330.TW"], row2330({ z: "-", b: "8.3100_", a: "8.3200_", u: "8.3200", w: "6.8200", y: "7.5700" })).quotes["2330.TW"];
+  const quote = decode(
+    ["2330.TW"],
+    row2330({ z: "-", b: "8.3100_", a: "8.3200_", u: "8.3200", w: "6.8200", y: "7.5700" }),
+  ).quotes["2330.TW"];
   assert.ok(Math.abs(quote.price - 8.32) <= 0.005);
   assert.equal(priceLimit(quote), null);
 });
@@ -618,7 +759,10 @@ test("a stock without both limits carries none", () => {
 });
 
 test("the shown quote's limits are the overlay's own, never the base's", () => {
-  const merged = mergeOverlay({ ...YAHOO_2330, limitUp: 2485, limitDown: 2035 }, { ...MIS_2330, limitUp: null, limitDown: null });
+  const merged = mergeOverlay(
+    { ...YAHOO_2330, limitUp: 2485, limitDown: 2035 },
+    { ...MIS_2330, limitUp: null, limitDown: null },
+  );
   assert.equal(merged.limitUp, null);
   assert.equal(merged.limitDown, null);
   assert.equal(mergeOverlay(YAHOO_2330, { ...MIS_2330, limitUp: 2485, limitDown: 2035 }).limitUp, 2485);
@@ -678,17 +822,39 @@ const levelPairs = (levels) => levels.map((level) => [level.price, level.size]);
 // mis-detail-1330 with the 2330 row's fields replaced.
 const detail1330 = (fields) => {
   const body = jsonFixture("mis-detail-1330");
-  return answer(JSON.stringify({ ...body, msgArray: body.msgArray.map((row) => (row.c === "2330" ? { ...row, ...fields } : row)) }));
+  return answer(
+    JSON.stringify({ ...body, msgArray: body.msgArray.map((row) => (row.c === "2330" ? { ...row, ...fields } : row)) }),
+  );
 };
 
 test("MIS levels", () => {
   const { book } = decode(["2330.TW"], detailAnswer("1330")).quotes["2330.TW"];
-  assert.deepEqual(levelPairs(book.bids), [[2170, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]);
-  assert.deepEqual(levelPairs(book.asks), [[2175, 503], [2180, 1248], [2185, 571], [2190, 362], [2195, 361]]);
+  assert.deepEqual(levelPairs(book.bids), [
+    [2170, 2280],
+    [2165, 208],
+    [2160, 394],
+    [2155, 467],
+    [2150, 1280],
+  ]);
+  assert.deepEqual(levelPairs(book.asks), [
+    [2175, 503],
+    [2180, 1248],
+    [2185, 571],
+    [2190, 362],
+    [2195, 361],
+  ]);
   assert.equal("auction" in book, false);
   // A market order (0.0000 with a size) is a level without a price, kept first with its size.
-  const market = decode(["2330.TW"], detail1330({ b: "0.0000_2165.0000_2160.0000_2155.0000_2150.0000_" })).quotes["2330.TW"].book;
-  assert.deepEqual(levelPairs(market.bids), [[null, 2280], [2165, 208], [2160, 394], [2155, 467], [2150, 1280]]);
+  const market = decode(["2330.TW"], detail1330({ b: "0.0000_2165.0000_2160.0000_2155.0000_2150.0000_" })).quotes[
+    "2330.TW"
+  ].book;
+  assert.deepEqual(levelPairs(market.bids), [
+    [null, 2280],
+    [2165, 208],
+    [2160, 394],
+    [2155, 467],
+    [2150, 1280],
+  ]);
   // A side without levels is empty, the price still taken.
   const oneSided = decode(["2330.TW"], detail1330({ a: "-", f: "-" })).quotes["2330.TW"];
   assert.deepEqual([oneSided.price, oneSided.book.asks, oneSided.book.bids.length], [2175, [], 5]);
@@ -705,7 +871,10 @@ test("a flagged row's levels are its auction book, never a price", () => {
     for (const symbol of Object.keys(each.auctionBook ?? {})) assert.ok(symbol in each.auction, `${name} ${symbol}`);
   }
   // A flagged row with no level has no auction book.
-  const bare = decode(["2330.TW"], answer(JSON.stringify({ msgArray: [{ ...auctionRow("0831", "2330"), a: "-", b: "-" }] })));
+  const bare = decode(
+    ["2330.TW"],
+    answer(JSON.stringify({ msgArray: [{ ...auctionRow("0831", "2330"), a: "-", b: "-" }] })),
+  );
   assert.ok(bare.auction["2330.TW"]);
   assert.equal("auctionBook" in bare, false);
 });
@@ -714,7 +883,8 @@ test("a named row with no levels marks noLevels", () => {
   const result = decode(["2330.TW"], auctionAnswer("0825"));
   assert.deepEqual([result.noLevels, result.quotes], [{ "2330.TW": true }, {}]);
   // A priced or flagged row never does.
-  for (const name of ["0831", "1335"]) assert.equal("noLevels" in decode(["2330.TW"], auctionAnswer(name)), false, name);
+  for (const name of ["0831", "1335"])
+    assert.equal("noLevels" in decode(["2330.TW"], auctionAnswer(name)), false, name);
 });
 
 test("A locked stock's market order (MIS)", () => {
@@ -722,5 +892,11 @@ test("A locked stock's market order (MIS)", () => {
   const q = decode(["6488.TWO", "2330.TW"], answer(JSON.stringify(jsonFixture("mis-locked-1324")))).quotes["6488.TWO"];
   assert.equal(q.price, 490);
   assert.deepEqual(q.book.bids, []);
-  assert.deepEqual(levelPairs(q.book.asks), [[null, 172], [490, 241], [490.5, 1], [491, 1], [491.5, 1]]);
+  assert.deepEqual(levelPairs(q.book.asks), [
+    [null, 172],
+    [490, 241],
+    [490.5, 1],
+    [491, 1],
+    [491.5, 1],
+  ]);
 });

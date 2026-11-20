@@ -2,9 +2,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, SETTINGS_MARKETS, consentCollapsed, consentGiven, currentHealth, finnhubKeyUsable, firstDraftError, keyChange, marketState, marketStatus,
+  SECRET_KEY_FINNHUB,
+  SETTINGS_KEY,
+  SETTINGS_MARKETS,
+  consentCollapsed,
+  consentGiven,
+  currentHealth,
+  finnhubKeyUsable,
+  firstDraftError,
+  keyChange,
+  marketState,
+  marketStatus,
   mergeSettings,
-  misEnabled, misReconfirm, readSettings, settingsMarkets, upIsRed, validateSettings, yahootwEnabled, yahootwReconfirm,
+  misEnabled,
+  misReconfirm,
+  readSettings,
+  settingsMarkets,
+  upIsRed,
+  validateSettings,
+  yahootwEnabled,
+  yahootwReconfirm,
 } from "../mods/wickline/settings.js";
 import { MIS_CONSENT_VERSION, MIS_URL } from "../mods/wickline/providers/mis.js";
 import { FINNHUB_URL } from "../mods/wickline/providers/finnhub.js";
@@ -13,7 +30,11 @@ import { STRINGS } from "../mods/wickline/i18n.js";
 
 const BINANCE = "https://data-api.binance.vision";
 const DEFAULTS = {
-  version: 1, language: "en", colors: "auto", languagePromptDismissed: false, keyRev: 0,
+  version: 1,
+  language: "en",
+  colors: "auto",
+  languagePromptDismissed: false,
+  keyRev: 0,
   sources: {
     us: { provider: "yahoo", finnhubUrl: FINNHUB_URL, budgetPerMinute: 60 },
     tw: { provider: "yahoo", mis: false, yahootw: false, misUrl: MIS_URL, misAck: null, yahootwAck: null },
@@ -26,17 +47,28 @@ test("reads settings defensively", () => {
   assert.deepEqual(readSettings(undefined), DEFAULTS);
   assert.deepEqual(readSettings(null), DEFAULTS);
   assert.deepEqual(readSettings("en"), DEFAULTS);
-  assert.deepEqual(readSettings({ version: 1, language: "fr", colors: "pink", languagePromptDismissed: "yes" }), DEFAULTS);
+  assert.deepEqual(
+    readSettings({ version: 1, language: "fr", colors: "pink", languagePromptDismissed: "yes" }),
+    DEFAULTS,
+  );
   assert.deepEqual(readSettings({ language: "ja" }), { ...DEFAULTS, language: "ja" });
-  assert.deepEqual(readSettings({ language: "ko", colors: "red-up", languagePromptDismissed: 1 }),
-    { ...DEFAULTS, language: "ko", colors: "red-up" });
+  assert.deepEqual(readSettings({ language: "ko", colors: "red-up", languagePromptDismissed: 1 }), {
+    ...DEFAULTS,
+    language: "ko",
+    colors: "red-up",
+  });
   assert.deepEqual(readSettings([]), DEFAULTS);
-  assert.deepEqual(readSettings({ version: 1, language: "ko", colors: "green-up", languagePromptDismissed: true }),
-    { ...DEFAULTS, language: "ko", colors: "green-up", languagePromptDismissed: true });
+  assert.deepEqual(readSettings({ version: 1, language: "ko", colors: "green-up", languagePromptDismissed: true }), {
+    ...DEFAULTS,
+    language: "ko",
+    colors: "green-up",
+    languagePromptDismissed: true,
+  });
 });
 
 test("reads the sources field by field", () => {
-  const url = (binanceUrl) => readSettings({ version: 1, sources: { crypto: { binanceUrl } } }).sources.crypto.binanceUrl;
+  const url = (binanceUrl) =>
+    readSettings({ version: 1, sources: { crypto: { binanceUrl } } }).sources.crypto.binanceUrl;
   assert.equal(url("https://mirror.test"), "https://mirror.test");
   // Kept as written so the dialog can name the problem; only a non-string or blank value falls back.
   assert.equal(url("http://x.test"), "http://x.test");
@@ -54,15 +86,29 @@ test("validates URLs", () => {
   assert.deepEqual(check("https://mirror.test/proxy"), {});
   assert.deepEqual(check("HTTPS://mirror.test"), {});
   assert.deepEqual(check("https://mirror.test/x"), {});
-  for (const bad of ["https://", "https:///x", "https://a b.test", "https://x.test?a=1", "https://x.test#top",
-    "https://u:p@mirror.test", "https://user@mirror.test/x", "https://.", "https://:", "https://-.:/x"]) {
+  for (const bad of [
+    "https://",
+    "https:///x",
+    "https://a b.test",
+    "https://x.test?a=1",
+    "https://x.test#top",
+    "https://u:p@mirror.test",
+    "https://user@mirror.test/x",
+    "https://.",
+    "https://:",
+    "https://-.:/x",
+  ]) {
     assert.deepEqual(check(bad), { "sources.crypto.binanceUrl": "url.invalid" }, bad);
   }
   // Spaces around the address are ignored, as when it is read back.
   assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: " https://mirror.test " } } }), {});
-  assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: "  " } } }), { "sources.crypto.binanceUrl": "url.notHttps" });
+  assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: "  " } } }), {
+    "sources.crypto.binanceUrl": "url.notHttps",
+  });
   // A draft that the person is still typing is validated as it is, not read again.
-  assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: "" } } }), { "sources.crypto.binanceUrl": "url.notHttps" });
+  assert.deepEqual(validateSettings({ sources: { crypto: { binanceUrl: "" } } }), {
+    "sources.crypto.binanceUrl": "url.notHttps",
+  });
   for (const lang of Object.keys(STRINGS)) {
     for (const code of ["url.notHttps", "url.invalid"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
   }
@@ -81,8 +127,11 @@ test("red-up by language", () => {
 });
 
 test("a save keeps keys this build does not know", () => {
-  assert.deepEqual(mergeSettings({ version: 1, language: "fr", later: { x: 1 } }, { languagePromptDismissed: true }),
-    { ...DEFAULTS, languagePromptDismissed: true, later: { x: 1 } });
+  assert.deepEqual(mergeSettings({ version: 1, language: "fr", later: { x: 1 } }, { languagePromptDismissed: true }), {
+    ...DEFAULTS,
+    languagePromptDismissed: true,
+    later: { x: 1 },
+  });
   assert.deepEqual(mergeSettings(undefined, { language: "ja" }), { ...DEFAULTS, language: "ja" });
   assert.deepEqual(mergeSettings("junk", {}), DEFAULTS);
 });
@@ -90,11 +139,19 @@ test("a save keeps keys this build does not know", () => {
 test("a save keeps sources keys this build does not know", () => {
   const raw = { version: 1, sources: { crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } } };
   const change = { sources: { crypto: { binanceUrl: "https://b.test" } } };
-  assert.deepEqual(mergeSettings(raw, change).sources,
-    { us: DEFAULTS.sources.us, tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://b.test", later: 1 }, future: { x: 2 } });
+  assert.deepEqual(mergeSettings(raw, change).sources, {
+    us: DEFAULTS.sources.us,
+    tw: DEFAULTS.sources.tw,
+    crypto: { binanceUrl: "https://b.test", later: 1 },
+    future: { x: 2 },
+  });
   // A change without sources leaves them as they were.
-  assert.deepEqual(mergeSettings(raw, { language: "ja" }).sources,
-    { us: DEFAULTS.sources.us, tw: DEFAULTS.sources.tw, crypto: { binanceUrl: "https://a.test", later: 1 }, future: { x: 2 } });
+  assert.deepEqual(mergeSettings(raw, { language: "ja" }).sources, {
+    us: DEFAULTS.sources.us,
+    tw: DEFAULTS.sources.tw,
+    crypto: { binanceUrl: "https://a.test", later: 1 },
+    future: { x: 2 },
+  });
 });
 
 const tw = (fields) => readSettings({ version: 1, sources: { tw: fields } });
@@ -106,7 +163,8 @@ test("consent gates MIS", () => {
   // Consent alone does not turn it on.
   assert.equal(misEnabled(tw({ provider: "yahoo", misAck: { version: MIS_CONSENT_VERSION } })), false);
   assert.equal(readSettings({ version: 1, sources: { tw: { provider: "bogus" } } }).sources.tw.mis, false);
-  for (const misAck of [{}, { version: "1" }, [], 1, { version: 1.5 }]) assert.equal(tw({ misAck }).sources.tw.misAck, null, JSON.stringify(misAck));
+  for (const misAck of [{}, { version: "1" }, [], 1, { version: 1.5 }])
+    assert.equal(tw({ misAck }).sources.tw.misAck, null, JSON.stringify(misAck));
   assert.deepEqual(tw({ misAck: { version: 1, extra: true } }).sources.tw.misAck, { version: 1 });
   // An older consent asks again; Yahoo or a current consent does not.
   assert.equal(misReconfirm(tw({ provider: "mis", misAck: { version: 0 } })), true);
@@ -117,20 +175,29 @@ test("consent gates MIS", () => {
 
 test("MIS needs consent and an https address to save", () => {
   const ack = { version: MIS_CONSENT_VERSION };
-  assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: null })), { "sources.tw.misAck": "mis.consentNeeded" });
+  assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: null })), {
+    "sources.tw.misAck": "mis.consentNeeded",
+  });
   assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: ack })), {});
-  assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: ack, misUrl: "http://x.test" })), { "sources.tw.misUrl": "url.notHttps" });
+  assert.deepEqual(validateSettings(tw({ provider: "mis", misAck: ack, misUrl: "http://x.test" })), {
+    "sources.tw.misUrl": "url.notHttps",
+  });
   // A hidden address (MIS off) does not block a save.
   assert.deepEqual(validateSettings(tw({ mis: false, misUrl: "http://x.test" })), {});
   assert.equal(tw({ misUrl: "https://mirror.test/mis" }).sources.tw.misUrl, "https://mirror.test/mis");
   for (const lang of Object.keys(STRINGS)) {
-    for (const code of ["mis.consentNeeded", "mis.statement", "mis.consent", "mis.reconfirm"]) assert.ok(STRINGS[lang][code], `${lang} ${code}`);
+    for (const code of ["mis.consentNeeded", "mis.statement", "mis.consent", "mis.reconfirm"])
+      assert.ok(STRINGS[lang][code], `${lang} ${code}`);
   }
 });
 
 test("a save stores URLs without surrounding spaces", () => {
-  const change = { sources: { tw: { provider: "mis", misUrl: ` ${MIS_URL}\t`, misAck: { version: MIS_CONSENT_VERSION } },
-    crypto: { binanceUrl: "  https://mirror.test/x " } } };
+  const change = {
+    sources: {
+      tw: { provider: "mis", misUrl: ` ${MIS_URL}\t`, misAck: { version: MIS_CONSENT_VERSION } },
+      crypto: { binanceUrl: "  https://mirror.test/x " },
+    },
+  };
   const saved = mergeSettings(undefined, change);
   assert.equal(saved.sources.tw.misUrl, MIS_URL);
   assert.equal(saved.sources.crypto.binanceUrl, "https://mirror.test/x");
@@ -167,7 +234,10 @@ test("Yahoo 奇摩股市 needs its own consent", () => {
   assert.equal(validateSettings(tw({ yahootw: true }))["sources.tw.yahootwAck"], "yahootw.consentNeeded");
   assert.deepEqual(validateSettings(tw({ yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } })), {});
   // A MIS consent does not stand in for it.
-  assert.equal(validateSettings(tw({ yahootw: true, misAck: { version: MIS_CONSENT_VERSION } }))["sources.tw.yahootwAck"], "yahootw.consentNeeded");
+  assert.equal(
+    validateSettings(tw({ yahootw: true, misAck: { version: MIS_CONSENT_VERSION } }))["sources.tw.yahootwAck"],
+    "yahootw.consentNeeded",
+  );
   assert.equal(yahootwEnabled(tw({ yahootw: true, misAck: { version: MIS_CONSENT_VERSION } })), false);
   // Consent alone does not turn it on.
   assert.equal(yahootwEnabled(tw({ yahootwAck: { version: YAHOOTW_CONSENT_VERSION } })), false);
@@ -175,14 +245,25 @@ test("Yahoo 奇摩股市 needs its own consent", () => {
   assert.equal(yahootwReconfirm(tw({ yahootw: false })), false);
   for (const yahootw of ["true", 1, null]) assert.equal(tw({ yahootw }).sources.tw.yahootw, false, String(yahootw));
   for (const lang of Object.keys(STRINGS)) {
-    for (const code of ["yahootw.consentNeeded", "yahootw.statement", "yahootw.consent", "yahootw.reconfirm", "yahootw.prevails"]) {
+    for (const code of [
+      "yahootw.consentNeeded",
+      "yahootw.statement",
+      "yahootw.consent",
+      "yahootw.reconfirm",
+      "yahootw.prevails",
+    ]) {
       assert.ok(STRINGS[lang][code], `${lang} ${code}`);
     }
   }
 });
 
 test("consent versions are independent", () => {
-  const settings = tw({ yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: 1 } });
+  const settings = tw({
+    yahootw: true,
+    yahootwAck: { version: YAHOOTW_CONSENT_VERSION },
+    mis: true,
+    misAck: { version: 1 },
+  });
   assert.equal(yahootwEnabled(settings), true);
   assert.equal(misReconfirm(settings), true);
 });
@@ -223,11 +304,14 @@ test("a save also writes the old provider key", () => {
 const us = (fields) => readSettings({ version: 1, sources: { us: fields } });
 
 test("budget validation", () => {
-  assert.deepEqual(validateSettings(us({ provider: "finnhub", budgetPerMinute: 3 })), { "sources.us.budgetPerMinute": "budget.tooSmall" });
+  assert.deepEqual(validateSettings(us({ provider: "finnhub", budgetPerMinute: 3 })), {
+    "sources.us.budgetPerMinute": "budget.tooSmall",
+  });
   assert.equal(us({ budgetPerMinute: "60" }).sources.us.budgetPerMinute, 60);
   assert.equal(us({ budgetPerMinute: "30" }).sources.us.budgetPerMinute, 60);
   assert.equal(us({ budgetPerMinute: 30 }).sources.us.budgetPerMinute, 30);
-  for (const bad of [4.5, null, -8, {}]) assert.equal(us({ budgetPerMinute: bad }).sources.us.budgetPerMinute, 60, String(bad));
+  for (const bad of [4.5, null, -8, {}])
+    assert.equal(us({ budgetPerMinute: bad }).sources.us.budgetPerMinute, 60, String(bad));
   assert.deepEqual(validateSettings(us({ provider: "finnhub", budgetPerMinute: 4 })), {});
   // A draft holds what is typed until it is a whole number.
   for (const typed of ["", "12a", "4.5", 0]) {
@@ -249,10 +333,14 @@ test("reads the US source and the key revision", () => {
 });
 
 test("Finnhub needs an https address and a key to save", () => {
-  assert.deepEqual(validateSettings(us({ provider: "finnhub", finnhubUrl: "http://x.test" })), { "sources.us.finnhubUrl": "url.notHttps" });
+  assert.deepEqual(validateSettings(us({ provider: "finnhub", finnhubUrl: "http://x.test" })), {
+    "sources.us.finnhubUrl": "url.notHttps",
+  });
   assert.deepEqual(validateSettings(us({ provider: "yahoo", finnhubUrl: "http://x.test" })), {});
   // The key is checked only when the dialog passes what is typed.
-  assert.deepEqual(validateSettings(us({ provider: "finnhub" }), { finnhubKey: " " }), { "sources.us.key": "finnhub.keyNeeded" });
+  assert.deepEqual(validateSettings(us({ provider: "finnhub" }), { finnhubKey: " " }), {
+    "sources.us.key": "finnhub.keyNeeded",
+  });
   assert.deepEqual(validateSettings(us({ provider: "finnhub" }), { finnhubKey: "test-key" }), {});
   assert.deepEqual(validateSettings(us({ provider: "yahoo" }), { finnhubKey: "" }), {});
   const saved = mergeSettings(undefined, { sources: { us: { provider: "finnhub", finnhubUrl: ` ${FINNHUB_URL} ` } } });
@@ -262,12 +350,27 @@ test("Finnhub needs an https address and a key to save", () => {
 
 test("the Finnhub address keeps the host finnhub.io; only its path can change", () => {
   const check = (finnhubUrl) => validateSettings(us({ provider: "finnhub", finnhubUrl }));
-  for (const good of [FINNHUB_URL, "https://finnhub.io", "https://finnhub.io/", "https://FINNHUB.io/api/v2", " https://finnhub.io/api/v1 "]) {
+  for (const good of [
+    FINNHUB_URL,
+    "https://finnhub.io",
+    "https://finnhub.io/",
+    "https://FINNHUB.io/api/v2",
+    " https://finnhub.io/api/v1 ",
+  ]) {
     assert.deepEqual(check(good), {}, good);
   }
-  for (const bad of ["https://evil.test", "https://finnhub.io.evil.test/api/v1", "https://evil.test/finnhub.io", "https://user@finnhub.io/api/v1",
-    "https://finnhub.io:8443/api/v1", "https://finnhub.io./api/v1", "https://finnhub.io/api/v1?x=1", "https://finnhub.io/api/v1#x",
-    "https://finnhub.io/api v1", "https://api.finnhub.io/v1"]) {
+  for (const bad of [
+    "https://evil.test",
+    "https://finnhub.io.evil.test/api/v1",
+    "https://evil.test/finnhub.io",
+    "https://user@finnhub.io/api/v1",
+    "https://finnhub.io:8443/api/v1",
+    "https://finnhub.io./api/v1",
+    "https://finnhub.io/api/v1?x=1",
+    "https://finnhub.io/api/v1#x",
+    "https://finnhub.io/api v1",
+    "https://api.finnhub.io/v1",
+  ]) {
     assert.deepEqual(check(bad), { "sources.us.finnhubUrl": "url.finnhubHost" }, bad);
   }
   assert.deepEqual(check("http://finnhub.io/api/v1"), { "sources.us.finnhubUrl": "url.notHttps" });
@@ -294,7 +397,8 @@ test("what a save does with the key", () => {
 });
 
 test("a typed key is trimmed, has no spaces inside and at most 128 characters", () => {
-  const check = (finnhubKey, keySaved = false) => validateSettings(us({ provider: "finnhub" }), { finnhubKey, keySaved });
+  const check = (finnhubKey, keySaved = false) =>
+    validateSettings(us({ provider: "finnhub" }), { finnhubKey, keySaved });
   assert.deepEqual(check("  test-key-0123  "), {});
   assert.deepEqual(check("t".repeat(128)), {});
   for (const bad of ["test key", "test-key\n2", "test\tkey", "t".repeat(129), "test\u0000key"]) {
@@ -318,7 +422,8 @@ test("the key texts say what lifts a stop, what Remove needs and that a chmod wa
   // The warning comes after both saves, so Cancel is safe.
   assert.match(STRINGS.en["finnhub.keyUnprotected"], /settings and the key are saved/);
   for (const lang of Object.keys(STRINGS)) {
-    for (const key of ["sources.us.keyRemoveHint", "finnhub.keyUnprotected", "finnhub.redirected"]) assert.ok(STRINGS[lang][key], `${lang} ${key}`);
+    for (const key of ["sources.us.keyRemoveHint", "finnhub.keyUnprotected", "finnhub.redirected"])
+      assert.ok(STRINGS[lang][key], `${lang} ${key}`);
   }
 });
 
@@ -330,14 +435,23 @@ test("marketState: Taiwan", () => {
   assert.deepEqual(marketState(tw({ yahootw: true }), "tw"), delayed);
   assert.deepEqual(marketState(tw({ yahootw: true, yahootwAck }), "tw"), { live: true, source: "yahootw" });
   assert.deepEqual(marketState(tw({ mis: true, misAck }), "tw"), { live: true, source: "mis" });
-  assert.deepEqual(marketState(tw({ yahootw: true, yahootwAck, mis: true, misAck }), "tw"), { live: true, source: "yahootw" });
+  assert.deepEqual(marketState(tw({ yahootw: true, yahootwAck, mis: true, misAck }), "tw"), {
+    live: true,
+    source: "yahootw",
+  });
   assert.deepEqual(marketState(tw({ mis: true, misAck: { version: MIS_CONSENT_VERSION - 1 } }), "tw"), delayed);
 });
 
 test("marketState: US", () => {
   assert.deepEqual(marketState(us({ provider: "finnhub" }), "us"), { live: true, source: "yahoo" });
-  assert.deepEqual(marketState(us({ provider: "finnhub" }), "us", { keyAvailable: true }), { live: true, source: "finnhub" });
-  assert.deepEqual(marketState(us({ provider: "yahoo" }), "us", { keyAvailable: true }), { live: true, source: "yahoo" });
+  assert.deepEqual(marketState(us({ provider: "finnhub" }), "us", { keyAvailable: true }), {
+    live: true,
+    source: "finnhub",
+  });
+  assert.deepEqual(marketState(us({ provider: "yahoo" }), "us", { keyAvailable: true }), {
+    live: true,
+    source: "yahoo",
+  });
 });
 
 test("marketState: crypto and other", () => {
@@ -356,18 +470,36 @@ test("finnhubKeyUsable", () => {
   assert.equal(finnhubKeyUsable({ ...none, typed: "a b", typedValid: false, saved: true }), false);
   // A stop on the address refuses a typed key too; a stop on the key does not.
   const stopped = (code) => [{ provider: "finnhub", code, stopped: true }];
-  for (const code of ["finnhub.redirected", "finnhub.badUrl"]) assert.equal(finnhubKeyUsable({ ...none, typed: "abc", health: stopped(code) }), false, code);
+  for (const code of ["finnhub.redirected", "finnhub.badUrl"])
+    assert.equal(finnhubKeyUsable({ ...none, typed: "abc", health: stopped(code) }), false, code);
   assert.equal(finnhubKeyUsable({ ...none, typed: "abc", health: stopped("finnhub.invalidKey") }), true);
   // The saved key counts while it stays and Finnhub has not stopped on it.
   assert.equal(finnhubKeyUsable({ ...none, saved: true }), true);
   assert.equal(finnhubKeyUsable({ ...none, saved: true, removing: true }), false);
   // Stopped is what problems() says, whatever the code: no list of codes to keep in step.
   for (const code of ["finnhub.invalidKey", "finnhub.secretUnreadable", "finnhub.someNewStop"]) {
-    assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code, stopped: true }] }), false, code);
+    assert.equal(
+      finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code, stopped: true }] }),
+      false,
+      code,
+    );
   }
-  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code: "finnhub.invalidKey" }] }), true);
-  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code: "finnhub.rateLimited" }] }), true);
-  assert.equal(finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "yahoo", code: "finnhub.invalidKey", stopped: true }] }), true);
+  assert.equal(
+    finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code: "finnhub.invalidKey" }] }),
+    true,
+  );
+  assert.equal(
+    finnhubKeyUsable({ ...none, saved: true, health: [{ provider: "finnhub", code: "finnhub.rateLimited" }] }),
+    true,
+  );
+  assert.equal(
+    finnhubKeyUsable({
+      ...none,
+      saved: true,
+      health: [{ provider: "yahoo", code: "finnhub.invalidKey", stopped: true }],
+    }),
+    true,
+  );
 });
 
 // The settings dialog's status for a market: the saved settings, a draft copy of them, the panel's
@@ -384,25 +516,60 @@ test("marketStatus: the source in use and whether it is failing", () => {
   const off = readSettings(undefined);
   const failing = (provider) => [{ provider, code: `${provider}.unreachable` }];
   // The source kept from the saved settings and listed in health.
-  assert.deepEqual(status({ saved: misOn, health: failing("mis"), market: "tw" }), { live: true, source: "mis", problem: true });
-  assert.deepEqual(status({ saved: off, health: failing("yahoo"), market: "tw" }), { live: false, source: "yahoo", problem: true });
+  assert.deepEqual(status({ saved: misOn, health: failing("mis"), market: "tw" }), {
+    live: true,
+    source: "mis",
+    problem: true,
+  });
+  assert.deepEqual(status({ saved: off, health: failing("yahoo"), market: "tw" }), {
+    live: false,
+    source: "yahoo",
+    problem: true,
+  });
   // Another source failing is not this market's problem.
-  assert.deepEqual(status({ saved: misOn, health: failing("yahoo"), market: "tw" }), { live: true, source: "mis", problem: false });
+  assert.deepEqual(status({ saved: misOn, health: failing("yahoo"), market: "tw" }), {
+    live: true,
+    source: "mis",
+    problem: false,
+  });
   assert.deepEqual(status({ saved: misOn, market: "tw" }), { live: true, source: "mis", problem: false });
   // A changed choice is not judged by the saved source's problem.
-  assert.deepEqual(status({ saved: misOn, draft: off, health: failing("mis"), market: "tw" }), { live: false, source: "yahoo", problem: false });
-  assert.deepEqual(status({ saved: off, draft: misOn, health: failing("mis"), market: "tw" }), { live: true, source: "mis", problem: false });
+  assert.deepEqual(status({ saved: misOn, draft: off, health: failing("mis"), market: "tw" }), {
+    live: false,
+    source: "yahoo",
+    problem: false,
+  });
+  assert.deepEqual(status({ saved: off, draft: misOn, health: failing("mis"), market: "tw" }), {
+    live: true,
+    source: "mis",
+    problem: false,
+  });
   // The saved key picks the US source; a failing Finnhub that has not stopped is still the one in use.
   const finnhub = us({ provider: "finnhub" });
   const savedKey = { ...NO_KEY, saved: true };
-  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us", key: savedKey }), { live: true, source: "finnhub", problem: true });
-  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us" }), { live: true, source: "yahoo", problem: false });
+  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us", key: savedKey }), {
+    live: true,
+    source: "finnhub",
+    problem: true,
+  });
+  assert.deepEqual(status({ saved: finnhub, health: failing("finnhub"), market: "us" }), {
+    live: true,
+    source: "yahoo",
+    problem: false,
+  });
 });
 
 test("the US falls back to real time; Taiwan and other markets to delayed", () => {
   const off = readSettings(undefined);
-  assert.deepEqual(["us", "tw", "other"].map((market) => marketState(off, market).live), [true, false, false]);
-  assert.deepEqual(status({ saved: off, health: [{ provider: "yahoo", code: "yahoo.unreachable" }], market: "us" }), { live: true, source: "yahoo", problem: true });
+  assert.deepEqual(
+    ["us", "tw", "other"].map((market) => marketState(off, market).live),
+    [true, false, false],
+  );
+  assert.deepEqual(status({ saved: off, health: [{ provider: "yahoo", code: "yahoo.unreachable" }], market: "us" }), {
+    live: true,
+    source: "yahoo",
+    problem: true,
+  });
 });
 
 test("marketStatus: health counts only while its source's settings are as saved", () => {
@@ -410,81 +577,171 @@ test("marketStatus: health counts only while its source's settings are as saved"
   const savedKey = { ...NO_KEY, saved: true };
   const stop = (code) => [{ provider: "finnhub", code, params: {}, stopped: true }];
   // A key typed over a refused one is judged by the choice alone: Save writes it and Finnhub tries it.
-  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: { ...savedKey, typed: "new-key" } }),
-    { live: true, source: "finnhub", problem: false });
+  assert.deepEqual(
+    status({
+      saved: finnhub,
+      health: stop("finnhub.invalidKey"),
+      market: "us",
+      key: { ...savedKey, typed: "new-key" },
+    }),
+    { live: true, source: "finnhub", problem: false },
+  );
   // So is a new Binance address after a region refusal: crypto has no fallback, so the choice says live.
   const crypto = readSettings(undefined);
   const moved = copy(crypto);
   moved.sources.crypto.binanceUrl = "https://example.com";
   const region = [{ provider: "binance", code: "binance.region", params: {} }];
-  assert.deepEqual(status({ saved: crypto, draft: moved, health: region, market: "crypto" }), { live: true, source: "binance", problem: false });
+  assert.deepEqual(status({ saved: crypto, draft: moved, health: region, market: "crypto" }), {
+    live: true,
+    source: "binance",
+    problem: false,
+  });
   // And a new Finnhub path after a redirect: the saved key would be sent again after Save.
   const path = copy(finnhub);
   path.sources.us.finnhubUrl = "https://finnhub.io/api/v2";
-  assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: savedKey }),
-    { live: true, source: "finnhub", problem: false });
+  assert.deepEqual(
+    status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: savedKey }),
+    { live: true, source: "finnhub", problem: false },
+  );
   // Remove pending is a change too: no key is left, so the market reads Yahoo Finance in real time, not failing.
-  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: { ...savedKey, removing: true } }),
-    { live: true, source: "yahoo", problem: false });
+  assert.deepEqual(
+    status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: { ...savedKey, removing: true } }),
+    { live: true, source: "yahoo", problem: false },
+  );
   // Unchanged, the old problem still shows.
-  assert.deepEqual(status({ saved: crypto, health: region, market: "crypto" }), { live: true, source: "binance", problem: true });
-  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: savedKey }),
-    { live: true, source: "yahoo", problem: false });
-  assert.deepEqual(status({ saved: finnhub, health: [{ provider: "finnhub", code: "finnhub.rateLimited", params: {} }], market: "us", key: savedKey }),
-    { live: true, source: "finnhub", problem: true });
+  assert.deepEqual(status({ saved: crypto, health: region, market: "crypto" }), {
+    live: true,
+    source: "binance",
+    problem: true,
+  });
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: savedKey }), {
+    live: true,
+    source: "yahoo",
+    problem: false,
+  });
+  assert.deepEqual(
+    status({
+      saved: finnhub,
+      health: [{ provider: "finnhub", code: "finnhub.rateLimited", params: {} }],
+      market: "us",
+      key: savedKey,
+    }),
+    { live: true, source: "finnhub", problem: true },
+  );
   // A Finnhub stop lifts only by what caused it: a budget edit keeps a refused key refused.
   const budget = copy(finnhub);
   budget.sources.us.budgetPerMinute = 30;
-  for (const code of ["finnhub.invalidKey", "finnhub.noKey", "finnhub.secretUnreadable", "finnhub.redirected", "finnhub.badUrl"]) {
-    assert.deepEqual(status({ saved: finnhub, draft: budget, health: stop(code), market: "us", key: savedKey }),
-      { live: true, source: "yahoo", problem: false }, code);
+  for (const code of [
+    "finnhub.invalidKey",
+    "finnhub.noKey",
+    "finnhub.secretUnreadable",
+    "finnhub.redirected",
+    "finnhub.badUrl",
+  ]) {
+    assert.deepEqual(
+      status({ saved: finnhub, draft: budget, health: stop(code), market: "us", key: savedKey }),
+      { live: true, source: "yahoo", problem: false },
+      code,
+    );
   }
   // A new address does not lift a refused key; a key typed does not lift a refused address.
-  assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.invalidKey"), market: "us", key: savedKey }),
-    { live: true, source: "yahoo", problem: false });
-  assert.deepEqual(currentHealth({ saved: finnhub, draft: copy(finnhub), health: stop("finnhub.badUrl"), keyEdited: true }), stop("finnhub.badUrl"));
+  assert.deepEqual(
+    status({ saved: finnhub, draft: path, health: stop("finnhub.invalidKey"), market: "us", key: savedKey }),
+    { live: true, source: "yahoo", problem: false },
+  );
+  assert.deepEqual(
+    currentHealth({ saved: finnhub, draft: copy(finnhub), health: stop("finnhub.badUrl"), keyEdited: true }),
+    stop("finnhub.badUrl"),
+  );
   // Yahoo Finance reads no settings: no edit drops its problem, so the US fallback it serves in real time reads Problem.
   const yahooDown = [{ provider: "yahoo", code: "yahoo.unreachable", params: {} }];
-  assert.deepEqual(status({ saved: finnhub, draft: budget, health: yahooDown, market: "us" }), { live: true, source: "yahoo", problem: true });
+  assert.deepEqual(status({ saved: finnhub, draft: budget, health: yahooDown, market: "us" }), {
+    live: true,
+    source: "yahoo",
+    problem: true,
+  });
   // A typed key decides alone: a malformed one is not saved, and the refused saved key is not used either.
   const badKey = { ...savedKey, typed: "bad key", typedValid: false };
-  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: badKey }),
-    { live: true, source: "yahoo", problem: false });
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.invalidKey"), market: "us", key: badKey }), {
+    live: true,
+    source: "yahoo",
+    problem: false,
+  });
   // A refused address refuses every key, typed or saved: after Save the US uses Yahoo Finance.
   const typedKey = { ...savedKey, typed: "new-key" };
-  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: typedKey }),
-    { live: true, source: "yahoo", problem: false });
-  assert.deepEqual(status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: typedKey }),
-    { live: true, source: "finnhub", problem: false });
+  assert.deepEqual(status({ saved: finnhub, health: stop("finnhub.redirected"), market: "us", key: typedKey }), {
+    live: true,
+    source: "yahoo",
+    problem: false,
+  });
+  assert.deepEqual(
+    status({ saved: finnhub, draft: path, health: stop("finnhub.redirected"), market: "us", key: typedKey }),
+    { live: true, source: "finnhub", problem: false },
+  );
   // A change on another market's page leaves this one's health in force.
   const elsewhere = copy(crypto);
   elsewhere.sources.tw.mis = true;
-  assert.deepEqual(status({ saved: crypto, draft: elsewhere, health: region, market: "crypto" }), { live: true, source: "binance", problem: true });
+  assert.deepEqual(status({ saved: crypto, draft: elsewhere, health: region, market: "crypto" }), {
+    live: true,
+    source: "binance",
+    problem: true,
+  });
 });
 
 test("marketStatus: a failing source hands the market to the next one switched on", () => {
-  const both = tw({ yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION }, mis: true, misAck: { version: MIS_CONSENT_VERSION } });
+  const both = tw({
+    yahootw: true,
+    yahootwAck: { version: YAHOOTW_CONSENT_VERSION },
+    mis: true,
+    misAck: { version: MIS_CONSENT_VERSION },
+  });
   const down = (provider) => ({ provider, code: `${provider}.unreachable`, params: {} });
   // Yahoo 奇摩股市 unreachable, MIS healthy: the rows show MIS, and so does the status.
-  assert.deepEqual(status({ saved: both, health: [down("yahootw")], market: "tw" }), { live: true, source: "mis", problem: false });
+  assert.deepEqual(status({ saved: both, health: [down("yahootw")], market: "tw" }), {
+    live: true,
+    source: "mis",
+    problem: false,
+  });
   // Every source switched on is failing: a problem, named after the first.
-  assert.deepEqual(status({ saved: both, health: [down("mis"), down("yahootw")], market: "tw" }), { live: true, source: "yahootw", problem: true });
+  assert.deepEqual(status({ saved: both, health: [down("mis"), down("yahootw")], market: "tw" }), {
+    live: true,
+    source: "yahootw",
+    problem: true,
+  });
   // Yahoo Finance failing too changes nothing: the problem is the real-time sources'.
-  assert.deepEqual(status({ saved: both, health: [down("yahootw"), down("mis"), down("yahoo")], market: "tw" }),
-    { live: true, source: "yahootw", problem: true });
+  assert.deepEqual(status({ saved: both, health: [down("yahootw"), down("mis"), down("yahoo")], market: "tw" }), {
+    live: true,
+    source: "yahootw",
+    problem: true,
+  });
   // Health is kept per source: a new MIS address says nothing about Yahoo 奇摩股市, which still fails.
   const edited = copy(both);
   edited.sources.tw.misUrl = "https://example.com";
-  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw")], market: "tw" }), { live: true, source: "mis", problem: false });
+  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw")], market: "tw" }), {
+    live: true,
+    source: "mis",
+    problem: false,
+  });
   // MIS failing too: its own edit drops its problem, so the choice says MIS.
-  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw"), down("mis")], market: "tw" }), { live: true, source: "mis", problem: false });
-  assert.deepEqual(currentHealth({ saved: both, draft: edited, health: [down("yahootw"), down("mis")], keyEdited: false }), [down("yahootw")]);
+  assert.deepEqual(status({ saved: both, draft: edited, health: [down("yahootw"), down("mis")], market: "tw" }), {
+    live: true,
+    source: "mis",
+    problem: false,
+  });
+  assert.deepEqual(
+    currentHealth({ saved: both, draft: edited, health: [down("yahootw"), down("mis")], keyEdited: false }),
+    [down("yahootw")],
+  );
 });
 
 test("currentHealth: each source's problem holds while the settings it reads are as saved", () => {
   const saved = us({ provider: "finnhub" });
   const problem = (provider, code, extra = {}) => ({ provider, code, params: {}, ...extra });
-  const health = [problem("finnhub", "finnhub.rateLimited"), problem("binance", "binance.region"), problem("yahoo", "yahoo.unreachable")];
+  const health = [
+    problem("finnhub", "finnhub.rateLimited"),
+    problem("binance", "binance.region"),
+    problem("yahoo", "yahoo.unreachable"),
+  ];
   assert.deepEqual(currentHealth({ health, saved, draft: copy(saved), keyEdited: false }), health);
   // A switch turned on and off again is unchanged.
   const back = copy(saved);
@@ -519,7 +776,10 @@ test("settingsMarkets follows the language", () => {
 });
 
 test("consentGiven", () => {
-  for (const [source, ack, version] of [["yahootw", "yahootwAck", YAHOOTW_CONSENT_VERSION], ["mis", "misAck", MIS_CONSENT_VERSION]]) {
+  for (const [source, ack, version] of [
+    ["yahootw", "yahootwAck", YAHOOTW_CONSENT_VERSION],
+    ["mis", "misAck", MIS_CONSENT_VERSION],
+  ]) {
     assert.equal(consentGiven({ [ack]: { version } }, source), true, source);
     assert.equal(consentGiven({ [ack]: { version: version - 1 } }, source), false, source);
     assert.equal(consentGiven({ [ack]: null }, source), false, source);
@@ -555,5 +815,8 @@ test("firstDraftError", () => {
 test("the precedence notes change no consent version", () => {
   assert.deepEqual([MIS_CONSENT_VERSION, YAHOOTW_CONSENT_VERSION], [2, 2]);
   const both = tw({ yahootw: true, yahootwAck: { version: 2 }, mis: true, misAck: { version: 2 } });
-  assert.deepEqual([yahootwEnabled(both), misEnabled(both), yahootwReconfirm(both), misReconfirm(both)], [true, true, false, false]);
+  assert.deepEqual(
+    [yahootwEnabled(both), misEnabled(both), yahootwReconfirm(both), misReconfirm(both)],
+    [true, true, false, false],
+  );
 });

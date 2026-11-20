@@ -2,23 +2,69 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, auctionFlagged, auctionWindowStart, chartLayout, chartQuote, detailSource, freshness, futuresSegment, inTaiwanAuction, isRealtime,
-  msUntilStale, sessionName, sessionOf, sessionProgress, shownLimit, staleAt,
+  LIVE_MAX_AGE_MS,
+  REALTIME_SOURCES,
+  auctionFlagged,
+  auctionWindowStart,
+  chartLayout,
+  chartQuote,
+  detailSource,
+  freshness,
+  futuresSegment,
+  inTaiwanAuction,
+  isRealtime,
+  msUntilStale,
+  sessionName,
+  sessionOf,
+  sessionProgress,
+  shownLimit,
+  staleAt,
 } from "../mods/wickline/freshness.js";
 import {
-  DETAIL_WAKE_CAP_MS, bandState, detailDimmed, detailWakeAt, followDetail, hoursWindow, nextEdge, rowDate, sessionTimes,
+  DETAIL_WAKE_CAP_MS,
+  bandState,
+  detailDimmed,
+  detailWakeAt,
+  followDetail,
+  hoursWindow,
+  nextEdge,
+  rowDate,
+  sessionTimes,
 } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
 import { closureOf, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
 import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
 import {
-  chartGeometry, dayFor, detailTimes, failureNote, formatStaleDate, formatTime, freshnessLabel, sessionTimesParts,
+  chartGeometry,
+  dayFor,
+  detailTimes,
+  failureNote,
+  formatStaleDate,
+  formatTime,
+  freshnessLabel,
+  sessionTimesParts,
 } from "../mods/wickline/format.js";
 import { t } from "../mods/wickline/i18n.js";
 import { YAHOOTW_CONSENT_VERSION, ownPeriods } from "../mods/wickline/providers/yahootw.js";
 import {
-  BOTH_ON, CLOSE_1224, LINE_PERIODS, LISTED_2026, MIS_ON, SEGMENTS, advance, at, day, fakeHost, listed2026, observation, ok, say, taipei,
-  withTZ, yq, zhLabel,
+  BOTH_ON,
+  CLOSE_1224,
+  LINE_PERIODS,
+  LISTED_2026,
+  MIS_ON,
+  SEGMENTS,
+  advance,
+  at,
+  day,
+  fakeHost,
+  listed2026,
+  observation,
+  ok,
+  say,
+  taipei,
+  withTZ,
+  yq,
+  zhLabel,
 } from "./helpers.mjs";
 
 const now = 1_000_000;
@@ -41,9 +87,21 @@ test("Yahoo 奇摩股市 is a real-time source", () => {
 
 test("freshness states", () => {
   const cases = [
-    [quote({ symbol: "BTC/USDT", source: "binance", timestamp: now - 30_000 }), "24h", { state: "live", delayMinutes: null, stoppedAt: null }],
-    [quote({ symbol: "2330.TW", source: "mis", timestamp: now - 120_000 }), "open", { state: "live", delayMinutes: null, stoppedAt: null }],
-    [quote({ symbol: "2330.TW", source: "mis", timestamp: now - 121_000 }), "open", { state: "stalled", delayMinutes: null, stoppedAt: now - 121_000 }],
+    [
+      quote({ symbol: "BTC/USDT", source: "binance", timestamp: now - 30_000 }),
+      "24h",
+      { state: "live", delayMinutes: null, stoppedAt: null },
+    ],
+    [
+      quote({ symbol: "2330.TW", source: "mis", timestamp: now - 120_000 }),
+      "open",
+      { state: "live", delayMinutes: null, stoppedAt: null },
+    ],
+    [
+      quote({ symbol: "2330.TW", source: "mis", timestamp: now - 121_000 }),
+      "open",
+      { state: "stalled", delayMinutes: null, stoppedAt: now - 121_000 },
+    ],
     [quote({ source: "finnhub" }), "unknown", { state: "unconfirmed", delayMinutes: null, stoppedAt: null }],
     [quote({ symbol: "2330.TW", exchange: "TAI" }), "open", { state: "delayed", delayMinutes: 20, stoppedAt: null }],
     [quote({}), "open", { state: "delayed", delayMinutes: null, stoppedAt: null }],
@@ -55,9 +113,14 @@ test("freshness states", () => {
     [quote({}), "pre", { state: "pre", delayMinutes: null, stoppedAt: null }],
     [quote({}), "post", { state: "post", delayMinutes: null, stoppedAt: null }],
     // A clock running a little behind the source must not make a fresh quote look stuck.
-    [quote({ symbol: "2330.TW", source: "mis", timestamp: now + 5_000 }), "open", { state: "live", delayMinutes: null, stoppedAt: null }],
+    [
+      quote({ symbol: "2330.TW", source: "mis", timestamp: now + 5_000 }),
+      "open",
+      { state: "live", delayMinutes: null, stoppedAt: null },
+    ],
   ];
-  for (const [q, session, expected] of cases) assert.deepEqual(freshness(q, session, now), expected, `${q.source} ${q.symbol} ${session}`);
+  for (const [q, session, expected] of cases)
+    assert.deepEqual(freshness(q, session, now), expected, `${q.source} ${q.symbol} ${session}`);
 });
 
 test("the session of a quote", () => {
@@ -76,19 +139,48 @@ test("the session of a quote", () => {
 test("the detail source line reads state · source", () => {
   const NOW = 1794188480000;
   const own = { symbol: "2330.TW", source: "yahootw", timestamp: NOW - 10_000, chartSource: "yahootw" };
-  assert.deepEqual(detailSource(own, "open", NOW, say("zh-TW")), [["價格：即時 · Yahoo 奇摩股市"], ["走勢：即時 · Yahoo 奇摩股市"]]);
-  assert.deepEqual(detailSource(own, "open", NOW, say("en")), [["Price: Live · Yahoo TW Stock"], ["Line: Live · Yahoo TW Stock"]]);
+  assert.deepEqual(detailSource(own, "open", NOW, say("zh-TW")), [
+    ["價格：即時 · Yahoo 奇摩股市"],
+    ["走勢：即時 · Yahoo 奇摩股市"],
+  ]);
+  assert.deepEqual(detailSource(own, "open", NOW, say("en")), [
+    ["Price: Live · Yahoo TW Stock"],
+    ["Line: Live · Yahoo TW Stock"],
+  ]);
   // A stalled price makes its own line read stalled too, with the time it stopped.
   const old = { ...own, timestamp: NOW - 180_000 };
   const stalled = t("zh-TW", "freshness.stalled", { time: formatTime(old.timestamp) });
-  assert.deepEqual(detailSource(old, "open", NOW, say("zh-TW")), [[`價格：${stalled} · Yahoo 奇摩股市`], [`走勢：${stalled} · Yahoo 奇摩股市`]]);
+  assert.deepEqual(detailSource(old, "open", NOW, say("zh-TW")), [
+    [`價格：${stalled} · Yahoo 奇摩股市`],
+    [`走勢：${stalled} · Yahoo 奇摩股市`],
+  ]);
   // A line from another source keeps its own delay.
   const mis = { symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: NOW - 10_000, chartSource: "yahoo" };
-  assert.deepEqual(detailSource(mis, "open", NOW, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
-  assert.deepEqual(detailSource({ ...mis, symbol: "AAPL", source: "finnhub", exchange: "NMS", chartTimestamp: NOW - 40_000, chartFetchedAt: NOW - 30_000 }, "open", NOW, say("en")),
-    [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(mis, "open", NOW, say("zh-TW")), [
+    ["價格：即時 · 證交所 MIS"],
+    ["走勢：延遲 20 分鐘 · Yahoo Finance"],
+  ]);
+  assert.deepEqual(
+    detailSource(
+      {
+        ...mis,
+        symbol: "AAPL",
+        source: "finnhub",
+        exchange: "NMS",
+        chartTimestamp: NOW - 40_000,
+        chartFetchedAt: NOW - 30_000,
+      },
+      "open",
+      NOW,
+      say("en"),
+    ),
+    [["Price: Live · Finnhub"], ["Line: Live · Yahoo Finance"]],
+  );
   // Not trading: the session, not "Live"; a session not known yet names the source alone.
-  assert.deepEqual(detailSource(own, "closed", NOW, say("en")), [["Price: Market closed · Yahoo TW Stock"], ["Line: Market closed · Yahoo TW Stock"]]);
+  assert.deepEqual(detailSource(own, "closed", NOW, say("en")), [
+    ["Price: Market closed · Yahoo TW Stock"],
+    ["Line: Market closed · Yahoo TW Stock"],
+  ]);
   assert.deepEqual(detailSource({ ...mis, chartSource: null }, "unknown", NOW, say("en")), [["Price: TWSE MIS"]]);
   // Base only: unchanged.
   const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: NOW };
@@ -98,18 +190,41 @@ test("the detail source line reads state · source", () => {
 test("detailSource reads a cached Yahoo line under a Finnhub price as before the split", () => {
   // AAPL's Yahoo Finance quote (line to 10:00 NY) failed at 10:05; Finnhub prices it live at 10:05.
   const now = at("2026-11-10T15:05:00Z");
-  const base = { ...yq("AAPL", "NMS", at("2026-11-10T15:00:00Z"), day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
-    fetchedAt: at("2026-11-10T15:00:05Z"), series: [1, 2], cached: true };
+  const base = {
+    ...yq("AAPL", "NMS", at("2026-11-10T15:00:00Z"), day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    fetchedAt: at("2026-11-10T15:00:05Z"),
+    series: [1, 2],
+    cached: true,
+  };
   const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: now - 10_000 }, null);
-  assert.deepEqual(detailSource(row, "open", now, say("en")), [["Price: Live · Finnhub"], ["Line: quote stopped at " + formatTime(base.timestamp) + " · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(row, "open", now, say("en")), [
+    ["Price: Live · Finnhub"],
+    ["Line: quote stopped at " + formatTime(base.timestamp) + " · Yahoo Finance"],
+  ]);
 });
 
 test("chartQuote is the line's quote, with the line's own cached flag", () => {
-  const q = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: 9, chartSource: "yahoo", chartTimestamp: 5,
-    chartFetchedAt: 7, chartCached: true, cached: undefined };
+  const q = {
+    symbol: "AAPL",
+    source: "finnhub",
+    exchange: "NMS",
+    timestamp: 9,
+    chartSource: "yahoo",
+    chartTimestamp: 5,
+    chartFetchedAt: 7,
+    chartCached: true,
+    cached: undefined,
+  };
   assert.deepEqual(
-    [chartQuote(q).source, chartQuote(q).timestamp, chartQuote(q).fetchedAt, chartQuote(q).cached, chartQuote(q).exchange],
-    ["yahoo", 5, 7, true, "NMS"]);
+    [
+      chartQuote(q).source,
+      chartQuote(q).timestamp,
+      chartQuote(q).fetchedAt,
+      chartQuote(q).cached,
+      chartQuote(q).exchange,
+    ],
+    ["yahoo", 5, 7, true, "NMS"],
+  );
 });
 
 // Yahoo reports ^TWII on TAI: a Taiwan quote, 20 minutes late like Taiwan stocks.
@@ -122,8 +237,16 @@ test("a Taiwan index on Yahoo reads 20 minutes", () => {
 
 // A light says the stock is at its limit now (or closed there), so it follows the price's own freshness.
 test("a price at its limit is lit only while that is still true", () => {
-  const at = (fields) => quote({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035,
-    periods: { pre: null, regular: [now - 3_600_000, now + 3_600_000], post: null }, ...fields });
+  const at = (fields) =>
+    quote({
+      symbol: "2330.TW",
+      source: "mis",
+      price: 2485,
+      limitUp: 2485,
+      limitDown: 2035,
+      periods: { pre: null, regular: [now - 3_600_000, now + 3_600_000], post: null },
+      ...fields,
+    });
   assert.equal(shownLimit(at({}), "open", now), "up");
   assert.equal(shownLimit(at({ price: 2035 }), "open", now), "down");
   // Closed at the limit, and the after-hours session at the close: still the day's limit.
@@ -142,8 +265,15 @@ test("a price at its limit is lit only while that is still true", () => {
 test("MIS's trial match before the open is not lit, a close at the limit is", () => {
   const open = Date.parse("2026-11-09T01:00:00Z");
   const close = Date.parse("2026-11-09T05:30:00Z");
-  const tw = (timestamp) => ({ symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp,
-    periods: { pre: null, regular: [open, close], post: null } });
+  const tw = (timestamp) => ({
+    symbol: "2330.TW",
+    source: "mis",
+    price: 2485,
+    limitUp: 2485,
+    limitDown: 2035,
+    timestamp,
+    periods: { pre: null, regular: [open, close], post: null },
+  });
   // At 08:45 MIS holds yesterday's price, at its limit-up: the trial match, not a stock locked at its limit.
   const before = Date.parse("2026-11-10T00:45:00Z");
   const yesterday = { ...tw(close), twRealtime: true };
@@ -167,8 +297,15 @@ test("a cached price is never lit, even a close at the limit", () => {
   const open = Date.parse("2026-11-09T01:00:00Z");
   const close = Date.parse("2026-11-09T05:30:00Z");
   const later = Date.parse("2026-11-09T07:00:00Z");
-  const q = { symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: close,
-    periods: { pre: null, regular: [open, close], post: null } };
+  const q = {
+    symbol: "2330.TW",
+    source: "mis",
+    price: 2485,
+    limitUp: 2485,
+    limitDown: 2035,
+    timestamp: close,
+    periods: { pre: null, regular: [open, close], post: null },
+  };
   assert.equal(shownLimit(q, sessionOf(q, later), later), "up");
   assert.equal(shownLimit({ ...q, cached: true }, sessionOf(q, later), later), null);
 });
@@ -179,9 +316,17 @@ const HK_DAY = day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z");
 test("a Yahoo quote from a real-time exchange is live, and stalls after 120 s", () => {
   // One stock and one FX exchange; markets.test.mjs pins which exchanges are real time.
   for (const exchange of ["NMS", "CCY"]) {
-    assert.deepEqual(freshness(yq("AAPL", exchange, now - 40_000), "open", now), { state: "live", delayMinutes: null, stoppedAt: null }, exchange);
+    assert.deepEqual(
+      freshness(yq("AAPL", exchange, now - 40_000), "open", now),
+      { state: "live", delayMinutes: null, stoppedAt: null },
+      exchange,
+    );
     assert.equal(freshness(yq("AAPL", exchange, now - 120_000), "open", now).state, "live", exchange);
-    assert.deepEqual(freshness(yq("AAPL", exchange, now - 121_000), "open", now), { state: "stalled", delayMinutes: null, stoppedAt: now - 121_000 }, exchange);
+    assert.deepEqual(
+      freshness(yq("AAPL", exchange, now - 121_000), "open", now),
+      { state: "stalled", delayMinutes: null, stoppedAt: now - 121_000 },
+      exchange,
+    );
   }
   assert.equal(freshness(yq("AAPL", "NMS", now), "unknown", now).state, "unconfirmed");
   assert.deepEqual([isRealtime(yq("AAPL", "NMS", now)), isRealtime(yq("2330.TW", "TAI", now))], [true, false]);
@@ -196,8 +341,12 @@ test("a delayed Yahoo quote shows its exchange's minutes and stalls at its delay
   assert.equal(freshness(hk, "open", T + 21 * 60_000).state, "stalled"); // 10:33
   assert.equal(freshness(hk, "closed", T + 3_600_000).state, "closed");
   // Two examples; markets.test.mjs pins every exchange's delay.
-  const minutes = [["2330.TW", "TAI", 20], ["7203.T", "JPX", 15]];
-  for (const [symbol, exchange, m] of minutes) assert.equal(freshness(yq(symbol, exchange, T, HK_DAY), "open", T + 60_000).delayMinutes, m, symbol);
+  const minutes = [
+    ["2330.TW", "TAI", 20],
+    ["7203.T", "JPX", 15],
+  ];
+  for (const [symbol, exchange, m] of minutes)
+    assert.equal(freshness(yq(symbol, exchange, T, HK_DAY), "open", T + 60_000).delayMinutes, m, symbol);
   const cn = yq("600519.SS", "SHH", T, HK_DAY);
   assert.equal(freshnessLabel(cn, freshness(cn, "open", T + 60_000), T + 60_000, "en", say("en")), "delayed 15 min");
 });
@@ -208,25 +357,45 @@ test("futures, unknown exchanges and a quote with no exchange never stall", () =
   assert.deepEqual(freshness(yq("ES=F", "CME", T, HK_DAY), "open", T + 3_600_000), delayed(10));
   assert.deepEqual(freshness(yq("ES=F", null, T, HK_DAY), "open", T + 3_600_000), delayed(null));
   assert.deepEqual(freshness(yq("AAPL", "XYZ", T, HK_DAY), "open", T + 3_600_000), delayed(null));
-  assert.deepEqual(detailSource(yq("AAPL", "XYZ", T, HK_DAY), "open", T + 60_000, say("en")), [["Yahoo Finance · regular session", "delay not provided"]]);
+  assert.deepEqual(detailSource(yq("AAPL", "XYZ", T, HK_DAY), "open", T + 60_000, say("en")), [
+    ["Yahoo Finance · regular session", "delay not provided"],
+  ]);
   const bare = yq("AAPL", null, now - 5_000); // no exchange yet: never live
   assert.deepEqual(freshness(bare, "open", now), delayed(null));
   assert.equal(freshnessLabel(bare, freshness(bare, "open", now), now, "en", say("en")), "Yahoo · delayed");
-  assert.deepEqual(detailSource(bare, "open", now, say("en")), [["Yahoo Finance · regular session", "delay not provided"]]);
+  assert.deepEqual(detailSource(bare, "open", now, say("en")), [
+    ["Yahoo Finance · regular session", "delay not provided"],
+  ]);
 });
 
 // What msUntilStale leaves a quote of `ageMs` that may get `limitMs` old: it stalls 1 ms past the limit.
 const left = (limitMs, ageMs) => limitMs - ageMs + 1;
 
 test("a quote may get 120 s old for real time, its delay plus 5 min, else it never stalls", () => {
-  assert.equal(msUntilStale({ symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: 0 }, "open", 0), left(120_000, 0));
+  assert.equal(
+    msUntilStale({ symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: 0 }, "open", 0),
+    left(120_000, 0),
+  );
   assert.equal(msUntilStale({ symbol: "BTC/USDT", source: "binance", timestamp: 0 }, "24h", 0), left(120_000, 0));
   // Yahoo Finance, by its age at the fetch: at the limit it waits only for the fetch guard, 1 ms past it is stale.
-  for (const [symbol, exchange, limit] of [["AAPL", "NMS", 120_000], ["0700.HK", "HKG", 1_200_000], ["2330.TW", "TAI", 1_500_000]]) {
+  for (const [symbol, exchange, limit] of [
+    ["AAPL", "NMS", 120_000],
+    ["0700.HK", "HKG", 1_200_000],
+    ["2330.TW", "TAI", 1_500_000],
+  ]) {
     assert.equal(msUntilStale(fetched(yq(symbol, exchange, 0), limit), "open", limit), left(300_000, 0), symbol);
-    assert.equal(msUntilStale(fetched(yq(symbol, exchange, 0), limit + 1), "open", limit + 1), left(limit, limit + 1), symbol);
+    assert.equal(
+      msUntilStale(fetched(yq(symbol, exchange, 0), limit + 1), "open", limit + 1),
+      left(limit, limit + 1),
+      symbol,
+    );
   }
-  for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) assert.equal(msUntilStale(yq(symbol, exchange, 0), "open", 0), null, symbol);
+  for (const [symbol, exchange] of [
+    ["ES=F", "CME"],
+    ["AAPL", "XYZ"],
+    ["AAPL", null],
+  ])
+    assert.equal(msUntilStale(yq(symbol, exchange, 0), "open", 0), null, symbol);
 });
 
 test("msUntilStale: the ms left before freshness reads stalled; real time counts in every session, delayed only while open", () => {
@@ -249,7 +418,11 @@ test("msUntilStale: the ms left before freshness reads stalled; real time counts
   assert.equal(msUntilStale(hk, "unknown", T + 1_200_001), null);
   assert.equal(msUntilStale(us, "unknown", T + 60_000), 240_001);
   assert.equal(msUntilStale(finnhub, "unknown", T + 60_000), 60_001);
-  for (const [symbol, exchange] of [["ES=F", "CME"], ["AAPL", "XYZ"], ["AAPL", null]]) {
+  for (const [symbol, exchange] of [
+    ["ES=F", "CME"],
+    ["AAPL", "XYZ"],
+    ["AAPL", null],
+  ]) {
     assert.equal(msUntilStale(yq(symbol, exchange, T, HK_DAY), "open", T + 3_600_000), null, symbol);
   }
 });
@@ -260,7 +433,11 @@ test("a delayed market's first minutes read delayed, not stopped at yesterday's 
   assert.equal(msUntilStale(fetched(tw, open + 1_500_001), "open", open + 1_500_001), 0);
   assert.deepEqual(freshness(tw, "open", open + 60_000), { state: "delayed", delayMinutes: 20, stoppedAt: null });
   assert.equal(freshness(tw, "open", open + 1_500_000).state, "delayed");
-  assert.deepEqual(freshness(tw, "open", open + 1_500_001), { state: "stalled", delayMinutes: null, stoppedAt: tw.timestamp });
+  assert.deepEqual(freshness(tw, "open", open + 1_500_001), {
+    state: "stalled",
+    delayMinutes: null,
+    stoppedAt: tw.timestamp,
+  });
   // An overlay is never anchored: yesterday's MIS price at the open reads stopped, never live.
   const mis = { ...tw, source: "mis" };
   assert.equal(msUntilStale(mis, "open", open + 30_000), left(120_000, open + 30_000 - mis.timestamp));
@@ -269,19 +446,39 @@ test("a delayed market's first minutes read delayed, not stopped at yesterday's 
 
 test("the detail names Yahoo's state and keeps a delay while closed", () => {
   const NOW = 1794188480000;
-  assert.deepEqual(detailSource(yq("AAPL", "NMS", NOW - 40_000), "open", NOW, say("en")), [["Price: Live · Yahoo Finance"]]);
-  assert.deepEqual(detailSource(yq("0700.HK", "HKG", NOW - 40_000), "closed", NOW, say("en")), [["Yahoo Finance · regular session", "delayed 15 min"]]);
+  assert.deepEqual(detailSource(yq("AAPL", "NMS", NOW - 40_000), "open", NOW, say("en")), [
+    ["Price: Live · Yahoo Finance"],
+  ]);
+  assert.deepEqual(detailSource(yq("0700.HK", "HKG", NOW - 40_000), "closed", NOW, say("en")), [
+    ["Yahoo Finance · regular session", "delayed 15 min"],
+  ]);
 });
 
 test("the line under a real-time price reads as its own quote, not the price", () => {
   const NOW = 1794188480000;
-  const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: NOW - 600_000, chartSource: "yahoo",
-    chartTimestamp: NOW - 40_000, chartFetchedAt: NOW - 30_000 };
+  const finnhub = {
+    symbol: "AAPL",
+    source: "finnhub",
+    exchange: "NMS",
+    timestamp: NOW - 600_000,
+    chartSource: "yahoo",
+    chartTimestamp: NOW - 40_000,
+    chartFetchedAt: NOW - 30_000,
+  };
   const stalled = t("en", "freshness.stalled", { time: formatTime(NOW - 600_000) });
-  assert.deepEqual(detailSource(finnhub, "open", NOW, say("en")), [[`Price: ${stalled} · Finnhub`], ["Line: Live · Yahoo Finance"]]);
-  assert.deepEqual(detailSource(finnhub, "closed", NOW, say("en")), [["Price: Market closed · Finnhub"], ["Line: Market closed · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(finnhub, "open", NOW, say("en")), [
+    [`Price: ${stalled} · Finnhub`],
+    ["Line: Live · Yahoo Finance"],
+  ]);
+  assert.deepEqual(detailSource(finnhub, "closed", NOW, say("en")), [
+    ["Price: Market closed · Finnhub"],
+    ["Line: Market closed · Yahoo Finance"],
+  ]);
   const mis = { symbol: "2330.TW", source: "mis", exchange: "TAI", timestamp: NOW - 10_000, chartSource: "yahoo" };
-  assert.deepEqual(detailSource(mis, "closed", NOW, say("en")), [["Price: Market closed · TWSE MIS"], ["Line: delayed 20 min · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(mis, "closed", NOW, say("en")), [
+    ["Price: Market closed · TWSE MIS"],
+    ["Line: delayed 20 min · Yahoo Finance"],
+  ]);
 });
 
 const TOKYO_DAY = day("2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z"); // 09:00–15:30 JST
@@ -290,7 +487,13 @@ const sessions = (q, times) => times.map((hms) => sessionOf(q, at(`2026-11-10T${
 
 test("Tokyo's lunch break is a session of its own", () => {
   const q = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), TOKYO_DAY); // timed 11:10 JST
-  assert.deepEqual(sessions(q, ["02:29:59", "02:30:00", "03:29:59", "03:30:00", "03:31:00"]), ["open", "lunch", "lunch", "open", "open"]);
+  assert.deepEqual(sessions(q, ["02:29:59", "02:30:00", "03:29:59", "03:30:00", "03:31:00"]), [
+    "open",
+    "lunch",
+    "lunch",
+    "open",
+    "open",
+  ]);
   const noon = at("2026-11-10T02:45:00Z"); // 11:45 JST
   assert.equal(sessionOf(yq("^N225", "OSA", q.timestamp, TOKYO_DAY), noon), "lunch");
   assert.deepEqual(freshness(q, sessionOf(q, noon), noon), { state: "lunch", delayMinutes: null, stoppedAt: null });
@@ -312,15 +515,30 @@ test("Hong Kong and Shanghai lunch; Taiwan, Korea and the US have none", () => {
   const tw = yq("2330.TW", "TAI", at("2026-11-10T03:50:00Z"), day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"));
   assert.equal(sessionOf(tw, noon), "open");
   assert.equal(freshness(tw, sessionOf(tw, noon), noon).delayMinutes, 20);
-  for (const [symbol, exchange] of [["005930.KS", "KSC"], ["AAPL", "NMS"]]) assert.equal(sessionOf(yq(symbol, exchange, noon, TOKYO_DAY), noon), "open", symbol);
+  for (const [symbol, exchange] of [
+    ["005930.KS", "KSC"],
+    ["AAPL", "NMS"],
+  ])
+    assert.equal(sessionOf(yq(symbol, exchange, noon, TOKYO_DAY), noon), "open", symbol);
 });
 
 test("the minutes of a lunch break do not count toward a stop", () => {
   const tokyo = yq("7203.T", "JPX", at("2026-11-10T02:30:00Z"), TOKYO_DAY); // the morning's last trade, 11:30 JST
   // Fetched at 12:31 JST, 1 min traded: nothing but the fetch guard can turn it.
-  assert.equal(msUntilStale(fetched(tokyo, at("2026-11-10T03:31:00Z")), "open", at("2026-11-10T03:31:00Z")), left(300_000, 0));
-  assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:31:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null });
-  assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:40:00Z")), { state: "delayed", delayMinutes: 15, stoppedAt: null }); // 12:40 JST: 10 min traded
+  assert.equal(
+    msUntilStale(fetched(tokyo, at("2026-11-10T03:31:00Z")), "open", at("2026-11-10T03:31:00Z")),
+    left(300_000, 0),
+  );
+  assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:31:00Z")), {
+    state: "delayed",
+    delayMinutes: 15,
+    stoppedAt: null,
+  });
+  assert.deepEqual(freshness(tokyo, "open", at("2026-11-10T03:40:00Z")), {
+    state: "delayed",
+    delayMinutes: 15,
+    stoppedAt: null,
+  }); // 12:40 JST: 10 min traded
   assert.equal(freshness(tokyo, "open", at("2026-11-10T03:50:00Z")).state, "delayed"); // 12:50 JST: 20 min of trading
   assert.equal(freshness(tokyo, "open", at("2026-11-10T03:50:00Z") + 1).state, "stalled");
   const cn = yq("600519.SS", "SHH", at("2026-11-10T03:30:00Z"), CN_DAY);
@@ -332,22 +550,46 @@ test("FX reads closed from Friday 22:00 to Sunday 22:00 UTC", () => {
   // Yahoo's period says open at each instant here.
   const fx = (iso, exchange = "CCY") => {
     const time = at(iso);
-    return [{ symbol: "EURUSD=X", source: "yahoo", exchange, timestamp: time - 5_000,
-      periods: { pre: null, regular: [time - 3_600_000, time + 3_600_000], post: null } }, time];
+    return [
+      {
+        symbol: "EURUSD=X",
+        source: "yahoo",
+        exchange,
+        timestamp: time - 5_000,
+        periods: { pre: null, regular: [time - 3_600_000, time + 3_600_000], post: null },
+      },
+      time,
+    ];
   };
   const session = (iso, exchange) => sessionOf(...fx(iso, exchange));
-  assert.deepEqual(["2026-11-13T21:59:59Z", "2026-11-13T22:00:00Z", "2026-11-14T12:00:00Z", "2026-11-15T21:59:59Z", "2026-11-15T22:00:00Z"].map((iso) => session(iso)),
-    ["open", "closed", "closed", "closed", "open"]);
+  assert.deepEqual(
+    [
+      "2026-11-13T21:59:59Z",
+      "2026-11-13T22:00:00Z",
+      "2026-11-14T12:00:00Z",
+      "2026-11-15T21:59:59Z",
+      "2026-11-15T22:00:00Z",
+    ].map((iso) => session(iso)),
+    ["open", "closed", "closed", "closed", "open"],
+  );
   assert.equal(session("2026-11-14T12:00:00Z", null), "closed"); // =X without an exchange
   const [saturday, s] = fx("2026-11-14T12:00:00Z");
-  assert.equal(freshness({ ...saturday, timestamp: at("2026-11-13T21:59:00Z") }, sessionOf(saturday, s), s).state, "closed");
+  assert.equal(
+    freshness({ ...saturday, timestamp: at("2026-11-13T21:59:00Z") }, sessionOf(saturday, s), s).state,
+    "closed",
+  );
   const [sunday, u] = fx("2026-11-15T22:01:00Z");
   assert.equal(freshness(sunday, sessionOf(sunday, u), u).state, "live");
 });
 
 // Yahoo's FX period is the UTC day (00:00–23:59), not a session: neither its last minute nor a day-old period reads closed.
 test("FX reads open outside its weekend whatever its period says", () => {
-  const eur = { symbol: "EURUSD=X", source: "yahoo", exchange: "CCY", periods: day("2026-11-10T00:00:00Z", "2026-11-10T23:59:00Z") };
+  const eur = {
+    symbol: "EURUSD=X",
+    source: "yahoo",
+    exchange: "CCY",
+    periods: day("2026-11-10T00:00:00Z", "2026-11-10T23:59:00Z"),
+  };
   assert.equal(sessionOf(eur, at("2026-11-10T23:59:30Z")), "open");
   assert.equal(sessionOf(eur, at("2026-11-11T12:00:00Z")), "open");
   assert.equal(sessionOf(eur, at("2026-11-13T22:00:00Z")), "closed");
@@ -356,17 +598,33 @@ test("FX reads open outside its weekend whatever its period says", () => {
 test("a lunch break counts only where it overlaps the quote's trading time", () => {
   // Timed 11:35 JST, inside lunch: only the minutes since the 12:30 reopening count, so it stops after 12:50.
   const inLunch = yq("7203.T", "JPX", at("2026-11-10T02:35:00Z"), TOKYO_DAY);
-  assert.equal(freshness(fetched(inLunch, at("2026-11-10T03:50:00Z")), "open", at("2026-11-10T03:50:00Z")).state, "delayed");
-  assert.equal(msUntilStale(fetched(inLunch, at("2026-11-10T03:50:00Z") + 1), "open", at("2026-11-10T03:50:00Z") + 1), 0);
+  assert.equal(
+    freshness(fetched(inLunch, at("2026-11-10T03:50:00Z")), "open", at("2026-11-10T03:50:00Z")).state,
+    "delayed",
+  );
+  assert.equal(
+    msUntilStale(fetched(inLunch, at("2026-11-10T03:50:00Z") + 1), "open", at("2026-11-10T03:50:00Z") + 1),
+    0,
+  );
   // Timed 11:00 JST, fetched 11:20: lunch has not begun, nothing is taken off: exactly its 20 min, not stale.
   const early = yq("7203.T", "JPX", at("2026-11-10T02:00:00Z"), TOKYO_DAY);
-  assert.equal(msUntilStale(fetched(early, at("2026-11-10T02:20:00Z")), "open", at("2026-11-10T02:20:00Z")), left(300_000, 0));
+  assert.equal(
+    msUntilStale(fetched(early, at("2026-11-10T02:20:00Z")), "open", at("2026-11-10T02:20:00Z")),
+    left(300_000, 0),
+  );
   // Fetched 1 ms past its 20 min: stalled, so a lunch subtracted where it does not overlap would show.
   const pastLimit = at("2026-11-10T02:20:00Z") + 1;
-  assert.deepEqual(freshness(fetched(early, pastLimit), "open", pastLimit), { state: "stalled", delayMinutes: null, stoppedAt: early.timestamp });
+  assert.deepEqual(freshness(fetched(early, pastLimit), "open", pastLimit), {
+    state: "stalled",
+    delayMinutes: null,
+    stoppedAt: early.timestamp,
+  });
   const morning = yq("7203.T", "JPX", at("2026-11-10T02:10:00Z"), TOKYO_DAY);
   // Its 20 min of trading end at 11:30, so it reads stalled only once the market reopens.
-  assert.equal(freshness(morning, sessionOf(morning, at("2026-11-10T03:30:00Z")), at("2026-11-10T03:30:00Z")).state, "delayed");
+  assert.equal(
+    freshness(morning, sessionOf(morning, at("2026-11-10T03:30:00Z")), at("2026-11-10T03:30:00Z")).state,
+    "delayed",
+  );
   assert.equal(freshness(morning, "open", at("2026-11-10T03:30:00Z") + 1).state, "stalled");
 });
 
@@ -379,7 +637,11 @@ test("a long list does not flicker: a Yahoo quote stays live until its next fetc
   const fetchAt = at("2026-11-10T15:00:00Z");
   const aapl = fetched(yq("AAPL", "NMS", fetchAt - 10_000, US_DAY), fetchAt);
   for (const since of [100_000, 119_000]) {
-    assert.deepEqual(freshness(aapl, "open", fetchAt + since), { state: "live", delayMinutes: null, stoppedAt: null }, `${since}`);
+    assert.deepEqual(
+      freshness(aapl, "open", fetchAt + since),
+      { state: "live", delayMinutes: null, stoppedAt: null },
+      `${since}`,
+    );
   }
   // Nothing changes until the next fetch or the 5-minute guard.
   assert.equal(msUntilStale(aapl, "open", fetchAt + 100_000), 200_001);
@@ -392,7 +654,10 @@ test("Yahoo at the US open: yesterday's close reads unconfirmed, never live or s
   assert.deepEqual(freshness(fetched(close, at("2026-11-10T14:30:05Z")), "open", now), unconfirmed);
   // Fetched before the open, or long after it with no trade yet: still unconfirmed.
   assert.deepEqual(freshness(fetched(close, at("2026-11-10T14:29:00Z")), "open", now), unconfirmed);
-  assert.deepEqual(freshness(fetched(close, at("2026-11-10T14:40:00Z")), "open", at("2026-11-10T14:40:10Z")), unconfirmed);
+  assert.deepEqual(
+    freshness(fetched(close, at("2026-11-10T14:40:00Z")), "open", at("2026-11-10T14:40:10Z")),
+    unconfirmed,
+  );
   // A fetch that brings a 09:30:10 trade: live.
   const traded = fetched(yq("AAPL", "NMS", at("2026-11-10T14:30:10Z"), US_DAY), at("2026-11-10T14:30:15Z"));
   assert.deepEqual(freshness(traded, "open", now), { state: "live", delayMinutes: null, stoppedAt: null });
@@ -401,14 +666,21 @@ test("Yahoo at the US open: yesterday's close reads unconfirmed, never live or s
   assert.equal(freshness(lastFetch, "open", lastFetch.fetchedAt + 300_000).state, "unconfirmed");
   assert.equal(freshness(lastFetch, "open", lastFetch.fetchedAt + 300_001).state, "stalled");
   assert.equal(msUntilStale(lastFetch, "open", at("2026-11-10T14:40:00Z")), left(300_000, 595_000));
-  assert.equal(msUntilStale(fetched(close, at("2026-11-10T14:40:00Z")), "open", at("2026-11-10T14:41:00Z")), left(300_000, 60_000));
+  assert.equal(
+    msUntilStale(fetched(close, at("2026-11-10T14:40:00Z")), "open", at("2026-11-10T14:41:00Z")),
+    left(300_000, 60_000),
+  );
 });
 
 test("a Yahoo quote not fetched for 5 minutes reads stopped while its market is open", () => {
   const fetchAt = at("2026-11-10T02:20:00Z"); // 10:20 in Hong Kong
   const hk = fetched(yq("0700.HK", "HKG", fetchAt - 60_000, HK_DAY), fetchAt);
   assert.deepEqual(freshness(hk, "open", fetchAt + 300_000), { state: "delayed", delayMinutes: 15, stoppedAt: null });
-  assert.deepEqual(freshness(hk, "open", fetchAt + 300_001), { state: "stalled", delayMinutes: null, stoppedAt: hk.timestamp });
+  assert.deepEqual(freshness(hk, "open", fetchAt + 300_001), {
+    state: "stalled",
+    delayMinutes: null,
+    stoppedAt: hk.timestamp,
+  });
   assert.equal(msUntilStale(hk, "open", fetchAt + 200_000), 100_001);
   assert.equal(freshness(hk, "closed", fetchAt + 3_600_000).state, "closed");
   const us = fetched(yq("AAPL", "NMS", at("2026-11-10T15:00:00Z") - 1_000, US_DAY), at("2026-11-10T15:00:00Z"));
@@ -421,7 +693,8 @@ test("a delayed Yahoo quote's boundary is taken at its fetch", () => {
   const hk = yq("0700.HK", "HKG", T, HK_DAY);
   // Fetched 20 min after the trade: delayed, however long ago the fetch (inside the guard); 1 ms later: stopped.
   const edge = fetched(hk, T + 1_200_000);
-  for (const since of [0, 60_000, 299_000]) assert.equal(freshness(edge, "open", edge.fetchedAt + since).state, "delayed", `${since}`);
+  for (const since of [0, 60_000, 299_000])
+    assert.equal(freshness(edge, "open", edge.fetchedAt + since).state, "delayed", `${since}`);
   const past = fetched(hk, T + 1_200_001);
   assert.deepEqual(freshness(past, "open", past.fetchedAt), { state: "stalled", delayMinutes: null, stoppedAt: T });
   assert.equal(msUntilStale(past, "open", past.fetchedAt + 60_000), 0);
@@ -439,7 +712,13 @@ test("an overlay's age still runs from its own time to now, whatever its fetch t
 
 test("FX just after 00:00 UTC is live with the last minute's quote: its day starts then, not a session", () => {
   const now = at("2026-11-10T00:00:20Z");
-  const eur = fetched({ ...yq("EURUSD=X", "CCY", at("2026-11-09T23:59:45Z"), day("2026-11-10T00:00:00Z", "2026-11-10T23:59:00Z")), symbol: "EURUSD=X" }, now);
+  const eur = fetched(
+    {
+      ...yq("EURUSD=X", "CCY", at("2026-11-09T23:59:45Z"), day("2026-11-10T00:00:00Z", "2026-11-10T23:59:00Z")),
+      symbol: "EURUSD=X",
+    },
+    now,
+  );
   assert.equal(sessionOf(eur, now), "open");
   assert.deepEqual(freshness(eur, "open", now), { state: "live", delayMinutes: null, stoppedAt: null });
   // Its age counts from the quote, not 00:00: 23:58:00 fetched at 00:01:59 is 4 minutes old.
@@ -452,14 +731,19 @@ test("a cached Yahoo quote still at the previous close reads stalled once the op
   const open = at("2026-11-10T14:30:00Z");
   const close = { ...fetched(yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), open - 60_000), cached: true };
   assert.equal(freshness(close, "open", open + 120_000).state, "unconfirmed");
-  assert.deepEqual(freshness(close, "open", open + 120_001), { state: "stalled", delayMinutes: null, stoppedAt: close.timestamp });
+  assert.deepEqual(freshness(close, "open", open + 120_001), {
+    state: "stalled",
+    delayMinutes: null,
+    stoppedAt: close.timestamp,
+  });
   assert.equal(msUntilStale(close, "open", open + 60_000), 60_001);
 });
 
 test("a Yahoo quote without a fetch time counts as fetched now", () => {
   const T = at("2026-11-10T15:00:00Z");
   const aapl = yq("AAPL", "NMS", T - 10_000, US_DAY);
-  for (const now of [T, T + 110_000, T + 110_001]) assert.deepEqual(freshness(aapl, "open", now), freshness(fetched(aapl, now), "open", now), `${now}`);
+  for (const now of [T, T + 110_000, T + 110_001])
+    assert.deepEqual(freshness(aapl, "open", now), freshness(fetched(aapl, now), "open", now), `${now}`);
   assert.equal(freshness(aapl, "open", T + 110_001).state, "stalled");
 });
 
@@ -473,28 +757,28 @@ test("a future's session: inside a segment open, between segments closed, the TA
     ["2026-11-09T16:00:00Z", LINE_PERIODS, "night"], // 00:00
     ["2026-11-09T17:00:00Z", LINE_PERIODS, "night"], // 01:00
     ["2026-11-09T20:59:59Z", LINE_PERIODS, "night"], // 04:59:59
-    ["2026-11-09T21:00:00Z", LINE_PERIODS, null],    // 05:00
-    ["2026-11-09T22:30:00Z", LINE_PERIODS, null],    // 06:30
-    ["2026-11-10T00:44:59Z", LINE_PERIODS, null],    // 08:44:59
-    ["2026-11-10T00:45:00Z", LINE_PERIODS, "day"],   // 08:45
-    ["2026-11-10T05:44:59Z", LINE_PERIODS, "day"],   // 13:44:59
-    ["2026-11-10T05:45:00Z", LINE_PERIODS, null],    // 13:45
-    ["2026-11-10T07:00:00Z", LINE_PERIODS, null],    // Tue 15:00: past the line's last segment
-    ["2026-11-10T06:59:59Z", null, null],            // TAIFEX hours: 14:59:59
-    ["2026-11-10T07:00:00Z", null, "night"],         // 15:00
-    ["2026-11-10T14:00:00Z", null, "night"],         // 22:00
-    ["2026-11-09T22:30:00Z", null, null],            // 06:30
-    ["2026-11-10T01:00:00Z", null, "day"],           // 09:00
-    ["2026-11-10T05:45:00Z", null, null],            // 13:45
-    ["2026-11-13T07:00:00Z", null, "night"],         // Fri 15:00
-    ["2026-11-13T20:59:59Z", null, "night"],         // Sat 04:59:59
-    ["2026-11-13T21:00:00Z", null, null],            // Sat 05:00
-    ["2026-11-14T02:00:00Z", null, null],            // Sat 10:00
-    ["2026-11-14T07:00:00Z", null, null],            // Sat 15:00: no Saturday night
-    ["2026-11-15T14:00:00Z", null, null],            // Sun 22:00
-    ["2026-11-15T16:30:00Z", null, null],            // Mon 00:30: no Sunday night
-    ["2026-11-16T00:44:59Z", null, null],            // Mon 08:44:59
-    ["2026-11-16T00:45:00Z", null, "day"],           // Mon 08:45
+    ["2026-11-09T21:00:00Z", LINE_PERIODS, null], // 05:00
+    ["2026-11-09T22:30:00Z", LINE_PERIODS, null], // 06:30
+    ["2026-11-10T00:44:59Z", LINE_PERIODS, null], // 08:44:59
+    ["2026-11-10T00:45:00Z", LINE_PERIODS, "day"], // 08:45
+    ["2026-11-10T05:44:59Z", LINE_PERIODS, "day"], // 13:44:59
+    ["2026-11-10T05:45:00Z", LINE_PERIODS, null], // 13:45
+    ["2026-11-10T07:00:00Z", LINE_PERIODS, null], // Tue 15:00: past the line's last segment
+    ["2026-11-10T06:59:59Z", null, null], // TAIFEX hours: 14:59:59
+    ["2026-11-10T07:00:00Z", null, "night"], // 15:00
+    ["2026-11-10T14:00:00Z", null, "night"], // 22:00
+    ["2026-11-09T22:30:00Z", null, null], // 06:30
+    ["2026-11-10T01:00:00Z", null, "day"], // 09:00
+    ["2026-11-10T05:45:00Z", null, null], // 13:45
+    ["2026-11-13T07:00:00Z", null, "night"], // Fri 15:00
+    ["2026-11-13T20:59:59Z", null, "night"], // Sat 04:59:59
+    ["2026-11-13T21:00:00Z", null, null], // Sat 05:00
+    ["2026-11-14T02:00:00Z", null, null], // Sat 10:00
+    ["2026-11-14T07:00:00Z", null, null], // Sat 15:00: no Saturday night
+    ["2026-11-15T14:00:00Z", null, null], // Sun 22:00
+    ["2026-11-15T16:30:00Z", null, null], // Mon 00:30: no Sunday night
+    ["2026-11-16T00:44:59Z", null, null], // Mon 08:44:59
+    ["2026-11-16T00:45:00Z", null, "day"], // Mon 08:45
   ];
   for (const [iso, periods, segment] of cases) {
     const now = at(iso);
@@ -504,27 +788,37 @@ test("a future's session: inside a segment open, between segments closed, the TA
   }
   // A periods value without segments (here ownPeriods' closed session): the TAIFEX hours decide.
   const friday = at("2026-11-13T20:59:58Z");
-  assert.equal(sessionOf(future(friday, { pre: null, regular: [friday, friday], post: null }), at("2026-11-16T00:45:00Z")), "open");
+  assert.equal(
+    sessionOf(future(friday, { pre: null, regular: [friday, friday], post: null }), at("2026-11-16T00:45:00Z")),
+    "open",
+  );
 });
 
 test("a future reads Live in both sessions, closed with its last trade in a break, and never stale there", () => {
   const tx = (key, params) => t("zh-TW", key, params);
-  const night = at("2026-11-09T17:00:00Z");                            // 01:00
+  const night = at("2026-11-09T17:00:00Z"); // 01:00
   assert.equal(freshness(future(night - 20_000), "open", night).state, "live");
   assert.equal(sessionName(future(night - 20_000), "open", night), "night");
-  const nine = at("2026-11-10T01:00:00Z");                             // 09:00
+  const nine = at("2026-11-10T01:00:00Z"); // 09:00
   assert.equal(freshness(future(nine - 10_000), "open", nine).state, "live");
   assert.equal(sessionName(future(nine - 10_000), "open", nine), "day");
   assert.equal(freshness(future(nine - 121_000), "open", nine).state, "stalled");
-  const last = at("2026-11-09T21:00:00Z");                             // 05:00
-  const now = at("2026-11-09T22:30:00Z");                              // 06:30
+  const last = at("2026-11-09T21:00:00Z"); // 05:00
+  const now = at("2026-11-09T22:30:00Z"); // 06:30
   const q = future(last);
   const fresh = freshness(q, sessionOf(q, now), now);
   assert.equal(fresh.state, "closed");
-  assert.equal(freshnessLabel(q, fresh, now, "zh-TW", tx),
-    `${tx("session.closed")} · ${[formatStaleDate(q, now, "zh-TW"), formatTime(last)].filter(Boolean).join(" ")}`);
+  assert.equal(
+    freshnessLabel(q, fresh, now, "zh-TW", tx),
+    `${tx("session.closed")} · ${[formatStaleDate(q, now, "zh-TW"), formatTime(last)].filter(Boolean).join(" ")}`,
+  );
   assert.equal(sessionName(q, "closed", now), "closed");
-  for (const iso of ["2026-11-09T21:00:00.001Z", "2026-11-09T21:01:00Z", "2026-11-09T22:30:00Z", "2026-11-10T05:45:30Z"]) {
+  for (const iso of [
+    "2026-11-09T21:00:00.001Z",
+    "2026-11-09T21:01:00Z",
+    "2026-11-09T22:30:00Z",
+    "2026-11-10T05:45:30Z",
+  ]) {
     assert.equal(msUntilStale(future(at(iso) - 30_000), "closed", at(iso)), null, iso);
   }
   assert.equal(msUntilStale(future(nine - 20_000), "open", nine), 100_001);
@@ -537,8 +831,8 @@ test("a future at its reported limit is lit while live and after its session, ne
   const nine = at("2026-11-10T01:00:00Z");
   assert.equal(shownLimit(atLimit(nine - 10_000), sessionOf(atLimit(nine - 10_000), nine), nine), "up");
   assert.equal(shownLimit(atLimit(nine - 121_000), "open", nine), null);
-  const last = at("2026-11-10T05:44:00Z");                             // 13:44
-  const after = at("2026-11-10T06:30:00Z");                            // 14:30
+  const last = at("2026-11-10T05:44:00Z"); // 13:44
+  const after = at("2026-11-10T06:30:00Z"); // 14:30
   assert.equal(sessionOf(atLimit(last), after), "closed");
   assert.equal(shownLimit(atLimit(last), "closed", after), "up");
 });
@@ -546,7 +840,7 @@ test("a future at its reported limit is lit while live and after its session, ne
 // TWSE's fixed-price trades after the close are a stock's: a future's price belongs to its session only up to its end.
 test("a future's limit holds after its session only for a trade inside it, with no after-close window", () => {
   const atLimit = (timestamp) => ({ ...future(timestamp), price: 45625, limitUp: 45625, limitDown: 37331 });
-  const two = at("2026-11-10T06:00:00Z");                              // 14:00, the break
+  const two = at("2026-11-10T06:00:00Z"); // 14:00, the break
   assert.equal(shownLimit(atLimit(at("2026-11-10T05:44:00Z")), "closed", two), "up");
   // Timed a minute past the day session's end: not the session's price.
   assert.equal(shownLimit(atLimit(at("2026-11-10T05:46:00Z")), "closed", two), null);
@@ -561,32 +855,54 @@ test("nextEdge: a future's next TAIFEX opening on its Taipei day; a stock withou
   const wtx = { symbol: "WTX&", periods: null };
   assert.equal(nextEdge(wtx, at("2026-11-09T22:30:00Z"), { openings: true }), at("2026-11-10T00:45:00Z")); // 06:30 → 08:45
   assert.equal(nextEdge(wtx, at("2026-11-10T01:00:00Z"), { openings: true }), at("2026-11-10T07:00:00Z")); // 09:00 → 15:00
-  assert.equal(nextEdge(wtx, at("2026-11-10T08:00:00Z"), { openings: true }), null);                       // 16:00
-  assert.equal(nextEdge(wtx, at("2026-11-14T02:00:00Z"), { openings: true }), null);                       // Saturday
-  assert.equal(nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), { openings: true }), at("2026-11-10T01:00:00Z"));
+  assert.equal(nextEdge(wtx, at("2026-11-10T08:00:00Z"), { openings: true }), null); // 16:00
+  assert.equal(nextEdge(wtx, at("2026-11-14T02:00:00Z"), { openings: true }), null); // Saturday
+  assert.equal(
+    nextEdge({ symbol: "2330.TW", periods: null }, at("2026-11-09T22:30:00Z"), { openings: true }),
+    at("2026-11-10T01:00:00Z"),
+  );
 });
 
 test("nextEdge: each market's next edge, and its next opening", () => {
   const hk = { symbol: "0700.HK", exchange: "HKG", periods: day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z") };
-  const us = { symbol: "AAPL", exchange: "NMS", periods: { pre: [at("2026-11-10T09:00:00Z"), at("2026-11-10T14:30:00Z")],
-    regular: [at("2026-11-10T14:30:00Z"), at("2026-11-10T21:00:00Z")], post: [at("2026-11-10T21:00:00Z"), at("2026-11-11T01:00:00Z")] } };
+  const us = {
+    symbol: "AAPL",
+    exchange: "NMS",
+    periods: {
+      pre: [at("2026-11-10T09:00:00Z"), at("2026-11-10T14:30:00Z")],
+      regular: [at("2026-11-10T14:30:00Z"), at("2026-11-10T21:00:00Z")],
+      post: [at("2026-11-10T21:00:00Z"), at("2026-11-11T01:00:00Z")],
+    },
+  };
   const cases = [
     // [quote, UTC now, next edge, next opening]
     [hk, "2026-11-10T03:59:30Z", "2026-11-10T04:00:00Z", "2026-11-10T05:00:00Z"], // 11:59:30 HK: lunch, then its end
     [us, "2026-11-10T14:29:20Z", "2026-11-10T14:30:00Z", "2026-11-10T14:30:00Z"], // 09:29:20 New York
     [{ symbol: "AAPL", periods: null }, "2026-11-10T14:00:00Z", "2026-11-10T14:30:00Z", "2026-11-10T14:30:00Z"],
     [{ symbol: "WTX&", periods: null }, "2026-11-10T05:00:00Z", "2026-11-10T05:45:00Z", "2026-11-10T07:00:00Z"], // 13:00 Taipei
-    [{ symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-13T00:00:00Z", "2026-11-14T00:00:00Z") },
-      "2026-11-13T21:00:00Z", "2026-11-13T22:00:00Z", "2026-11-15T22:00:00Z"],
-    [{ symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") },
-      "2026-11-10T06:00:00Z", "2026-11-10T16:00:00Z", null],                                      // 14:00: Taipei midnight
-    [us, "2026-11-11T01:30:00Z", "2026-11-11T16:00:00Z", null],                                 // after post: the row's own midnight
+    [
+      { symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-13T00:00:00Z", "2026-11-14T00:00:00Z") },
+      "2026-11-13T21:00:00Z",
+      "2026-11-13T22:00:00Z",
+      "2026-11-15T22:00:00Z",
+    ],
+    [
+      { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") },
+      "2026-11-10T06:00:00Z",
+      "2026-11-10T16:00:00Z",
+      null,
+    ], // 14:00: Taipei midnight
+    [us, "2026-11-11T01:30:00Z", "2026-11-11T16:00:00Z", null], // after post: the row's own midnight
     [{ symbol: "BTC/USDT", periods: null }, "2026-11-10T06:00:00Z", "2026-11-10T16:00:00Z", null],
   ];
   withTZ("Asia/Taipei", () => {
     for (const [quote, iso, edge, opening] of cases) {
       assert.equal(nextEdge(quote, at(iso)), edge && at(edge), `${quote.symbol} ${iso}`);
-      assert.equal(nextEdge(quote, at(iso), { openings: true }), opening && at(opening), `${quote.symbol} ${iso} opening`);
+      assert.equal(
+        nextEdge(quote, at(iso), { openings: true }),
+        opening && at(opening),
+        `${quote.symbol} ${iso} opening`,
+      );
     }
   });
 });
@@ -597,9 +913,9 @@ test("nextEdge on an edge gives the next one", () => {
   const wtx = { symbol: "WTX&", periods: null };
   const fx = { symbol: "EURUSD=X", exchange: "CCY", periods: day("2026-11-13T00:00:00Z", "2026-11-14T00:00:00Z") };
   withTZ("Asia/Taipei", () => {
-    assert.equal(nextEdge(hk, at("2026-11-10T04:00:00Z")), at("2026-11-10T05:00:00Z"));  // 12:00 HK → 13:00
+    assert.equal(nextEdge(hk, at("2026-11-10T04:00:00Z")), at("2026-11-10T05:00:00Z")); // 12:00 HK → 13:00
     assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z")); // 15:00 Taipei → midnight
-    assert.equal(nextEdge(fx, at("2026-11-13T22:00:00Z")), at("2026-11-14T16:00:00Z"));  // Friday 22:00 → Taipei midnight, before Sunday's
+    assert.equal(nextEdge(fx, at("2026-11-13T22:00:00Z")), at("2026-11-14T16:00:00Z")); // Friday 22:00 → Taipei midnight, before Sunday's
   });
 });
 
@@ -608,10 +924,10 @@ test("nextEdge on an edge gives the next one", () => {
 test("nextEdge: a future with its line's segments still opens at 15:00, and past 15:00 goes on", () => {
   const wtx = { symbol: "WTX&", periods: LINE_PERIODS };
   const openings = { openings: true };
-  assert.equal(nextEdge(wtx, at("2026-11-10T05:00:00Z")), at("2026-11-10T05:45:00Z"));           // 13:00: day close, in both
-  assert.equal(nextEdge(wtx, at("2026-11-10T06:59:50Z")), at("2026-11-10T07:00:00Z"));           // 14:59:50
+  assert.equal(nextEdge(wtx, at("2026-11-10T05:00:00Z")), at("2026-11-10T05:45:00Z")); // 13:00: day close, in both
+  assert.equal(nextEdge(wtx, at("2026-11-10T06:59:50Z")), at("2026-11-10T07:00:00Z")); // 14:59:50
   assert.equal(nextEdge(wtx, at("2026-11-10T06:59:50Z"), openings), at("2026-11-10T07:00:00Z"));
-  assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z"));           // 15:00 → midnight
+  assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z")), at("2026-11-10T16:00:00Z")); // 15:00 → midnight
   assert.equal(nextEdge(wtx, at("2026-11-10T07:00:00Z"), openings), null);
 });
 
@@ -623,8 +939,13 @@ test("nextEdge: a future with its line's segments still opens at 15:00, and past
 // Watchlist#marked uses (closureOf in its twMarket, through withClosure; here from the 2026 schedule, and the answers
 // its `answers` gives at that time, else none), so the sweep reads a listed day, and a day or night without trades, as
 // a row does.
-const marked = (quote, time) => (resolvedMarket(quote.symbol, quote.exchange) !== "tw" ? quote
-  : withClosure(quote, closureOf(twMarket(quote.symbol), time, listed2026, quote.answers?.(time) ?? (() => undefined))));
+const marked = (quote, time) =>
+  resolvedMarket(quote.symbol, quote.exchange) !== "tw"
+    ? quote
+    : withClosure(
+        quote,
+        closureOf(twMarket(quote.symbol), time, listed2026, quote.answers?.(time) ?? (() => undefined)),
+      );
 // What a row reads: its session, its day, and its no-trades reading, which the detail's session times and
 // the status line's note read apart from sessionOf.
 const INFERRED = ["noTrades", "nightNoTrades"];
@@ -644,7 +965,8 @@ const isNightOpen = (open) => taipeiMinute(open) === NIGHT_SESSION.from;
 // `quietDay`: only the day sessions (08:45 and 09:00) answer, so a quiet day's 今日無成交 carries past 15:00 with no night
 // answer at all and ends at the night's 15:10 cap.
 const quietDay = (time) => (market, open) => (isNightOpen(open) ? undefined : answeredAt(time, "realtime", "yahootw"));
-const quietNight = (time) => (market, open) => (isNightOpen(open) ? { ...answeredAt(time, "realtime", "yahootw"), newest: open - 1 } : undefined);
+const quietNight = (time) => (market, open) =>
+  isNightOpen(open) ? { ...answeredAt(time, "realtime", "yahootw"), newest: open - 1 } : undefined;
 
 // The instants in [from, to), stepped by `step`, where what `quote` reads changes without an edge at or before it.
 function unannounced(quote, [from, to], step = MINUTE_MS) {
@@ -686,10 +1008,24 @@ const EDGE_SWEEP_QUOTES = [
   { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") },
   { symbol: "2330.TW", periods: null },
   { symbol: "^TWII", exchange: "TAI", periods: null },
-  { symbol: "AAPL", exchange: "NMS", periods: { pre: [at("2026-03-09T08:00:00Z"), at("2026-03-09T13:30:00Z")], // EDT
-    regular: [at("2026-03-09T13:30:00Z"), at("2026-03-09T20:00:00Z")], post: [at("2026-03-09T20:00:00Z"), at("2026-03-10T00:00:00Z")] } },
-  { symbol: "AAPL", exchange: "NMS", periods: { pre: [at("2026-11-10T09:00:00Z"), at("2026-11-10T14:30:00Z")], // EST
-    regular: [at("2026-11-10T14:30:00Z"), at("2026-11-10T21:00:00Z")], post: [at("2026-11-10T21:00:00Z"), at("2026-11-11T01:00:00Z")] } },
+  {
+    symbol: "AAPL",
+    exchange: "NMS",
+    periods: {
+      pre: [at("2026-03-09T08:00:00Z"), at("2026-03-09T13:30:00Z")], // EDT
+      regular: [at("2026-03-09T13:30:00Z"), at("2026-03-09T20:00:00Z")],
+      post: [at("2026-03-09T20:00:00Z"), at("2026-03-10T00:00:00Z")],
+    },
+  },
+  {
+    symbol: "AAPL",
+    exchange: "NMS",
+    periods: {
+      pre: [at("2026-11-10T09:00:00Z"), at("2026-11-10T14:30:00Z")], // EST
+      regular: [at("2026-11-10T14:30:00Z"), at("2026-11-10T21:00:00Z")],
+      post: [at("2026-11-10T21:00:00Z"), at("2026-11-11T01:00:00Z")],
+    },
+  },
   { symbol: "AAPL", periods: null },
   { symbol: "0700.HK", exchange: "HKG", periods: day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z") },
   { symbol: "7203.T", exchange: "JPX", periods: day("2026-11-10T00:00:00Z", "2026-11-10T06:30:00Z") },
@@ -698,7 +1034,12 @@ const EDGE_SWEEP_QUOTES = [
   { symbol: "WTX&", periods: LINE_PERIODS },
   { symbol: "BTC/USDT", periods: null },
   // Inferred closures: a stock or a future without trades, by a real-time or a delayed source, and a night without trades.
-  { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), answers: quietRealtime },
+  {
+    symbol: "2330.TW",
+    exchange: "TAI",
+    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"),
+    answers: quietRealtime,
+  },
   { symbol: "2330.TW", periods: null, answers: quietDelayed },
   { symbol: "^TWII", exchange: "TAI", periods: null, answers: quietRealtime },
   { symbol: "WTX&", periods: null, answers: quietRealtime },
@@ -709,13 +1050,19 @@ const EDGE_SWEEP_QUOTES = [
   { symbol: "WTX&", periods: LINE_PERIODS, answers: quietDay },
   // Call auctions: a Taiwan stock with a real-time source on (Watchlist#marked's `twRealtime`), with and without periods, on
   // an unlisted day without trades, and with MIS's flag (`auctionAt`, Tuesday 11/10 at 09:01:55), which lapses on its own.
-  { symbol: "2330.TW", exchange: "TAI", periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), twRealtime: true },
+  {
+    symbol: "2330.TW",
+    exchange: "TAI",
+    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"),
+    twRealtime: true,
+  },
   { symbol: "2330.TW", periods: null, twRealtime: true },
   { symbol: "2330.TW", periods: null, twRealtime: true, answers: quietRealtime },
   { symbol: "2330.TW", periods: null, twRealtime: true, auctionAt: at("2026-11-10T01:01:55Z") },
 ];
-const sweepName = (quote) => `${quote.symbol} ${quote.periods ? "with" : "without"} periods${quote.answers ? `, ${quote.answers.name}` : ""}`
-  + `${quote.twRealtime ? ", real time on" : ""}${quote.auctionAt ? ", flagged" : ""}`;
+const sweepName = (quote) =>
+  `${quote.symbol} ${quote.periods ? "with" : "without"} periods${quote.answers ? `, ${quote.answers.name}` : ""}` +
+  `${quote.twRealtime ? ", real time on" : ""}${quote.auctionAt ? ", flagged" : ""}`;
 
 test("every change in what a row reads comes at or after an edge announced for it", () => {
   for (const quote of EDGE_SWEEP_QUOTES) {
@@ -726,19 +1073,38 @@ test("every change in what a row reads comes at or after an edge announced for i
   // The inferred quotes turn at their deadlines (Tue 11/10: 09:10, 09:30, and the night's 15:10).
   const [realtime, delayed, , , , night] = EDGE_SWEEP_QUOTES.filter((quote) => quote.answers);
   const reads = (quote, iso) => reading(quote, at(iso)).replace(/ \d+ /, " ");
-  assert.deepEqual([reads(realtime, "2026-11-10T01:09:59Z"), reads(realtime, "2026-11-10T01:10:00Z"), reads(delayed, "2026-11-10T01:29:59Z"),
-    reads(delayed, "2026-11-10T01:30:00Z"), reads(night, "2026-11-10T07:09:59Z"), reads(night, "2026-11-10T07:10:00Z")],
-  ["open null", 'noTrades {"kind":"noTrades","source":"yahootw"}', "open null", 'noTrades {"kind":"noTrades","source":"yahoo"}', "open null",
-    'closed {"kind":"nightNoTrades","source":"yahootw"}']);
+  assert.deepEqual(
+    [
+      reads(realtime, "2026-11-10T01:09:59Z"),
+      reads(realtime, "2026-11-10T01:10:00Z"),
+      reads(delayed, "2026-11-10T01:29:59Z"),
+      reads(delayed, "2026-11-10T01:30:00Z"),
+      reads(night, "2026-11-10T07:09:59Z"),
+      reads(night, "2026-11-10T07:10:00Z"),
+    ],
+    [
+      "open null",
+      'noTrades {"kind":"noTrades","source":"yahootw"}',
+      "open null",
+      'noTrades {"kind":"noTrades","source":"yahoo"}',
+      "open null",
+      'closed {"kind":"nightNoTrades","source":"yahootw"}',
+    ],
+  );
 });
 
 test("the edge sweep holds on New York and Santiago clocks, each row turning at its own midnight", () => {
-  const SANTIAGO_WEEKS = [[at("2026-04-02T00:00:00Z"), at("2026-04-08T00:00:00Z")], [at("2026-09-03T00:00:00Z"), at("2026-09-09T00:00:00Z")]];
+  const SANTIAGO_WEEKS = [
+    [at("2026-04-02T00:00:00Z"), at("2026-04-08T00:00:00Z")],
+    [at("2026-09-03T00:00:00Z"), at("2026-09-09T00:00:00Z")],
+  ];
   withTZ("America/New_York", () => {
-    for (const quote of EDGE_SWEEP_QUOTES) for (const week of EDGE_SWEEP_WEEKS) assert.deepEqual(unannounced(quote, week), [], sweepName(quote));
+    for (const quote of EDGE_SWEEP_QUOTES)
+      for (const week of EDGE_SWEEP_WEEKS) assert.deepEqual(unannounced(quote, week), [], sweepName(quote));
   });
   withTZ("America/Santiago", () => {
-    for (const quote of EDGE_SWEEP_QUOTES) for (const week of SANTIAGO_WEEKS) assert.deepEqual(unannounced(quote, week), [], sweepName(quote));
+    for (const quote of EDGE_SWEEP_QUOTES)
+      for (const week of SANTIAGO_WEEKS) assert.deepEqual(unannounced(quote, week), [], sweepName(quote));
   });
 });
 
@@ -750,8 +1116,13 @@ test("a row reading a closure is told of no opening inside a closure", () => {
   }
   // The weeks hold both closures, for stocks and futures alike.
   const reads = (quote, iso) => sessionOf(marked(quote, at(iso)), at(iso));
-  assert.deepEqual([reads({ symbol: "2330.TW", periods: null }, "2026-12-25T02:00:00Z"), reads({ symbol: "WTX&", periods: null }, "2026-12-25T18:00:00Z")],
-    ["holiday", "closed"]);
+  assert.deepEqual(
+    [
+      reads({ symbol: "2330.TW", periods: null }, "2026-12-25T02:00:00Z"),
+      reads({ symbol: "WTX&", periods: null }, "2026-12-25T18:00:00Z"),
+    ],
+    ["holiday", "closed"],
+  );
 });
 
 // The open detail's wake is never now or earlier, and never missing (every real quote has its row's midnight ahead), so
@@ -759,7 +1130,11 @@ test("a row reading a closure is told of no opening inside a closure", () => {
 // (so the stale moment is a number, not NaN), marked at its time as a row is (with its mark's end, as the detail's
 // quote is), over a plain week and the weeks with listed days.
 test("every detail wake is strictly later than now", () => {
-  const priced = (quote, t) => ({ ...quote, source: quote.symbol === "BTC/USDT" ? "binance" : "yahootw", timestamp: t - 30_000 });
+  const priced = (quote, t) => ({
+    ...quote,
+    source: quote.symbol === "BTC/USDT" ? "binance" : "yahootw",
+    timestamp: t - 30_000,
+  });
   const misses = [];
   const marks = { listed: 0, inferred: 0, endFirst: 0 };
   for (const quote of EDGE_SWEEP_QUOTES) {
@@ -780,37 +1155,60 @@ test("every detail wake is strictly later than now", () => {
 
 test("a closed day: no dot, never stale, lit as closed, 休市 in the detail", () => {
   const now = at("2026-12-25T02:00:00Z");
-  const q = { symbol: "2330.TW", source: "yahootw", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: CLOSE_1224,
-    periods: day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z"), closure: { kind: "listed", reason: "行憲紀念日" }, chartSource: "yahootw" };
+  const q = {
+    symbol: "2330.TW",
+    source: "yahootw",
+    price: 2485,
+    limitUp: 2485,
+    limitDown: 2035,
+    timestamp: CLOSE_1224,
+    periods: day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z"),
+    closure: { kind: "listed", reason: "行憲紀念日" },
+    chartSource: "yahootw",
+  };
   assert.equal(sessionOf(q, now), "holiday");
   assert.deepEqual(freshness(q, "holiday", now), { state: "holiday", delayMinutes: null, stoppedAt: null });
   assert.equal(shownLimit(q, "holiday", now), "up");
-  assert.deepEqual(detailSource(q, "holiday", now, say("zh-TW")), [["價格：休市 · Yahoo 奇摩股市"], ["走勢：休市 · Yahoo 奇摩股市"]]);
-  const base = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: CLOSE_1224, closure: { kind: "listed", reason: "行憲紀念日" } };
-  assert.deepEqual(detailSource(base, "holiday", now, say("zh-TW")), [["Yahoo Finance · 一般交易時段", "延遲 20 分鐘"]]);
+  assert.deepEqual(detailSource(q, "holiday", now, say("zh-TW")), [
+    ["價格：休市 · Yahoo 奇摩股市"],
+    ["走勢：休市 · Yahoo 奇摩股市"],
+  ]);
+  const base = {
+    symbol: "2330.TW",
+    source: "yahoo",
+    exchange: "TAI",
+    timestamp: CLOSE_1224,
+    closure: { kind: "listed", reason: "行憲紀念日" },
+  };
+  assert.deepEqual(detailSource(base, "holiday", now, say("zh-TW")), [
+    ["Yahoo Finance · 一般交易時段", "延遲 20 分鐘"],
+  ]);
   assert.equal(t("zh-TW", `session.${sessionName(q, "holiday", now)}`), "休市");
   const wtx = { symbol: "WTX&", periods: null, closure: { kind: "listed", reason: "行憲紀念日" } };
-  assert.equal(nextEdge(wtx, at("2026-12-24T22:00:00Z"), { openings: true }), null);   // 12/25 06:00: no opening
+  assert.equal(nextEdge(wtx, at("2026-12-24T22:00:00Z"), { openings: true }), null); // 12/25 06:00: no opening
   // A removed night: no night segment, so closed, not open.
-  assert.equal(sessionOf({ symbol: "WTX&", periods: null, closure: { kind: "nightRemoved" } }, at("2026-12-25T18:00:00Z")), "closed");
+  assert.equal(
+    sessionOf({ symbol: "WTX&", periods: null, closure: { kind: "nightRemoved" } }, at("2026-12-25T18:00:00Z")),
+    "closed",
+  );
 });
 
 test("a Taiwan or US quote without periods reads its exchange's hours; any other has no session", () => {
   const cases = [
     // [symbol, exchange, UTC, session] (local time in the comment)
-    ["AAPL", undefined, "2026-11-10T14:31:00Z", "open"],     // Tue 09:31 New York (EST)
-    ["AAPL", undefined, "2026-11-11T01:00:00Z", "closed"],   // 20:00
-    ["AAPL", undefined, "2026-11-14T15:00:00Z", "closed"],   // Saturday
-    ["AAPL", undefined, "2026-03-06T14:29:59Z", "closed"],   // Fri 09:29:59 EST
-    ["AAPL", undefined, "2026-03-06T14:30:00Z", "open"],     // Fri 09:30 EST
-    ["AAPL", undefined, "2026-03-09T13:29:59Z", "closed"],   // Mon 09:29:59 EDT
-    ["AAPL", undefined, "2026-03-09T13:30:00Z", "open"],     // Mon 09:30 EDT
-    ["AAPL", undefined, "2026-10-30T13:30:00Z", "open"],     // Fri 09:30 EDT
-    ["AAPL", undefined, "2026-11-02T13:30:00Z", "closed"],   // Mon 08:30 EST
-    ["AAPL", undefined, "2026-11-02T14:30:00Z", "open"],     // Mon 09:30 EST
+    ["AAPL", undefined, "2026-11-10T14:31:00Z", "open"], // Tue 09:31 New York (EST)
+    ["AAPL", undefined, "2026-11-11T01:00:00Z", "closed"], // 20:00
+    ["AAPL", undefined, "2026-11-14T15:00:00Z", "closed"], // Saturday
+    ["AAPL", undefined, "2026-03-06T14:29:59Z", "closed"], // Fri 09:29:59 EST
+    ["AAPL", undefined, "2026-03-06T14:30:00Z", "open"], // Fri 09:30 EST
+    ["AAPL", undefined, "2026-03-09T13:29:59Z", "closed"], // Mon 09:29:59 EDT
+    ["AAPL", undefined, "2026-03-09T13:30:00Z", "open"], // Mon 09:30 EDT
+    ["AAPL", undefined, "2026-10-30T13:30:00Z", "open"], // Fri 09:30 EDT
+    ["AAPL", undefined, "2026-11-02T13:30:00Z", "closed"], // Mon 08:30 EST
+    ["AAPL", undefined, "2026-11-02T14:30:00Z", "open"], // Mon 09:30 EST
     ["2330.TW", undefined, "2026-11-10T00:59:59Z", "closed"], // 08:59:59 Taipei
-    ["2330.TW", undefined, "2026-11-10T01:00:00Z", "open"],   // 09:00
-    ["2330.TW", undefined, "2026-11-10T05:29:59Z", "open"],   // 13:29:59
+    ["2330.TW", undefined, "2026-11-10T01:00:00Z", "open"], // 09:00
+    ["2330.TW", undefined, "2026-11-10T05:29:59Z", "open"], // 13:29:59
     ["2330.TW", undefined, "2026-11-10T05:30:00Z", "closed"], // 13:30
     ["2330.TW", undefined, "2026-11-14T02:00:00Z", "closed"], // Saturday 10:00
     ["6488.TWO", undefined, "2026-11-10T02:00:00Z", "open"],
@@ -819,19 +1217,35 @@ test("a Taiwan or US quote without periods reads its exchange's hours; any other
     ["^N225", "OSA", "2026-11-10T02:00:00Z", "unknown"],
   ];
   for (const [symbol, exchange, iso, session] of cases) {
-    assert.equal(sessionOf({ symbol, exchange, source: "finnhub", periods: null }, at(iso)), session, `${symbol} ${iso}`);
+    assert.equal(
+      sessionOf({ symbol, exchange, source: "finnhub", periods: null }, at(iso)),
+      session,
+      `${symbol} ${iso}`,
+    );
   }
   // The DST edges, on both Sundays.
-  assert.deepEqual(["2026-03-08T06:59:59Z", "2026-03-08T07:00:00Z", "2026-11-01T05:59:59Z", "2026-11-01T06:00:00Z"]
-    .map((iso) => usOffsetMin(at(iso))), [-300, -240, -240, -300]);
-  assert.deepEqual(hoursWindow({ symbol: "AAPL", periods: null }, at("2026-07-15T15:00:00Z")),
-    { regular: [at("2026-07-15T13:30:00Z"), at("2026-07-15T20:00:00Z")], weekday: true });
+  assert.deepEqual(
+    ["2026-03-08T06:59:59Z", "2026-03-08T07:00:00Z", "2026-11-01T05:59:59Z", "2026-11-01T06:00:00Z"].map((iso) =>
+      usOffsetMin(at(iso)),
+    ),
+    [-300, -240, -240, -300],
+  );
+  assert.deepEqual(hoursWindow({ symbol: "AAPL", periods: null }, at("2026-07-15T15:00:00Z")), {
+    regular: [at("2026-07-15T13:30:00Z"), at("2026-07-15T20:00:00Z")],
+    weekday: true,
+  });
   assert.equal(hoursWindow({ symbol: "0700.HK", exchange: "HKG", periods: null }, at("2026-11-10T02:00:00Z")), null);
 });
 
 test("a Finnhub-first AAPL reads Live and 開盤中 at 09:31 New York, closed with its time at 20:00", () => {
   const open = at("2026-11-10T14:31:00Z");
-  const live = mergeOverlay(undefined, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: open - 5_000, fetchedAt: open });
+  const live = mergeOverlay(undefined, {
+    symbol: "AAPL",
+    source: "finnhub",
+    price: 230,
+    timestamp: open - 5_000,
+    fetchedAt: open,
+  });
   assert.equal(freshness(live, sessionOf(live, open), open).state, "live");
   assert.equal(t("zh-TW", `session.${sessionName(live, sessionOf(live, open), open)}`), "開盤中");
   const last = at("2026-11-10T20:59:55Z");
@@ -840,13 +1254,21 @@ test("a Finnhub-first AAPL reads Live and 開盤中 at 09:31 New York, closed wi
   const fresh = freshness(closed, sessionOf(closed, evening), evening);
   assert.equal(fresh.state, "closed");
   const tx = say("en");
-  assert.equal(freshnessLabel(closed, fresh, evening, "en", tx),
-    `${tx("session.closed")} · ${[formatStaleDate(closed, evening, "en"), formatTime(last)].filter(Boolean).join(" ")}`);
+  assert.equal(
+    freshnessLabel(closed, fresh, evening, "en", tx),
+    `${tx("session.closed")} · ${[formatStaleDate(closed, evening, "en"), formatTime(last)].filter(Boolean).join(" ")}`,
+  );
 });
 
 test("a MIS-first 2330.TW at 10:00 Taipei reads Live and 開盤中", () => {
   const now = at("2026-11-10T02:00:00Z");
-  const quote = mergeOverlay(undefined, { symbol: "2330.TW", source: "mis", price: 2250, timestamp: now - 5_000, fetchedAt: now });
+  const quote = mergeOverlay(undefined, {
+    symbol: "2330.TW",
+    source: "mis",
+    price: 2250,
+    timestamp: now - 5_000,
+    fetchedAt: now,
+  });
   assert.equal(freshness(quote, sessionOf(quote, now), now).state, "live");
   assert.equal(t("zh-TW", `session.${sessionName(quote, sessionOf(quote, now), now)}`), "開盤中");
 });
@@ -858,34 +1280,56 @@ test("an unconfirmed price or line names its source alone", () => {
   const yesterday = { ...yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), periods), fetchedAt: now - 5_000 };
   assert.deepEqual(detailSource(yesterday, sessionOf(yesterday, now), now, say("zh-TW")), [["價格：Yahoo Finance"]]);
   assert.deepEqual(detailSource(yesterday, sessionOf(yesterday, now), now, say("en")), [["Price: Yahoo Finance"]]);
-  const finnhub = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: now - 10_000, periods,
-    chartSource: "yahoo", chartTimestamp: open - 60_000, chartFetchedAt: now - 5_000 };
+  const finnhub = {
+    symbol: "AAPL",
+    source: "finnhub",
+    exchange: "NMS",
+    timestamp: now - 10_000,
+    periods,
+    chartSource: "yahoo",
+    chartTimestamp: open - 60_000,
+    chartFetchedAt: now - 5_000,
+  };
   assert.deepEqual(detailSource(finnhub, "open", now, say("en")), [["Price: Live · Finnhub"], ["Line: Yahoo Finance"]]);
 });
 
 test("no trades today: lit as closed, never while stalled", () => {
   const now = at("2026-11-11T01:10:00Z");
-  const q = { symbol: "2330.TW", source: "mis", price: 2485, limitUp: 2485, limitDown: 2035, timestamp: at("2026-11-10T05:30:00Z"),
-    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z") };
-  assert.equal(shownLimit({ ...q, periods: day("2026-11-11T01:00:00Z", "2026-11-11T05:30:00Z") }, "open", now), null);   // stalled
+  const q = {
+    symbol: "2330.TW",
+    source: "mis",
+    price: 2485,
+    limitUp: 2485,
+    limitDown: 2035,
+    timestamp: at("2026-11-10T05:30:00Z"),
+    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"),
+  };
+  assert.equal(shownLimit({ ...q, periods: day("2026-11-11T01:00:00Z", "2026-11-11T05:30:00Z") }, "open", now), null); // stalled
   assert.equal(shownLimit({ ...q, closure: { kind: "noTrades", source: "mis" } }, "noTrades", now), "up");
 });
 
 // The band draws a dot and no label: a day without trades by inference (maybe a stuck feed) must not look like a
 // closed market there, while a listed day does.
 test("the band's dot: hollow for 今日無成交, none for 休市 or closed", () => {
-  const now = at("2026-11-11T01:30:00Z");                          // 09:30 on a normal Wednesday
+  const now = at("2026-11-11T01:30:00Z"); // 09:30 on a normal Wednesday
   const close = at("2026-11-10T05:30:00Z");
-  const row = (closure) => ({ symbol: "2330.TW", source: "yahoo", exchange: "TAI", price: 1000, timestamp: close, closure });
+  const row = (closure) => ({
+    symbol: "2330.TW",
+    source: "yahoo",
+    exchange: "TAI",
+    price: 1000,
+    timestamp: close,
+    closure,
+  });
   assert.equal(bandState(row({ kind: "noTrades", source: "yahoo" }), now), "stalled");
   assert.equal(bandState(row({ kind: "listed", reason: "颱風" }), now), "holiday");
-  assert.equal(bandState(row(null), at("2026-11-14T02:00:00Z")), "closed");   // Saturday
+  assert.equal(bandState(row(null), at("2026-11-14T02:00:00Z")), "closed"); // Saturday
 });
 
 // A TW-only index priced by Yahoo 奇摩股市 alone, with no line periods yet, reads its session from TWSE's hours: a feed
 // that stopped at 11:00 must not read closed at 11:00 once the hours say the market closed.
 test("a price read by the hours that stopped well before the close keeps reading stalled after it", () => {
-  const eleven = at("2026-11-11T03:00:00Z");                         // 11:00 Taipei, Wednesday
+  const eleven = at("2026-11-11T03:00:00Z"); // 11:00 Taipei, Wednesday
   const quote = (timestamp, now) => {
     const own = { symbol: "^TWOII", source: "yahootw", exchange: "TWO", price: 300, timestamp, tradeTime: timestamp };
     return { ...own, periods: ownPeriods(own, undefined, now) };
@@ -894,10 +1338,13 @@ test("a price read by the hours that stopped well before the close keeps reading
     const q = quote(timestamp, now);
     return freshness(q, sessionOf(q, now), now).state;
   };
-  assert.equal(state(eleven, at("2026-11-11T05:00:00Z")), "stalled");         // 13:00, open
-  assert.equal(state(eleven, at("2026-11-11T05:31:00Z")), "stalled");         // 13:31, closed by the hours
-  assert.equal(state(eleven, at("2026-11-11T12:00:00Z")), "stalled");         // 20:00
-  assert.equal(freshness(quote(eleven, at("2026-11-11T05:31:00Z")), "closed", at("2026-11-11T05:31:00Z")).stoppedAt, eleven);
+  assert.equal(state(eleven, at("2026-11-11T05:00:00Z")), "stalled"); // 13:00, open
+  assert.equal(state(eleven, at("2026-11-11T05:31:00Z")), "stalled"); // 13:31, closed by the hours
+  assert.equal(state(eleven, at("2026-11-11T12:00:00Z")), "stalled"); // 20:00
+  assert.equal(
+    freshness(quote(eleven, at("2026-11-11T05:31:00Z")), "closed", at("2026-11-11T05:31:00Z")).stoppedAt,
+    eleven,
+  );
   // A price fresh at the close reads closed; on the next Taipei day the price is an earlier day's, closed with its date.
   assert.equal(state(at("2026-11-11T05:29:30Z"), at("2026-11-11T05:31:00Z")), "closed");
   assert.equal(state(eleven, at("2026-11-11T16:01:00Z")), "closed");
@@ -908,10 +1355,10 @@ test("a price read by the hours that stopped well before the close keeps reading
 test("a Finnhub-only US stock that stopped before the close reads stalled all evening", () => {
   const aapl = (timestamp) => ({ symbol: "AAPL", source: "finnhub", price: 230, timestamp, periods: null });
   const state = (timestamp, now) => freshness(aapl(timestamp), sessionOf(aapl(timestamp), now), now).state;
-  const evening = at("2026-11-12T01:00:00Z");                        // 20:00 New York on 11/11
+  const evening = at("2026-11-12T01:00:00Z"); // 20:00 New York on 11/11
   assert.equal(sessionOf(aapl(at("2026-11-11T20:50:00Z")), evening), "closed");
-  assert.equal(state(at("2026-11-11T20:50:00Z"), evening), "stalled");         // 15:50
-  assert.equal(state(at("2026-11-11T20:59:40Z"), evening), "closed");          // 15:59:40
+  assert.equal(state(at("2026-11-11T20:50:00Z"), evening), "stalled"); // 15:50
+  assert.equal(state(at("2026-11-11T20:59:40Z"), evening), "closed"); // 15:59:40
 });
 
 test("a cached price is never live, in any session that would read live; paused and other states keep theirs", () => {
@@ -925,38 +1372,63 @@ test("a cached price is never live, in any session that would read live; paused 
   }
   // Unconfirmed stays unconfirmed: an unknown session, and a Yahoo price still at the previous close.
   assert.equal(freshness({ ...mis, source: "finnhub" }, "unknown", now).state, "unconfirmed");
-  const open = at("2026-11-10T14:30:00Z");                   // 09:30 New York
-  const prior = { ...yq("AAPL", "NMS", open - 61_200_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
-    fetchedAt: open + 5_000, cached: true };                  // yesterday's 16:00 close, fetched at 09:30:05
+  const open = at("2026-11-10T14:30:00Z"); // 09:30 New York
+  const prior = {
+    ...yq("AAPL", "NMS", open - 61_200_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    fetchedAt: open + 5_000,
+    cached: true,
+  }; // yesterday's 16:00 close, fetched at 09:30:05
   assert.equal(freshness(prior, "open", open + 20_000).state, "unconfirmed");
   assert.equal(freshness(prior, "open", open + 119_000).state, "unconfirmed");
   assert.equal(freshness(prior, "open", open + 121_000).state, "stalled");
   // A delayed cached quote keeps its delay until its age passes delay + 5 min (15 + 5 min for HKG).
-  const tenHK = at("2026-11-10T02:00:00Z");                  // 10:00 Hong Kong
-  const hk = { ...yq("0700.HK", "HKG", tenHK - 60_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")), cached: true };
+  const tenHK = at("2026-11-10T02:00:00Z"); // 10:00 Hong Kong
+  const hk = {
+    ...yq("0700.HK", "HKG", tenHK - 60_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")),
+    cached: true,
+  };
   assert.equal(freshness(hk, "open", tenHK).state, "delayed");
   assert.equal(freshness(hk, "open", tenHK - 60_000 + 20 * 60_000 + 1_000).state, "stalled");
 });
 
 test("a recent cached Yahoo Finance line under a live Finnhub price reads stopped by the rule, not by age", () => {
-  const time = at("2026-11-10T15:05:00Z");                  // 10:05 New York
-  const base = { ...yq("AAPL", "NMS", time - 30_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
-    fetchedAt: time - 25_000, series: [1, 2], cached: true };
+  const time = at("2026-11-10T15:05:00Z"); // 10:05 New York
+  const base = {
+    ...yq("AAPL", "NMS", time - 30_000, day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z")),
+    fetchedAt: time - 25_000,
+    series: [1, 2],
+    cached: true,
+  };
   const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: time - 10_000 }, null);
   // A cached line used to read Live by its age (30 s); it now reads stopped at its own time.
-  assert.deepEqual(detailSource(row, "open", time, say("en")),
-    [["Price: Live · Finnhub"], [`Line: quote stopped at ${formatTime(base.timestamp)} · Yahoo Finance`]]);
+  assert.deepEqual(detailSource(row, "open", time, say("en")), [
+    ["Price: Live · Finnhub"],
+    [`Line: quote stopped at ${formatTime(base.timestamp)} · Yahoo Finance`],
+  ]);
 });
 
 test("a sole-source future rate limited 5 s after its price reads 報價停在 22:00 at once", () => {
-  const price = at("2026-11-11T14:00:00Z");           // 22:00 Taipei, night session
-  const q = { symbol: "WTX&", source: "yahootw", timestamp: price, periods: { pre: null, regular: null, post: null,
-    segments: [[at("2026-11-11T07:00:00Z"), at("2026-11-11T21:00:00Z")]] }, chartSource: "yahootw", cached: true };
+  const price = at("2026-11-11T14:00:00Z"); // 22:00 Taipei, night session
+  const q = {
+    symbol: "WTX&",
+    source: "yahootw",
+    timestamp: price,
+    periods: {
+      pre: null,
+      regular: null,
+      post: null,
+      segments: [[at("2026-11-11T07:00:00Z"), at("2026-11-11T21:00:00Z")]],
+    },
+    chartSource: "yahootw",
+    cached: true,
+  };
   const time = price + 5_000;
   withTZ("Asia/Taipei", () => {
     assert.equal(zhLabel(q, time), "報價停在 22:00");
-    assert.deepEqual(detailSource(q, sessionOf(q, time), time, say("zh-TW")),
-      [["價格：報價停在 22:00 · Yahoo 奇摩股市"], ["走勢：報價停在 22:00 · Yahoo 奇摩股市"]]);
+    assert.deepEqual(detailSource(q, sessionOf(q, time), time, say("zh-TW")), [
+      ["價格：報價停在 22:00 · Yahoo 奇摩股市"],
+      ["走勢：報價停在 22:00 · Yahoo 奇摩股市"],
+    ]);
   });
 });
 
@@ -966,21 +1438,29 @@ test("the stale wake judges a cached quote by age, as before", () => {
 });
 
 test("a cached Yahoo Finance base under a live MIS price leaves the MIS price live", () => {
-  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
-  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")), cached: true };
+  const time = at("2026-11-10T02:00:00Z"); // 10:00 Taipei
+  const base = {
+    ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    cached: true,
+  };
   const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
   assert.equal(freshness(row, sessionOf(row, time), time).state, "live");
 });
 
 test("a live MIS price over a failed Yahoo Finance base: live, lit at its limit, the line's note", () => {
-  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
-  const base = { ...yq("6488.TWO", "TWO", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
-    fetchedAt: time - 590_000, series: [1, 2], previousClose: 500, cached: true };
+  const time = at("2026-11-10T02:00:00Z"); // 10:00 Taipei
+  const base = {
+    ...yq("6488.TWO", "TWO", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    fetchedAt: time - 590_000,
+    series: [1, 2],
+    previousClose: 500,
+    cached: true,
+  };
   const mis = { symbol: "6488.TWO", source: "mis", price: 550, limitUp: 550, limitDown: 450, timestamp: time - 5_000 };
   const row = mergeOverlay(base, mis, null);
   assert.equal(freshness(row, "open", time).state, "live");
   assert.equal(shownLimit(row, "open", time), "up");
-  const failed = { code: "request.timeout", params: {} };   // why the Yahoo Finance base failed
+  const failed = { code: "request.timeout", params: {} }; // why the Yahoo Finance base failed
   assert.equal(failureNote(row, failed), "quote.chartCached");
   assert.equal(bandState(row, time), "live");
   // The overlay itself gone stale reads stalled by age, still with the line's note, still not cached.
@@ -989,17 +1469,27 @@ test("a live MIS price over a failed Yahoo Finance base: live, lit at its limit,
 });
 
 test("2330.TW's detail with MIS live over a failed Yahoo Finance quote names both sources", () => {
-  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
-  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
-    fetchedAt: time - 590_000, series: [1, 2], cached: true };
+  const time = at("2026-11-10T02:00:00Z"); // 10:00 Taipei
+  const base = {
+    ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    fetchedAt: time - 590_000,
+    series: [1, 2],
+    cached: true,
+  };
   const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
-  assert.deepEqual(detailSource(row, "open", time, say("zh-TW")), [["價格：即時 · 證交所 MIS"], ["走勢：延遲 20 分鐘 · Yahoo Finance"]]);
+  assert.deepEqual(detailSource(row, "open", time, say("zh-TW")), [
+    ["價格：即時 · 證交所 MIS"],
+    ["走勢：延遲 20 分鐘 · Yahoo Finance"],
+  ]);
   assert.equal(failureNote(row, { code: "request.timeout", params: {} }), "quote.chartCached");
 });
 
 test("Yahoo 奇摩股市 with its own line over a failed Yahoo Finance base: no row note", () => {
   const time = at("2026-11-10T02:00:00Z");
-  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")), cached: true };
+  const base = {
+    ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    cached: true,
+  };
   const today = taipeiDay(time);
   const own = { symbol: "2330.TW", source: "yahootw", price: 500, timestamp: time - 5_000, day: today };
   const row = mergeOverlay(base, own, { day: today, series: [499, 500] });
@@ -1007,16 +1497,20 @@ test("Yahoo 奇摩股市 with its own line over a failed Yahoo Finance base: no 
 });
 
 test("a live MIS price where Yahoo Finance never answered keeps the reason alone", () => {
-  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
+  const time = at("2026-11-10T02:00:00Z"); // 10:00 Taipei
   const row = mergeOverlay(undefined, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
   assert.equal(failureNote(row, { code: "request.timeout", params: {} }), "reason");
   assert.equal(freshness(row, sessionOf(row, time), time).state, "live");
 });
 
 test("a cached Yahoo Finance base with no line under a live MIS price: no cached chart, the reason alone", () => {
-  const time = at("2026-11-10T02:00:00Z");                 // 10:00 Taipei
-  const base = { ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
-    fetchedAt: time - 590_000, series: [], cached: true };
+  const time = at("2026-11-10T02:00:00Z"); // 10:00 Taipei
+  const base = {
+    ...yq("2330.TW", "TAI", time - 600_000, day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z")),
+    fetchedAt: time - 590_000,
+    series: [],
+    cached: true,
+  };
   const row = mergeOverlay(base, { symbol: "2330.TW", source: "mis", price: 500, timestamp: time - 5_000 }, null);
   assert.ok(!("chartCached" in row));
   assert.equal(failureNote(row, { code: "request.timeout", params: {} }), "reason");
@@ -1065,41 +1559,80 @@ async function wakes(detail, from, until) {
   host.clock = from;
   const redraws = [];
   const asked = [];
-  const sleep = (ms) => { asked.push(ms); return host.clock + ms > until ? Promise.reject(new Error("closed")) : host.sleep(ms); };
-  const closed = new Promise((_, reject) => host.sleeps.push({ at: until, resolve: () => reject(new Error("closed")) }));
+  const sleep = (ms) => {
+    asked.push(ms);
+    return host.clock + ms > until ? Promise.reject(new Error("closed")) : host.sleep(ms);
+  };
+  const closed = new Promise((_, reject) =>
+    host.sleeps.push({ at: until, resolve: () => reject(new Error("closed")) }),
+  );
   closed.catch(() => {});
-  const run = followDetail(() => detail, { now: host.now, sleep, changed: () => redraws.push(host.clock), woken: () => closed })
-    .catch(() => {});
+  const run = followDetail(() => detail, {
+    now: host.now,
+    sleep,
+    changed: () => redraws.push(host.clock),
+    woken: () => closed,
+  }).catch(() => {});
   await advance(host, until);
   await run;
   return { redraws, asked };
 }
 
 // A closed 2330.TW (Yahoo 奇摩股市, 11/10's periods, 13:30 trade) opened at 21:00 Taipei: its next wake is 00:00, 3 h on.
-const CLOSED_2330 = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: at("2026-11-10T05:30:00Z"),
-  periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), chartSource: "yahootw" };
+const CLOSED_2330 = {
+  symbol: "2330.TW",
+  source: "yahootw",
+  price: 1_000,
+  timestamp: at("2026-11-10T05:30:00Z"),
+  periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"),
+  chartSource: "yahootw",
+};
 const NINE_PM = at("2026-11-10T13:00:00Z");
 const MIDNIGHT_TPE = at("2026-11-10T16:00:00Z");
 // An open WTX& detail on Yahoo 奇摩股市 and TAIFEX's table (periods null), with its trade time and marks in `overrides`.
-const wtxDetail = (overrides) => ({ symbol: "WTX&", source: "yahootw", price: 23_000, periods: null, chartSource: "yahootw", ...overrides });
+const wtxDetail = (overrides) => ({
+  symbol: "WTX&",
+  source: "yahootw",
+  price: 23_000,
+  periods: null,
+  chartSource: "yahootw",
+  ...overrides,
+});
 
 test("AAPL's open detail turns from Live to stopped about a second after 120 s", async () => {
-  const trade = at("2026-11-10T15:00:00Z");                                        // 10:00:00 NY
-  const detail = { symbol: "AAPL", source: "finnhub", exchange: "NMS", timestamp: trade, price: 230,
-    periods: day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z") };
+  const trade = at("2026-11-10T15:00:00Z"); // 10:00:00 NY
+  const detail = {
+    symbol: "AAPL",
+    source: "finnhub",
+    exchange: "NMS",
+    timestamp: trade,
+    price: 230,
+    periods: day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z"),
+  };
   assert.equal(detailWakeAt(detail, trade + 30_000), trade + 120_001);
   const { redraws } = await wakes(detail, trade + 30_000, trade + 125_000);
-  assert.ok(redraws.some((time) => time >= trade + 120_000 && time <= trade + 121_000), redraws.join());
+  assert.ok(
+    redraws.some((time) => time >= trade + 120_000 && time <= trade + 121_000),
+    redraws.join(),
+  );
   assert.match(shownAt(detail, trade + 120_000).source[0][0], /即時/);
   assert.match(shownAt(detail, trade + 120_001).source[0][0], /報價停在/);
 });
 
 test("a Finnhub price with a live Yahoo Finance line: the line turns stale at its own moment, first", () => {
-  const time = at("2026-11-10T15:05:00Z");                                         // 10:05 New York
+  const time = at("2026-11-10T15:05:00Z"); // 10:05 New York
   // The line's Yahoo quote was 5 s old when fetched 250 s ago: its fetch guard falls at +50 001, before the price's +110 001.
-  const q = { symbol: "AAPL", source: "finnhub", exchange: "NMS", price: 230, timestamp: time - 10_000,
+  const q = {
+    symbol: "AAPL",
+    source: "finnhub",
+    exchange: "NMS",
+    price: 230,
+    timestamp: time - 10_000,
     periods: day("2026-11-10T14:30:00Z", "2026-11-10T21:00:00Z"),
-    chartSource: "yahoo", chartTimestamp: time - 255_000, chartFetchedAt: time - 250_000 };
+    chartSource: "yahoo",
+    chartTimestamp: time - 255_000,
+    chartFetchedAt: time - 250_000,
+  };
   assert.equal(detailWakeAt(q, time), time + 50_001);
   withTZ("Asia/Taipei", () => {
     const [[price], [line]] = shownAt(q, time + 50_001).source;
@@ -1109,22 +1642,33 @@ test("a Finnhub price with a live Yahoo Finance line: the line turns stale at it
 });
 
 test("0700.HK's open detail reads 午休 within a second of 12:00", async () => {
-  const noon = at("2026-11-10T04:00:00Z");                                         // 12:00 Hong Kong
+  const noon = at("2026-11-10T04:00:00Z"); // 12:00 Hong Kong
   // Fetched 30 s after its quote (fetchedAt set, so the fetch guard does not sit at +300 001 for ever).
-  const detail = { ...yq("0700.HK", "HKG", noon - 90_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")), fetchedAt: noon - 60_000 };
+  const detail = {
+    ...yq("0700.HK", "HKG", noon - 90_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")),
+    fetchedAt: noon - 60_000,
+  };
   const { redraws } = await wakes(detail, noon - 60_000, noon + 5_000);
-  assert.ok(redraws.some((t) => t >= noon && t <= noon + 1_000), redraws.join());
+  assert.ok(
+    redraws.some((t) => t >= noon && t <= noon + 1_000),
+    redraws.join(),
+  );
   assert.equal(sessionOf(heldMarks(detail, noon), noon), "lunch");
 });
 
 test("a night mark opened at 02:00 ends at 05:00: 已收盤, the night's hours shown again", () => {
-  const opened = at("2026-11-11T18:00:00Z");                                       // 02:00 Thursday 11/12
-  const end = at("2026-11-11T21:00:00Z");                                          // 05:00
+  const opened = at("2026-11-11T18:00:00Z"); // 02:00 Thursday 11/12
+  const end = at("2026-11-11T21:00:00Z"); // 05:00
   // The day traded until 13:45 on 11/11; the night (15:00) had no trade; TAIFEX's table (periods null).
-  const detail = wtxDetail({ timestamp: at("2026-11-11T05:45:00Z"), closure: { kind: "nightNoTrades", source: "yahootw" }, closureUntil: end });
+  const detail = wtxDetail({
+    timestamp: at("2026-11-11T05:45:00Z"),
+    closure: { kind: "nightNoTrades", source: "yahootw" },
+    closureUntil: end,
+  });
   assert.equal(detailWakeAt(detail, opened), end);
   withTZ("Asia/Taipei", () => {
-    const hours = (time) => sessionTimesParts(sessionTimes(heldMarks(detail, time), time), "zh-TW", say("zh-TW")).join(" · ");
+    const hours = (time) =>
+      sessionTimesParts(sessionTimes(heldMarks(detail, time), time), "zh-TW", say("zh-TW")).join(" · ");
     assert.match(hours(end - 1_000), /夜盤尚無成交/);
     assert.match(hours(end), /日盤 08:45–13:45 · 夜盤 15:00–05:00/);
     assert.equal(sessionOf(heldMarks(detail, end), end), "closed");
@@ -1132,10 +1676,14 @@ test("a night mark opened at 02:00 ends at 05:00: 已收盤, the night's hours s
 });
 
 test("a futures day's 今日無成交 opened at 15:05 ends at 15:10, never Live", () => {
-  const end = at("2026-11-11T07:10:00Z");                                          // 15:10
+  const end = at("2026-11-11T07:10:00Z"); // 15:10
   // Last trade 13:44 on 11/10; TAIFEX's table; the mark as closureOf gave it at 15:05.
-  const detail = wtxDetail({ timestamp: at("2026-11-10T05:44:00Z"), closure: { kind: "noTrades", source: "yahootw" },
-    closureDeadline: end, closureUntil: end });
+  const detail = wtxDetail({
+    timestamp: at("2026-11-10T05:44:00Z"),
+    closure: { kind: "noTrades", source: "yahootw" },
+    closureDeadline: end,
+    closureUntil: end,
+  });
   assert.equal(sessionOf(heldMarks(detail, end - 1_000), end - 1_000), "noTrades");
   const after = heldMarks(detail, end);
   assert.equal(sessionOf(after, end), "open");
@@ -1143,32 +1691,39 @@ test("a futures day's 今日無成交 opened at 15:05 ends at 15:10, never Live"
 });
 
 test("WTX&'s detail opened at 23:50 on 12/24 into a listed 12/25: stalled, then 已收盤, never 休市 or Live", async () => {
-  const trade = at("2026-12-24T15:49:30Z");                                        // 23:49:30 Thursday 12/24
+  const trade = at("2026-12-24T15:49:30Z"); // 23:49:30 Thursday 12/24
   const detail = wtxDetail({ timestamp: trade });
   const state = (time) => freshness(detail, sessionOf(detail, time), time).state;
   assert.equal(state(trade + 120_000), "live");
   assert.equal(state(trade + 120_001), "stalled");
   const midnight = at("2026-12-24T16:00:00Z");
-  const nightEnd = at("2026-12-24T21:00:00Z");                                     // 05:00 on 12/25
-  const dayOpen = at("2026-12-25T00:45:00Z");                                      // 08:45 on 12/25
+  const nightEnd = at("2026-12-24T21:00:00Z"); // 05:00 on 12/25
+  const dayOpen = at("2026-12-25T00:45:00Z"); // 08:45 on 12/25
   const { redraws } = await wakes(detail, trade + 30_000, dayOpen + 5_000);
   for (const moment of [midnight, nightEnd, dayOpen]) {
-    assert.ok(redraws.some((t) => t >= moment && t <= moment + 1_000), `${new Date(moment).toISOString()}: ${redraws.join()}`);
+    assert.ok(
+      redraws.some((t) => t >= moment && t <= moment + 1_000),
+      `${new Date(moment).toISOString()}: ${redraws.join()}`,
+    );
   }
   assert.equal(sessionOf(detail, nightEnd), "closed");
-  assert.equal(state(at("2026-12-25T01:00:00Z")), "stalled");                        // 09:00 on 12/25
-  for (let time = trade + 120_001; time < at("2026-12-25T21:00:00Z"); time += MINUTE_MS) {   // to 05:00 on 12/26
+  assert.equal(state(at("2026-12-25T01:00:00Z")), "stalled"); // 09:00 on 12/25
+  for (let time = trade + 120_001; time < at("2026-12-25T21:00:00Z"); time += MINUTE_MS) {
+    // to 05:00 on 12/26
     assert.notEqual(state(time), "live", new Date(time).toISOString());
     assert.notEqual(sessionOf(detail, time), "holiday", new Date(time).toISOString());
   }
 });
 
 test("WTX&'s detail opened at 20:00 on listed 12/25 holds 休市 through the night it removes, to 05:00 on 12/26", async () => {
-  const opened = at("2026-12-25T12:00:00Z");                                       // 20:00 on 12/25
-  const midnight = at("2026-12-25T16:00:00Z");                                     // 00:00 on 12/26
-  const end = at("2026-12-25T21:00:00Z");                                          // 05:00 on 12/26
+  const opened = at("2026-12-25T12:00:00Z"); // 20:00 on 12/25
+  const midnight = at("2026-12-25T16:00:00Z"); // 00:00 on 12/26
+  const end = at("2026-12-25T21:00:00Z"); // 05:00 on 12/26
   // The detail's quote as Watchlist#detailQuote composes it: the rules table's reading at opening, without its deadline.
-  const { closureDeadline: _deadline, ...detail } = marked(wtxDetail({ timestamp: at("2026-12-24T05:44:00Z") }), opened);
+  const { closureDeadline: _deadline, ...detail } = marked(
+    wtxDetail({ timestamp: at("2026-12-24T05:44:00Z") }),
+    opened,
+  );
   assert.equal(detail.closure?.kind, "listed");
   assert.equal(detail.closureUntil, end);
   for (let time = midnight; time < end; time += MINUTE_MS) {
@@ -1184,16 +1739,26 @@ test("WTX&'s detail opened at 20:00 on listed 12/25 holds 休市 through the nig
   assert.ok(detailWakeAt(detail, midnight - MINUTE_MS) <= midnight);
   const { redraws } = await wakes(detail, opened, end + 5_000);
   for (const moment of [midnight, end]) {
-    assert.ok(redraws.some((t) => t >= moment && t <= moment + 1_000), `${new Date(moment).toISOString()}: ${redraws.join()}`);
+    assert.ok(
+      redraws.some((t) => t >= moment && t <= moment + 1_000),
+      `${new Date(moment).toISOString()}: ${redraws.join()}`,
+    );
   }
 });
 
 test("2330.TW's detail opened at 22:00 on listed 2/12 reads 已收盤 with the date from 00:00 on 2/13", () => {
   // LISTED_2026 lists Thursday 2/12 and Friday 2/13 (市場無交易，僅辦理結算交割作業). Last trade 2/11 13:30.
-  const end = at("2026-02-12T16:00:00Z");                                          // 00:00 on 2/13
-  const detail = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: at("2026-02-11T05:30:00Z"),
-    periods: day("2026-02-11T01:00:00Z", "2026-02-11T05:30:00Z"), chartSource: "yahootw",
-    closure: { kind: "listed", reason: "市場無交易，僅辦理結算交割作業" }, closureUntil: end };
+  const end = at("2026-02-12T16:00:00Z"); // 00:00 on 2/13
+  const detail = {
+    symbol: "2330.TW",
+    source: "yahootw",
+    price: 1_000,
+    timestamp: at("2026-02-11T05:30:00Z"),
+    periods: day("2026-02-11T01:00:00Z", "2026-02-11T05:30:00Z"),
+    chartSource: "yahootw",
+    closure: { kind: "listed", reason: "市場無交易，僅辦理結算交割作業" },
+    closureUntil: end,
+  };
   withTZ("Asia/Taipei", () => {
     assert.equal(sessionOf(heldMarks(detail, end - 1_000), end - 1_000), "holiday");
     assert.equal(zhLabel(heldMarks(detail, end), end), "已收盤 · 2/11 13:30");
@@ -1208,7 +1773,10 @@ test("2330.TW's detail opened at 22:00 on listed 2/12 reads 已收盤 with the d
 test("followDetail sleeps in 10-minute steps to a far wake and redraws only when it is reached", async () => {
   const { redraws, asked } = await wakes(CLOSED_2330, NINE_PM, MIDNIGHT_TPE + 1_000);
   assert.equal(asked.length, 19);
-  assert.ok(asked.every((ms) => ms > 0 && ms <= DETAIL_WAKE_CAP_MS), asked.join());
+  assert.ok(
+    asked.every((ms) => ms > 0 && ms <= DETAIL_WAKE_CAP_MS),
+    asked.join(),
+  );
   assert.deepEqual(redraws, [MIDNIGHT_TPE]);
 });
 
@@ -1219,19 +1787,30 @@ test("followDetail after a system sleep past its wake redraws once and computes 
   const redraws = [];
   const sleep = (ms) => {
     asked.push(ms);
-    if (asked.length === 1) { clock = MIDNIGHT_TPE + 3_600_000; return Promise.resolve(); }
+    if (asked.length === 1) {
+      clock = MIDNIGHT_TPE + 3_600_000;
+      return Promise.resolve();
+    }
     return Promise.reject(new Error("closed"));
   };
-  await followDetail(() => CLOSED_2330, { now: () => clock, sleep, changed: () => redraws.push(clock),
-    woken: () => new Promise(() => {}) }).catch(() => {});
+  await followDetail(() => CLOSED_2330, {
+    now: () => clock,
+    sleep,
+    changed: () => redraws.push(clock),
+    woken: () => new Promise(() => {}),
+  }).catch(() => {});
   assert.deepEqual(redraws, [MIDNIGHT_TPE + 3_600_000]);
   assert.equal(asked[1], DETAIL_WAKE_CAP_MS);
 });
 
 test("followDetail ends when its sleep rejects, with no later redraw", async () => {
   const redraws = [];
-  const done = followDetail(() => CLOSED_2330, { now: () => NINE_PM, sleep: () => Promise.reject(new Error("closed")),
-    changed: () => redraws.push(1), woken: () => new Promise(() => {}) });
+  const done = followDetail(() => CLOSED_2330, {
+    now: () => NINE_PM,
+    sleep: () => Promise.reject(new Error("closed")),
+    changed: () => redraws.push(1),
+    woken: () => new Promise(() => {}),
+  });
   await assert.rejects(done);
   assert.deepEqual(redraws, []);
 });
@@ -1247,8 +1826,15 @@ test("a wake recomputes from the quote the getter gives now", async () => {
   const redraws = [];
   let detail = CLOSED_2330;
   let wake;
-  const run = followDetail(() => detail, { now: host.now, sleep: host.sleep, changed: () => redraws.push(host.clock),
-    woken: () => new Promise((resolve) => { wake = resolve; }) });
+  const run = followDetail(() => detail, {
+    now: host.now,
+    sleep: host.sleep,
+    changed: () => redraws.push(host.clock),
+    woken: () =>
+      new Promise((resolve) => {
+        wake = resolve;
+      }),
+  });
   run.catch(() => {});
   await new Promise((r) => setImmediate(r));
   detail = live;
@@ -1261,7 +1847,14 @@ test("A handed quote sets the wake", async () => {
   // 2330.TW's detail opened stalled (MIS price cached): its next wake is the 13:30 close. The row hands it MIS's live
   // quote traded at 10:00:03, adopted at 10:00:05; the list is then paused, so nothing else is handed.
   const periods = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
-  const stalled = { symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: taipei("09:50:00"), cached: true, periods };
+  const stalled = {
+    symbol: "2330.TW",
+    source: "mis",
+    price: 2172.5,
+    timestamp: taipei("09:50:00"),
+    cached: true,
+    periods,
+  };
   const live = { symbol: "2330.TW", source: "mis", price: 2175, timestamp: taipei("10:00:03"), periods };
   assert.equal(detailWakeAt(stalled, taipei("10:00:00")), taipei("13:30:00"));
   const host = fakeHost(() => ok({}));
@@ -1269,8 +1862,15 @@ test("A handed quote sets the wake", async () => {
   const redraws = [];
   let detail = stalled;
   let wake;
-  const run = followDetail(() => detail, { now: host.now, sleep: host.sleep, changed: () => redraws.push(host.clock),
-    woken: () => new Promise((resolve) => { wake = resolve; }) });
+  const run = followDetail(() => detail, {
+    now: host.now,
+    sleep: host.sleep,
+    changed: () => redraws.push(host.clock),
+    woken: () =>
+      new Promise((resolve) => {
+        wake = resolve;
+      }),
+  });
   run.catch(() => {});
   await advance(host, taipei("10:00:05"));
   detail = live;
@@ -1285,21 +1885,28 @@ test("a mark's end alone wakes the detail: row 7's 今日無成交 at 15:10", ()
   // No closureDeadline, so nothing but closureUntil falls at 15:10 (nextEdge gives 00:00 here).
   const fifteen = at("2026-11-11T07:00:00Z");
   const end = at("2026-11-11T07:10:00Z");
-  const d = wtxDetail({ timestamp: at("2026-11-10T05:44:00Z"), closure: { kind: "noTrades", source: "yahootw" }, closureUntil: end });
+  const d = wtxDetail({
+    timestamp: at("2026-11-10T05:44:00Z"),
+    closure: { kind: "noTrades", source: "yahootw" },
+    closureUntil: end,
+  });
   assert.equal(detailWakeAt(d, fifteen), end);
 });
 
 test("a delayed stock's open detail does not wake at its stale moment: it prints its delay, never a state", () => {
-  const time = at("2026-11-10T02:00:00Z");                                         // 10:00 Hong Kong
-  const q = { ...yq("0700.HK", "HKG", time - 60_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")), fetchedAt: time - 30_000 };
-  const stale = staleAt(q, "open", time);                                          // the fetch guard, + 270 001
+  const time = at("2026-11-10T02:00:00Z"); // 10:00 Hong Kong
+  const q = {
+    ...yq("0700.HK", "HKG", time - 60_000, day("2026-11-10T01:30:00Z", "2026-11-10T08:00:00Z")),
+    fetchedAt: time - 30_000,
+  };
+  const stale = staleAt(q, "open", time); // the fetch guard, + 270 001
   assert.equal(stale, time + 270_001);
   assert.deepEqual(detailSource(q, "open", stale, say("en")), detailSource(q, "open", time, say("en")));
-  assert.equal(detailWakeAt(q, time), at("2026-11-10T04:00:00Z"));                  // 12:00, the lunch break
+  assert.equal(detailWakeAt(q, time), at("2026-11-10T04:00:00Z")); // 12:00, the lunch break
 });
 
 test("a pair's open detail does not wake at its stale moment: it shows no state", () => {
-  const time = at("2026-11-10T15:07:00Z");               // :07, so no zone's midnight falls within the next 2 min
+  const time = at("2026-11-10T15:07:00Z"); // :07, so no zone's midnight falls within the next 2 min
   const pair = { symbol: "BTC/USDT", source: "binance", price: 90_000, timestamp: time - 10_000, periods: null };
   assert.equal(staleAt(pair, "24h", time), time + 110_001);
   assert.deepEqual(detailSource(pair, "24h", time + 110_001, say("en")), detailSource(pair, "24h", time, say("en")));
@@ -1309,17 +1916,24 @@ test("a pair's open detail does not wake at its stale moment: it shows no state"
 });
 
 test("a cached real-time detail already reads stalled: its next wake is its next edge, not its age's ts + 120 001", () => {
-  const time = at("2026-11-10T02:00:00Z");                                         // 10:00 Taipei
-  const q = { symbol: "2330.TW", source: "yahootw", price: 1_000, timestamp: time - 5_000, cached: true,
-    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"), chartSource: "yahootw" };
+  const time = at("2026-11-10T02:00:00Z"); // 10:00 Taipei
+  const q = {
+    symbol: "2330.TW",
+    source: "yahootw",
+    price: 1_000,
+    timestamp: time - 5_000,
+    cached: true,
+    periods: day("2026-11-10T01:00:00Z", "2026-11-10T05:30:00Z"),
+    chartSource: "yahootw",
+  };
   const stalled = { state: "stalled", delayMinutes: null, stoppedAt: q.timestamp };
   assert.deepEqual(freshness(q, "open", time), stalled);
   assert.deepEqual(freshness(q, "open", q.timestamp + 120_001), stalled);
-  assert.equal(detailWakeAt(q, time), at("2026-11-10T05:30:00Z"));                  // 13:30, the close
+  assert.equal(detailWakeAt(q, time), at("2026-11-10T05:30:00Z")); // 13:30, the close
 });
 
 test("a cached real-time Yahoo Finance price still at the previous close wakes where it turns stalled", () => {
-  const open = at("2026-11-10T14:30:00Z");                                         // 09:30 New York
+  const open = at("2026-11-10T14:30:00Z"); // 09:30 New York
   const close = { ...fetched(yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), open - 60_000), cached: true };
   assert.equal(freshness(close, "open", open + 120_000).state, "unconfirmed");
   assert.equal(freshness(close, "open", open + 120_001).state, "stalled");
@@ -1327,18 +1941,33 @@ test("a cached real-time Yahoo Finance price still at the previous close wakes w
 });
 
 test("a cached Yahoo Finance line: no wake at its stale moment once it reads stopped, one while at the previous close", () => {
-  const time = at("2026-11-10T15:05:00Z");                                         // 10:05 New York
+  const time = at("2026-11-10T15:05:00Z"); // 10:05 New York
   const base = { ...yq("AAPL", "NMS", time - 30_000, US_DAY), fetchedAt: time - 25_000, series: [1, 2], cached: true };
   const row = mergeOverlay(base, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: time - 10_000 }, null);
   // The line reads stopped now and at its age's moment (+ 90 001): only the price's own (+ 110 001) is a wake.
-  assert.deepEqual(detailSource(row, "open", time + 90_001, say("en"))[1], detailSource(row, "open", time, say("en"))[1]);
+  assert.deepEqual(
+    detailSource(row, "open", time + 90_001, say("en"))[1],
+    detailSource(row, "open", time, say("en"))[1],
+  );
   assert.equal(detailWakeAt(row, time), time + 110_001);
   // A line still at the previous close, under a price from the same period (an after-hours one), reads unconfirmed
   // until the open + 120 s.
   const open = at("2026-11-10T14:30:00Z");
-  const prior = { ...yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY), fetchedAt: open - 60_000, series: [1, 2], cached: true };
-  const early = mergeOverlay(prior, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: at("2026-11-09T23:00:00Z") }, null);
-  assert.notDeepEqual(detailSource(early, "open", open + 120_001, say("en"))[1], detailSource(early, "open", open + 5_000, say("en"))[1]);
+  const prior = {
+    ...yq("AAPL", "NMS", at("2026-11-09T21:00:00Z"), US_DAY),
+    fetchedAt: open - 60_000,
+    series: [1, 2],
+    cached: true,
+  };
+  const early = mergeOverlay(
+    prior,
+    { symbol: "AAPL", source: "finnhub", price: 230, timestamp: at("2026-11-09T23:00:00Z") },
+    null,
+  );
+  assert.notDeepEqual(
+    detailSource(early, "open", open + 120_001, say("en"))[1],
+    detailSource(early, "open", open + 5_000, say("en"))[1],
+  );
   assert.equal(detailWakeAt(early, open + 5_000), open + 120_001);
   // Under today's price it is an earlier period's line: not drawn, no line source, no wake of its own.
   const today = mergeOverlay(prior, { symbol: "AAPL", source: "finnhub", price: 230, timestamp: open + 3_000 }, null);
@@ -1351,10 +1980,31 @@ test("a cached Yahoo Finance line: no wake at its stale moment once it reads sto
 const YAHOOTW_ON = { version: 1, sources: { tw: { yahootw: true, yahootwAck: { version: YAHOOTW_CONSENT_VERSION } } } };
 const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
 // Yahoo Finance's quote: Monday's close (2215 at 13:30 on 11/16) under today's periods, or today's delayed price at `time`.
-const yahooClose = (symbol = "2330.TW") => ({ ...yq(symbol, "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY), price: 2215, series: [2200, 2215] });
-const yahooDelayed = (time, symbol = "2330.TW") => ({ ...yq(symbol, "TAI", time, TW_TODAY), price: 2180, series: [2190, 2180] });
-const misPrice = (time, fields = {}) => ({ symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: time, ...fields });
-const ytwTrade = (price, time, symbol = "2330.TW") => ({ symbol, source: "yahootw", price, timestamp: time, tradeTime: time, day: taipeiDay(time) });
+const yahooClose = (symbol = "2330.TW") => ({
+  ...yq(symbol, "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY),
+  price: 2215,
+  series: [2200, 2215],
+});
+const yahooDelayed = (time, symbol = "2330.TW") => ({
+  ...yq(symbol, "TAI", time, TW_TODAY),
+  price: 2180,
+  series: [2190, 2180],
+});
+const misPrice = (time, fields = {}) => ({
+  symbol: "2330.TW",
+  source: "mis",
+  price: 2172.5,
+  timestamp: time,
+  ...fields,
+});
+const ytwTrade = (price, time, symbol = "2330.TW") => ({
+  symbol,
+  source: "yahootw",
+  price,
+  timestamp: time,
+  tradeTime: time,
+  day: taipeiDay(time),
+});
 
 // A watchlist with `prefs` on and, for `symbol`, the base quote, the overlays by source and MIS's flagged snapshot.
 function twWatch(prefs, { base, overlays, auctionAt } = {}, symbol = "2330.TW") {
@@ -1373,7 +2023,9 @@ function rowAt(w, now, symbol = "2330.TW", lang = "zh-TW") {
   const session = sessionOf(quote, now);
   const fresh = freshness(quote, session, now);
   const date = rowDate(quote, fresh, now, lang);
-  const label = [freshnessLabel(quote, fresh, now, lang, say(lang)), date && t(lang, "quote.asOf", { date })].filter(Boolean).join(" · ");
+  const label = [freshnessLabel(quote, fresh, now, lang, say(lang)), date && t(lang, "quote.asOf", { date })]
+    .filter(Boolean)
+    .join(" · ");
   return { quote, session, state: fresh.state, label };
 }
 // The states a row draws a dot for (ui/parts.js dot): filled for live, a ring for these.
@@ -1390,16 +2042,23 @@ test("The morning trial match", () => {
 });
 
 test("The closing auction", () => {
-  const w = twWatch(YAHOOTW_ON, { base: yahooDelayed(taipei("13:08:00")),
-    overlays: { yahootw: { ...ytwTrade(2175, taipei("13:24:58")), timestamp: taipei("13:24:59") } } });
+  const w = twWatch(YAHOOTW_ON, {
+    base: yahooDelayed(taipei("13:08:00")),
+    overlays: { yahootw: { ...ytwTrade(2175, taipei("13:24:58")), timestamp: taipei("13:24:59") } },
+  });
   const row = rowAt(w, taipei("13:28:00"));
   assert.deepEqual([row.quote.source, row.quote.price, row.state, row.label], ["yahootw", 2175, "auction", "試撮中"]);
   assert.ok(!DOT_STATES.includes(row.state));
 });
 
 test("Yahoo Finance alone", () => {
-  assert.deepEqual([rowAt(twWatch(undefined, { base: yahooClose() }), taipei("08:38:00")).state,
-    rowAt(twWatch(undefined, { base: yahooDelayed(taipei("13:08:00")) }), taipei("13:28:00")).state], ["closed", "delayed"]);
+  assert.deepEqual(
+    [
+      rowAt(twWatch(undefined, { base: yahooClose() }), taipei("08:38:00")).state,
+      rowAt(twWatch(undefined, { base: yahooDelayed(taipei("13:08:00")) }), taipei("13:28:00")).state,
+    ],
+    ["closed", "delayed"],
+  );
 });
 
 test("A delayed price in the afternoon", () => {
@@ -1414,7 +2073,9 @@ test("An index", () => {
 });
 
 test("A listed closed day", () => {
-  const w = twWatch(MIS_ON, { base: { ...yq("2330.TW", "TAI", CLOSE_1224, day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z")), price: 2215 } });
+  const w = twWatch(MIS_ON, {
+    base: { ...yq("2330.TW", "TAI", CLOSE_1224, day("2026-12-24T01:00:00Z", "2026-12-24T05:30:00Z")), price: 2215 },
+  });
   w.holidays.days = LISTED_2026;
   assert.equal(rowAt(w, taipei("08:38:00", "2026-12-25")).session, "holiday");
 });
@@ -1423,7 +2084,8 @@ test("A closure the schedule does not list", () => {
   // An unlisted typhoon day: MIS answers from the open, never with a trade.
   const w = twWatch(MIS_ON, { base: yahooClose() });
   assert.equal(rowAt(w, taipei("08:38:00")).session, "auction");
-  for (const time of ["09:00:10", "09:29:50"]) w.noteTrade("stock", NaN, { source: "mis", realtime: true }, taipei(time));
+  for (const time of ["09:00:10", "09:29:50"])
+    w.noteTrade("stock", NaN, { source: "mis", realtime: true }, taipei(time));
   assert.equal(rowAt(w, taipei("09:30:00")).session, "noTrades");
 });
 
@@ -1437,14 +2099,21 @@ test("A late opening match", () => {
 });
 
 test("Another source has the opening trade", () => {
-  const w = twWatch(BOTH_ON, { base: yahooClose(), overlays: { yahootw: ytwTrade(2190, taipei("09:00:02")) }, auctionAt: taipei("08:59:57") });
+  const w = twWatch(BOTH_ON, {
+    base: yahooClose(),
+    overlays: { yahootw: ytwTrade(2190, taipei("09:00:02")) },
+    auctionAt: taipei("08:59:57"),
+  });
   const row = rowAt(w, taipei("09:00:03"));
   assert.deepEqual([row.quote.price, row.state], [2190, "live"]);
 });
 
 test("The close from another source", () => {
-  const w = twWatch(BOTH_ON, { base: yahooDelayed(taipei("13:10:00")),
-    overlays: { mis: misPrice(taipei("13:23:55")), yahootw: ytwTrade(2170, taipei("13:30:00")) }, auctionAt: taipei("13:29:58") });
+  const w = twWatch(BOTH_ON, {
+    base: yahooDelayed(taipei("13:10:00")),
+    overlays: { mis: misPrice(taipei("13:23:55")), yahootw: ytwTrade(2170, taipei("13:30:00")) },
+    auctionAt: taipei("13:29:58"),
+  });
   const row = rowAt(w, taipei("13:30:05"));
   assert.deepEqual([row.quote.price, row.state], [2170, "closed"]);
 });
@@ -1458,8 +2127,15 @@ test("A flag nobody refreshes", () => {
 });
 
 test("A trade in the flag's own second", () => {
-  const w = twWatch(BOTH_ON, { base: yahooClose("0050.TW"), overlays: { yahootw: ytwTrade(94.55, taipei("09:00:00"), "0050.TW") },
-    auctionAt: taipei("09:00:00") }, "0050.TW");
+  const w = twWatch(
+    BOTH_ON,
+    {
+      base: yahooClose("0050.TW"),
+      overlays: { yahootw: ytwTrade(94.55, taipei("09:00:00"), "0050.TW") },
+      auctionAt: taipei("09:00:00"),
+    },
+    "0050.TW",
+  );
   const row = rowAt(w, taipei("09:00:01"), "0050.TW");
   assert.deepEqual([row.quote.price, row.state], [94.55, "live"]);
 });
@@ -1467,14 +2143,28 @@ test("A trade in the flag's own second", () => {
 test("A flag over a delayed price", () => {
   // MIS timed out at 13:26 and dropped its held price; its next answer still flags the row. The delayed price reads as it
   // would without the flag: delayed inside the session, closed after 13:30 by its own periods.
-  for (const [flaggedAt, now, state] of [["13:27:58", "13:28:00", "delayed"], ["13:29:58", "13:31:00", "closed"]]) {
-    const row = rowAt(twWatch(MIS_ON, { base: yahooDelayed(taipei("13:08:00")), auctionAt: taipei(flaggedAt) }), taipei(now));
-    assert.deepEqual([row.quote.auctionAt, row.session === "auction", row.state], [taipei(flaggedAt), false, state], now);
+  for (const [flaggedAt, now, state] of [
+    ["13:27:58", "13:28:00", "delayed"],
+    ["13:29:58", "13:31:00", "closed"],
+  ]) {
+    const row = rowAt(
+      twWatch(MIS_ON, { base: yahooDelayed(taipei("13:08:00")), auctionAt: taipei(flaggedAt) }),
+      taipei(now),
+    );
+    assert.deepEqual(
+      [row.quote.auctionAt, row.session === "auction", row.state],
+      [taipei(flaggedAt), false, state],
+      now,
+    );
   }
 });
 
 test("A flag outside the windows", () => {
-  const w = twWatch(MIS_ON, { base: yahooDelayed(taipei("10:10:00")), overlays: { mis: misPrice(taipei("10:29:30")) }, auctionAt: taipei("10:29:58") });
+  const w = twWatch(MIS_ON, {
+    base: yahooDelayed(taipei("10:10:00")),
+    overlays: { mis: misPrice(taipei("10:29:30")) },
+    auctionAt: taipei("10:29:58"),
+  });
   const held = rowAt(w, taipei("10:30:05"));
   assert.deepEqual([held.quote.price, held.state], [2172.5, "auction"]);
   w.overlays["2330.TW"].mis = misPrice(taipei("10:31:00"), { price: 2160 });
@@ -1498,9 +2188,15 @@ test("Taiwan auction before its periods", () => {
 test("MIS's close does not come", () => {
   // MIS alone prices the row, holds its 13:23:55 book price through the auction, and its cache keeps answering 13:29:58's flag.
   for (const base of [yahooDelayed(taipei("13:10:00")), undefined]) {
-    const row = rowAt(twWatch(MIS_ON, { base, overlays: { mis: misPrice(taipei("13:23:55")) }, auctionAt: taipei("13:29:58") }), taipei("13:32:00"));
-    assert.deepEqual([row.quote.price, row.state, freshness(row.quote, row.session, taipei("13:32:00")).stoppedAt],
-      [2172.5, "stalled", taipei("13:23:55")], base ? "with periods" : "without");
+    const row = rowAt(
+      twWatch(MIS_ON, { base, overlays: { mis: misPrice(taipei("13:23:55")) }, auctionAt: taipei("13:29:58") }),
+      taipei("13:32:00"),
+    );
+    assert.deepEqual(
+      [row.quote.price, row.state, freshness(row.quote, row.session, taipei("13:32:00")).stoppedAt],
+      [2172.5, "stalled", taipei("13:23:55")],
+      base ? "with periods" : "without",
+    );
   }
 });
 
@@ -1511,35 +2207,76 @@ test("a still-fresh flag at 13:31 reads auction, not stalled", () => {
 
 test("A Taiwan stock's last trade before the auction", () => {
   // MIS off: Yahoo 奇摩股市's price, with no trading periods yet. Its close is taken at 13:25.
-  const row = rowAt(twWatch(YAHOOTW_ON, { overlays: { yahootw: ytwTrade(2175, taipei("13:24:50")) } }), taipei("13:30:30"));
+  const row = rowAt(
+    twWatch(YAHOOTW_ON, { overlays: { yahootw: ytwTrade(2175, taipei("13:24:50")) } }),
+    taipei("13:30:30"),
+  );
   assert.deepEqual([row.quote.periods, row.state], [null, "closed"]);
 });
 
 test("Held at the limit through the closing auction", () => {
-  const limitUp = { symbol: "6488.TWO", source: "mis", price: 563, limitUp: 563, limitDown: 461, timestamp: taipei("13:24:50") };
+  const limitUp = {
+    symbol: "6488.TWO",
+    source: "mis",
+    price: 563,
+    limitUp: 563,
+    limitDown: 461,
+    timestamp: taipei("13:24:50"),
+  };
   const w = twWatch(MIS_ON, { overlays: { mis: limitUp } }, "6488.TWO");
   const row = rowAt(w, taipei("13:27:00"), "6488.TWO");
   assert.equal(row.state, "auction");
   assert.equal(shownLimit(row.quote, row.session, taipei("13:27:00")), "up");
   // A cached price keeps the auction's word, never lit.
   const cached = { ...row.quote, cached: true };
-  assert.deepEqual([freshness(cached, row.session, taipei("13:27:00")).state, shownLimit(cached, row.session, taipei("13:27:00"))], ["auction", null]);
+  assert.deepEqual(
+    [freshness(cached, row.session, taipei("13:27:00")).state, shownLimit(cached, row.session, taipei("13:27:00"))],
+    ["auction", null],
+  );
 });
 
 test("the windows are half-open", () => {
-  const q = { symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: taipei("13:30:00", "2026-11-16"), periods: TW_TODAY, twRealtime: true };
+  const q = {
+    symbol: "2330.TW",
+    source: "mis",
+    price: 2172.5,
+    timestamp: taipei("13:30:00", "2026-11-16"),
+    periods: TW_TODAY,
+    twRealtime: true,
+  };
   const reads = (time, date) => sessionOf(q, taipei(time, date));
-  assert.deepEqual(["08:30:00", "13:25:00"].map((time) => reads(time)), ["auction", "auction"]);
-  assert.deepEqual(["09:00:00", "13:30:00"].map((time) => reads(time)), ["open", "closed"]);
+  assert.deepEqual(
+    ["08:30:00", "13:25:00"].map((time) => reads(time)),
+    ["auction", "auction"],
+  );
+  assert.deepEqual(
+    ["09:00:00", "13:30:00"].map((time) => reads(time)),
+    ["open", "closed"],
+  );
   assert.equal(sessionOf(q, taipei("08:30:00") - 1), "closed");
-  assert.deepEqual([inTaiwanAuction(taipei("08:30:00")), inTaiwanAuction(taipei("08:59:59")), inTaiwanAuction(taipei("09:00:00")),
-    inTaiwanAuction(taipei("13:25:00")), inTaiwanAuction(taipei("13:30:00"))], [true, true, false, true, false]);
+  assert.deepEqual(
+    [
+      inTaiwanAuction(taipei("08:30:00")),
+      inTaiwanAuction(taipei("08:59:59")),
+      inTaiwanAuction(taipei("09:00:00")),
+      inTaiwanAuction(taipei("13:25:00")),
+      inTaiwanAuction(taipei("13:30:00")),
+    ],
+    [true, true, false, true, false],
+  );
   // Saturday 11/21: no auction.
   assert.equal(inTaiwanAuction(taipei("08:40:00", "2026-11-21")), false);
 });
 
 test("nextEdge wakes at the windows and the lapse", () => {
-  const q = { symbol: "2330.TW", source: "yahoo", exchange: "TAI", timestamp: taipei("13:30:00", "2026-11-16"), periods: TW_TODAY, twRealtime: true };
+  const q = {
+    symbol: "2330.TW",
+    source: "yahoo",
+    exchange: "TAI",
+    timestamp: taipei("13:30:00", "2026-11-16"),
+    periods: TW_TODAY,
+    twRealtime: true,
+  };
   assert.equal(nextEdge(q, taipei("08:29:00")), taipei("08:30:00"));
   assert.equal(nextEdge(q, taipei("08:30:00")), taipei("09:00:00"));
   assert.equal(nextEdge(q, taipei("13:24:59")), taipei("13:25:00"));
@@ -1628,7 +2365,10 @@ test("sessionProgress: WTX& over a weekend", () => {
   // Saturday: Friday 23:00's price sits on Monday's trading day, whose night opened Friday 15:00.
   const q = { symbol: "WTX&", source: "yahootw", timestamp: taipei("23:00:00", "2026-11-20"), periods: null };
   assert.equal(sessionProgress(q, q.timestamp), 480 / 1140);
-  assert.equal(chartLayout({ ...q, price: 27000, series: [26990, 27000], chartTimestamp: q.timestamp }).extent, 480 / 1140);
+  assert.equal(
+    chartLayout({ ...q, price: 27000, series: [26990, 27000], chartTimestamp: q.timestamp }).extent,
+    480 / 1140,
+  );
 });
 
 test("sessionProgress: a time before the period gives 1", () => {
@@ -1663,7 +2403,8 @@ test("sessionProgress: null by kind", () => {
     yq("KC=F", undefined, t),
     // Neither periods nor exchange hours.
     yq("0700.HK", "HKG", t),
-  ]) assert.equal(sessionProgress(q, t), null, q.symbol);
+  ])
+    assert.equal(sessionProgress(q, t), null, q.symbol);
 });
 
 test("sessionProgress: a zero-length period gives 1", () => {
@@ -1673,7 +2414,9 @@ test("sessionProgress: a zero-length period gives 1", () => {
 });
 
 test("A line in its session: mid-morning", () => {
-  const { layout, g } = drawn(line({ ...yq("2330.TW", "TAI", taipei("10:07:30"), TW_TODAY), series: [2190, 2185, 2180, 2182, 2180] }));
+  const { layout, g } = drawn(
+    line({ ...yq("2330.TW", "TAI", taipei("10:07:30"), TW_TODAY), series: [2190, 2185, 2180, 2182, 2180] }),
+  );
   assert.deepEqual(layout, { extent: 0.25, dot: null });
   assert.equal(lastX(g), 25);
   assert.ok(g.points.every(([x]) => x <= 25));
@@ -1683,7 +2426,14 @@ test("A line in its session: mid-morning", () => {
 
 test("A line in its session: a future's night opens", () => {
   const time = at("2026-11-09T07:02:00Z");
-  const q = line({ symbol: "WTX&", source: "yahootw", timestamp: time, chartSource: "yahootw", chartTimestamp: time, periods: LINE_PERIODS });
+  const q = line({
+    symbol: "WTX&",
+    source: "yahootw",
+    timestamp: time,
+    chartSource: "yahootw",
+    chartTimestamp: time,
+    periods: LINE_PERIODS,
+  });
   const { layout, g } = drawn(q);
   assert.deepEqual(layout, { extent: 2 / 1140, dot: null });
   assert.equal(lastX(g), 0.18);
@@ -1701,7 +2451,13 @@ test("A line in its session: a finished day", () => {
   const yahoo = line(yq("2330.TW", "TAI", taipei("13:30:00"), TW_TODAY));
   assert.equal(drawn(yahoo).layout.extent, 1);
   assert.equal(lastX(drawn(yahoo).g), 100);
-  const mis = line({ ...yahoo, source: "mis", timestamp: taipei("13:30:00"), chartSource: "yahoo", chartTimestamp: taipei("13:30:00") });
+  const mis = line({
+    ...yahoo,
+    source: "mis",
+    timestamp: taipei("13:30:00"),
+    chartSource: "yahoo",
+    chartTimestamp: taipei("13:30:00"),
+  });
   assert.deepEqual(drawn(mis).layout, { extent: 1, dot: null });
   // Hours only: yesterday's close read the next morning.
   const hoursOnly = line({ symbol: "2330.TW", source: "yahootw", timestamp: taipei("13:30:00", "2026-11-16") });
@@ -1716,7 +2472,14 @@ test("A line in its session: one point", () => {
 });
 
 test("A line in its session: crypto", () => {
-  const q = { symbol: "BTC/USDT", source: "binance", timestamp: taipei("10:00:00"), price: 90000, previousClose: null, series: [89000, 90000] };
+  const q = {
+    symbol: "BTC/USDT",
+    source: "binance",
+    timestamp: taipei("10:00:00"),
+    price: 90000,
+    previousClose: null,
+    series: [89000, 90000],
+  };
   const { layout, g } = drawn(q);
   assert.deepEqual(layout, { extent: null, dot: null });
   assert.equal(lastX(g), 100);
@@ -1724,7 +2487,11 @@ test("A line in its session: crypto", () => {
 
 test("A price after its line: MIS over a late Yahoo Finance line", () => {
   const q = line({
-    ...yq("2330.TW", "TAI", taipei("10:00:05"), TW_TODAY), source: "mis", price: 2200, chartSource: "yahoo", chartTimestamp: taipei("09:40:00"),
+    ...yq("2330.TW", "TAI", taipei("10:00:05"), TW_TODAY),
+    source: "mis",
+    price: 2200,
+    chartSource: "yahoo",
+    chartTimestamp: taipei("09:40:00"),
   });
   const { layout, g } = drawn(q);
   assert.equal(layout.extent, 40 / 270);
@@ -1737,7 +2504,13 @@ test("A price after its line: MIS over a late Yahoo Finance line", () => {
 });
 
 test("A price after its line: before Yahoo Finance's first bar", () => {
-  const q = line({ ...yq("2330.TW", "TAI", taipei("09:05:00"), TW_TODAY), source: "mis", series: [], chartSource: null, chartTimestamp: null });
+  const q = line({
+    ...yq("2330.TW", "TAI", taipei("09:05:00"), TW_TODAY),
+    source: "mis",
+    series: [],
+    chartSource: null,
+    chartTimestamp: null,
+  });
   const { layout, g } = drawn(q);
   assert.equal(layout.dot.x, 5 / 270);
   assert.deepEqual(g.points, []);
@@ -1746,7 +2519,12 @@ test("A price after its line: before Yahoo Finance's first bar", () => {
 });
 
 test("A price after its line: a line one bar behind", () => {
-  const q = line({ ...yq("AAPL", "NMS", ny("10:03:00"), NY_DAY), source: "finnhub", chartSource: "yahoo", chartTimestamp: ny("10:00:00") });
+  const q = line({
+    ...yq("AAPL", "NMS", ny("10:03:00"), NY_DAY),
+    source: "finnhub",
+    chartSource: "yahoo",
+    chartTimestamp: ny("10:00:00"),
+  });
   assert.equal(chartLayout(q).dot, null);
   // Past 5 minutes it is drawn; at exactly 5 it is not.
   assert.equal(chartLayout({ ...q, timestamp: ny("10:05:00") }).dot, null);
@@ -1755,7 +2533,15 @@ test("A price after its line: a line one bar behind", () => {
 
 test("A price after its line: a future without its day's line", () => {
   const time = at("2026-11-09T07:00:40Z"); // 15:00:40 Taipei
-  const q = line({ symbol: "WTX&", source: "yahootw", timestamp: time, periods: LINE_PERIODS, series: [], chartSource: null, chartTimestamp: null });
+  const q = line({
+    symbol: "WTX&",
+    source: "yahootw",
+    timestamp: time,
+    periods: LINE_PERIODS,
+    series: [],
+    chartSource: null,
+    chartTimestamp: null,
+  });
   const { layout, g } = drawn(q);
   assert.equal(layout.dot.x, 40 / (1140 * 60));
   assert.equal(g.dot[0], 0.06);
@@ -1764,7 +2550,12 @@ test("A price after its line: a future without its day's line", () => {
 
 test("A price after its line: Yahoo 奇摩股市's own line", () => {
   const time = taipei("10:30:00");
-  const q = line({ ...yq("0050.TW", "TAI", time, TW_TODAY), source: "yahootw", chartSource: "yahootw", chartTimestamp: time });
+  const q = line({
+    ...yq("0050.TW", "TAI", time, TW_TODAY),
+    source: "yahootw",
+    chartSource: "yahootw",
+    chartTimestamp: time,
+  });
   assert.equal(chartLayout(q).dot, null);
 });
 
@@ -1778,7 +2569,11 @@ test("A price dot in an auction", () => {
   // 13:27: 試撮中, the price held from 13:24:50, past the Yahoo Finance line's 13:05 end. The price's dot is no state dot.
   const now = taipei("13:27:00");
   const q = line({
-    ...yq("2330.TW", "TAI", taipei("13:24:50"), TW_TODAY), source: "mis", twRealtime: true, chartSource: "yahoo", chartTimestamp: taipei("13:05:00"),
+    ...yq("2330.TW", "TAI", taipei("13:24:50"), TW_TODAY),
+    source: "mis",
+    twRealtime: true,
+    chartSource: "yahoo",
+    chartTimestamp: taipei("13:05:00"),
   });
   assert.equal(freshness(q, sessionOf(q, now), now).state, "auction");
   assert.notEqual(chartLayout(q).dot, null);

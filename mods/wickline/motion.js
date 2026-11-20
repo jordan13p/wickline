@@ -49,9 +49,10 @@ export function rowsWithGhosts(symbols, { chosen, shown }, ghosts, marketFor) {
     }
     groups.set(anchor, [...(groups.get(anchor) ?? []), { ghost, hops, order }]);
   });
-  const ghostsIn = (anchor) => (groups.get(anchor) ?? [])
-    .sort((a, b) => b.hops - a.hops || b.order - a.order)
-    .map(({ ghost }) => ({ symbol: ghost.symbol, ghost }));
+  const ghostsIn = (anchor) =>
+    (groups.get(anchor) ?? [])
+      .sort((a, b) => b.hops - a.hops || b.order - a.order)
+      .map(({ ghost }) => ({ symbol: ghost.symbol, ghost }));
   return [
     ...symbols.flatMap((symbol) => [...ghostsIn(symbol), ...(showing.has(symbol) ? [{ symbol, ghost: null }] : [])]),
     ...ghostsIn(null),

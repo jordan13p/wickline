@@ -5,7 +5,20 @@
 import { View } from "gpui-kit";
 import { v_flex, h_flex, InputState } from "gpui-base";
 import {
-  appHome, closeOverlay, exec, focused, layout, nextCommand, openOverlay, panes, props, run, setShared, shared, theme, window as appWindow,
+  appHome,
+  closeOverlay,
+  exec,
+  focused,
+  layout,
+  nextCommand,
+  openOverlay,
+  panes,
+  props,
+  run,
+  setShared,
+  shared,
+  theme,
+  window as appWindow,
 } from "herdr";
 import * as fs from "fs/promises";
 import { Watchlist, WATCHLIST_KEY } from "./watchlist.js";
@@ -14,11 +27,28 @@ import { QuoteError } from "./quotes.js";
 import { changeTone, number } from "./format.js";
 import { followDetail, sessionOf, shownLimit } from "./freshness.js";
 import { DETAIL_KEY, adopt, clearsOnClose, makeToken, nextWrite, startHandover } from "./handover.js";
-import { FILTER_STORAGE_KEY, dropBefore, filterAfterAdd, filterAfterRemove, heldFilter, nextOf, openFilter, readFilter, resolvedMarket } from "./markets.js";
+import {
+  FILTER_STORAGE_KEY,
+  dropBefore,
+  filterAfterAdd,
+  filterAfterRemove,
+  heldFilter,
+  nextOf,
+  openFilter,
+  readFilter,
+  resolvedMarket,
+} from "./markets.js";
 import { MOTION_END_MS, MOTION_GAP_MS, SPIN_MS, UNDO_MS, settleOffset, spinTurnsFor } from "./motion.js";
 import { t as translate } from "./i18n.js";
 import {
-  SECRET_KEY_FINNHUB, SETTINGS_KEY, currentHealth, keyChange, mergeSettings, readSettings, settingsMarkets, upIsRed,
+  SECRET_KEY_FINNHUB,
+  SETTINGS_KEY,
+  currentHealth,
+  keyChange,
+  mergeSettings,
+  readSettings,
+  settingsMarkets,
+  upIsRed,
   validateSettings,
 } from "./settings.js";
 import { BINANCE_URL } from "./providers/binance.js";
@@ -78,7 +108,10 @@ export default class Wickline extends View {
           now: () => Date.now(),
           sleep: (ms) => cx.sleep(ms),
           changed: () => cx.notify(),
-          woken: () => new Promise((resolve) => { this.wakeDetail = resolve; }),
+          woken: () =>
+            new Promise((resolve) => {
+              this.wakeDetail = resolve;
+            }),
         });
       });
       return;
@@ -116,7 +149,7 @@ export default class Wickline extends View {
     this.marketFor = (symbol) => {
       const exchange = this.watch.exchangeOf(symbol);
       const ghost = exchange === null ? this.leaving.find((g) => g.symbol === symbol) : null;
-      return resolvedMarket(symbol, ghost ? ghost.row.quote?.exchange ?? null : exchange);
+      return resolvedMarket(symbol, ghost ? (ghost.row.quote?.exchange ?? null) : exchange);
     };
     // The pill's geometry: each filter label's width, reported by the label itself (see ui/panel.js).
     this.filterWidths = {};
@@ -164,14 +197,22 @@ export default class Wickline extends View {
     // spawn for its whole life: sleeping and redrawing go through it.
     for (const id of this.watch.providerIds()) {
       cx.spawn(async (cx) => {
-        await this.watch.runProvider(id, { sleep: (ms) => cx.sleep(ms), changed: () => { this.handOver(); cx.notify(); } });
+        await this.watch.runProvider(id, {
+          sleep: (ms) => cx.sleep(ms),
+          changed: () => {
+            this.handOver();
+            cx.notify();
+          },
+        });
       });
     }
     // A language chosen in another copy reaches this one on render, where no input can be made: render
     // wakes this loop, which remakes the input at once, keeping what was typed and the focus.
     cx.spawn(async (cx) => {
       for (;;) {
-        await new Promise((resolve) => { this.wakeInput = resolve; });
+        await new Promise((resolve) => {
+          this.wakeInput = resolve;
+        });
         if (this.inputLang === this.lang) continue;
         const hadFocus = this.inputFocused;
         this.makeInput();
@@ -237,7 +278,11 @@ export default class Wickline extends View {
     // Taken before the remove, which drops the row's quote at once: the fading row draws from this copy.
     const symbols = this.watch.preferences.symbols;
     const ghost = {
-      symbol, before: nextOf(symbols, symbol), row: this.rowSource(symbol, Date.now()), height: this.rowHeights[symbol], gone: false,
+      symbol,
+      before: nextOf(symbols, symbol),
+      row: this.rowSource(symbol, Date.now()),
+      height: this.rowHeights[symbol],
+      gone: false,
     };
     this.act(cx, () => {
       const notice = this.watch.remove(symbol);
@@ -249,7 +294,15 @@ export default class Wickline extends View {
       if (notice.code === "notice.removed" && ghost.height > 0) {
         this.added.delete(symbol);
         this.leaving.push(ghost);
-        this.playRow(cx, () => { ghost.gone = true; }, () => { this.leaving = this.leaving.filter((g) => g !== ghost); });
+        this.playRow(
+          cx,
+          () => {
+            ghost.gone = true;
+          },
+          () => {
+            this.leaving = this.leaving.filter((g) => g !== ghost);
+          },
+        );
       }
       return notice;
     });
@@ -290,7 +343,13 @@ export default class Wickline extends View {
     // Added again while its old row is still fading out: that row goes at once.
     this.leaving = this.leaving.filter((g) => g.symbol !== symbol);
     this.added.set(symbol, "new");
-    this.playRow(cx, () => { if (this.added.has(symbol)) this.added.set(symbol, "shown"); }, () => this.added.delete(symbol));
+    this.playRow(
+      cx,
+      () => {
+        if (this.added.has(symbol)) this.added.set(symbol, "shown");
+      },
+      () => this.added.delete(symbol),
+    );
   }
 
   // Drops `drag.symbol` in front of `drag.before`. A move that changed the order slides the row from where
@@ -304,7 +363,15 @@ export default class Wickline extends View {
       if (from) {
         const settle = { symbol: drag.symbol, from };
         this.settle = settle;
-        this.playRow(cx, () => { if (this.settle === settle) settle.from = 0; }, () => { if (this.settle === settle) this.settle = null; });
+        this.playRow(
+          cx,
+          () => {
+            if (this.settle === settle) settle.from = 0;
+          },
+          () => {
+            if (this.settle === settle) this.settle = null;
+          },
+        );
       }
       return notice;
     });
@@ -360,8 +427,14 @@ export default class Wickline extends View {
   // `this[flag]` follows whether `input` has the focus, redrawing on each change: a field's border shows it.
   trackFocus(input, flag) {
     this[flag] = false;
-    input.on("focus", (_e, cx) => { this[flag] = true; cx.notify(); });
-    input.on("blur", (_e, cx) => { this[flag] = false; cx.notify(); });
+    input.on("focus", (_e, cx) => {
+      this[flag] = true;
+      cx.notify();
+    });
+    input.on("blur", (_e, cx) => {
+      this[flag] = false;
+      cx.notify();
+    });
   }
 
   // The key input is for a new key only: it starts empty and masked, and a saved key is shown as its last
@@ -380,8 +453,15 @@ export default class Wickline extends View {
     this.keyInput.on("change", (_e, cx) => cx.notify());
     // Shown text is masked again as soon as the field loses the focus.
     this.keyFocused = false;
-    this.keyInput.on("focus", (_e, cx) => { this.keyFocused = true; cx.notify(); });
-    this.keyInput.on("blur", (_e, cx) => { this.keyFocused = false; this.maskKey(); cx.notify(); });
+    this.keyInput.on("focus", (_e, cx) => {
+      this.keyFocused = true;
+      cx.notify();
+    });
+    this.keyInput.on("blur", (_e, cx) => {
+      this.keyFocused = false;
+      this.maskKey();
+      cx.notify();
+    });
     this.finnhubUrlInput = InputState.new({ placeholder: FINNHUB_URL, value: this.draft.sources.us.finnhubUrl });
     this.finnhubUrlInput.on("change", (_e, cx) => {
       this.draft.sources.us.finnhubUrl = this.finnhubUrlInput.value();
@@ -424,16 +504,22 @@ export default class Wickline extends View {
     this.input?.release();
     this.inputLang = this.lang;
     this.input = InputState.new({ placeholder: this.tx("input.placeholder"), value: this.typed });
-    this.input.on("change", () => { this.typed = this.input.value(); });
+    this.input.on("change", () => {
+      this.typed = this.input.value();
+    });
     this.input.on("submit", (_e, cx) => this.add(cx));
     this.trackFocus(this.input, "inputFocused");
   }
 
   chooseLanguage(cx, language) {
-    this.act(cx, () => {
-      this.saveSettings({ language, languagePromptDismissed: true });
-      if (this.inputLang !== this.lang) this.makeInput();
-    }, "error.saveSettings");
+    this.act(
+      cx,
+      () => {
+        this.saveSettings({ language, languagePromptDismissed: true });
+        if (this.inputLang !== this.lang) this.makeInput();
+      },
+      "error.saveSettings",
+    );
   }
 
   // The text for `key` in this copy's language.
@@ -450,10 +536,13 @@ export default class Wickline extends View {
   // `failure` names what could not be saved: the watchlist, or the settings for the prompt.
   act(cx, action, failure = "error.save") {
     this.error = null;
-    try { this.notice = action() ?? null; } catch (cause) {
+    try {
+      this.notice = action() ?? null;
+    } catch (cause) {
       this.notice = null;
       // Anything but a bad symbol is the store failing.
-      this.error = cause instanceof QuoteError ? { code: cause.code, params: cause.params } : { code: failure, params: {} };
+      this.error =
+        cause instanceof QuoteError ? { code: cause.code, params: cause.params } : { code: failure, params: {} };
     }
     cx.notify();
     // A removal's notice carries `undo`, whichever action gave it; it ends after UNDO_MS.
@@ -472,7 +561,9 @@ export default class Wickline extends View {
     });
     // A first add that went through answers the language prompt too: it stays English.
     if (!this.notice || this.notice.code === "notice.duplicate" || this.settings.languagePromptDismissed) return;
-    try { this.saveSettings({ languagePromptDismissed: true }); } catch {
+    try {
+      this.saveSettings({ languagePromptDismissed: true });
+    } catch {
       this.error = { code: "error.saveSettings", params: {} };
     }
   }
@@ -523,7 +614,12 @@ export default class Wickline extends View {
       token = null;
     }
     const wide = canCarryBook(detail, this.settings);
-    openOverlay({ mod: MOD_ID, kind: "dialog", width: wide ? DETAIL_WIDE_WIDTH : DETAIL_WIDTH, props: { detail, token, wide } });
+    openOverlay({
+      mod: MOD_ID,
+      kind: "dialog",
+      width: wide ? DETAIL_WIDE_WIDTH : DETAIL_WIDTH,
+      props: { detail, token, wide },
+    });
   }
 
   /**
@@ -534,8 +630,12 @@ export default class Wickline extends View {
   handOver() {
     if (!this.handover) return;
     try {
-      const { write, mine } = nextWrite(detailStore.read(), this.handover, this.watch.detailQuote(this.handover.symbol, Date.now()),
-        this.watch.preferences.paused);
+      const { write, mine } = nextWrite(
+        detailStore.read(),
+        this.handover,
+        this.watch.detailQuote(this.handover.symbol, Date.now()),
+        this.watch.preferences.paused,
+      );
       if (write) detailStore.write(write);
       this.handover = mine;
     } catch {
@@ -555,7 +655,11 @@ export default class Wickline extends View {
 
   openSettings(tab) {
     openOverlay({
-      mod: MOD_ID, kind: "dialog", modal: true, width: 640, height: 520,
+      mod: MOD_ID,
+      kind: "dialog",
+      modal: true,
+      width: 640,
+      height: 520,
       // `health`: each source's current problem, `{ provider, code, params }`.
       props: { settings: { tab, health: this.watch.problems() } },
     });
@@ -597,9 +701,16 @@ export default class Wickline extends View {
     const form = layoutFor(this.size);
     const root = (form === "band" ? h_flex() : v_flex())
       // `background`, as Herdr's terminals and other panes: Wickline sits beside them as one more pane.
-      .id("bw").size_full().bg(t.background).text_color(t.foreground).text_size(12.5)
+      .id("bw")
+      .size_full()
+      .bg(t.background)
+      .text_color(t.foreground)
+      .text_size(12.5)
       .when(this.card, (el) => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
-      .on_size_change((size, cx) => { this.size = size; cx.notify(); });
+      .on_size_change((size, cx) => {
+        this.size = size;
+        cx.notify();
+      });
     if (this.yielding) return yieldView(this, root, t, form === "band");
     if (form === "band") return band(this, root, t);
     return form === "table" ? table(this, root, t) : sidebar(this, root, t);
@@ -632,7 +743,9 @@ export default class Wickline extends View {
     // At its limit the price is the limit, so its own text names it.
     // The panel's background as ink keeps the block readable in light and dark themes alike.
     return {
-      limit, color: this.changeColor(t, up ? 1 : -1), ink: t.background,
+      limit,
+      color: this.changeColor(t, up ? 1 : -1),
+      ink: t.background,
       tip: this.tx(up ? "quote.limitUp" : "quote.limitDown", { price: number(quote) }),
     };
   }
@@ -674,7 +787,10 @@ export default class Wickline extends View {
 
   // What stops a save, the key the dialog holds included (it is never in the draft).
   draftErrors() {
-    return validateSettings(this.draft, { finnhubKey: this.keyInput.value(), keySaved: this.keyEnding !== null && !this.keyRemoving });
+    return validateSettings(this.draft, {
+      finnhubKey: this.keyInput.value(),
+      keySaved: this.keyEnding !== null && !this.keyRemoving,
+    });
   }
 
   // The Finnhub key as the dialog holds it, given `errors` (draftErrors), for marketStatus: it decides
@@ -682,8 +798,10 @@ export default class Wickline extends View {
   // Yahoo with or without a key (its US prices are real time), and reads Problem when every source fails.
   keyFields(errors) {
     return {
-      typed: this.keyInput.value().trim(), typedValid: !errors["sources.us.key"],
-      saved: this.keyEnding !== null, removing: this.keyRemoving,
+      typed: this.keyInput.value().trim(),
+      typedValid: !errors["sources.us.key"],
+      saved: this.keyEnding !== null,
+      removing: this.keyRemoving,
     };
   }
 
@@ -694,7 +812,12 @@ export default class Wickline extends View {
     if (Object.keys(this.draftErrors()).length || !this.keyLoaded || this.saving) return;
     const { language, colors, sources } = this.draft;
     const key = this.keyInput.value().trim();
-    const change = keyChange({ provider: sources.us.provider, typed: key, saved: this.keyEnding !== null, removing: this.keyRemoving });
+    const change = keyChange({
+      provider: sources.us.provider,
+      typed: key,
+      saved: this.keyEnding !== null,
+      removing: this.keyRemoving,
+    });
     // Taken before the write, which re-renders this copy with the new settings.
     const before = this.settings;
     this.saving = true;
@@ -703,7 +826,8 @@ export default class Wickline extends View {
       let ownerOnly = true;
       if (change) {
         try {
-          ownerOnly = change === "write" ? await saveSecret(SECRET_KEY_FINNHUB, key) : await removeSecret(SECRET_KEY_FINNHUB);
+          ownerOnly =
+            change === "write" ? await saveSecret(SECRET_KEY_FINNHUB, key) : await removeSecret(SECRET_KEY_FINNHUB);
         } catch {
           this.saving = false;
           this.error = { code: "error.saveKey", params: {} };
@@ -713,12 +837,17 @@ export default class Wickline extends View {
       }
       try {
         const saved = shared(SETTINGS_KEY);
-        setShared(SETTINGS_KEY, mergeSettings(saved, {
-          language, colors, sources,
-          // Picking a language answers the language prompt too.
-          ...(language !== this.settings.language && { languagePromptDismissed: true }),
-          ...(change && { keyRev: readSettings(saved).keyRev + 1 }),
-        }));
+        setShared(
+          SETTINGS_KEY,
+          mergeSettings(saved, {
+            language,
+            colors,
+            sources,
+            // Picking a language answers the language prompt too.
+            ...(language !== this.settings.language && { languagePromptDismissed: true }),
+            ...(change && { keyRev: readSettings(saved).keyRev + 1 }),
+          }),
+        );
       } catch {
         this.saving = false;
         this.error = { code: "error.saveSettings", params: {} };
@@ -729,7 +858,12 @@ export default class Wickline extends View {
         // Saved, but other accounts may read the file: the dialog stays open to say so, and Save closes it.
         this.saving = false;
         // Sources whose settings this save changed have not run with them yet: their old problems go.
-        this.health = currentHealth({ health: this.health, saved: before, draft: this.draft, keyEdited: change !== null });
+        this.health = currentHealth({
+          health: this.health,
+          saved: before,
+          draft: this.draft,
+          keyEdited: change !== null,
+        });
         this.keyInput.set_value("");
         this.keyRemoving = false;
         await this.readKeyEnding();

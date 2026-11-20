@@ -14,8 +14,14 @@ const ROOT = new URL("../", import.meta.url);
 // mis.twse.com.tw only once the person turns TWSE MIS on and consents; finnhub.io only with Finnhub
 // chosen and a key saved.
 // openapi.twse.com.tw: TWSE's holiday schedule, while the list holds a Taiwan symbol.
-const ALLOWED_HOSTS = ["query1.finance.yahoo.com", "data-api.binance.vision", "mis.twse.com.tw", "tw.stock.yahoo.com", "finnhub.io",
-  "openapi.twse.com.tw"];
+const ALLOWED_HOSTS = [
+  "query1.finance.yahoo.com",
+  "data-api.binance.vision",
+  "mis.twse.com.tw",
+  "tw.stock.yahoo.com",
+  "finnhub.io",
+  "openapi.twse.com.tw",
+];
 // Herdr writes these into the mod folder; they are git-ignored.
 const GENERATED = ["jsconfig.json", "gpui-kit.d.ts"];
 
@@ -79,22 +85,34 @@ test("core modules import only relative modules; ui/ adds the view libraries", (
     if (allowed.length === 0) core += 1;
     else ui += 1;
     for (const specifier of importSpecifiers(read(file))) {
-      assert.ok(specifier.startsWith("./") || specifier.startsWith("../") || allowed.includes(specifier), `${specifier} in ${name}`);
+      assert.ok(
+        specifier.startsWith("./") || specifier.startsWith("../") || allowed.includes(specifier),
+        `${specifier} in ${name}`,
+      );
       // main.js is the shell: importing it would bring Herdr in by a relative path.
       assert.doesNotMatch(specifier, /(^|\/)main\.js$/, `${specifier} in ${name}`);
     }
   }
   assert.ok(core > 0, "no core module found");
   assert.ok(ui > 0, "no ui module found");
-  assert.deepEqual(importSpecifiers('import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";\nawait import ( "herdr" );\nawait import(`herdr`);'),
-    ["./a.js", "fs/promises", "gpui-kit", "herdr", "herdr"]);
+  assert.deepEqual(
+    importSpecifiers(
+      'import { a } from "./a.js";\nimport fs from "fs/promises";\nimport "gpui-kit";\nawait import ( "herdr" );\nawait import(`herdr`);',
+    ),
+    ["./a.js", "fs/promises", "gpui-kit", "herdr", "herdr"],
+  );
 });
 
 // A split keeps the modules a tree: a cycle would make one module's top level run before another it needs is ready.
 test("no import cycle among the mod's modules", () => {
-  const graph = new Map(jsFiles().map((file) => [file.href, importSpecifiers(read(file))
-    .filter((specifier) => specifier.startsWith("./") || specifier.startsWith("../"))
-    .map((specifier) => new URL(specifier, file).href)]));
+  const graph = new Map(
+    jsFiles().map((file) => [
+      file.href,
+      importSpecifiers(read(file))
+        .filter((specifier) => specifier.startsWith("./") || specifier.startsWith("../"))
+        .map((specifier) => new URL(specifier, file).href),
+    ]),
+  );
   const name = (href) => relativeName(new URL(href));
   const done = new Set();
   const path = [];
@@ -113,7 +131,8 @@ test("no import cycle among the mod's modules", () => {
 // Herdr's globals reach no module but main.js either: `fetch` (the core gets it as `host.fetch`), also
 // aliased or through `window` / `self` (also destructured), `localStorage`, and `globalThis`, through which a module could
 // find anything else. `fetch:` as an object key and `fetchedAt` are not the global.
-const HERDR_GLOBALS = /(?<![.\w$])(?:fetch\b(?!\s*:)|localStorage\b|globalThis\b)|\b(?:window|self)\s*\.\s*fetch\b|\}\s*=\s*(?:window|self)\b/;
+const HERDR_GLOBALS =
+  /(?<![.\w$])(?:fetch\b(?!\s*:)|localStorage\b|globalThis\b)|\b(?:window|self)\s*\.\s*fetch\b|\}\s*=\s*(?:window|self)\b/;
 // The source without comments, which may name these; a `//` after `:` or a quote is a URL, not a comment.
 const code = (source) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
 // The source with each string's text blanked, quote-aware: the text of '…', "…" and a template turns to spaces
@@ -128,7 +147,8 @@ function withoutStrings(source) {
   // Template text from `i` to its closing backtick, or to the next `${`, which opens an expression.
   const templateText = () => {
     const from = i;
-    while (i < source.length && source[i] !== "`" && !(source[i] === "$" && source[i + 1] === "{")) i += source[i] === "\\" ? 2 : 1;
+    while (i < source.length && source[i] !== "`" && !(source[i] === "$" && source[i + 1] === "{"))
+      i += source[i] === "\\" ? 2 : 1;
     out += blank(from, i);
     if (source[i] === "`") {
       out += "`";
@@ -173,7 +193,10 @@ const scanned = (source) => withoutStrings(code(source));
 
 // The code with no whitespace and no trailing comma before `)`, `]` or `}`: for shape patterns, written without
 // spaces. Identifier counts and words that must be absent are checked on code(), where `const intro` keeps its space.
-const flat = (text) => code(text).replace(/\s+/g, "").replace(/,(?=[)\]}])/g, "");
+const flat = (text) =>
+  code(text)
+    .replace(/\s+/g, "")
+    .replace(/,(?=[)\]}])/g, "");
 // The index of the bracket that closes the one at `at`, counted on code whose strings are blanked; -1 if none.
 function closing(blanked, at) {
   const open = blanked[at];
@@ -213,8 +236,15 @@ function block(source, anchor) {
 const uiFiles = () => jsFiles().filter((url) => relativeName(url).startsWith("ui/"));
 // The panel and whatever it splits into: every ui/ module but the two dialogs and the parts they share with it.
 const NOT_PANEL = ["ui/detail-dialog.js", "ui/settings-dialog.js", "ui/parts.js"];
-const uiCode = () => uiFiles().map((url) => code(read(url))).join("\n");
-const panelCode = () => uiFiles().filter((url) => !NOT_PANEL.includes(relativeName(url))).map((url) => code(read(url))).join("\n");
+const uiCode = () =>
+  uiFiles()
+    .map((url) => code(read(url)))
+    .join("\n");
+const panelCode = () =>
+  uiFiles()
+    .filter((url) => !NOT_PANEL.includes(relativeName(url)))
+    .map((url) => code(read(url)))
+    .join("\n");
 
 // The pins read code(), so a comment opener inside a string (`"/*"`) would erase code up to the next `*/`, and the
 // pins would pass on what is left. Every function and method head in a module must survive the stripper.
@@ -246,16 +276,26 @@ test("only main.js wires Herdr's storage, network and files", () => {
   assert.ok(importSpecifiers(main).includes("fs/promises"), "main.js imports fs/promises");
   assert.match(code(main), /(?<![.\w])fetch\s*\(/, "main.js calls fetch");
   assert.doesNotMatch(scanned("this.host.fetch(url); // fetch(url)\n/* localStorage */"), HERDR_GLOBALS);
-  assert.doesNotMatch(scanned("const host = { fetch: (url) => url }; quote.fetchedAt; window.paint_path(p)"), HERDR_GLOBALS);
+  assert.doesNotMatch(
+    scanned("const host = { fetch: (url) => url }; quote.fetchedAt; window.paint_path(p)"),
+    HERDR_GLOBALS,
+  );
   assert.doesNotMatch(scanned('const text = "kept in localStorage";'), HERDR_GLOBALS);
   assert.match(scanned('const u = "https://x"; globalThis'), HERDR_GLOBALS);
   assert.doesNotMatch(scanned("const t = `kept in ${'localStorage'} and \\` fetch(u)`;"), HERDR_GLOBALS);
   for (const source of [
-    "const get = fetch;", "window.fetch(url)", "self . fetch(url)", "const { fetch: get } = window;", 'const s = "a"; localStorage.getItem("k")',
+    "const get = fetch;",
+    "window.fetch(url)",
+    "self . fetch(url)",
+    "const { fetch: get } = window;",
+    'const s = "a"; localStorage.getItem("k")',
     // A quote of the other kind inside a string, or inside a template, hides nothing after it.
-    "const q = '\"'; localStorage.x; const r = '\"';", "const s = `a\"`; fetch(u); const t = \"x\";",
+    "const q = '\"'; localStorage.x; const r = '\"';",
+    'const s = `a"`; fetch(u); const t = "x";',
     // A template's expressions are code, also nested.
-    "const u = `${host}/${fetch(u)}`;", "const v = `a${`b${globalThis}`}c`;", "const w = `${{ a: 1 }.a}`; localStorage.x;",
+    "const u = `${host}/${fetch(u)}`;",
+    "const v = `a${`b${globalThis}`}c`;",
+    "const w = `${{ a: 1 }.a}`; localStorage.x;",
   ]) {
     assert.match(scanned(source), HERDR_GLOBALS, source);
   }
@@ -267,11 +307,20 @@ test("only main.js wires Herdr's storage, network and files", () => {
 const PROCESS_GLOBAL = /(?<![.\w$])process\b/;
 // The Herdr commands the moves between a pane, a tab and a docked block run (`host.run` is Herdr's `run`,
 // handed in by main.js): commands, not programs.
-const MOVE_COMMANDS = ["tab.new", "tab.select", "pane.split", "pane.close", "layout.hide", "layout.show", "layout.select"];
+const MOVE_COMMANDS = [
+  "tab.new",
+  "tab.select",
+  "pane.split",
+  "pane.close",
+  "layout.hide",
+  "layout.show",
+  "layout.select",
+];
 test("the only program is chmod 600 on the key file", () => {
   for (const file of jsFiles()) {
     const name = relativeName(file);
-    for (const banned of ["process", "child_process"]) assert.ok(!importSpecifiers(read(file)).includes(banned), `${banned} imported in ${name}`);
+    for (const banned of ["process", "child_process"])
+      assert.ok(!importSpecifiers(read(file)).includes(banned), `${banned} imported in ${name}`);
     assert.doesNotMatch(withoutStrings(code(read(file))), PROCESS_GLOBAL, name);
   }
   const main = code(read(new URL("main.js", MOD)));
@@ -311,7 +360,8 @@ test("the settings dialog never loads the full key", () => {
   const reader = body(main, "readKeyEnding");
   assert.match(reader, /\bloadSecretEnding\(\s*SECRET_KEY_FINNHUB\s*\)/);
   assert.doesNotMatch(reader, /\bloadSecret\b|secrets\./);
-  for (const name of ["ui/settings-dialog.js", "settings.js"]) assert.doesNotMatch(code(read(new URL(name, MOD))), /\bloadSecret|secrets\./, name);
+  for (const name of ["ui/settings-dialog.js", "settings.js"])
+    assert.doesNotMatch(code(read(new URL(name, MOD))), /\bloadSecret|secrets\./, name);
 });
 
 // Every module is a .js file: an .mjs, .cjs or .ts one would escape the scans above.
@@ -332,11 +382,22 @@ test("keys.json binds only the open key", () => {
 
 test("the repo root is the listing folder", () => {
   const names = readdirSync(ROOT);
-  for (const name of ["mods", "RECIPE.md", "preview.png", "README.md", "README.zh-TW.md", "LICENSE", "keys.json", "assets", "tests"]) {
+  for (const name of [
+    "mods",
+    "RECIPE.md",
+    "preview.png",
+    "README.md",
+    "README.zh-TW.md",
+    "LICENSE",
+    "keys.json",
+    "assets",
+    "tests",
+  ]) {
     assert.ok(names.includes(name), name);
   }
   assert.ok(!names.includes("layouts"), "no layouts/");
-  for (const name of ["logo-light.svg", "logo-dark.svg"]) assert.match(read(new URL(`assets/${name}`, ROOT)), /viewBox="0 0 24 24"/, name);
+  for (const name of ["logo-light.svg", "logo-dark.svg"])
+    assert.match(read(new URL(`assets/${name}`, ROOT)), /viewBox="0 0 24 24"/, name);
 });
 
 test("icon is single-colour", () => {
@@ -349,8 +410,21 @@ test("icon is single-colour", () => {
 
 test("header and row icons are single-colour and drawn on a 24 px grid", () => {
   const dir = new URL("icons/", MOD);
-  const names = readdirSync(dir).filter((name) => name.endsWith(".svg")).sort();
-  for (const name of ["close", "grip", "mark-center", "mark-sides", "pause", "play", "refresh", "restore", "settings", "zoom"]) {
+  const names = readdirSync(dir)
+    .filter((name) => name.endsWith(".svg"))
+    .sort();
+  for (const name of [
+    "close",
+    "grip",
+    "mark-center",
+    "mark-sides",
+    "pause",
+    "play",
+    "refresh",
+    "restore",
+    "settings",
+    "zoom",
+  ]) {
     assert.ok(names.includes(`${name}.svg`), name);
   }
   for (const name of names) {
@@ -385,12 +459,16 @@ test("every error code has English text", () => {
     const text = read(file);
     for (const [, code] of text.matchAll(/new QuoteError\(\s*"([^"]+)"/g)) errors.add(code);
     // Codes handed to the view as `{ code, params }`, e.g. a deferred refresh.
-    for (const [, code] of text.matchAll(/"((?:symbol|yahoo|yahootw|binance|mis|finnhub|request|notice|budget)\.[A-Za-z]+)"/g)) notices.add(code);
+    for (const [, code] of text.matchAll(
+      /"((?:symbol|yahoo|yahootw|binance|mis|finnhub|request|notice|budget)\.[A-Za-z]+)"/g,
+    ))
+      notices.add(code);
   }
   // The key's name in the secrets file, not a text.
   notices.delete(SECRET_KEY_FINNHUB);
   // Built from the provider id: `${provider.id}.unreachable`.
-  for (const id of new Watchlist({ load: () => undefined, settings: () => undefined }).providerIds()) errors.add(`${id}.unreachable`);
+  for (const id of new Watchlist({ load: () => undefined, settings: () => undefined }).providerIds())
+    errors.add(`${id}.unreachable`);
   assert.ok(errors.size > 0);
   for (const code of errors) assert.ok(code in MESSAGES_EN, code);
   for (const code of notices) assert.ok(code in STRINGS.en, code);
@@ -424,7 +502,8 @@ test("RECIPE.md stays under the gallery's size limit", () => {
 // Field-level build details live beside the recipe, so the gallery's copy stays under its limit.
 const COMPANIONS = { "RECIPE-internals.md": "# Wickline — internals", "RECIPE-sources.md": "# Wickline — sources" };
 test("each RECIPE companion stays short", () => {
-  for (const name of Object.keys(COMPANIONS)) assert.ok(statSync(new URL(name, ROOT)).size <= 30_000, `${name} over 30,000 bytes`);
+  for (const name of Object.keys(COMPANIONS))
+    assert.ok(statSync(new URL(name, ROOT)).size <= 30_000, `${name} over 30,000 bytes`);
 });
 
 test("RECIPE.md links to each companion, which exists", () => {
@@ -438,7 +517,12 @@ test("RECIPE.md links to each companion, which exists", () => {
 
 // Only ASCII anchors are checked (a `#yahoo-奇摩股市` anchor is skipped): companion headings stay ASCII ("Yahoo TW Stock").
 test("every link into a RECIPE companion lands on one of its headings", () => {
-  const slug = (h) => h.toLowerCase().replace(/[^a-z0-9 -]/g, "").trim().replace(/ /g, "-");
+  const slug = (h) =>
+    h
+      .toLowerCase()
+      .replace(/[^a-z0-9 -]/g, "")
+      .trim()
+      .replace(/ /g, "-");
   for (const doc of ["RECIPE.md", ...Object.keys(COMPANIONS), "README.md", "README.zh-TW.md"]) {
     for (const [, target, anchor] of read(new URL(doc, ROOT)).matchAll(/\]\((RECIPE-[a-z]+\.md)#([a-z0-9-]+)\)/g)) {
       const slugs = [...read(new URL(target, ROOT)).matchAll(/^#+ (.+)$/gm)].map(([, h]) => slug(h));
@@ -450,7 +534,10 @@ test("every link into a RECIPE companion lands on one of its headings", () => {
 // The settings tab's disclaimer block and the READMEs carry the same sentences.
 test("the READMEs and RECIPE carry the settings tab's disclaimer", () => {
   const keys = ["disclaimer.data", "disclaimer.advice", "disclaimer.sources", "disclaimer.direct", "disclaimer.key"];
-  for (const [name, lang] of [["README.md", "en"], ["README.zh-TW.md", "zh-TW"]]) {
+  for (const [name, lang] of [
+    ["README.md", "en"],
+    ["README.zh-TW.md", "zh-TW"],
+  ]) {
     const text = read(new URL(name, ROOT));
     for (const key of keys) assert.ok(text.includes(STRINGS[lang][key]), `${key} in ${name}`);
   }
@@ -466,7 +553,10 @@ test("the READMEs and RECIPE carry the settings tab's disclaimer", () => {
 test("README.zh-TW.md quotes both Taiwan statements", () => {
   const readme = read(new URL("README.zh-TW.md", ROOT));
   for (const key of ["mis.statement", "yahootw.statement"]) {
-    const quote = STRINGS["zh-TW"][key].split("\n\n").map((paragraph) => `> ${paragraph}`).join("\n>\n");
+    const quote = STRINGS["zh-TW"][key]
+      .split("\n\n")
+      .map((paragraph) => `> ${paragraph}`)
+      .join("\n>\n");
     assert.ok(readme.includes(quote), key);
   }
 });
@@ -502,38 +592,74 @@ test("the disclosure names every host and the key file in all four places", () =
 // The Yahoo 奇摩股市 host is named with what it is asked for, in every place the disclosure lives.
 test("the disclosure says Yahoo 奇摩股市 is asked for futures too", () => {
   const future = { en: /futures/, "zh-TW": /期貨/, "zh-CN": /期货/, ja: /先物/, ko: /선물/ };
-  const places = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]]
-    .map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n")]);
+  const places = [
+    ["README.md", "en"],
+    ["README.zh-TW.md", "zh-TW"],
+    ["RECIPE.md", "en"],
+  ].map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n")]);
   // Sentences end with 。, or with a period and a space (the host names keep their own dots).
-  for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.hosts`, lang, STRINGS[lang]["privacy.hosts"].split(/(?<=。)|(?<=\.)\s+/)]);
+  for (const lang of Object.keys(STRINGS))
+    places.push([`${lang} privacy.hosts`, lang, STRINGS[lang]["privacy.hosts"].split(/(?<=。)|(?<=\.)\s+/)]);
   for (const [name, lang, parts] of places) {
     const naming = parts.filter((part) => part.includes("tw.stock.yahoo.com"));
-    assert.ok(naming.some((part) => future[lang].test(part)), name);
+    assert.ok(
+      naming.some((part) => future[lang].test(part)),
+      name,
+    );
   }
 });
 
 // What every disclosure says beside the holiday schedule's host: while the list holds a Taiwan symbol, by GET,
 // once a day per open copy and hourly after a failure, with no key, nothing stored.
 const SCHEDULE_WORDS = {
-  en: [/once a day per open copy/, /retried hourly after a failure/, /Taiwan symbol/, /no key/, /nothing (from it )?(is )?stored/],
+  en: [
+    /once a day per open copy/,
+    /retried hourly after a failure/,
+    /Taiwan symbol/,
+    /no key/,
+    /nothing (from it )?(is )?stored/,
+  ],
   "zh-TW": [/每個開啟的 copy 每天/, /失敗後每小時重試/, /台灣商品/, /不需金鑰/, /不儲存/],
   "zh-CN": [/每个打开的副本每天/, /失败后每小时重试/, /台湾商品/, /无需密钥/, /不保存/],
-  ja: [/開いているコピーごとに 1 日 1 回/, /失敗した場合は 1 時間ごとに再試行/, /台湾の銘柄/, /キーは不要/, /何も保存しません/],
-  ko: [/열려 있는 사본마다 하루 한 번/, /실패하면 1시간마다 다시 시도/, /대만 종목/, /키는 필요 없/, /저장하지 않습니다/],
+  ja: [
+    /開いているコピーごとに 1 日 1 回/,
+    /失敗した場合は 1 時間ごとに再試行/,
+    /台湾の銘柄/,
+    /キーは不要/,
+    /何も保存しません/,
+  ],
+  ko: [
+    /열려 있는 사본마다 하루 한 번/,
+    /실패하면 1시간마다 다시 시도/,
+    /대만 종목/,
+    /키는 필요 없/,
+    /저장하지 않습니다/,
+  ],
 };
 test("the schedule's host is named with what is asked", () => {
-  const places = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]]
-    .map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n")]);
-  for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.hosts`, lang, STRINGS[lang]["privacy.hosts"].split(/(?<=。)|(?<=\.)\s+/)]);
+  const places = [
+    ["README.md", "en"],
+    ["README.zh-TW.md", "zh-TW"],
+    ["RECIPE.md", "en"],
+  ].map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n")]);
+  for (const lang of Object.keys(STRINGS))
+    places.push([`${lang} privacy.hosts`, lang, STRINGS[lang]["privacy.hosts"].split(/(?<=。)|(?<=\.)\s+/)]);
   for (const [name, lang, parts] of places) {
     const naming = parts.filter((part) => part.includes("openapi.twse.com.tw"));
-    assert.ok(naming.some((part) => /GET/.test(part) && SCHEDULE_WORDS[lang].every((word) => word.test(part))), name);
+    assert.ok(
+      naming.some((part) => /GET/.test(part) && SCHEDULE_WORDS[lang].every((word) => word.test(part))),
+      name,
+    );
   }
 });
 
-const ATTRIBUTION = "臺灣證券交易所 有價證券集中交易市場開（休）市日期（每年最新版）；此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，使用者於遵守本條款各項規定之前提下，得利用之。https://data.gov.tw/license";
+const ATTRIBUTION =
+  "臺灣證券交易所 有價證券集中交易市場開（休）市日期（每年最新版）；此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，使用者於遵守本條款各項規定之前提下，得利用之。https://data.gov.tw/license";
 test("the holiday schedule is credited with its licence in both READMEs, RECIPE and the tab", () => {
-  for (const [name, lang] of [["README.md", "en"], ["README.zh-TW.md", "zh-TW"]]) {
+  for (const [name, lang] of [
+    ["README.md", "en"],
+    ["README.zh-TW.md", "zh-TW"],
+  ]) {
     const text = read(new URL(name, ROOT));
     assert.ok(text.includes(STRINGS[lang]["disclaimer.sourcesHolidays"]), name);
     assert.ok(text.includes(ATTRIBUTION), name);
@@ -549,21 +675,40 @@ test("the holiday schedule is credited with its licence in both READMEs, RECIPE 
 // The one program, the owner-only key file, the fixed Finnhub host and the real revoke, in all four places.
 // README and RECIPE name `chmod 600` for technical readers; the app says the same fact in plain words.
 const OWNER_ONLY = {
-  en: /only your account can read it/, "zh-TW": /只有你的帳號能讀取/, "zh-CN": /只有你的账户能读取/,
-  ja: /あなたのアカウントだけが読める/, ko: /내 계정만 읽을 수 있/,
+  en: /only your account can read it/,
+  "zh-TW": /只有你的帳號能讀取/,
+  "zh-CN": /只有你的账户能读取/,
+  ja: /あなたのアカウントだけが読める/,
+  ko: /내 계정만 읽을 수 있/,
 };
 const NOTHING_ELSE = {
-  en: /No other programs run/, "zh-TW": /不執行其他任何程式/, "zh-CN": /不运行其他任何程序/,
-  ja: /それ以外のプログラムは実行しません/, ko: /그 밖의 프로그램은 실행하지 않습니다/,
+  en: /No other programs run/,
+  "zh-TW": /不執行其他任何程式/,
+  "zh-CN": /不运行其他任何程序/,
+  ja: /それ以外のプログラムは実行しません/,
+  ko: /그 밖의 프로그램은 실행하지 않습니다/,
 };
 // The companions hold build details, not the disclosure: they are only checked for what they must never claim.
 test("the disclosure names the chmod, the fixed Finnhub host and how to revoke the key", () => {
-  const docs = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"], ...Object.keys(COMPANIONS).map((name) => [name, "en"])].map(([name, lang]) => [name, lang, read(new URL(name, ROOT))]);
+  const docs = [
+    ["README.md", "en"],
+    ["README.zh-TW.md", "zh-TW"],
+    ["RECIPE.md", "en"],
+    ...Object.keys(COMPANIONS).map((name) => [name, "en"]),
+  ].map(([name, lang]) => [name, lang, read(new URL(name, ROOT))]);
   for (const lang of Object.keys(STRINGS)) {
-    docs.push([`${lang} privacy`, lang, ["privacy.hosts", "privacy.programs", "privacy.storage"].map((key) => STRINGS[lang][key]).join(" ")]);
+    docs.push([
+      `${lang} privacy`,
+      lang,
+      ["privacy.hosts", "privacy.programs", "privacy.storage"].map((key) => STRINGS[lang][key]).join(" "),
+    ]);
   }
   const revoke = { en: /regenerat/i, "zh-TW": /重新產生/, "zh-CN": /重新生成/, ja: /再発行/, ko: /재발급/ };
-  const settable = { en: /Finnhub address you set/i, "zh-TW": /你設定的 Finnhub 網址/, "zh-CN": /你设置的 Finnhub 网址/ };
+  const settable = {
+    en: /Finnhub address you set/i,
+    "zh-TW": /你設定的 Finnhub 網址/,
+    "zh-CN": /你设置的 Finnhub 网址/,
+  };
   for (const [name, lang, text] of docs) {
     if (name.endsWith(" privacy")) {
       // The same fact as chmod 600, without the jargon: the key file, after saving, readable by your account only.
@@ -578,7 +723,11 @@ test("the disclosure names the chmod, the fixed Finnhub host and how to revoke t
     }
     if (!(name in COMPANIONS)) assert.match(text, revoke[lang], `revoke in ${name}`);
     if (settable[lang]) assert.doesNotMatch(text, settable[lang], `a settable Finnhub host in ${name}`);
-    assert.doesNotMatch(text, /Programs: none|No programs|(?<!除此之外)不執行任何程式|不執行程式|(?<!除此之外)不运行任何程序/, `"no programs" in ${name}`);
+    assert.doesNotMatch(
+      text,
+      /Programs: none|No programs|(?<!除此之外)不執行任何程式|不執行程式|(?<!除此之外)不运行任何程序/,
+      `"no programs" in ${name}`,
+    );
   }
 });
 
@@ -739,7 +888,11 @@ test("the US page says what Finnhub adds", () => {
 test("the docs call Yahoo's US prices real time, and name lunch, FX and futures", () => {
   for (const name of ["README.md", "RECIPE.md"]) {
     const doc = read(new URL(name, ROOT));
-    assert.doesNotMatch(doc, /United States \| Yahoo Finance \(delayed\)|Real time for up to|showing Yahoo|real-time limit/, name);
+    assert.doesNotMatch(
+      doc,
+      /United States \| Yahoo Finance \(delayed\)|Real time for up to|showing Yahoo|real-time limit/,
+      name,
+    );
     for (const word of ["Lunch", "22:00 UTC", "indicative"]) assert.ok(doc.includes(word), `${name} ${word}`);
   }
   const zh = read(new URL("README.zh-TW.md", ROOT));
@@ -772,7 +925,10 @@ test("a failed first write never keeps the detail from opening", () => {
   const guarded = open.match(/try\{detailStore\.write\(value\);[^}]*\}catch\{([^}]*)\}/);
   assert.ok(guarded, "the write is guarded");
   assert.match(guarded[1], /token=null/);
-  assert.ok(open.indexOf("openOverlay(") > open.indexOf(guarded[0]) + guarded[0].length, "the dialog opens after the guard");
+  assert.ok(
+    open.indexOf("openOverlay(") > open.indexOf(guarded[0]) + guarded[0].length,
+    "the dialog opens after the guard",
+  );
   assert.ok(open.includes("props:{detail,token,wide}"), "props: { detail, token, wide }");
 });
 
@@ -786,7 +942,10 @@ test("the detail copy sends no request and owns no Watchlist", () => {
 test("only detailStore touches wickline.detail, and the hand-over decides in one synchronous step", () => {
   const source = read(new URL("main.js", MOD));
   const main = code(source);
-  assert.ok(!withoutStrings(main).includes("wickline.detail") && !/["'`]wickline\.detail["'`]/.test(main), "the key by its constant only");
+  assert.ok(
+    !withoutStrings(main).includes("wickline.detail") && !/["'`]wickline\.detail["'`]/.test(main),
+    "the key by its constant only",
+  );
   const store = block(source, "const detailStore =");
   assert.ok(flat(store).includes("read:()=>shared(DETAIL_KEY)"), "read: () => shared(DETAIL_KEY)");
   assert.match(flat(store), /write:\((\w+)\)=>setShared\(DETAIL_KEY,\1\)/);
@@ -799,12 +958,21 @@ test("only detailStore touches wickline.detail, and the hand-over decides in one
     assert.ok(inImport || inStore, `DETAIL_KEY at ${at}`);
   }
   const handOver = body(source, "handOver");
-  assert.ok(flat(handOver).includes("nextWrite(detailStore.read(),this.handover,"), "nextWrite(detailStore.read(), this.handover, …");
+  assert.ok(
+    flat(handOver).includes("nextWrite(detailStore.read(),this.handover,"),
+    "nextWrite(detailStore.read(), this.handover, …",
+  );
   assert.doesNotMatch(handOver, /\bawait\b/);
   const open = flat(body(source, "openDetail"));
-  assert.ok(open.indexOf("detailStore.write(") >= 0 && open.indexOf("detailStore.write(") < open.indexOf("openOverlay("), "written before the dialog opens");
+  assert.ok(
+    open.indexOf("detailStore.write(") >= 0 && open.indexOf("detailStore.write(") < open.indexOf("openOverlay("),
+    "written before the dialog opens",
+  );
   assert.match(flat(main), /changed:\(\)=>\{this\.handOver\(\);cx\.notify\(\);?\}/);
-  assert.ok(flat(body(source, "close")).includes("clearsOnClose(detailStore.read(),this.held"), "clearsOnClose(detailStore.read(), this.held");
+  assert.ok(
+    flat(body(source, "close")).includes("clearsOnClose(detailStore.read(),this.held"),
+    "clearsOnClose(detailStore.read(), this.held",
+  );
   const render = flat(body(source, "render"));
   assert.ok(render.includes("if(this.detail)") && render.includes("detailView("), "the detail's render");
   const branch = render.slice(render.indexOf("if(this.detail)"), render.indexOf("detailView(") + 1);
@@ -813,27 +981,68 @@ test("only detailStore touches wickline.detail, and the hand-over decides in one
 
 // What the disclosure says of the open detail's key, per language.
 const DETAIL_KEY_WORDS = {
-  en: [/wickline\.detail/, /saved to disk/, /copy that opened it/, /cleared when it closes/, /next detail opens/, /no request of its own/],
+  en: [
+    /wickline\.detail/,
+    /saved to disk/,
+    /copy that opened it/,
+    /cleared when it closes/,
+    /next detail opens/,
+    /no request of its own/,
+  ],
   "zh-TW": [/wickline\.detail/, /寫入磁碟/, /開啟它的那個/, /關閉時清除/, /下次開啟詳細資料/, /不會自行發出任何請求/],
   "zh-CN": [/wickline\.detail/, /写入磁盘/, /打开它的那个/, /关闭时清除/, /下次打开详情/, /不会自行发出任何请求/],
-  ja: [/wickline\.detail/, /ディスクに保存/, /開いたコピー/, /閉じると消去/, /次に詳細を開く/, /独自のリクエストは送りません/],
-  ko: [/wickline\.detail/, /디스크에 저장/, /연 사본/, /닫으면 지웁니다/, /다음에 상세를 열/, /자체 요청은 보내지 않습니다/],
+  ja: [
+    /wickline\.detail/,
+    /ディスクに保存/,
+    /開いたコピー/,
+    /閉じると消去/,
+    /次に詳細を開く/,
+    /独自のリクエストは送りません/,
+  ],
+  ko: [
+    /wickline\.detail/,
+    /디스크에 저장/,
+    /연 사본/,
+    /닫으면 지웁니다/,
+    /다음에 상세를 열/,
+    /자체 요청은 보내지 않습니다/,
+  ],
 };
-const STORAGE_NAMES = ["wickline.watchlist.v1", "wickline.settings.v1", "wickline.dockTab", "wickline.detail", "data/wickline/secrets.json",
-  "localStorage"];
+const STORAGE_NAMES = [
+  "wickline.watchlist.v1",
+  "wickline.settings.v1",
+  "wickline.dockTab",
+  "wickline.detail",
+  "data/wickline/secrets.json",
+  "localStorage",
+];
 test("Storage named", () => {
   const places = ["README.md", "README.zh-TW.md", "RECIPE.md"].map((name) => [name, read(new URL(name, ROOT))]);
   for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.storage`, STRINGS[lang]["privacy.storage"]]);
-  for (const [name, text] of places) for (const key of STORAGE_NAMES) assert.ok(text.includes(key), `${key} in ${name}`);
+  for (const [name, text] of places)
+    for (const key of STORAGE_NAMES) assert.ok(text.includes(key), `${key} in ${name}`);
 });
 
 test("The detail's key", () => {
   // A doc says it all on one line naming the key; the app's storage text, anywhere in it.
-  const places = [["README.md", "en"], ["README.zh-TW.md", "zh-TW"], ["RECIPE.md", "en"]]
-    .map(([name, lang]) => [name, lang, read(new URL(name, ROOT)).split("\n").filter((line) => line.includes("wickline.detail"))]);
-  for (const lang of Object.keys(STRINGS)) places.push([`${lang} privacy.storage`, lang, [STRINGS[lang]["privacy.storage"]]]);
+  const places = [
+    ["README.md", "en"],
+    ["README.zh-TW.md", "zh-TW"],
+    ["RECIPE.md", "en"],
+  ].map(([name, lang]) => [
+    name,
+    lang,
+    read(new URL(name, ROOT))
+      .split("\n")
+      .filter((line) => line.includes("wickline.detail")),
+  ]);
+  for (const lang of Object.keys(STRINGS))
+    places.push([`${lang} privacy.storage`, lang, [STRINGS[lang]["privacy.storage"]]]);
   for (const [name, lang, parts] of places) {
-    assert.ok(parts.some((part) => DETAIL_KEY_WORDS[lang].every((word) => word.test(part))), name);
+    assert.ok(
+      parts.some((part) => DETAIL_KEY_WORDS[lang].every((word) => word.test(part))),
+      name,
+    );
   }
 });
 

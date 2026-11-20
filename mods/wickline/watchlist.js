@@ -2,17 +2,40 @@
 // and each loop's `io`, so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade, withoutActivity } from "./quotes.js";
 import {
-  HOLIDAYS_URL, closureOf, currentOpen, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay, twMarket, withClosure,
+  HOLIDAYS_URL,
+  closureOf,
+  currentOpen,
+  listsYearOf,
+  parseHolidays,
+  taipeiDay,
+  taipeiMinute,
+  tradingDay,
+  twMarket,
+  withClosure,
 } from "./calendar.js";
 import {
-  LIVE_MAX_AGE_MS, REALTIME_SOURCES, TW_TRIAL_MATCH, auctionFlagged, auctionWindowStart, isRealtime, nextEdge, sessionOf, staleAt,
+  LIVE_MAX_AGE_MS,
+  REALTIME_SOURCES,
+  TW_TRIAL_MATCH,
+  auctionFlagged,
+  auctionWindowStart,
+  isRealtime,
+  nextEdge,
+  sessionOf,
+  staleAt,
 } from "./freshness.js";
 import { DAY_MS, MINUTE_MS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { binance } from "./providers/binance.js";
 import { finnhub, finnhubAddressOk, finnhubCap } from "./providers/finnhub.js";
 import { mis } from "./providers/mis.js";
 import {
-  SECRET_KEY_FINNHUB, finnhubChosen, misEnabled, misReconfirm, readSettings, yahootwEnabled, yahootwReconfirm,
+  SECRET_KEY_FINNHUB,
+  finnhubChosen,
+  misEnabled,
+  misReconfirm,
+  readSettings,
+  yahootwEnabled,
+  yahootwReconfirm,
 } from "./settings.js";
 import { yahoo } from "./providers/yahoo.js";
 import { ownPeriods, yahootw } from "./providers/yahootw.js";
@@ -36,7 +59,8 @@ const SWITCHES = {
   mis: { on: misEnabled, notice: (settings) => (misReconfirm(settings) ? "mis.reconfirm" : null) },
   finnhub: {
     // The address is checked again here: shared state may hold one the dialog never accepted.
-    on: (settings, w) => finnhubChosen(settings) && finnhubAddressOk(settings.sources.us.finnhubUrl) && Boolean(w.finnhubKey),
+    on: (settings, w) =>
+      finnhubChosen(settings) && finnhubAddressOk(settings.sources.us.finnhubUrl) && Boolean(w.finnhubKey),
     // The key file's problems only once this copy has read it for the saved keyRev.
     notice: (settings, w) => {
       if (!finnhubChosen(settings)) return null;
@@ -52,7 +76,18 @@ const SWITCHES = {
 // ranks below a session not yet known but above pre/post. A listed closed day and a day without trades pace as closed
 // (sessionFor then reads "closed": its line is not asked again, and no source says it prices nothing live). A call
 // auction paces as open: the closing auction's end brings the close.
-const SESSION_RANK = { open: 4, "24h": 4, auction: 4, unknown: 3, lunch: 2, pre: 1, post: 1, closed: 0, holiday: 0, noTrades: 0 };
+const SESSION_RANK = {
+  open: 4,
+  "24h": 4,
+  auction: 4,
+  unknown: 3,
+  lunch: 2,
+  pre: 1,
+  post: 1,
+  closed: 0,
+  holiday: 0,
+  noTrades: 0,
+};
 // Errors about the source itself, not one symbol: shown as the source's problem.
 const SOURCE_FAILURE = /\.(unreachable|timeout|rateLimited|region|http|unreadable)$/;
 // The source is down or hung: the rest of the round would only wait out more timeouts.
@@ -97,8 +132,9 @@ function wake(state) {
 export function pickOverlay(byProvider, order, now, base = null, flagged = false) {
   const held = flagged ? byProvider[mis.id] : null;
   const heldDay = held ? taipeiDay(held.timestamp) : null;
-  const misYields = Boolean(held) && order.some((id) =>
-    id !== mis.id && byProvider[id] && taipeiDay(byProvider[id].timestamp) === heldDay);
+  const misYields =
+    Boolean(held) &&
+    order.some((id) => id !== mis.id && byProvider[id] && taipeiDay(byProvider[id].timestamp) === heldDay);
   let newest = null;
   for (const id of order) {
     const overlay = byProvider[id];
@@ -135,10 +171,10 @@ export function mergeOverlay(base, overlay, line) {
   // The base's line and activity come only from the overlay's period: both times before, or both at or after, the
   // start of the base's regular period (epoch ms, no time zone needed).
   const start = base?.periods?.regular?.[0];
-  const samePeriod = start === undefined || (base.timestamp < start) === (overlay.timestamp < start);
+  const samePeriod = start === undefined || base.timestamp < start === overlay.timestamp < start;
   // A kept (cached) or another period's volume never stands beside a fresh price.
-  const lendsActivity = ownPrice
-    || ((overlay.volume ?? null) === null && Boolean(base) && isRealtime(base) && !base.cached && samePeriod);
+  const lendsActivity =
+    ownPrice || ((overlay.volume ?? null) === null && Boolean(base) && isRealtime(base) && !base.cached && samePeriod);
   const merged = { ...(lendsActivity ? base : withoutActivity(base)) };
   for (const [key, value] of Object.entries(overlay)) if (value !== null && value !== undefined) merged[key] = value;
   const previousClose = merged.previousClose ?? null;
@@ -157,19 +193,19 @@ export function mergeOverlay(base, overlay, line) {
     ...(ownPrice && cached ? { cached } : {}),
     ...(!own && fallback?.cached && fallback.series?.length ? { chartCached: true } : {}),
     previousClose,
-    changePercent: previousClose > 0 ? (overlay.price - previousClose) / previousClose * 100 : null,
+    changePercent: previousClose > 0 ? ((overlay.price - previousClose) / previousClose) * 100 : null,
     name: base?.name ?? null,
     localName: overlay.name ?? null,
     // A price is never paired with another answer's limits.
     limitUp: overlay.limitUp ?? null,
     limitDown: overlay.limitDown ?? null,
     currency: base?.currency ?? null,
-    series: own ? [...own, overlay.price] : fallback?.series ?? [],
+    series: own ? [...own, overlay.price] : (fallback?.series ?? []),
     ...(times && { times }),
     periods: base?.periods ?? null,
-    chartSource: own ? overlay.source : fallback?.source ?? null,
-    chartTimestamp: own ? overlay.timestamp : fallback?.timestamp ?? null,
-    chartFetchedAt: own ? overlay.fetchedAt : fallback?.fetchedAt ?? null,
+    chartSource: own ? overlay.source : (fallback?.source ?? null),
+    chartTimestamp: own ? overlay.timestamp : (fallback?.timestamp ?? null),
+    chartFetchedAt: own ? overlay.fetchedAt : (fallback?.fetchedAt ?? null),
   };
 }
 
@@ -184,7 +220,9 @@ export function readPreferences(value) {
       try {
         const symbol = normalizeSymbol(raw);
         if (!symbols.includes(symbol)) symbols.push(symbol);
-      } catch { /* Skip one bad entry, not the whole list. */ }
+      } catch {
+        /* Skip one bad entry, not the whole list. */
+      }
     }
   }
   return { version: 1, symbols, paused: saved?.version === 1 && saved.paused === true };
@@ -271,11 +309,29 @@ export class Watchlist {
     // Per provider: its backoff, its current problem, its round and its own wake-up. `lineFailures`, by
     // symbol: the source failure of that symbol's last line request, for a provider with `linesPerRound`.
     // `noLive`: while the market is open, why an overlay source that answers prices nothing.
-    this.sources = Object.fromEntries(PROVIDERS.map((provider) => [provider.id, {
-      retryAt: 0, failures: 0, disabled: false, problem: null, noLive: null,
-      loading: false, manual: false, refreshing: false, dirty: true, wake: null,
-      lastRequestAt: -Infinity, missed: false, linesAt: {}, lineFailures: {}, configKey: null, disabledFor: null,
-    }]));
+    this.sources = Object.fromEntries(
+      PROVIDERS.map((provider) => [
+        provider.id,
+        {
+          retryAt: 0,
+          failures: 0,
+          disabled: false,
+          problem: null,
+          noLive: null,
+          loading: false,
+          manual: false,
+          refreshing: false,
+          dirty: true,
+          wake: null,
+          lastRequestAt: -Infinity,
+          missed: false,
+          linesAt: {},
+          lineFailures: {},
+          configKey: null,
+          disabledFor: null,
+        },
+      ]),
+    );
   }
 
   /**
@@ -330,8 +386,12 @@ export class Watchlist {
   /** A listed US stock left on Yahoo because Finnhub's budget is used up by the ones before it. */
   overCap(symbol) {
     const config = this.config();
-    return config.on.finnhub && this.serves(finnhub, symbol, config) && this.preferences.symbols.includes(symbol)
-      && !this.symbolsFor(finnhub, config).includes(symbol);
+    return (
+      config.on.finnhub &&
+      this.serves(finnhub, symbol, config) &&
+      this.preferences.symbols.includes(symbol) &&
+      !this.symbolsFor(finnhub, config).includes(symbol)
+    );
   }
 
   /**
@@ -414,7 +474,8 @@ export class Watchlist {
   unmarkedBase(symbol, now) {
     const sole = this.soleSource(symbol);
     const own = sole && this.overlays[symbol]?.[sole.id];
-    const quote = !sole ? this.quotes[symbol]
+    const quote = !sole
+      ? this.quotes[symbol]
       : own && { ...own, periods: ownPeriods(own, this.linePeriods[symbol] ?? null, now) };
     return quote && this.errors[symbol] ? { ...quote, cached: true } : quote;
   }
@@ -458,8 +519,8 @@ export class Watchlist {
     if (opening && auctionNow !== null && auctionWindowStart(opening.fetchedAt) === auctionNow) return opening.book;
     const { book } = quote;
     if (book) {
-      const fetchedIn = quote.source === yahootw.id && kindOf(symbol) === "stock"
-        ? auctionWindowStart(quote.fetchedAt) : null;
+      const fetchedIn =
+        quote.source === yahootw.id && kindOf(symbol) === "stock" ? auctionWindowStart(quote.fetchedAt) : null;
       if (fetchedIn === null) return book;
       // An earlier day's last book, still sent before today's first trade, is never this auction's.
       const tradedToday = taipeiDay(quote.tradeTime ?? quote.timestamp) === taipeiDay(quote.fetchedAt);
@@ -481,7 +542,12 @@ export class Watchlist {
     const { byMarket } = this.closures;
     if (!byMarket[market]) {
       const { on } = this.config();
-      const reading = closureOf(market, now, (day) => this.holidays.days[day] ?? null, (m, open) => this.observed(m, open, on));
+      const reading = closureOf(
+        market,
+        now,
+        (day) => this.holidays.days[day] ?? null,
+        (m, open) => this.observed(m, open, on),
+      );
       byMarket[market] = { ...reading, twRealtime: Boolean(on[mis.id] || on[yahootw.id]) };
     }
     return byMarket[market];
@@ -496,8 +562,9 @@ export class Watchlist {
   observed(market, open, on) {
     const entry = this.seen[market][open];
     if (!entry) return undefined;
-    const answers = PROVIDERS.filter(({ id }) => entry.answers[id] && (!OVERLAY_ORDER.includes(id) || on[id]))
-      .map(({ id }) => ({ source: id, ...entry.answers[id] }));
+    const answers = PROVIDERS.filter(({ id }) => entry.answers[id] && (!OVERLAY_ORDER.includes(id) || on[id])).map(
+      ({ id }) => ({ source: id, ...entry.answers[id] }),
+    );
     const ofKind = (realtime) => answers.filter((answer) => answer.realtime === realtime);
     return { traded: entry.newest >= open, newest: entry.newest, answers: [...ofKind(true), ...ofKind(false)] };
   }
@@ -521,7 +588,9 @@ export class Watchlist {
 
   /** Whether `symbols` hold a Taiwan symbol, a ^TW… index still waiting for its first quote included. */
   holdsTaiwan(symbols) {
-    return symbols.some((symbol) => this.marketFor(symbol) === "tw" || (isTaiwanForm(symbol) && this.pendingIndex(symbol)));
+    return symbols.some(
+      (symbol) => this.marketFor(symbol) === "tw" || (isTaiwanForm(symbol) && this.pendingIndex(symbol)),
+    );
   }
 
   /**
@@ -566,7 +635,9 @@ export class Watchlist {
       const response = await this.getWithin({ url: HOLIDAYS_URL, headers: HEADERS }, io);
       if (response !== TIMED_OUT && response.ok) days = parseHolidays(response.text);
       if (days && !listsYearOf(days, now)) days = null;
-    } catch { /* No schedule: tried again after HOLIDAY_RETRY_MS. */ }
+    } catch {
+      /* No schedule: tried again after HOLIDAY_RETRY_MS. */
+    }
     holidays.tried = taipeiDay(now);
     holidays.pending = null;
     if (days) {
@@ -811,13 +882,15 @@ export class Watchlist {
         if (error.code === "yahootw.reconfirm") this.errors[symbol] = this.unpricedReason(symbol, config);
       }
       for (const symbol of preferences.symbols) {
-        if (this.twOnly.has(symbol) || kindOf(symbol) === "future") this.errors[symbol] = this.unpricedReason(symbol, config);
+        if (this.twOnly.has(symbol) || kindOf(symbol) === "future")
+          this.errors[symbol] = this.unpricedReason(symbol, config);
       }
       this.twOnly.clear();
     } else {
       // On: those reasons go at once.
       for (const [symbol, error] of Object.entries(this.errors)) {
-        if (error.code === "yahootw.futuresNeedSource" || error.code === "yahootw.reconfirm") delete this.errors[symbol];
+        if (error.code === "yahootw.futuresNeedSource" || error.code === "yahootw.reconfirm")
+          delete this.errors[symbol];
       }
     }
     for (const symbol of [...this.twOnly]) if (!keep.has(symbol)) this.twOnly.delete(symbol);
@@ -829,9 +902,14 @@ export class Watchlist {
     for (const provider of OVERLAYS) {
       const symbols = new Set(this.symbolsFor(provider, config));
       for (const symbol of symbols) covered.add(symbol);
-      const held = [this.overlays, this.overlayErrors, this.lines[provider.id] ?? {}, this.lineTrades[provider.id] ?? {},
+      const held = [
+        this.overlays,
+        this.overlayErrors,
+        this.lines[provider.id] ?? {},
+        this.lineTrades[provider.id] ?? {},
         ...(provider === mis ? [this.auctionAt, this.auctionBooks, this.noLevels] : []),
-        ...(provider === yahootw ? [this.ytwAuctionBooks] : [])];
+        ...(provider === yahootw ? [this.ytwAuctionBooks] : []),
+      ];
       for (const symbol of held.flatMap(Object.keys)) {
         if (symbols.has(symbol)) continue;
         this.dropOverlay(provider, symbol);
@@ -854,7 +932,10 @@ export class Watchlist {
     if (sole) return provider === sole;
     const kind = kindOf(symbol);
     // Only an index's market needs its quote's exchange.
-    return provider.kinds.includes(kind) && provider.markets.includes(kind === "index" ? this.marketFor(symbol) : marketOf(symbol));
+    return (
+      provider.kinds.includes(kind) &&
+      provider.markets.includes(kind === "index" ? this.marketFor(symbol) : marketOf(symbol))
+    );
   }
 
   /**
@@ -880,9 +961,13 @@ export class Watchlist {
     let best = "closed";
     for (const symbol of symbols) {
       const quote = this.baseQuote(symbol, now);
-      let session = quote ? sessionOf(quote, now)
-        : this.soleSource(symbol) ? (this.errors[symbol]?.code === "yahootw.notFound" ? "closed" : soleSession(this.standIn(symbol, now), now))
-        : "unknown";
+      let session = quote
+        ? sessionOf(quote, now)
+        : this.soleSource(symbol)
+          ? this.errors[symbol]?.code === "yahootw.notFound"
+            ? "closed"
+            : soleSession(this.standIn(symbol, now), now)
+          : "unknown";
       // MIS's flag keeps the pace also where a delayed price from today reads its own session. Before 09:00 Taipei (the
       // trial match's end) a call auction paces as closed: its answers show nothing new, the consent texts promise the
       // fast pace only during trading hours, and the 09:00 opening starts a round.
@@ -997,8 +1082,10 @@ export class Watchlist {
         // the first price of a session is not up to an interval late; from then on the row reads that session, and
         // its cadence with it.
         const opens = this.edgeAt(symbols, now, { openings: true });
-        due += Math.max(Math.min(provider.intervalMs(this.sessionFor(symbols, now)), opens === null ? Infinity : opens - now),
-          state.retryAt - now);
+        due += Math.max(
+          Math.min(provider.intervalMs(this.sessionFor(symbols, now)), opens === null ? Infinity : opens - now),
+          state.retryAt - now,
+        );
       }
       await this.rest(state, symbols, due, io, hidden);
     }
@@ -1035,11 +1122,18 @@ export class Watchlist {
     const config = this.config();
     const configKey = JSON.stringify(config);
     // A new address asks every line again.
-    if (state.configKey !== configKey) { state.configKey = configKey; state.linesAt = {}; }
+    if (state.configKey !== configKey) {
+      state.configKey = configKey;
+      state.linesAt = {};
+    }
     // Only Finnhub's requests carry the key; no other source is ever handed it. The symbols Yahoo 奇摩股市 prices
     // alone go to its requests only, never to config(): a change there would make sync() restart every round.
-    const asked = provider === finnhub ? { ...config, finnhubKey: this.finnhubKey }
-      : provider === yahootw ? { ...config, anyDay: symbols.filter((symbol) => this.soleSource(symbol, config)) } : config;
+    const asked =
+      provider === finnhub
+        ? { ...config, finnhubKey: this.finnhubKey }
+        : provider === yahootw
+          ? { ...config, anyDay: symbols.filter((symbol) => this.soleSource(symbol, config)) }
+          : config;
     const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
     const spacing = provider.spacingMs(quoteCount, provider.intervalMs(this.sessionFor(symbols, this.host.now())));
@@ -1057,7 +1151,10 @@ export class Watchlist {
         const request = requests[index];
         if (request.kind === "line") {
           const failed = await this.line(provider, state, request, io, current);
-          if (this.endsRound(provider, failed)) { this.endOnLine(provider, state, requests, index, failed); return; }
+          if (this.endsRound(provider, failed)) {
+            this.endOnLine(provider, state, requests, index, failed);
+            return;
+          }
           continue;
         }
         const wait = spacing - (this.host.now() - state.lastRequestAt);
@@ -1098,7 +1195,10 @@ export class Watchlist {
       for (const request of provider.linesPerRound ? this.dueLines(provider, state, requests) : []) {
         if (!current()) return;
         const failed = await this.line(provider, state, request, io, current);
-        if (this.endsRound(provider, failed)) { this.endOnLine(provider, state, requests, requests.indexOf(request), failed); return; }
+        if (this.endsRound(provider, failed)) {
+          this.endOnLine(provider, state, requests, requests.indexOf(request), failed);
+          return;
+        }
         if (!current()) return;
         // A failure of the source itself (an HTTP error, an unreadable answer) shows, as a price's would.
         // A line is asked only every `linesMs`, so it stays shown through the rounds between, until
@@ -1109,7 +1209,8 @@ export class Watchlist {
       if (!current()) return;
       // A symbol no longer priced by this source (removed, or its price gone) is not asked for a line
       // again, so its failure goes.
-      for (const symbol of Object.keys(state.lineFailures)) if (!this.priced(provider, symbol)) delete state.lineFailures[symbol];
+      for (const symbol of Object.keys(state.lineFailures))
+        if (!this.priced(provider, symbol)) delete state.lineFailures[symbol];
       // An answer that prices nothing live while the market is open is shown, or the person sees only
       // delayed rows with no word why; it stays until an answer prices a row again.
       if (live || this.sessionFor(symbols, this.host.now()) !== "open") state.noLive = null;
@@ -1216,7 +1317,9 @@ export class Watchlist {
           // (by this source once it priced it, so the kept price reads cached, and always for a future, which
           // Yahoo Finance never sees).
           if (overlay || (!error && result.names?.[symbol])) delete this.errors[symbol];
-          else this.errors[symbol] = error ?? notice((had || kindOf(symbol) === "future") ? "yahootw.notFound" : "yahoo.notFound");
+          else
+            this.errors[symbol] =
+              error ?? notice(had || kindOf(symbol) === "future" ? "yahootw.notFound" : "yahoo.notFound");
           continue;
         }
         // A symbol in a call auction (MIS's flag) keeps the price held from before it. A flag from a snapshot older
@@ -1289,8 +1392,11 @@ export class Watchlist {
       for (const [market, time] of Object.entries(result.newestTrade)) trades[market] = { time, realtime };
     } else {
       const rows = [
-        ...Object.entries(result.quotes).map(([symbol, quote]) =>
-          [symbol, timedByTrade(quote) ? quote.tradeTime ?? quote.timestamp : null, isRealtime(quote)]),
+        ...Object.entries(result.quotes).map(([symbol, quote]) => [
+          symbol,
+          timedByTrade(quote) ? (quote.tradeTime ?? quote.timestamp) : null,
+          isRealtime(quote),
+        ]),
         ...Object.keys(result.auction ?? {}).map((symbol) => [symbol, null, realtime]),
       ];
       for (const [symbol, time, rowRealtime] of rows) {
@@ -1302,7 +1408,8 @@ export class Watchlist {
         if (later || !trades[market]) trades[market] = { time: later ? time : null, realtime: rowRealtime };
       }
     }
-    for (const [market, { time, realtime }] of Object.entries(trades)) this.noteTrade(market, time, { source: provider.id, realtime }, now);
+    for (const [market, { time, realtime }] of Object.entries(trades))
+      this.noteTrade(market, time, { source: provider.id, realtime }, now);
   }
 
   /** Each overlay source's symbols, in OVERLAYS order: what `wakeResolved` compares. */
@@ -1349,7 +1456,10 @@ export class Watchlist {
   // this source prices alone, which has no base; an overlay goes.
   fail(provider, symbol, error) {
     if (provider === yahootw) delete this.ytwAuctionBooks[symbol];
-    if (!provider.overlay || this.soleSource(symbol) === provider) { this.errors[symbol] = error; return; }
+    if (!provider.overlay || this.soleSource(symbol) === provider) {
+      this.errors[symbol] = error;
+      return;
+    }
     this.dropOverlay(provider, symbol);
     if (provider === mis) delete this.noLevels[symbol];
     this.setEntry(this.overlayErrors, symbol, provider.id, error);
@@ -1372,7 +1482,8 @@ export class Watchlist {
   /** One quote request; when one unknown symbol fails a whole batch, ask symbol by symbol. */
   async quote(provider, request, io, current, config) {
     const batch = await this.ask(provider, request, io, current);
-    if (!batch || request.symbols.length < 2 || !request.symbols.every((symbol) => batch.errors[symbol]?.invalidSymbol)) return batch;
+    if (!batch || request.symbols.length < 2 || !request.symbols.every((symbol) => batch.errors[symbol]?.invalidSymbol))
+      return batch;
     const merged = { quotes: {}, errors: {} };
     for (const symbol of request.symbols) {
       const single = provider.requests([symbol], config).find((r) => r.kind === "quote");

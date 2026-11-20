@@ -3,7 +3,15 @@
 // This file holds the host, limits and decoder; the switch and consent live in settings.js and the
 // settings dialog. No Herdr imports, so tests run it under Node.
 import {
-  HEADERS, QuoteError, cleanText, currencyCode, exchangeCode, limitPair, positive, positiveOrNull, withinLimits,
+  HEADERS,
+  QuoteError,
+  cleanText,
+  currencyCode,
+  exchangeCode,
+  limitPair,
+  positive,
+  positiveOrNull,
+  withinLimits,
 } from "../quotes.js";
 import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
 import { MINUTE_MS, fastPace, kindOf } from "../markets.js";
@@ -86,8 +94,10 @@ function bookSide(orderbook, side, total, future) {
     sum += n ?? 0;
   }
   if (sum !== amount(total, future)) return null;
-  return orderbook.map((level) => ({ price: positiveOrNull(level?.[side]), size: amount(level?.[size], future) }))
-    .filter((level) => level.size > 0).slice(0, BOOK_LEVELS);
+  return orderbook
+    .map((level) => ({ price: positiveOrNull(level?.[side]), size: amount(level?.[size], future) }))
+    .filter((level) => level.size > 0)
+    .slice(0, BOOK_LEVELS);
 }
 
 // The row's book, `{ bids, asks }`, only when both sides add up (bookSide); none without an `orderbook` list.
@@ -198,11 +208,13 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     // A trade counts only with a time the decoder accepts: a future's at most FUTURE_AHEAD_MS ahead, a stock's on today's
     // trading day or earlier. A time further ahead is a bad time, never a trade.
     const timeOk = future ? aheadOk : day <= today;
-    if (price && tradeTime !== null && timeOk && !delayed) newestTrade[clock] = Math.max(newestTrade[clock] ?? tradeTime, tradeTime);
+    if (price && tradeTime !== null && timeOk && !delayed)
+      newestTrade[clock] = Math.max(newestTrade[clock] ?? tradeTime, tradeTime);
     // A symbol only this source prices has no other row to fall back on: a price refused as not real time says so,
     // so the kept price reads cached rather than taken for a name-only answer. A price with no trade time is refused
     // the same way: there is no trade to date it by.
-    if (price && soleHere && (delayed || !aheadOk || tradeTime === null)) errors[symbol] = new QuoteError("yahootw.noLiveRows");
+    if (price && soleHere && (delayed || !aheadOk || tradeTime === null))
+      errors[symbol] = new QuoteError("yahootw.noLiveRows");
     // A stock in the opening auction (`preopen`, no price yet) sends the trial match's book: an auction book, never a price.
     if (!price && !delayed && kindOf(symbol) === "stock" && row.marketStatus === "preopen") {
       const levels = book(row, false);
@@ -214,34 +226,40 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       errors[symbol] = new QuoteError("yahootw.outOfLimits");
       continue;
     }
-    priced.push([isToday && clock, {
-      symbol,
-      source: "yahootw",
-      name,
-      price,
-      previousClose: number(row.regularMarketPreviousClose),
-      open: number(row.regularMarketOpen),
-      high: number(row.regularMarketDayHigh),
-      low: number(row.regularMarketDayLow),
-      ...limits,
-      // An instrument only this source prices takes its market and currency from here.
-      exchange: exchangeCode(row.exchange),
-      currency: currencyCode(row.currency),
-      // An index's activity is not read.
-      ...(kindOf(symbol) !== "index" && activity(row, future)),
-      tradeTime,
-      day,
-      fetchedAt: now,
-    }]);
+    priced.push([
+      isToday && clock,
+      {
+        symbol,
+        source: "yahootw",
+        name,
+        price,
+        previousClose: number(row.regularMarketPreviousClose),
+        open: number(row.regularMarketOpen),
+        high: number(row.regularMarketDayHigh),
+        low: number(row.regularMarketDayLow),
+        ...limits,
+        // An instrument only this source prices takes its market and currency from here.
+        exchange: exchangeCode(row.exchange),
+        currency: currencyCode(row.currency),
+        // An index's activity is not read.
+        ...(kindOf(symbol) !== "index" && activity(row, future)),
+        tradeTime,
+        day,
+        fetchedAt: now,
+      },
+    ]);
   }
   // The newest trade on each market clock among today's quotes.
   const feedTime = {};
   for (const [clock, quote] of priced) if (clock) feedTime[clock] = Math.max(feedTime[clock] ?? 0, quote.tradeTime);
-  const quotes = Object.fromEntries(priced.map(([clock, quote]) =>
-    [quote.symbol, { ...quote, timestamp: clock ? feedTime[clock] : quote.tradeTime }]));
+  const quotes = Object.fromEntries(
+    priced.map(([clock, quote]) => [quote.symbol, { ...quote, timestamp: clock ? feedTime[clock] : quote.tradeTime }]),
+  );
   const anyToday = priced.some(([clock]) => clock);
   return {
-    quotes, errors, names,
+    quotes,
+    errors,
+    names,
     ...(anyPrice && !anyToday && { noLive: new QuoteError("yahootw.noLiveRows") }),
     ...(Object.keys(newestTrade).length && { newestTrade }),
     ...(Object.keys(auctionBook).length && { auctionBook }),
@@ -249,8 +267,11 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
 }
 
 // `sourceTradingPeriods`' periods, at any depth, as sorted `[start, end]` pairs; none when it is not an array.
-const futuresSegments = (periods) => (Array.isArray(periods) ? periods.flat(Infinity) : [])
-  .map(period).filter(Boolean).sort((a, b) => a[0] - b[0]);
+const futuresSegments = (periods) =>
+  (Array.isArray(periods) ? periods.flat(Infinity) : [])
+    .map(period)
+    .filter(Boolean)
+    .sort((a, b) => a[0] - b[0]);
 
 /**
  * One symbol's line, `{ day, series, times, lastAt, endAt }`: the one-minute closes of today's trading day (see
@@ -283,7 +304,10 @@ export function decodeTick(symbol, response, now) {
     // Checked before the close is taken, so yesterday's last close never fills today's first minutes. A minute
     // after `now` is still to come (a futures answer lists the whole trading day): never filled.
     if (seconds * 1000 > now || dayAt(seconds * 1000) !== today) return;
-    if (positive(closes?.[i])) { last = closes[i]; lastAt = seconds * 1000; }
+    if (positive(closes?.[i])) {
+      last = closes[i];
+      lastAt = seconds * 1000;
+    }
     if (last === null) return;
     series.push(last);
     times.push(seconds * 1000);
@@ -292,13 +316,29 @@ export function decodeTick(symbol, response, now) {
   const regular = period(trading?.regular);
   const segments = kindOf(symbol) === "future" ? futuresSegments(chart.meta.sourceTradingPeriods) : [];
   return {
-    quotes: {}, errors: {},
-    ...(series.length && { lines: { [symbol]: {
-      day: today, series, times, lastAt, ...(regular && dayAt(regular[1] - 1) === today && { endAt: regular[1] }),
-    } } }),
-    ...(regular && { periods: { [symbol]: {
-      pre: period(trading.pre), regular, post: period(trading.post), ...(segments.length && { segments }),
-    } } }),
+    quotes: {},
+    errors: {},
+    ...(series.length && {
+      lines: {
+        [symbol]: {
+          day: today,
+          series,
+          times,
+          lastAt,
+          ...(regular && dayAt(regular[1] - 1) === today && { endAt: regular[1] }),
+        },
+      },
+    }),
+    ...(regular && {
+      periods: {
+        [symbol]: {
+          pre: period(trading.pre),
+          regular,
+          post: period(trading.post),
+          ...(segments.length && { segments }),
+        },
+      },
+    }),
   };
 }
 
@@ -323,7 +363,13 @@ export const yahootw = {
     for (let i = 0; i < symbols.length; i += YAHOOTW_BATCH) {
       const batch = symbols.slice(i, i + YAHOOTW_BATCH);
       const url = `${YAHOOTW_BASE}StockServices.stockList;symbols=${batch.map(encodeURIComponent).join(",")}`;
-      requests.push({ url, headers: HEADERS, symbols: batch, kind: "quote", anyDay: batch.filter((symbol) => anyDay.has(symbol)) });
+      requests.push({
+        url,
+        headers: HEADERS,
+        symbols: batch,
+        kind: "quote",
+        anyDay: batch.filter((symbol) => anyDay.has(symbol)),
+      });
     }
     for (const symbol of symbols) {
       const url = `${YAHOOTW_BASE}FinanceChartService.ApacLibraCharts;type=tick;symbols=${encodeURIComponent(JSON.stringify([symbol]))}`;

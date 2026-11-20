@@ -43,7 +43,9 @@ const EXCHANGES = {
   jp: ["JPX", "OSA"],
   kr: ["KSC", "KOE"],
 };
-const EXCHANGE_MARKET = Object.fromEntries(Object.entries(EXCHANGES).flatMap(([market, codes]) => codes.map((code) => [code, market])));
+const EXCHANGE_MARKET = Object.fromEntries(
+  Object.entries(EXCHANGES).flatMap(([market, codes]) => codes.map((code) => [code, market])),
+);
 
 /** The market an exchange code belongs to, or null. */
 export const exchangeMarket = (exchange) => EXCHANGE_MARKET[exchange] ?? null;
@@ -53,7 +55,7 @@ export const exchangeMarket = (exchange) => EXCHANGE_MARKET[exchange] ?? null;
  * one is reported, or when it is not in the table). A currency or a Yahoo future (=) stays other.
  */
 export function resolvedMarket(symbol, exchange) {
-  return symbol.startsWith("^") ? exchangeMarket(exchange) ?? "other" : marketOf(symbol);
+  return symbol.startsWith("^") ? (exchangeMarket(exchange) ?? "other") : marketOf(symbol);
 }
 
 // Lunch breaks in local minutes since midnight; `offsetMin` is the exchange clock's fixed UTC offset (no DST).
@@ -63,10 +65,14 @@ const CHINA_LUNCH = { offsetMin: 480, from: 690, to: 780 };
 
 // TAIFEX's published hours (Taipei, +8 h, no DST), in minutes since midnight; each session opens Monday to
 // Friday (Sunday 0). The night session runs past midnight into the next day. Holidays follow the data only.
-export const TAIFEX_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], sessions: [
-  { from: 525, to: 825 },   // day, 08:45–13:45
-  { from: 900, to: 1740 },  // night, 15:00–05:00 the next day
-] });
+export const TAIFEX_HOURS = Object.freeze({
+  offsetMin: 480,
+  weekdays: [1, 2, 3, 4, 5],
+  sessions: [
+    { from: 525, to: 825 }, // day, 08:45–13:45
+    { from: 900, to: 1740 }, // night, 15:00–05:00 the next day
+  ],
+});
 export const DAY_SESSION = TAIFEX_HOURS.sessions[0];
 export const NIGHT_SESSION = TAIFEX_HOURS.sessions[1];
 
@@ -75,7 +81,7 @@ export const fastPace = (session) => session === "open" || session === "auction"
 
 // Regular hours used only for a Taiwan or US quote with no trading periods yet; exchange-local minutes.
 export const TWSE_HOURS = Object.freeze({ offsetMin: 480, weekdays: [1, 2, 3, 4, 5], from: 540, to: 810 }); // 09:00–13:30 Taipei, TWSE and TPEx
-export const US_HOURS = Object.freeze({ weekdays: [1, 2, 3, 4, 5], from: 570, to: 960 });                  // 09:30–16:00 New York
+export const US_HOURS = Object.freeze({ weekdays: [1, 2, 3, 4, 5], from: 570, to: 960 }); // 09:30–16:00 New York
 
 // The UTC instant of the `nth` Sunday (1-based) of `month` (0-based, as Date.UTC) at `hourUtc`.
 function nthSundayUtc(year, month, nth, hourUtc) {
@@ -125,18 +131,33 @@ const late = (delayS, lunch = null) => ({ delayS, lunch });
 // provided, never a guess. It mixes Yahoo's facts (realtime, delayS) with the exchange's own (lunch, fx), and
 // stays here rather than in a provider, since the view reads both together.
 const RULES = {
-  NMS: LIVE, NYQ: LIVE, PCX: LIVE, // measured 2026-11-09, lag 1–16 s
-  NGM: LIVE, NCM: LIVE, ASE: LIVE, BTS: LIVE, // measured 2026-11-10 in a US session: NGM, NCM, ASE and BTS real time (0–34 s)
-  SNP: LIVE, DJI: LIVE, NIM: LIVE, // measured 2026-11-09
+  NMS: LIVE,
+  NYQ: LIVE,
+  PCX: LIVE, // measured 2026-11-09, lag 1–16 s
+  NGM: LIVE,
+  NCM: LIVE,
+  ASE: LIVE,
+  BTS: LIVE, // measured 2026-11-10 in a US session: NGM, NCM, ASE and BTS real time (0–34 s)
+  SNP: LIVE,
+  DJI: LIVE,
+  NIM: LIVE, // measured 2026-11-09
   CCY: { ...LIVE, fx: true }, // measured 2026-11-10, lag 2–31 s; indicative quotes
-  TAI: late(1200), TWO: late(1200), // measured 2026-11-10, 1198–1220 s
-  KSC: late(1200), KOE: late(1200), // measured 2026-11-10, 1197–1210 s
-  JPX: late(900, TOKYO_LUNCH), OSA: late(900, TOKYO_LUNCH), // measured 2026-11-10 (899–901 s, after lunch); Yahoo help says 20
+  TAI: late(1200),
+  TWO: late(1200), // measured 2026-11-10, 1198–1220 s
+  KSC: late(1200),
+  KOE: late(1200), // measured 2026-11-10, 1197–1210 s
+  JPX: late(900, TOKYO_LUNCH),
+  OSA: late(900, TOKYO_LUNCH), // measured 2026-11-10 (899–901 s, after lunch); Yahoo help says 20
   HKG: late(900, HONG_KONG_LUNCH), // measured 2026-11-10, 896–907 s
-  SHH: late(900, CHINA_LUNCH), SHZ: late(900, CHINA_LUNCH), // measured 2026-11-10, 898–901 s (help says 30)
+  SHH: late(900, CHINA_LUNCH),
+  SHZ: late(900, CHINA_LUNCH), // measured 2026-11-10, 898–901 s (help says 30)
   CXI: late(1200), // measured 2026-11-09, 1117 s (over 15 min)
-  PNK: late(900), NYS: late(900), WCB: late(900), // Yahoo help (SLN2310)
-  CME: { ...late(600), futures: true }, NYM: { ...late(600), futures: true }, CMX: { ...late(600), futures: true }, // measured 2026-11-10, 592–611 s
+  PNK: late(900),
+  NYS: late(900),
+  WCB: late(900), // Yahoo help (SLN2310)
+  CME: { ...late(600), futures: true },
+  NYM: { ...late(600), futures: true },
+  CMX: { ...late(600), futures: true }, // measured 2026-11-10, 592–611 s
   CBT: { ...late(600), futures: true }, // CME Group, as CME; not measured
 };
 
@@ -253,8 +274,11 @@ export function filterAfterRemove(symbols, filter, marketFor, pending) {
  * elsewhere, so the choice settles (filterAfterRemove with nothing pending) once no index is pending.
  */
 export function heldFilter(symbols, filter, marketFor, pending) {
-  return filter !== "all" && filterAfterRemove(symbols, filter, marketFor, pending) === filter
-    && !symbols.some((symbol) => inFilter(symbol, filter, marketFor));
+  return (
+    filter !== "all" &&
+    filterAfterRemove(symbols, filter, marketFor, pending) === filter &&
+    !symbols.some((symbol) => inFilter(symbol, filter, marketFor))
+  );
 }
 
 // The key under which a copy keeps its market filter in its own storage (see main.js).

@@ -7,19 +7,35 @@ import { backFromYield, onScreen, ownTabAction, syncDock } from "../mods/wicklin
 // The office layout, ids only: Wickline docked as one tab of the collapsible panel's stack.
 const block = (id, content) => ({ id, type: "block", content });
 const office = ({ hidden = false, active = "wickline" } = {}) => ({
-  id: "root", type: "row", children: [
-    { id: "work-body", type: "row", children: [
-      block("main", { tab: "active" }),
-      { id: "panel", type: "column", hidden, children: [
-        { id: "panel-body", type: "stack", active, children: [
-          block("files", { mod: "files" }),
-          block("wickline", { mod: "wickline", props: { card: true } }),
-        ] },
-      ] },
-    ] },
+  id: "root",
+  type: "row",
+  children: [
+    {
+      id: "work-body",
+      type: "row",
+      children: [
+        block("main", { tab: "active" }),
+        {
+          id: "panel",
+          type: "column",
+          hidden,
+          children: [
+            {
+              id: "panel-body",
+              type: "stack",
+              active,
+              children: [
+                block("files", { mod: "files" }),
+                block("wickline", { mod: "wickline", props: { card: true } }),
+              ],
+            },
+          ],
+        },
+      ],
+    },
   ],
 });
-const byId = (node, id) => node.id === id ? node : (node.children ?? []).map((c) => byId(c, id)).find(Boolean);
+const byId = (node, id) => (node.id === id ? node : (node.children ?? []).map((c) => byId(c, id)).find(Boolean));
 
 // Herdr as moves.js sees it: the layout, the panes, the shared store, and every command run, in order.
 // `later(n, change)` applies `change` on the n-th look at panes() or layout() from now: Herdr shows the
@@ -34,7 +50,10 @@ function fakeHost({ tree = office(), panes = [] } = {}) {
   host.layout = () => (look(), host.tree);
   host.panes = () => (look(), host.list);
   host.shared = (key) => host.store[key];
-  host.setShared = (key, value) => { host.ran.push(["setShared", key, value]); host.store[key] = value; };
+  host.setShared = (key, value) => {
+    host.ran.push(["setShared", key, value]);
+    host.store[key] = value;
+  };
   host.focused = () => ({ tab: "t1", pane: "p1" });
   host.run = (command, args) => host.ran.push([command, args]);
   return host;
@@ -43,14 +62,27 @@ function fakeHost({ tree = office(), panes = [] } = {}) {
 // A click's cx: spawn starts the task at once (as Herdr does) and keeps it; sleep lets other work run.
 function fakeCx() {
   const cx = { tasks: [], sleeps: 0 };
-  cx.spawn = (task) => { cx.tasks.push(task(cx)); };
-  cx.sleep = async () => { cx.sleeps++; await new Promise((r) => setImmediate(r)); };
+  cx.spawn = (task) => {
+    cx.tasks.push(task(cx));
+  };
+  cx.sleep = async () => {
+    cx.sleeps++;
+    await new Promise((r) => setImmediate(r));
+  };
   cx.done = () => Promise.all(cx.tasks);
   return cx;
 }
 
 const view = (extra = {}) => ({
-  card: false, dock: null, yielding: false, dockShown: false, fromDock: false, from: null, moving: false, filter: "all", ...extra,
+  card: false,
+  dock: null,
+  yielding: false,
+  dockShown: false,
+  fromDock: false,
+  from: null,
+  moving: false,
+  filter: "all",
+  ...extra,
 });
 const commands = (host) => host.ran.map(([name]) => name);
 
@@ -95,7 +127,12 @@ test("onScreen gives the loops the same answer and leaves the view as it is", ()
 
 test("a dock tab record left by a closed tab is cleared once, by render and by the loops alike", () => {
   for (const check of [onScreen, syncDock]) {
-    const host = fakeHost({ panes: [{ pane: "p1", tab: "t1", terminal: "term-1" }, { pane: "p8", tab: "t9", terminal: "term-8" }] });
+    const host = fakeHost({
+      panes: [
+        { pane: "p1", tab: "t1", terminal: "term-1" },
+        { pane: "p8", tab: "t9", terminal: "term-8" },
+      ],
+    });
     // The person closed the tab's Wickline pane by hand: a shell is all that is left in t9.
     host.store[DOCK_TAB_KEY] = { tab: "t9" };
     const v = view({ card: true });
@@ -150,13 +187,20 @@ test("⤢ from a block: waits for the new tab, then records it and hides the pan
   assert.equal(action.label, "button.ownTab");
   const cx = fakeCx();
   action.go(cx);
-  assert.deepEqual(host.ran, [["tab.new", { mod: "wickline", name: "Wickline", props: { dock: true, from: "t1", filter: "tw" } }]]);
+  assert.deepEqual(host.ran, [
+    ["tab.new", { mod: "wickline", name: "Wickline", props: { dock: true, from: "t1", filter: "tw" } }],
+  ]);
   // The tab shows up in panes() a few looks later; until then nothing is recorded and nothing hides.
-  host.later(3, () => { host.list = [...host.list, { pane: "p9", tab: "t9", mod: "wickline" }]; });
+  host.later(3, () => {
+    host.list = [...host.list, { pane: "p9", tab: "t9", mod: "wickline" }];
+  });
   await cx.sleep();
   assert.deepEqual(commands(host), ["tab.new"]);
   await cx.done();
-  assert.deepEqual(host.ran.slice(1), [["setShared", DOCK_TAB_KEY, { tab: "t9" }], ["layout.hide", { id: "panel" }]]);
+  assert.deepEqual(host.ran.slice(1), [
+    ["setShared", DOCK_TAB_KEY, { tab: "t9" }],
+    ["layout.hide", { id: "panel" }],
+  ]);
   assert.ok(cx.sleeps >= 2);
   // The block stays, so the icon works again.
   assert.equal(v.moving, false);
@@ -187,22 +231,32 @@ test("back to the panel: waits until the block is shown before closing the tab's
     ["layout.show", { id: "panel" }],
   ]);
   // The panel opens on Wickline a few looks later.
-  host.later(3, () => { host.tree = office(); });
+  host.later(3, () => {
+    host.tree = office();
+  });
   await cx.sleep();
   assert.equal(commands(host).includes("pane.close"), false);
   await cx.done();
   // Cleared as `{ tab: null }`: Herdr keeps a value set to null.
-  assert.deepEqual(host.ran.slice(2), [["setShared", DOCK_TAB_KEY, { tab: null }], ["pane.close", { pane: "p9" }]]);
+  assert.deepEqual(host.ran.slice(2), [
+    ["setShared", DOCK_TAB_KEY, { tab: null }],
+    ["pane.close", { pane: "p9" }],
+  ]);
   // The tab copy is going away: its icon stays out for good.
   assert.equal(v.moving, true);
 });
 
 test("back to the panel: returns to the tab the person moved Wickline from, then closes the tab's pane", async () => {
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
-  const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p1", tab: "t1" }, { pane: "p2", tab: "t2" }, tab] });
+  const host = fakeHost({
+    tree: office({ hidden: true }),
+    panes: [{ pane: "p1", tab: "t1" }, { pane: "p2", tab: "t2" }, tab],
+  });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true, from: "t1" });
-  host.later(2, () => { host.tree = office(); });
+  host.later(2, () => {
+    host.tree = office();
+  });
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
   await cx.done();
@@ -219,7 +273,9 @@ test("back to the panel: a tab it came from that is gone is not selected", async
   const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p2", tab: "t2" }, tab] });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true, from: "t1" });
-  host.later(2, () => { host.tree = office(); });
+  host.later(2, () => {
+    host.tree = office();
+  });
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
   await cx.done();
@@ -231,10 +287,15 @@ test("back to the panel: a refused tab.select still closes the tab's pane", asyn
   const tab = { pane: "p9", tab: "t9", mod: "wickline", focused: true };
   const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p1", tab: "t1" }, tab] });
   const run = host.run;
-  host.run = (command, args) => { run(command, args); if (command === "tab.select") throw new Error("no such tab"); };
+  host.run = (command, args) => {
+    run(command, args);
+    if (command === "tab.select") throw new Error("no such tab");
+  };
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ fromDock: true, from: "t1" });
-  host.later(2, () => { host.tree = office(); });
+  host.later(2, () => {
+    host.tree = office();
+  });
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
   await cx.done();
@@ -250,7 +311,10 @@ test("⤢ from a block: with no focused tab, the new tab carries no `from`", asy
   syncDock(host, v);
   const cx = fakeCx();
   ownTabAction(host, v).go(cx);
-  assert.deepEqual(host.ran[0], ["tab.new", { mod: "wickline", name: "Wickline", props: { dock: true, filter: "all" } }]);
+  assert.deepEqual(host.ran[0], [
+    "tab.new",
+    { mod: "wickline", name: "Wickline", props: { dock: true, filter: "all" } },
+  ]);
   await cx.done();
 });
 
@@ -288,7 +352,9 @@ test("the yield view's way back closes the dock tab's pane and keeps the block's
   const host = fakeHost({ tree: office({ hidden: true }), panes: [{ pane: "p1", tab: "t1", focused: true }, tab] });
   host.store[DOCK_TAB_KEY] = { tab: "t9" };
   const v = view({ card: true });
-  host.later(2, () => { host.tree = office(); });
+  host.later(2, () => {
+    host.tree = office();
+  });
   const cx = fakeCx();
   backFromYield(host, v, cx);
   await cx.done();
@@ -306,7 +372,9 @@ test("a pane copy moves to its own tab and closes its pane only once the new cop
   const cx = fakeCx();
   action.go(cx);
   assert.deepEqual(host.ran, [["tab.new", { mod: "wickline", name: "Wickline", props: { from: "t1", filter: "us" } }]]);
-  host.later(3, () => { host.list = [...host.list, { pane: "p4", tab: "t4", mod: "wickline" }]; });
+  host.later(3, () => {
+    host.list = [...host.list, { pane: "p4", tab: "t4", mod: "wickline" }];
+  });
   await cx.done();
   assert.deepEqual(host.ran.at(-1), ["pane.close", { pane: "p2" }]);
   assert.equal(v.moving, true);

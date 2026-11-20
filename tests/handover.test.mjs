@@ -1,21 +1,45 @@
 // node --test tests/  (handover.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DETAIL_KEY, adopt, clearsOnClose, makeToken, nextWrite, packTimes, startHandover, unpackTimes } from "../mods/wickline/handover.js";
+import {
+  DETAIL_KEY,
+  adopt,
+  clearsOnClose,
+  makeToken,
+  nextWrite,
+  packTimes,
+  startHandover,
+  unpackTimes,
+} from "../mods/wickline/handover.js";
 import { Watchlist } from "../mods/wickline/watchlist.js";
 import { detailSource, sessionOf } from "../mods/wickline/freshness.js";
 import { heldMarks, taipeiDay } from "../mods/wickline/calendar.js";
 import { failureNote } from "../mods/wickline/format.js";
 import { MIS_URL, mis } from "../mods/wickline/providers/mis.js";
 import { yahootw } from "../mods/wickline/providers/yahootw.js";
-import { BOTH_ON, LISTED_2026, MIS_ON, at, day, fakeHost, jsonFixture, ok, say, taipei, withTZ, yq } from "./helpers.mjs";
+import {
+  BOTH_ON,
+  LISTED_2026,
+  MIS_ON,
+  at,
+  day,
+  fakeHost,
+  jsonFixture,
+  ok,
+  say,
+  taipei,
+  withTZ,
+  yq,
+} from "./helpers.mjs";
 
 // Herdr's shared state: what is written is persisted, so a read gives a copy, never the object written.
 function memoryStore() {
   let value;
   return {
     read: () => (value === undefined ? undefined : JSON.parse(JSON.stringify(value))),
-    write: (next) => { value = JSON.parse(JSON.stringify(next)); },
+    write: (next) => {
+      value = JSON.parse(JSON.stringify(next));
+    },
   };
 }
 
@@ -36,7 +60,9 @@ function watchWith(prefs, { quotes = {}, overlays = {} } = {}, symbols = ["2330.
 function glue(w, store) {
   let mine = null;
   return {
-    get mine() { return mine; },
+    get mine() {
+      return mine;
+    },
     open(symbol, now, random = 0.5) {
       const token = makeToken(now, random);
       const started = startHandover(symbol, token, w.detailQuote(symbol, now));
@@ -64,10 +90,34 @@ const close = (store, held) => {
 
 // Tuesday 2026-11-17 in Taipei: Yahoo Finance's delayed 2330.TW under today's periods, and a MIS or Yahoo 奇摩股市 price.
 const TW_TODAY = day("2026-11-17T01:00:00Z", "2026-11-17T05:30:00Z");
-const yahooDelayed = (time, symbol = "2330.TW") => ({ ...yq(symbol, "TAI", time, TW_TODAY), price: 2180, series: [2190, 2180], fetchedAt: time });
-const yahooClose = () => ({ ...yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY), price: 2215, series: [2200, 2215] });
-const misPrice = (time, fields = {}) => ({ symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: time, fetchedAt: time, ...fields });
-const ytwTrade = (price, time) => ({ symbol: "2330.TW", source: "yahootw", price, timestamp: time, tradeTime: time, day: taipeiDay(time), fetchedAt: time });
+const yahooDelayed = (time, symbol = "2330.TW") => ({
+  ...yq(symbol, "TAI", time, TW_TODAY),
+  price: 2180,
+  series: [2190, 2180],
+  fetchedAt: time,
+});
+const yahooClose = () => ({
+  ...yq("2330.TW", "TAI", taipei("13:30:00", "2026-11-16"), TW_TODAY),
+  price: 2215,
+  series: [2200, 2215],
+});
+const misPrice = (time, fields = {}) => ({
+  symbol: "2330.TW",
+  source: "mis",
+  price: 2172.5,
+  timestamp: time,
+  fetchedAt: time,
+  ...fields,
+});
+const ytwTrade = (price, time) => ({
+  symbol: "2330.TW",
+  source: "yahootw",
+  price,
+  timestamp: time,
+  tradeTime: time,
+  day: taipeiDay(time),
+  fetchedAt: time,
+});
 // What the open detail shows at `time` from the quote it holds.
 const sourceAt = (q, time) => {
   const held = heldMarks(q, time);
@@ -85,8 +135,10 @@ test("makeToken differs by time and by chance", () => {
 });
 
 test("Current while open", () => {
-  const w = watchWith(MIS_ON, { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
-    overlays: { "2330.TW": { mis: misPrice(taipei("10:00:00")) } } });
+  const w = watchWith(MIS_ON, {
+    quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
+    overlays: { "2330.TW": { mis: misPrice(taipei("10:00:00")) } },
+  });
   const store = memoryStore();
   const x = glue(w, store);
   const held = x.open("2330.TW", taipei("10:00:02"));
@@ -105,8 +157,17 @@ test("Current while open", () => {
 
 test("A failed round while open", () => {
   const traded = taipei("22:00:00");
-  const own = { symbol: "WTX&", source: "yahootw", exchange: "TFE", price: 23_000, timestamp: traded, tradeTime: traded,
-    day: taipeiDay(traded), fetchedAt: traded + 2_000, periods: null };
+  const own = {
+    symbol: "WTX&",
+    source: "yahootw",
+    exchange: "TFE",
+    price: 23_000,
+    timestamp: traded,
+    tradeTime: traded,
+    day: taipeiDay(traded),
+    fetchedAt: traded + 2_000,
+    periods: null,
+  };
   const w = watchWith(BOTH_ON, { overlays: { "WTX&": { yahootw: own } } }, ["WTX&"]);
   const store = memoryStore();
   const x = glue(w, store);
@@ -117,12 +178,16 @@ test("A failed round while open", () => {
   const q = render(store, held);
   assert.equal(q.cached, true);
   assert.equal(failureNote(q, q.error), "quote.cached");
-  withTZ("Asia/Taipei", () => assert.ok(sourceAt(q, t)[0][0].includes("報價停在 22:00 · Yahoo 奇摩股市"), sourceAt(q, t)[0][0]));
+  withTZ("Asia/Taipei", () =>
+    assert.ok(sourceAt(q, t)[0][0].includes("報價停在 22:00 · Yahoo 奇摩股市"), sourceAt(q, t)[0][0]),
+  );
 });
 
 test("A fallback while open", () => {
-  const w = watchWith(MIS_ON, { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
-    overlays: { "2330.TW": { mis: misPrice(taipei("09:59:50")) } } });
+  const w = watchWith(MIS_ON, {
+    quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
+    overlays: { "2330.TW": { mis: misPrice(taipei("09:59:50")) } },
+  });
   const store = memoryStore();
   const x = glue(w, store);
   const held = x.open("2330.TW", taipei("09:59:55"));
@@ -135,7 +200,9 @@ test("A fallback while open", () => {
 });
 
 test("Another detail takes over", () => {
-  const records = () => ({ quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")), "0050.TW": yahooDelayed(taipei("09:40:00"), "0050.TW") } });
+  const records = () => ({
+    quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")), "0050.TW": yahooDelayed(taipei("09:40:00"), "0050.TW") },
+  });
   const wx = watchWith(undefined, records(), ["2330.TW", "0050.TW"]);
   const wy = watchWith(undefined, records(), ["2330.TW", "0050.TW"]);
   const store = memoryStore();
@@ -160,8 +227,11 @@ test("Another detail takes over", () => {
 });
 
 test("Closing clears it", () => {
-  const w = watchWith(undefined, { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")), "0050.TW": yahooDelayed(taipei("09:40:00"), "0050.TW") } },
-    ["2330.TW", "0050.TW"]);
+  const w = watchWith(
+    undefined,
+    { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")), "0050.TW": yahooDelayed(taipei("09:40:00"), "0050.TW") } },
+    ["2330.TW", "0050.TW"],
+  );
   const store = memoryStore();
   const x = glue(w, store);
   const held = x.open("2330.TW", taipei("10:00:00"));
@@ -179,8 +249,10 @@ test("Closing clears it", () => {
 });
 
 test("Paused or removed", () => {
-  const w = watchWith(MIS_ON, { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
-    overlays: { "2330.TW": { mis: misPrice(taipei("10:00:00")) } } });
+  const w = watchWith(MIS_ON, {
+    quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
+    overlays: { "2330.TW": { mis: misPrice(taipei("10:00:00")) } },
+  });
   w.pause(true);
   const store = memoryStore();
   const x = glue(w, store);
@@ -200,8 +272,15 @@ test("Paused or removed", () => {
 
 // LISTED_2026 lists Thursday 2/12 and Friday 2/13; 2330.TW last traded on 2/11 at 13:30.
 function secondClosedDay() {
-  const w = watchWith(MIS_ON, { quotes: { "2330.TW": { ...yq("2330.TW", "TAI", at("2026-02-11T05:30:00Z"),
-    day("2026-02-11T01:00:00Z", "2026-02-11T05:30:00Z")), price: 1_000, series: [990, 1_000] } } });
+  const w = watchWith(MIS_ON, {
+    quotes: {
+      "2330.TW": {
+        ...yq("2330.TW", "TAI", at("2026-02-11T05:30:00Z"), day("2026-02-11T01:00:00Z", "2026-02-11T05:30:00Z")),
+        price: 1_000,
+        series: [990, 1_000],
+      },
+    },
+  });
   w.holidays.days = LISTED_2026;
   return w;
 }
@@ -212,11 +291,15 @@ test("A second closed day: the paused panel hands nothing at midnight", () => {
   w.pause(true);
   const store = memoryStore();
   const x = glue(w, store);
-  x.open("2330.TW", at("2026-02-12T14:00:00Z"));                                  // 22:00 on 2/12
+  x.open("2330.TW", at("2026-02-12T14:00:00Z")); // 22:00 on 2/12
   assert.equal(store.read().quote.closure?.kind, "listed");
   // Only the marks differ at 00:00:01 on 2/13.
   const { closure: _a, closureUntil: _b, ...before } = store.read().quote;
-  const { closure: _c, closureUntil: _d, ...after } = JSON.parse(JSON.stringify(w.detailQuote("2330.TW", MIDNIGHT_0213 + 1_000)));
+  const {
+    closure: _c,
+    closureUntil: _d,
+    ...after
+  } = JSON.parse(JSON.stringify(w.detailQuote("2330.TW", MIDNIGHT_0213 + 1_000)));
   assert.deepEqual(after, before);
   assert.equal(x.pass(MIDNIGHT_0213 + 1_000), null);
   assert.equal(store.read().seq, 1);
@@ -230,21 +313,23 @@ test("unpaused, a closure change is handed at once", () => {
   const write = x.pass(MIDNIGHT_0213 + 1_000);
   assert.equal(write.seq, 2);
   assert.equal(write.quote.closure?.kind, "listed");
-  assert.equal(write.quote.closureUntil, at("2026-02-13T16:00:00Z"));               // 00:00 on 2/14
+  assert.equal(write.quote.closureUntil, at("2026-02-13T16:00:00Z")); // 00:00 on 2/14
 });
 
 test("opened unpaused, then paused: no mark change is handed", () => {
   const w = secondClosedDay();
   const store = memoryStore();
   const x = glue(w, store);
-  x.open("2330.TW", MIDNIGHT_0213 - 30_000);                                       // 23:59:30 on 2/12
+  x.open("2330.TW", MIDNIGHT_0213 - 30_000); // 23:59:30 on 2/12
   w.pause(true);
   assert.equal(x.pass(MIDNIGHT_0213 + 1_000), null);
 });
 
 test("a paused list hands a fallback as its overlay ages", () => {
-  const w = watchWith(BOTH_ON, { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
-    overlays: { "2330.TW": { yahootw: ytwTrade(2190, taipei("10:00:00")) } } });
+  const w = watchWith(BOTH_ON, {
+    quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")) },
+    overlays: { "2330.TW": { yahootw: ytwTrade(2190, taipei("10:00:00")) } },
+  });
   w.fail(mis, "2330.TW", { code: "mis.timeout", params: {} });
   w.pause(true);
   const store = memoryStore();
@@ -273,7 +358,10 @@ test("a copy that opened no detail never writes", () => {
   const store = memoryStore();
   glue(wx, store).open("2330.TW", taipei("10:00:00"));
   wy.quotes["2330.TW"] = yahooDelayed(taipei("10:00:30"));
-  assert.deepEqual(nextWrite(store.read(), null, wy.detailQuote("2330.TW", taipei("10:00:40")), false), { write: null, mine: null });
+  assert.deepEqual(nextWrite(store.read(), null, wy.detailQuote("2330.TW", taipei("10:00:40")), false), {
+    write: null,
+    mine: null,
+  });
   assert.equal(store.read().seq, 1);
 });
 
@@ -281,19 +369,36 @@ const Q = { symbol: "2330.TW", source: "mis", price: 2172.5, timestamp: 1 };
 
 test("adopt ignores what is not its own newer hand-over", () => {
   const held = { token: "a", seq: 2 };
-  for (const stored of [undefined, null, {}, "x", { token: "a" }, { symbol: "2330.TW", token: "a", seq: "3", quote: Q },
-    { symbol: "2330.TW", token: "a", seq: 3, quote: null }, { symbol: "0050.TW", token: "a", seq: 3, quote: Q },
-    { symbol: "2330.TW", token: "b", seq: 3, quote: Q }, { symbol: "2330.TW", token: "a", seq: 2, quote: Q }]) {
+  for (const stored of [
+    undefined,
+    null,
+    {},
+    "x",
+    { token: "a" },
+    { symbol: "2330.TW", token: "a", seq: "3", quote: Q },
+    { symbol: "2330.TW", token: "a", seq: 3, quote: null },
+    { symbol: "0050.TW", token: "a", seq: 3, quote: Q },
+    { symbol: "2330.TW", token: "b", seq: 3, quote: Q },
+    { symbol: "2330.TW", token: "a", seq: 2, quote: Q },
+  ]) {
     assert.equal(adopt(stored, held), null);
   }
   assert.deepEqual(adopt({ symbol: "2330.TW", token: "a", seq: 3, quote: Q }, held), { quote: Q, seq: 3 });
-  assert.equal(adopt({ symbol: "2330.TW", token: "a", seq: 3, quote: Q }, null), null);   // a detail opened without a token
+  assert.equal(adopt({ symbol: "2330.TW", token: "a", seq: 3, quote: Q }, null), null); // a detail opened without a token
 });
 
 test("clearsOnClose only for its own token", () => {
   const own = { symbol: "2330.TW", token: "a", seq: 3, quote: Q };
   assert.equal(clearsOnClose(own, "a"), true);
-  for (const stored of [{ ...own, token: "b" }, {}, undefined, null, { token: "a" }, { ...own, seq: 0 }, { ...own, quote: null }]) {
+  for (const stored of [
+    { ...own, token: "b" },
+    {},
+    undefined,
+    null,
+    { token: "a" },
+    { ...own, seq: 0 },
+    { ...own, quote: null },
+  ]) {
     assert.equal(clearsOnClose(stored, "a"), false);
   }
   assert.equal(clearsOnClose(own, null), false);
@@ -302,7 +407,14 @@ test("clearsOnClose only for its own token", () => {
 test("nextWrite drops its token for any value but its own", () => {
   const { mine } = startHandover("2330.TW", "a", Q);
   const newer = { ...Q, price: 2175 };
-  for (const stored of [{}, undefined, null, "x", { symbol: "2330.TW", token: "b", seq: 9, quote: Q }, { token: "a", seq: 1 }]) {
+  for (const stored of [
+    {},
+    undefined,
+    null,
+    "x",
+    { symbol: "2330.TW", token: "b", seq: 9, quote: Q },
+    { token: "a", seq: 1 },
+  ]) {
     assert.deepEqual(nextWrite(stored, mine, newer, false), { write: null, mine: null });
   }
   const stored = { symbol: "2330.TW", token: "a", seq: 1, quote: Q };
@@ -319,15 +431,43 @@ const BOOK = {
   bids: [2175, 2170, 2165, 2160, 2155].map((price, i) => ({ price, size: 1_234 + i })),
   asks: [2180, 2185, 2190, 2195, 2200].map((price, i) => ({ price, size: 2_345 + i })),
 };
-const ACTIVITY = { volume: 38_211, previousVolume: 41_502, turnover: 83_123_456_789, avgPrice: 2177.35, lastSize: 12, inner: 18_002,
-  outer: 20_209, sizeUnit: "lot" };
+const ACTIVITY = {
+  volume: 38_211,
+  previousVolume: 41_502,
+  turnover: 83_123_456_789,
+  avgPrice: 2177.35,
+  lastSize: 12,
+  inner: 18_002,
+  outer: 20_209,
+  sizeUnit: "lot",
+};
 
 test("a full-day 2330.TW value stays under 16 KB", () => {
   const series = Array.from({ length: 271 }, (_, i) => 2150 + (i % 121) * 0.5);
-  const quote = { ...yahooDelayed(taipei("13:30:00")), ...misPrice(taipei("13:30:00")), ...ACTIVITY, book: BOOK, series, name: "Taiwan Semiconductor Manufacturing Company Limited",
-    localName: "台積電", previousClose: 2170, changePercent: 0.12, open: 2160, high: 2210, low: 2150, limitUp: 2385, limitDown: 1955,
-    currency: "TWD", chartSource: "yahoo", chartTimestamp: taipei("13:30:00"), chartFetchedAt: taipei("13:30:05"), twRealtime: true,
-    closure: null, error: null, fallback: null };
+  const quote = {
+    ...yahooDelayed(taipei("13:30:00")),
+    ...misPrice(taipei("13:30:00")),
+    ...ACTIVITY,
+    book: BOOK,
+    series,
+    name: "Taiwan Semiconductor Manufacturing Company Limited",
+    localName: "台積電",
+    previousClose: 2170,
+    changePercent: 0.12,
+    open: 2160,
+    high: 2210,
+    low: 2150,
+    limitUp: 2385,
+    limitDown: 1955,
+    currency: "TWD",
+    chartSource: "yahoo",
+    chartTimestamp: taipei("13:30:00"),
+    chartFetchedAt: taipei("13:30:05"),
+    twRealtime: true,
+    closure: null,
+    error: null,
+    fallback: null,
+  };
   const size = JSON.stringify(startHandover("2330.TW", makeToken(taipei("13:30:00"), 0.5), quote).value).length;
   assert.ok(size < 16_384, `${size}`);
 });
@@ -335,12 +475,44 @@ test("a full-day 2330.TW value stays under 16 KB", () => {
 test("a future's full trading day stays under 16 KB too", () => {
   const series = Array.from({ length: 1_140 }, (_, i) => 40_000 + ((i * 37) % 400) - 200);
   const traded = taipei("13:44:00");
-  const quote = { symbol: "WTX&", source: "yahootw", exchange: "TFE", price: 40_123, timestamp: traded, tradeTime: traded, fetchedAt: traded,
-    day: taipeiDay(traded), ...ACTIVITY, sizeUnit: "contract", book: BOOK, series, name: "台指期近一", localName: "台指期近一",
-    previousClose: 39_900, changePercent: 0.56, open: 39_950, high: 40_210, low: 39_800, limitUp: 43_890, limitDown: 35_910,
-    periods: { pre: null, regular: [taipei("15:00:00", "2026-11-16"), taipei("13:45:00")], post: null,
-      segments: [[taipei("15:00:00", "2026-11-16"), taipei("05:00:00")], [taipei("08:45:00"), taipei("13:45:00")]] },
-    chartSource: "yahootw", chartTimestamp: traded, chartFetchedAt: traded, closure: null, error: null, fallback: null };
+  const quote = {
+    symbol: "WTX&",
+    source: "yahootw",
+    exchange: "TFE",
+    price: 40_123,
+    timestamp: traded,
+    tradeTime: traded,
+    fetchedAt: traded,
+    day: taipeiDay(traded),
+    ...ACTIVITY,
+    sizeUnit: "contract",
+    book: BOOK,
+    series,
+    name: "台指期近一",
+    localName: "台指期近一",
+    previousClose: 39_900,
+    changePercent: 0.56,
+    open: 39_950,
+    high: 40_210,
+    low: 39_800,
+    limitUp: 43_890,
+    limitDown: 35_910,
+    periods: {
+      pre: null,
+      regular: [taipei("15:00:00", "2026-11-16"), taipei("13:45:00")],
+      post: null,
+      segments: [
+        [taipei("15:00:00", "2026-11-16"), taipei("05:00:00")],
+        [taipei("08:45:00"), taipei("13:45:00")],
+      ],
+    },
+    chartSource: "yahootw",
+    chartTimestamp: traded,
+    chartFetchedAt: traded,
+    closure: null,
+    error: null,
+    fallback: null,
+  };
   const size = JSON.stringify(startHandover("WTX&", makeToken(traded, 0.5), quote).value).length;
   assert.ok(size < 16_384, `${size}`);
 });
@@ -357,19 +529,27 @@ test("packTimes stores whole seconds and deltas; unpackTimes gives the same time
   const packed = packTimes(q);
   assert.equal("times" in packed, false);
   assert.equal(packed.timesPacked.t0, NIGHT_TIMES[0] / 1000);
-  assert.deepEqual(new Set(packed.timesPacked.d), new Set([60, 13_560, 120, 20]));   // minute, 05:00→08:45 after 04:59, the skip, 13:44→13:44:20
+  assert.deepEqual(new Set(packed.timesPacked.d), new Set([60, 13_560, 120, 20])); // minute, 05:00→08:45 after 04:59, the skip, 13:44→13:44:20
   assert.deepEqual(unpackTimes(JSON.parse(JSON.stringify(packed))), q);
   assert.equal(packTimes(Q), Q);
-  assert.equal("timesPacked" in packTimes({ ...Q, series: [1], times: [1_500] }), false);  // not a whole second: no times at all
+  assert.equal("timesPacked" in packTimes({ ...Q, series: [1], times: [1_500] }), false); // not a whole second: no times at all
 });
 test("unpackTimes refuses what it cannot decode", () => {
   const good = packTimes({ ...Q, series: [1, 2, 3], times: [60_000, 120_000, 180_000] });
-  for (const timesPacked of [null, "x", { t0: 60.5, d: [60, 60] }, { t0: 60, d: "60" }, { t0: 60, d: [60, "60"] }, { t0: 60, d: [60] }, { t0: 60, d: [60, 1.5] }]) {
+  for (const timesPacked of [
+    null,
+    "x",
+    { t0: 60.5, d: [60, 60] },
+    { t0: 60, d: "60" },
+    { t0: 60, d: [60, "60"] },
+    { t0: 60, d: [60] },
+    { t0: 60, d: [60, 1.5] },
+  ]) {
     const out = unpackTimes({ ...good, timesPacked });
     assert.equal("times" in out || "timesPacked" in out, false, JSON.stringify(timesPacked));
     assert.deepEqual(out.series, [1, 2, 3]);
   }
-  assert.equal("times" in unpackTimes({ ...Q, series: [1, 2], times: [1, 2] }), false);   // a plain array is never read
+  assert.equal("times" in unpackTimes({ ...Q, series: [1, 2], times: [1, 2] }), false); // a plain array is never read
 });
 test("a timed quote is handed packed, kept plain, adopted with its times and not written again", () => {
   const timed = { ...yahooDelayed(taipei("10:00:00")), times: [taipei("09:55:00"), taipei("10:00:00")] };
@@ -379,7 +559,7 @@ test("a timed quote is handed packed, kept plain, adopted with its times and not
   const held = x.open("2330.TW", taipei("10:00:10"));
   assert.deepEqual(store.read().quote.timesPacked, { t0: taipei("09:55:00") / 1000, d: [300] });
   assert.deepEqual(x.mine.quote.times, timed.times);
-  assert.equal(x.pass(taipei("10:00:20")), null);                       // the same quote: nothing written
+  assert.equal(x.pass(taipei("10:00:20")), null); // the same quote: nothing written
   w.quotes["2330.TW"] = { ...timed, price: 2185, series: [2190, 2185] };
   assert.ok(x.pass(taipei("10:00:30")));
   assert.deepEqual(render(store, held).times, timed.times);
@@ -388,21 +568,57 @@ test("a timed quote is handed packed, kept plain, adopted with its times and not
 test("a future's full trading day with its times stays under 16 KB", () => {
   const traded = taipei("13:44:20");
   const series = NIGHT_TIMES.map((_, i) => 40_000.5 + ((i * 37) % 400) - 200);
-  const quote = { symbol: "WTX&", source: "yahootw", exchange: "TFE", price: 40_123.5, timestamp: traded, tradeTime: traded, fetchedAt: traded,
-    day: taipeiDay(traded), ...ACTIVITY, sizeUnit: "contract", book: BOOK, series, times: NIGHT_TIMES, name: "台指期近一", localName: "台指期近一",
-    previousClose: 39_900, changePercent: 0.56, open: 39_950, high: 40_210, low: 39_800, limitUp: 43_890, limitDown: 35_910,
-    periods: { pre: null, regular: [taipei("15:00:00", "2026-11-16"), taipei("13:45:00")], post: null,
-      segments: [[taipei("15:00:00", "2026-11-16"), taipei("05:00:00")], [taipei("08:45:00"), taipei("13:45:00")]] },
-    chartSource: "yahootw", chartTimestamp: traded, chartFetchedAt: traded, closure: null, error: null, fallback: null };
+  const quote = {
+    symbol: "WTX&",
+    source: "yahootw",
+    exchange: "TFE",
+    price: 40_123.5,
+    timestamp: traded,
+    tradeTime: traded,
+    fetchedAt: traded,
+    day: taipeiDay(traded),
+    ...ACTIVITY,
+    sizeUnit: "contract",
+    book: BOOK,
+    series,
+    times: NIGHT_TIMES,
+    name: "台指期近一",
+    localName: "台指期近一",
+    previousClose: 39_900,
+    changePercent: 0.56,
+    open: 39_950,
+    high: 40_210,
+    low: 39_800,
+    limitUp: 43_890,
+    limitDown: 35_910,
+    periods: {
+      pre: null,
+      regular: [taipei("15:00:00", "2026-11-16"), taipei("13:45:00")],
+      post: null,
+      segments: [
+        [taipei("15:00:00", "2026-11-16"), taipei("05:00:00")],
+        [taipei("08:45:00"), taipei("13:45:00")],
+      ],
+    },
+    chartSource: "yahootw",
+    chartTimestamp: traded,
+    chartFetchedAt: traded,
+    closure: null,
+    error: null,
+    fallback: null,
+  };
   const { value } = startHandover("WTX&", makeToken(traded, 0.5), quote);
   const size = JSON.stringify(value).length;
-  assert.ok(size < 16_384, `${size}`);                                // about 13,700 B (plain ms would be about 26,200)
+  assert.ok(size < 16_384, `${size}`); // about 13,700 B (plain ms would be about 26,200)
   assert.deepEqual(unpackTimes(JSON.parse(JSON.stringify(value.quote))).times, NIGHT_TIMES);
 });
 
 test("a second open from the same copy replaces the first", () => {
-  const w = watchWith(undefined, { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")), "0050.TW": yahooDelayed(taipei("09:40:00"), "0050.TW") } },
-    ["2330.TW", "0050.TW"]);
+  const w = watchWith(
+    undefined,
+    { quotes: { "2330.TW": yahooDelayed(taipei("09:40:00")), "0050.TW": yahooDelayed(taipei("09:40:00"), "0050.TW") } },
+    ["2330.TW", "0050.TW"],
+  );
   const store = memoryStore();
   const x = glue(w, store);
   const a = x.open("2330.TW", taipei("10:00:00"), 0.1);

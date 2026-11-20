@@ -37,7 +37,11 @@ import { QuoteError } from "../quotes.js";
 
 /** `JSON.parse` for an answer's body; a body that is not JSON is the provider's `*.unreadable` error. */
 export function parseJson(text, unreadableCode) {
-  try { return JSON.parse(text); } catch { throw new QuoteError(unreadableCode); }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new QuoteError(unreadableCode);
+  }
 }
 
 /** A decoder's last step: a QuoteError becomes that error on each requested symbol; anything else is a bug. */

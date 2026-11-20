@@ -2,7 +2,17 @@
 // Taiwan quotes. Off until the person turns it on and consents. This file holds
 // the feed's host, limits and decoder; the switch and consent live in settings.js and the settings
 // dialog. No Herdr imports, so tests run it under Node.
-import { HEADERS, QuoteError, cleanText, hasLimits, limitPair, positive, positiveOrNull, sized, withinLimits } from "../quotes.js";
+import {
+  HEADERS,
+  QuoteError,
+  cleanText,
+  hasLimits,
+  limitPair,
+  positive,
+  positiveOrNull,
+  sized,
+  withinLimits,
+} from "../quotes.js";
 import { failEach, parseJson } from "./provider.js";
 import { fastPace } from "../markets.js";
 
@@ -21,7 +31,8 @@ export function misChannel(symbol) {
 }
 
 // The best real bid or ask: "2265.0000_2260.0000_..." → 2265. Market orders show as 0.0000 and are skipped.
-const best = (value) => (typeof value === "string" ? value.split("_").map(positiveOrNull).find(Boolean) ?? null : null);
+const best = (value) =>
+  typeof value === "string" ? (value.split("_").map(positiveOrNull).find(Boolean) ?? null) : null;
 
 // The levels at most a side of the book shows.
 const BOOK_LEVELS = 5;
@@ -38,9 +49,16 @@ const MARKET_PRICE = /^0(\.0+)?$/;
 function levels(prices, sizes) {
   if (typeof prices !== "string") return [];
   const sized = typeof sizes === "string" ? sizes.split("_") : [];
-  return prices.split("_").map((price, i) => ({ price: positiveOrNull(price), size: positiveOrNull(sized[i]), market: MARKET_PRICE.test(price) }))
+  return prices
+    .split("_")
+    .map((price, i) => ({
+      price: positiveOrNull(price),
+      size: positiveOrNull(sized[i]),
+      market: MARKET_PRICE.test(price),
+    }))
     .filter((level) => level.size !== null && (level.price !== null || level.market))
-    .map(({ price, size }) => ({ price, size })).slice(0, BOOK_LEVELS);
+    .map(({ price, size }) => ({ price, size }))
+    .slice(0, BOOK_LEVELS);
 }
 
 /**
@@ -83,7 +101,8 @@ export function decodeMis(symbols, response, now) {
   const auctionBook = {};
   const noLevels = {};
   for (const row of body.msgArray) {
-    const symbol = typeof row?.ex === "string" && typeof row.c === "string" ? wanted.get(`${row.ex}_${row.c}.tw`) : undefined;
+    const symbol =
+      typeof row?.ex === "string" && typeof row.c === "string" ? wanted.get(`${row.ex}_${row.c}.tw`) : undefined;
     if (!symbol) continue;
     const name = cleanText(row.n);
     if (name) names[symbol] = name;
@@ -132,8 +151,12 @@ export function decodeMis(symbols, response, now) {
   }
   const some = (record) => Object.keys(record).length > 0;
   return {
-    quotes, errors, names,
-    ...(some(auction) && { auction }), ...(some(auctionBook) && { auctionBook }), ...(some(noLevels) && { noLevels }),
+    quotes,
+    errors,
+    names,
+    ...(some(auction) && { auction }),
+    ...(some(auctionBook) && { auctionBook }),
+    ...(some(noLevels) && { noLevels }),
   };
 }
 
@@ -150,7 +173,12 @@ export const mis = {
     const requests = [];
     for (let i = 0; i < symbols.length; i += MIS_BATCH) {
       const batch = symbols.slice(i, i + MIS_BATCH);
-      requests.push({ url: `${misUrl}?ex_ch=${batch.map(misChannel).join("|")}&json=1&delay=0`, headers: HEADERS, symbols: batch, kind: "quote" });
+      requests.push({
+        url: `${misUrl}?ex_ch=${batch.map(misChannel).join("|")}&json=1&delay=0`,
+        headers: HEADERS,
+        symbols: batch,
+        kind: "quote",
+      });
     }
     return requests;
   },

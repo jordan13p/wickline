@@ -2,7 +2,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  DOCK_TAB_KEY, blockYields, canOpenOwnTab, closeOnceOpened, dockOf, isShown, newWickline, newWicklineTab, ownTabSource, returnPane, staleDockTab,
+  DOCK_TAB_KEY,
+  blockYields,
+  canOpenOwnTab,
+  closeOnceOpened,
+  dockOf,
+  isShown,
+  newWickline,
+  newWicklineTab,
+  ownTabSource,
+  returnPane,
+  staleDockTab,
 } from "../mods/wickline/panes.js";
 
 // Panes as panes() gives them: Wickline's own tab "t9", opened from "t1".
@@ -10,7 +20,12 @@ const pane = (id, tab, extra = {}) => ({ pane: id, tab, terminal: `term-${id}`, 
 const mine = { pane: "p9", tab: "t9", terminal: null, mod: "wickline", focused: true };
 
 test("back beside the terminal: a pane of the tab it came from", () => {
-  const panes = [pane("p1", "t1", { terminal: null, mod: "notes" }), pane("p2", "t1"), pane("p3", "t1", { focused: true }), mine];
+  const panes = [
+    pane("p1", "t1", { terminal: null, mod: "notes" }),
+    pane("p2", "t1"),
+    pane("p3", "t1", { focused: true }),
+    mine,
+  ];
   // That tab's focused pane first.
   assert.equal(returnPane(panes, "t1", null), "p3");
   // Else its first terminal pane.
@@ -72,8 +87,12 @@ test("the old copy closes only once the new one is seen", () => {
 function fakeHost(before, opened, shownAt) {
   const host = { reads: 0, sleeps: [], closed: [] };
   host.panes = () => (++host.reads, shownAt !== null && host.reads >= shownAt ? [...before, opened] : before);
-  host.sleep = async (ms) => { host.sleeps.push(ms); };
-  host.close = (pane) => { host.closed.push(pane); };
+  host.sleep = async (ms) => {
+    host.sleeps.push(ms);
+  };
+  host.close = (pane) => {
+    host.closed.push(pane);
+  };
   return host;
 }
 
@@ -124,25 +143,45 @@ test("own tab: a new Wickline pane in the moving copy's own tab is not the moved
 // The office layout, ids only: Wickline docked as one tab of the collapsible panel's stack.
 const block = (id, content) => ({ id, type: "block", content });
 const office = (wicklineProps = { card: true }) => ({
-  id: "root", type: "row", children: [
+  id: "root",
+  type: "row",
+  children: [
     { id: "side", type: "column", children: [block("spaces", { mod: "spaces" })] },
-    { id: "work", type: "column", children: [
-      block("tabs", { mod: "tabs" }),
-      { id: "work-body", type: "row", children: [
-        block("main", { tab: "active" }),
-        { id: "panel", type: "column", hidden: true, children: [
-          { id: "panel-body", type: "stack", active: "files", children: [
-            block("files", { mod: "files" }),
-            block("changes", { mod: "changes" }),
-            block("graph", { mod: "graph" }),
-            block("wickline", { mod: "wickline", props: wicklineProps }),
-          ] },
-        ] },
-      ] },
-    ] },
+    {
+      id: "work",
+      type: "column",
+      children: [
+        block("tabs", { mod: "tabs" }),
+        {
+          id: "work-body",
+          type: "row",
+          children: [
+            block("main", { tab: "active" }),
+            {
+              id: "panel",
+              type: "column",
+              hidden: true,
+              children: [
+                {
+                  id: "panel-body",
+                  type: "stack",
+                  active: "files",
+                  children: [
+                    block("files", { mod: "files" }),
+                    block("changes", { mod: "changes" }),
+                    block("graph", { mod: "graph" }),
+                    block("wickline", { mod: "wickline", props: wicklineProps }),
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
   ],
 });
-const byId = (node, id) => node.id === id ? node : (node.children ?? []).map((c) => byId(c, id)).find(Boolean);
+const byId = (node, id) => (node.id === id ? node : (node.children ?? []).map((c) => byId(c, id)).find(Boolean));
 
 test("dockOf: the card block, its stack and the panel that collapses", () => {
   assert.deepEqual(dockOf(office(), "wickline"), { block: "wickline", stack: "panel-body", collapse: "panel" });
@@ -155,13 +194,20 @@ test("dockOf: the panel is found by structure, even when it carries no hidden ke
 });
 
 test("dockOf: a stack placed straight in a row collapses alone, never the row", () => {
-  const stack = { id: "dock", type: "stack", active: "wickline", children: [
-    block("files", { mod: "files" }), block("wickline", { mod: "wickline", props: { card: true } }),
-  ] };
-  const tree = { id: "root", type: "column", children: [
-    block("tabs", { mod: "tabs" }),
-    { id: "work-body", type: "row", children: [block("main", { tab: "active" }), stack] },
-  ] };
+  const stack = {
+    id: "dock",
+    type: "stack",
+    active: "wickline",
+    children: [block("files", { mod: "files" }), block("wickline", { mod: "wickline", props: { card: true } })],
+  };
+  const tree = {
+    id: "root",
+    type: "column",
+    children: [
+      block("tabs", { mod: "tabs" }),
+      { id: "work-body", type: "row", children: [block("main", { tab: "active" }), stack] },
+    ],
+  };
   assert.deepEqual(dockOf(tree, "wickline"), { block: "wickline", stack: "dock", collapse: "dock" });
   // Wrapped in a column of its own: the wrapper goes, the row stays.
   byId(tree, "work-body").children[1] = { id: "wrap", type: "column", children: [stack] };
@@ -169,9 +215,18 @@ test("dockOf: a stack placed straight in a row collapses alone, never the row", 
 });
 
 test("dockOf: nothing to collapse when every node up to the root is a lone child", () => {
-  const stack = { id: "dock", type: "stack", active: "wickline", children: [block("wickline", { mod: "wickline", props: { card: true } })] };
+  const stack = {
+    id: "dock",
+    type: "stack",
+    active: "wickline",
+    children: [block("wickline", { mod: "wickline", props: { card: true } })],
+  };
   assert.deepEqual(dockOf(stack, "wickline"), { block: "wickline", stack: "dock", collapse: null });
-  assert.deepEqual(dockOf({ id: "root", type: "column", children: [stack] }, "wickline"), { block: "wickline", stack: "dock", collapse: null });
+  assert.deepEqual(dockOf({ id: "root", type: "column", children: [stack] }, "wickline"), {
+    block: "wickline",
+    stack: "dock",
+    collapse: null,
+  });
 });
 
 test("dockOf: a copy without the card prop is not a docked block", () => {
@@ -229,7 +284,13 @@ test("a dock tab record is stale once its tab holds no Wickline pane", () => {
   assert.equal(staleDockTab({ tab: "t2" }, [wickline]), false);
   // The person closed the tab, or the Wickline pane in it: stale.
   assert.equal(staleDockTab({ tab: "t2" }, []), true);
-  assert.equal(staleDockTab({ tab: "t2" }, [{ pane: "p2", tab: "t2", terminal: "term-p2" }, { ...wickline, tab: "t9" }]), true);
+  assert.equal(
+    staleDockTab({ tab: "t2" }, [
+      { pane: "p2", tab: "t2", terminal: "term-p2" },
+      { ...wickline, tab: "t9" },
+    ]),
+    true,
+  );
   // Already cleared, never written, or malformed: nothing to clear.
   assert.equal(staleDockTab({ tab: null }, []), false);
   assert.equal(staleDockTab(null, []), false);
@@ -243,7 +304,12 @@ test("the docked block's tab: a Wickline pane in a tab that was not there before
   assert.equal(newWicklineTab(before, [...before, { pane: "p3", tab: "t1", mod: "wickline" }]), null);
   assert.equal(newWicklineTab(before, [...before, { pane: "p3", tab: "t7", mod: "wickline" }]).pane, "p3");
   // Another new tab with no Wickline in it does not either; the opened one still does.
-  const after = [...before, pane("p4", "t8"), { pane: "p5", tab: "t1", mod: "wickline" }, { pane: "p6", tab: "t9", mod: "wickline" }];
+  const after = [
+    ...before,
+    pane("p4", "t8"),
+    { pane: "p5", tab: "t1", mod: "wickline" },
+    { pane: "p6", tab: "t9", mod: "wickline" },
+  ];
   assert.equal(newWicklineTab(before, after).pane, "p6");
   assert.equal(newWicklineTab(before, before), null);
 });

@@ -2,8 +2,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  BAND_MAX_HEIGHT, COLUMN_GAP, DROP_ORDER, GUTTER, NAME_MAX_WIDTH, NAME_MIN_WIDTH, REMOVE_W, RIGHT_INSET, SCROLL_LANE, SPARK_MIN, TABLE_COLUMNS, TABLE_MAX_WIDTH, TABLE_MIN_WIDTH,
-  columnWidth, layoutFor, nameWidth, sparkWidth, tableColumns, wantsCard,
+  BAND_MAX_HEIGHT,
+  COLUMN_GAP,
+  DROP_ORDER,
+  GUTTER,
+  NAME_MAX_WIDTH,
+  NAME_MIN_WIDTH,
+  REMOVE_W,
+  RIGHT_INSET,
+  SCROLL_LANE,
+  SPARK_MIN,
+  TABLE_COLUMNS,
+  TABLE_MAX_WIDTH,
+  TABLE_MIN_WIDTH,
+  columnWidth,
+  layoutFor,
+  nameWidth,
+  sparkWidth,
+  tableColumns,
+  wantsCard,
 } from "../mods/wickline/layout.js";
 import { DETAIL_WIDE_WIDTH, DETAIL_WIDTH, canCarryBook } from "../mods/wickline/layout.js";
 import { readSettings } from "../mods/wickline/settings.js";
@@ -14,7 +31,11 @@ const ALL = ["symbol", "name", "state", "line", "price", "change", "changePct", 
 const KEPT = ["symbol", "state", "price", "changePct"];
 const width = (id) => TABLE_COLUMNS.find((column) => column.id === id).width;
 // What `ids` take with the name at its minimum, the gaps, the left gutter and the right inset.
-const needed = (ids) => ids.reduce((sum, id) => sum + (width(id) ?? NAME_MIN_WIDTH), 0) + COLUMN_GAP * (ids.length - 1) + GUTTER + RIGHT_INSET;
+const needed = (ids) =>
+  ids.reduce((sum, id) => sum + (width(id) ?? NAME_MIN_WIDTH), 0) +
+  COLUMN_GAP * (ids.length - 1) +
+  GUTTER +
+  RIGHT_INSET;
 
 test("the band, table and name keep their size limits", () => {
   assert.equal(BAND_MAX_HEIGHT, 72);
@@ -36,7 +57,10 @@ test("the layout follows the size", () => {
 });
 
 test("the columns, in display order, with the name the only flexible one", () => {
-  assert.deepEqual(TABLE_COLUMNS.map((column) => column.id), ALL);
+  assert.deepEqual(
+    TABLE_COLUMNS.map((column) => column.id),
+    ALL,
+  );
   for (const column of TABLE_COLUMNS) {
     if (column.id === "name") assert.equal(column.width, null);
     else assert.ok(column.width > 0, column.id);
@@ -57,7 +81,10 @@ test("a wide table shows every column", () => {
 test("previous close is the first to go", () => {
   const allButOne = needed(ALL) - 1;
   assert.ok(allButOne >= needed(ALL.filter((id) => id !== "prevClose")));
-  assert.deepEqual(tableColumns(allButOne), ALL.filter((id) => id !== "prevClose"));
+  assert.deepEqual(
+    tableColumns(allButOne),
+    ALL.filter((id) => id !== "prevClose"),
+  );
   assert.deepEqual(tableColumns(needed(ALL)), ALL);
 });
 
@@ -139,7 +166,8 @@ test("A Taiwan stock with a real-time source", () => {
 });
 
 test("No book to carry", () => {
-  for (const symbol of ["AAPL", "^TWII", "BTC/USDT"]) assert.equal(canCarryBook({ symbol }, readSettings(BOTH_ON)), false, symbol);
+  for (const symbol of ["AAPL", "^TWII", "BTC/USDT"])
+    assert.equal(canCarryBook({ symbol }, readSettings(BOTH_ON)), false, symbol);
   assert.equal(canCarryBook({ symbol: "2330.TW" }, readSettings(undefined)), false);
   // A future has no MIS row: only Yahoo 奇摩股市 carries its book.
   assert.equal(canCarryBook({ symbol: "WTX&" }, readSettings(MIS_ON)), false);
