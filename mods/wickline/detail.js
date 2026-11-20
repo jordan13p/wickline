@@ -27,7 +27,7 @@ import { DAY_SESSION, NIGHT_SESSION, TAIFEX_HOURS, exchangeRule, kindOf, resolve
 import { BOOK_LEVELS, hasLimits, isCryptoPair, positive } from "./quotes.js";
 import { localWindow } from "./time.js";
 
-/** The day's amplitude in percent, (high − low) / previous close × 100; null without all three. */
+/** The day's amplitude in percent; null without high, low and previous close. */
 export function amplitude(quote) {
   return positive(quote.high) && positive(quote.low) && positive(quote.previousClose)
     ? ((quote.high - quote.low) / quote.previousClose) * 100
@@ -78,11 +78,9 @@ export function innerOuter(quote, tx) {
 const levelCount = (book) => book.bids.length + book.asks.length;
 
 /**
- * What the two-column detail's book area shows, as `{ title, book, line }`; `title` and `line` are string keys.
- * - The quote's book, when it has a level and is an auction book exactly when the detail reads `試撮中` (`auction`).
- *   Its title is "detail.auctionBook" in an auction, else "detail.book".
- * - Otherwise no book, the title "detail.book" and one line: "reason" when the price has a failure to name,
- *   "detail.bookEmpty" when the source answered with no level, else "detail.bookNone".
+ * What the two-column detail's book area shows, as `{ title, book, line }`; `title` and `line` are string keys. The
+ * quote's book shows only when it has a level and is an auction book exactly when the detail reads `試撮中`.
+ * Otherwise one line says why there is none.
  */
 export function detailBook(quote, auction) {
   const book = quote.book ?? null;
@@ -175,17 +173,10 @@ export function detailTimes(quote, now, lang, tx) {
 }
 
 /**
- * The detail's 交易時段 for `quote` at `now`, as data tagged by `kind` (sessionTimesParts writes it). Times are in ms,
- * regular session only.
- * - "allDay": a pair or FX.
- * - "closedToday", with the schedule's `reason`: a listed closed day.
- * - "noTradesToday": a Taiwan quote that reads as having no trades today.
- * - "futures": a TAIFEX future's `day` and `night` as [start, end] on `now`'s Taipei date. `night` is null while it is
- *   closed; `nightNoTrades` then says it is for want of trades rather than removed.
- * - "spans" with one span from TWSE's hours: a Taiwan stock or index, whatever periods it carries (a TW-only index
- *   priced on an earlier day carries a zero-length period).
- * - "spans" from periods.regular, else the exchange's hours, split around its lunch: any other symbol.
- * - null with nothing to show.
+ * The detail's 交易時段 for `quote` at `now`, as data tagged by `kind` for sessionTimesParts; null with nothing to
+ * show. Times are in ms, regular session only. A future's `night` is null while it is closed; `nightNoTrades` then
+ * says it is for want of trades rather than removed. A Taiwan stock or index takes TWSE's hours whatever periods it
+ * carries, as a TW-only index priced on an earlier day carries a zero-length period.
  */
 export function sessionTimes(quote, now) {
   if (isCryptoPair(quote.symbol) || exchangeRule(quote.exchange, quote.symbol).fx) return { kind: "allDay" };
@@ -212,7 +203,6 @@ const timeRange = ([start, end]) => `${formatTime(start)}–${formatTime(end)}`;
 // The only language that shows a listed closure's reason: the schedule gives it in Traditional Chinese.
 const REASON_LANG = "zh-TW";
 
-// The 交易時段 line's parts for one sessionTimes value, by its kind (see sessionTimesParts).
 function hoursParts(times, lang, tx) {
   switch (times.kind) {
     case "allDay":
@@ -234,9 +224,7 @@ function hoursParts(times, lang, tx) {
 
 /**
  * The 交易時段 line's parts for a sessionTimes value, joined with " · " by segments(); [] for null. The first part
- * carries the "detail.sessionTimes" label. A listed closed day reads 今日休市, then the schedule's reason in zh-TW
- * only; a removed night reads 夜盤休市. A day without trades reads 今日尚無成交，可能休市; a night without trades,
- * 夜盤尚無成交.
+ * carries the "detail.sessionTimes" label.
  */
 export function sessionTimesParts(times, lang, tx) {
   if (!times) return [];
@@ -285,11 +273,10 @@ const readStaleAt = (quote, session, now) =>
   freshness(quote, session, now).state === "stalled" ? null : staleAt(quote, session, now);
 
 /**
- * The next moment after `now` at which the open detail can read differently, or null. It is the earliest of:
- * - its row's next edge (nextEdge);
- * - its mark's end (`closureUntil`), with marks as held at `now` (heldMarks);
- * - the stale moment of a real-time price that is not a pair (a delayed stock prints its delay, a pair no state);
- * - the stale moment of a line that is another source's real-time quote (lineReading).
+ * The next moment after `now` at which the open detail can read differently, or null. It is the earliest of its
+ * row's next edge, its mark's end and the stale moments of what it shows a state for. Only a real-time price that is
+ * not a pair shows one (a delayed stock prints its delay, a pair no state), and a line that is another source's
+ * real-time quote.
  * Each counts only when strictly later than `now`, so a wait cut at it is never zero.
  */
 export function detailWakeAt(detail, now) {
@@ -331,13 +318,9 @@ export async function followDetail(detail, { now, sleep, changed, woken }) {
 }
 
 /**
- * The detail dialog's sources as lines, each a list of parts joined with ` · `. `tx(key, params)` translates.
- * - A real-time price names its state and source on one line (`Price: Live · TWSE MIS`), or its source alone while
- *   unconfirmed. Its line follows on a line of its own: the same state when the line is the price source's own;
- *   else the state of the line's own quote when that source is real time, or else its exchange's delay
- *   (`Line: delayed 20 min · Yahoo Finance`).
- * - A delayed stock reads as one line of two parts, with its exchange's delay.
- * - A pair reads as one part.
+ * The detail dialog's sources as lines, each a list of parts joined with ` · `; `tx` translates. A real-time price
+ * names its state and source (`Price: Live · TWSE MIS`). Its line follows on a line of its own, read by the line's own
+ * quote (`Line: delayed 20 min · Yahoo Finance`). A delayed stock reads as one line with its exchange's delay.
  */
 export function detailSource(quote, session, now, tx) {
   if (isRealtime(quote) && !isCryptoPair(quote.symbol)) {

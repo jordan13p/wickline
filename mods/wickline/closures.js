@@ -116,13 +116,6 @@ export function heldMarks(quote, now) {
  *    as it is.
  * 9. Otherwise none.
  *
- * When each reading ends:
- * - a stock's, a listed day included: the next 00:00;
- * - a future's listed day: 05:00 the next day, when the night it removes ends;
- * - a future's before 05:00 (3–5): 05:00;
- * - a future's day reading (7, 8b): the cap;
- * - a future's night reading (8, from 15:10 on): the next 05:00.
- *
  * A night's reading of day D: if D traded (its day session, the night's newest trade since 08:45 D, or a stock since
  * 09:00 D), the night has no trades yet (nightNoTrades). Otherwise the whole day has none (noTrades).
  */
@@ -144,7 +137,6 @@ function closureRule(market, now, open, listed, seen) {
     tradedSince("future", dayOpen(day)) ||
     seen("future", taipeiAt(day, NIGHT_SESSION.from))?.newest >= dayOpen(day) ||
     tradedSince("stock", taipeiAt(day, TWSE_HOURS.from));
-  // Where each row's reading ends (see above).
   const midnight = nextTaipeiMidnight(now);
   const nightEnd = taipeiAt(today, NIGHT_END_MIN);
   // A future's listed mark outlasts the day: the night from 15:00 on T to 05:00 on T+1 is removed too.

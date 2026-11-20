@@ -148,7 +148,6 @@ export function readPreferences(value) {
 export class Watchlist {
   constructor(host) {
     this.host = host;
-    // Whether this copy is on screen; a host without shown() always is.
     this.isShown = () => host.shown?.() ?? true;
     // The Finnhub key as read from the secrets file for `keyRev`, null until read. Only in memory: never in the
     // config, the shared state or an error.
@@ -378,13 +377,9 @@ export class Watchlist {
   }
 
   /**
-   * `quote` with a Taiwan symbol's marks. This is the one place a quote gets them, so whatever reads a row (its
-   * session, label, cadence and edges) reads the same closure and call auction.
-   * - `closure`, `closureDeadline` and `closureUntil`: its market's reading at `now` (closureAt).
-   * - `twRealtime: true`, for a stock while MIS or Yahoo 奇摩股市 is on.
-   * - `auctionAt`: MIS's flagged snapshot, while the quote's price traded before it.
-   * - The book from rowBook. A stock priced by Yahoo Finance while a real-time source is on loses its activity, so a
-   *   20-minute-late volume never stands beside a real-time price.
+   * `quote` with a Taiwan symbol's marks: its closure, `twRealtime`, `auctionAt` and its book. This is the one place a
+   * quote gets them, so whatever reads a row reads the same closure and call auction. A stock priced by Yahoo Finance
+   * while a real-time source is on loses its activity, so a 20-minute-late volume never stands beside a live price.
    */
   marked(symbol, quote, now) {
     if (!quote || this.marketFor(symbol) !== "tw") return quote;
@@ -401,13 +396,9 @@ export class Watchlist {
   }
 
   /**
-   * The book a Taiwan row shows, or null, first match wins:
-   * 1. MIS's auction book, while MIS's flag holds the price (`held`) and that flag carried levels;
-   * 2. Yahoo 奇摩股市's opening-auction book, while `now` is in the window it was fetched in;
-   * 3. the quote's own book. A Yahoo 奇摩股市 stock book fetched inside a call auction is that auction's: marked
-   *    `auction: true` while `now` is in the same window and the quote traded that day, else none. It never shows as
-   *    the market's book, another auction's, or an earlier day's;
-   * 4. an empty book while MIS's latest answer had no level.
+   * The book a Taiwan row shows, or null. A Yahoo 奇摩股市 stock book fetched inside a call auction is that auction's.
+   * It shows only while `now` is in the same window and the stock traded that day, so it never passes for the
+   * market's book, another auction's or an earlier day's.
    */
   rowBook(symbol, quote, held, now) {
     if (held && this.auctionBooks[symbol]) return this.auctionBooks[symbol];
@@ -543,9 +534,8 @@ export class Watchlist {
   }
 
   /**
-   * What a symbol without a quote is read by at `now`, for its session and edges alike: its form alone, with no
-   * periods, and its closure. sessionOf then reads a Taiwan or US symbol by its exchange's hours, a future by
-   * TAIFEX's.
+   * What a symbol without a quote is read by at `now`, for its session and edges alike: its form and its closure.
+   * Without periods, sessionOf reads it by its exchange's hours.
    */
   standIn(symbol, now) {
     return this.marked(symbol, { symbol, periods: null }, now);
@@ -646,9 +636,9 @@ export class Watchlist {
   }
 
   /**
-   * Moves `symbol` before `beforeSymbol` (null for the end), judged against the list as saved now, so a drop in a
-   * copy that has not synced yet still lands beside the symbol it was dropped on. Null, and nothing saved, when either
-   * symbol is gone or the order would stay.
+   * Moves `symbol` before `beforeSymbol` (null for the end), judged against the list as saved now. A drop in a copy
+   * that has not synced yet then still lands beside the symbol it was dropped on. Null, and nothing saved, when
+   * either symbol is gone or the order would stay.
    */
   move(symbol, beforeSymbol) {
     return this.edit((p) => {
@@ -700,7 +690,7 @@ export class Watchlist {
   /**
    * Starts at once the round a hidden copy skipped, in each source that skipped one. The view calls it on render,
    * which is when a hidden docked copy is shown again. A source that missed nothing keeps its own pace.
-   * A copy still judged hidden wakes nothing: it can render anyway (a second card block, a stack with no active
+   * A copy still judged hidden wakes nothing. It can render anyway (a second card block, a stack with no active
    * child), and each wake would mark the round missed again and redraw, in a loop.
    */
   wakeMissed() {
@@ -737,7 +727,7 @@ export class Watchlist {
     return JSON.stringify([this.preferences.paused, this.symbolLists(PROVIDERS).map((symbols) => [...symbols].sort())]);
   }
 
-  /** The symbols each of `providers` quotes (see symbolsFor), in that order. */
+  /** The symbols each of `providers` quotes, in that order. */
   symbolLists(providers) {
     const config = this.config();
     return providers.map((provider) => this.symbolsFor(provider, config));
@@ -815,7 +805,6 @@ export class Watchlist {
     const sole = this.soleSource(symbol, config);
     if (sole) return provider === sole;
     const kind = kindOf(symbol);
-    // Only an index's market needs its quote's exchange.
     return (
       provider.kinds.includes(kind) &&
       provider.markets.includes(kind === "index" ? this.marketFor(symbol) : marketOf(symbol))
@@ -878,10 +867,7 @@ export class Watchlist {
     return wait;
   }
 
-  /**
-   * The earliest nextEdge among `symbols`' shown quotes (a symbol without one by its standIn), or null. `mode` is
-   * passed to nextEdge.
-   */
+  /** The earliest nextEdge among `symbols`' shown quotes, or null; a symbol without one is read by its standIn. */
   edgeAt(symbols, now, mode) {
     let earliest = null;
     for (const symbol of symbols) {
@@ -913,7 +899,6 @@ export class Watchlist {
           state.disabled = false;
           state.problem = null;
         }
-        // Another copy may have edited the shared list.
         this.adopt(readPreferences(this.host.load()));
         const configKey = JSON.stringify(this.config());
         if (configKey !== this.configKey) this.closureRev++;
@@ -994,7 +979,6 @@ export class Watchlist {
   async round(provider, state, symbols, io) {
     const revision = this.revision;
     const current = () => !this.stopped && revision === this.revision;
-    // A cooldown holds, also for Refresh.
     if (this.host.now() < state.retryAt) return;
     const config = this.config();
     const configKey = JSON.stringify(config);
@@ -1128,9 +1112,9 @@ export class Watchlist {
     return provider.overlay ? this.overlays[symbol]?.[provider.id] : this.quotes[symbol];
   }
 
-  // Whether a line's error ends the round: when the source rate limited it, or, for a provider with `linesPerRound`
-  // (its lines come after all its prices), when it is down or hung, so more line timeouts do not hold up the next
-  // price round.
+  // Whether a line's error ends the round: when the source rate limited it, or when it is down or hung for a provider
+  // with `linesPerRound`. That provider's lines come after all its prices, so more line timeouts would only hold up
+  // the next price round.
   endsRound(provider, error) {
     if (!error) return false;
     return error.retryAfterMs !== undefined || (Boolean(provider.linesPerRound) && SOURCE_DOWN.test(error.code));
@@ -1187,12 +1171,9 @@ export class Watchlist {
           else delete this.ytwAuctionBooks[symbol];
         }
         if (this.soleSource(symbol) === provider) {
-          // A sole-source symbol has no base, so it keeps its last price and line, as a base quote does. Its row's
-          // error, first match wins:
-          // - none once its source prices it, or names it without an error;
-          // - the source's failure as itself, never as not found;
-          // - not found: by this source once it priced it (so the kept price reads cached) and always for a future,
-          //   which Yahoo Finance never sees; else by Yahoo Finance.
+          // A sole-source symbol has no base, so it keeps its last price and line, as a base quote does, and its row
+          // says why. A failure is shown as itself, never as not found. Not found is this source's once it priced the
+          // symbol, so the kept price reads cached, and always for a future, which Yahoo Finance never sees.
           if (overlay || (!error && result.names?.[symbol])) delete this.errors[symbol];
           else
             this.errors[symbol] =
@@ -1308,7 +1289,7 @@ export class Watchlist {
     });
   }
 
-  // Sets one provider's entry in a per-symbol record (undefined clears it), dropping a symbol left empty.
+  // Sets one provider's entry in a per-symbol record; undefined clears it, and a symbol left empty goes.
   setEntry(record, symbol, id, value) {
     if (value !== undefined) {
       (record[symbol] ??= {})[id] = value;
@@ -1354,7 +1335,6 @@ export class Watchlist {
     if (provider === mis) this.dropAuction(symbol);
   }
 
-  // MIS's auction flag for `symbol` and its auction book, together.
   dropAuction(symbol) {
     delete this.auctionAt[symbol];
     delete this.auctionBooks[symbol];
@@ -1378,12 +1358,9 @@ export class Watchlist {
 
   /**
    * Asks for a symbol's line, at most once per `linesMs`, while the symbol has a quote from this provider. Returns
-   * the request's error for the symbol, if any.
-   * - A base provider writes the base quote's line; a failure leaves it as it was.
-   * - An overlay provider keeps its own line beside its price. An answer without one (a failure, or no point from
-   *   today) drops it, and so does a frozen line, which would be drawn as live with only its tail moving. Frozen is
-   *   judged as the line arrives, not at each price.
-   * - A sole-source symbol keeps the answer's trading periods, line or not; known ones are never dropped.
+   * the request's error for the symbol, if any. An overlay provider's answer without a line drops the line it held,
+   * and so does a frozen line, which would be drawn as live with only its tail moving. Frozen is judged as the line
+   * arrives, not at each price. A sole-source symbol's known periods are never dropped.
    */
   async line(provider, state, request, io, current) {
     const [symbol] = request.symbols;
@@ -1434,7 +1411,7 @@ export class Watchlist {
 
   /**
    * When the regular session of a line's trading day ends: the answer's own `endAt`, else the known periods' end when
-   * they are of that day (a sole-source symbol's from its last line answer, else the base quote's); else never.
+   * they are of that day, else never. A sole-source symbol's periods come from its last line answer.
    */
   sessionEnd(provider, symbol, line) {
     if (Number.isFinite(line.endAt)) return line.endAt;

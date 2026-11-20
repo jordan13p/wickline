@@ -1,7 +1,5 @@
 // Moving Wickline between a pane, a tab of its own and a docked block, and whether a docked block is on screen.
-// main.js hands in `host`, Herdr's `{ panes, layout, run, shared, setShared, focused }`, and the view.
-// These functions read and set the view's move state: `card`, `dock`, `yielding`, `dockShown`, `fromDock`,
-// `moving`, `filter`, and the tab an own-tab copy was opened from, as view.from.
+// main.js hands in `host` (Herdr's functions) and the view, whose move state these functions read and set.
 // `cx` is the click's; each wait runs in a task spawned from it that owns its own cx.
 import {
   DOCK_TAB_KEY,
@@ -23,7 +21,7 @@ import {
  * A block is shown while its panel is open, its tab is the stack's active one, and it does not yield to its own tab.
  * A copy that is not a card is not docked and always shown. The layout is read each time, as the user may move the
  * block or switch layouts.
- * It also clears a stale dock tab record, from the loops too: a hidden block never renders, and the record must be
+ * It also clears a stale dock tab record, from the loops too. A hidden block never renders, and the record must be
  * gone before a Wickline pane opened another way in that tab could make the block yield.
  */
 function readDock(host, card) {
@@ -57,13 +55,10 @@ export function syncDock(host, view) {
 const carried = (view) => ({ filter: view.filter });
 
 /**
- * The header's own-tab icon, `{ icon, label, go(cx) }`, or null.
- * - A pane copy that shares its tab offers its own tab; the copy in that tab offers the way back, when there is a
- *   pane to go back beside.
- * - A docked block offers its own tab while it is shown; its tab copy offers the way back to the panel.
+ * The header's own-tab icon, `{ icon, label, go(cx) }`, or null: a copy's own tab, or the way back from it.
  * Clicking a mod pane focuses it, so the focused Wickline pane is the one clicked. panes() lists the new copy a
- * little after run() returns, so a task waits for it (closeOnceOpened) and only then closes the old copy's own pane,
- * never a shell split in beside it. Clicks while a move is under way do nothing, so copies never pile up.
+ * little after run() returns, so a task waits for it before closing the old copy's own pane. A shell split in beside
+ * it is never closed. Clicks while a move is under way do nothing, so copies never pile up.
  */
 export function ownTabAction(host, view) {
   if (view.fromDock) {

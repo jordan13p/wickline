@@ -46,9 +46,9 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
   };
 }
 
-// The crosshair card's size. The width is estimated: the time at 11 px (6.5 px a character) over the price and change
-// at 12 px semibold (7.5 px a character, 6 px apart), with 6 px padding each side. The height is exact: a 14 px and a
-// 16 px line (ui/parts.js sets both) plus 2 px between and 4 px above and below.
+// The crosshair card's size. The width is estimated from 6.5 px a character for the 11 px time, and 7.5 px for the
+// 12 px semibold price and change, which sit 6 px apart; 6 px padding each side. The height is exact: a 14 px and a
+// 16 px line (ui/parts.js sets both), plus 2 px between and 4 px above and below.
 // The estimate only picks the card's side and catches a card too wide for both. A card on the line's left is placed
 // by its right edge, and one at the bottom by its bottom edge, so the gaps never depend on the font.
 const CROSSHAIR_TIME_CHAR_PX = 6.5;
@@ -91,8 +91,8 @@ export function crosshairLabel(quote, index, lang) {
 }
 
 /**
- * Where the crosshair's card sits across a box `widthPx` wide, for a line at `x`% of it: `{ left }` right of the line
- * when it fits there, else `{ right }` left of the line when it fits there, else `{ left: 0 }` at the box's left edge.
+ * Where the crosshair's card sits across a box `widthPx` wide, for a line at `x`% of it. It goes right of the line
+ * when it fits, else left of it, else at the box's left edge.
  */
 export function crosshairSpot(x, label, widthPx) {
   const time = label.time.length * CROSSHAIR_TIME_CHAR_PX;
@@ -106,10 +106,7 @@ export function crosshairSpot(x, label, widthPx) {
   return { left: 0 };
 }
 
-/**
- * Where the crosshair's card sits down a box `heightPx` tall, for a point `y`% down it: `{ top }` with its middle at
- * the point, held inside the box by `{ top: 0 }` or `{ bottom: 0 }`.
- */
+/** Where the crosshair's card sits down a box `heightPx` tall: its middle at the point `y`% down, kept inside. */
 export function crosshairLevel(y, heightPx) {
   const top = (y * heightPx) / 100 - CROSSHAIR_CARD_PX / 2;
   if (top <= 0 || heightPx <= CROSSHAIR_CARD_PX) return { top: 0 };
@@ -144,8 +141,6 @@ export function regularSpans(quote, regular) {
 }
 
 // The spans of trading time in the trading day of `t`, as [start, end] in ms, or null when unknown.
-// A future takes the segments its periods list for that day, else TAIFEX's sessions. Any other symbol takes its
-// regular period, else its exchange's hours, split around the lunch.
 function tradingSpans(quote, t) {
   if (kindOf(quote.symbol) === "future") {
     const day = futuresDay(t);
@@ -158,9 +153,9 @@ function tradingSpans(quote, t) {
 
 /**
  * The share of `quote`'s trading day elapsed at `t`, in [0, 1], counting trading time only: a lunch break and the gap
- * between a future's sessions take none. null for a pair, FX or a Yahoo future (`=F`), or with neither periods nor
- * exchange hours. A finished earlier day gives 1: a time before the period, a quote timed before its period's start
- * (yesterday's bars under today's periods), or a period of zero length.
+ * between a future's sessions take none. null for a pair, FX or a Yahoo future (`=F`), or without periods or hours.
+ * A finished earlier day gives 1. So does a quote timed before its period's start: yesterday's bars under today's
+ * periods.
  */
 export function sessionProgress(quote, t) {
   const kind = kindOf(quote.symbol);

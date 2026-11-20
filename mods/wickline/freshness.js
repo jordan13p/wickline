@@ -98,7 +98,6 @@ function taifexSegments(now) {
 // Taipei minutes since midnight from which a TAIFEX segment starting then is the night session's (12:00).
 const NIGHT_FROM_MIN = 720;
 
-// A night session's segment: it starts at or after 12:00 Taipei.
 const isNight = ([start]) => taipeiMinute(start) >= NIGHT_FROM_MIN;
 
 /** Whether a quote's night session is closed: removed by a listed day, or without trades (closureOf). */
@@ -132,10 +131,8 @@ export function lunchWithin(quote, regular, at) {
 export const TW_TRIAL_MATCH = { from: 510, to: TWSE_HOURS.from };
 const TW_CLOSING_AUCTION = { from: 805, to: TWSE_HOURS.to };
 const TW_AUCTIONS = [TW_TRIAL_MATCH, TW_CLOSING_AUCTION];
-// How long before TWSE's close its closing auction begins, in ms.
 const CLOSING_AUCTION_MS = (TW_CLOSING_AUCTION.to - TW_CLOSING_AUCTION.from) * MINUTE_MS;
 
-// A Taiwan auction window on the Taipei date of `at`, as [start, end) in ms.
 const auctionWindow = (window, at) => localWindow({ offsetMin: TWSE_HOURS.offsetMin, ...window }, at);
 
 /** Whether `now` is inside one of Taiwan's call auctions (TW_AUCTIONS) on a TWSE trading weekday. */
@@ -169,7 +166,6 @@ export const auctionFlagged = (auctionAt, now) => now - auctionAt < LIVE_MAX_AGE
  */
 const auctionOf = (quote, now) => (quote.twRealtime && inTaiwanAuction(now)) || auctionFlagged(quote.auctionAt, now);
 
-// A Taiwan stock (not an index, not a future).
 const isTaiwanStock = (quote) =>
   kindOf(quote.symbol) === "stock" && resolvedMarket(quote.symbol, quote.exchange) === "tw";
 
@@ -183,14 +179,9 @@ function nextDayStart(offsetMin, weekday, now) {
 }
 
 /**
- * The moments around `now` at which sessionOf can change for `quote`; an opening is when trading starts again.
- * - A pair: none.
- * - A future: each segment's start (an opening) and end, from its periods and from TAIFEX's hours both, since the row
- *   moves from the first to the second at 15:00.
- * - Without a regular period: a Taiwan or US quote's hours on a trading weekday, the start an opening.
- * - FX: the weekend's start and end (Friday and Sunday 22:00 UTC), the end an opening.
- * - Any other: its pre, regular and post bounds, and the lunch inside the regular period. The regular start and the
- *   lunch's end are openings.
+ * The moments around `now` at which sessionOf can change for `quote`, along its own branches; an opening is when
+ * trading starts again. A future takes the segments of its periods and of TAIFEX's hours both, since the row moves
+ * from the first to the second at 15:00.
  */
 function sessionEdges(quote, now) {
   if (isCryptoPair(quote.symbol)) return [];
@@ -217,14 +208,11 @@ function dayEdges(quote, now) {
   return [edge(nextDayTurn(quote, now))];
 }
 
-// A Taiwan row's next `closureDeadline` (from closureOf), where its closure may turn: an inference deadline or its
-// mark's end.
+// A Taiwan row's `closureDeadline`, where its closure may turn.
 const deadlineEdges = (quote) => (quote.closureDeadline ? [edge(quote.closureDeadline)] : []);
 
-// Where a row's call auction can begin or end: the moment MIS's flag lapses, and for a Taiwan stock with a real-time
-// source on, each auction window's start and end today and tomorrow, on trading weekdays.
-// None while the row reads a closure: sessionOf reads the closure first, and the closure's end is an edge of its own.
-// Never an opening: a call auction trades nothing, so these only redraw.
+// Where a row's call auction can begin or end. None while the row reads a closure: sessionOf reads the closure first,
+// and the closure's end is an edge of its own. Never an opening: a call auction trades nothing, so these only redraw.
 function auctionEdges(quote, now) {
   if (quote.closure) return [];
   const edges = quote.auctionAt === undefined ? [] : [edge(quote.auctionAt + LIVE_MAX_AGE_MS)];
@@ -261,8 +249,8 @@ export function sessionName(quote, session, now) {
 }
 
 /**
- * A Taiwan or US quote's regular window from its exchange's hours on the exchange's date of `now`, whatever the
- * weekday, and whether that date is a trading weekday, as `{ regular, weekday }`. null for any other quote.
+ * A Taiwan or US quote's regular window from its exchange's hours, `{ regular, weekday }`, null for any other quote.
+ * The window is on the exchange's date of `now`, whatever the weekday; `weekday` says whether that date trades.
  */
 export function hoursWindow(quote, now) {
   const market = resolvedMarket(quote.symbol, quote.exchange);
@@ -272,16 +260,9 @@ export function hoursWindow(quote, now) {
 }
 
 /**
- * The session `quote` reads at `now`, first match wins:
- * - a pair: "24h";
- * - a Taiwan listed closed day: "holiday", whatever its periods say;
- * - a Taiwan day without trades, inferred: "noTrades" (a night without trades leaves a future "closed");
- * - in a call auction: "auction", unless the price is a delayed one from today;
- * - a future: "open" inside a segment, else "closed";
- * - without a regular period: by its exchange's hours for a Taiwan or US quote, "open" or "closed"; else "unknown";
- * - FX: by its week only, "closed" over the weekend and "open" otherwise;
- * - else from its periods: "pre", "open", "post" or "closed", and "lunch" inside its exchange's lunch break (Yahoo's
- *   regular period runs through it).
+ * The session `quote` reads at `now`. A Taiwan closure wins over the periods, and a call auction over all but a
+ * delayed price from today. A future whose night is closed reads "closed" then. FX reads only its week, as its
+ * regular period is the UTC day.
  */
 export function sessionOf(quote, now) {
   if (isCryptoPair(quote.symbol)) return "24h";
@@ -302,7 +283,7 @@ export function sessionOf(quote, now) {
   if (exchangeRule(quote.exchange, quote.symbol).fx) return fxWeekend(now) ? "closed" : "open";
   const session = marketSession(quote, now);
   if (session !== "open") return session;
-  // marketSession has read the regular period, so inside the lunch break is "lunch" wherever the break falls.
+  // Yahoo's regular period runs through the lunch break, so the break is read from the exchange's own hours.
   const lunch = lunchWithin(quote, null, now);
   return lunch && now >= lunch[0] && now < lunch[1] ? "lunch" : "open";
 }
@@ -335,8 +316,8 @@ function misMissedClose(quote, twStock, now) {
 const PAUSED = new Set(["closed", "holiday", "noTrades", "pre", "post", "lunch", "auction"]);
 
 /**
- * How long until a quote turns stale in `session`, in ms: at least 1 while it has not, 0 or less once it has (too old,
- * or a Yahoo Finance quote not fetched for FETCH_MAX_AGE_MS).
+ * How long until a quote turns stale in `session`, in ms; 0 or less once it has. A Yahoo Finance quote also turns
+ * stale when not fetched for FETCH_MAX_AGE_MS.
  * null when it never will this session: a delayed quote or a future outside the open session, a Yahoo future (`=F`),
  * or an exchange without a delay. Outside the open session neither of the first two reads stalled: a delayed quote is
  * a Yahoo base, never handed over, and a future has one source, so there is nothing to wake for.
@@ -362,14 +343,9 @@ export function staleAt(quote, session, now) {
 }
 
 /**
- * A quote's state, as `{ state, delayMinutes, stoppedAt }`:
- * - "live": real time, trading, at most LIVE_MAX_AGE_MS old (a time ahead of the clock counts as new) and not cached;
- * - "unconfirmed": real time in an "unknown" session, or a real-time Yahoo quote still at the previous close after
- *   today's open, until today's first trade or the fetch guard;
- * - "stalled": past its msUntilStale, real time or delayed; a cached real-time price at once;
- * - "delayed": any other quote, with its exchange's minutes when known;
- * - the session while the market is not trading (closed, holiday, noTrades, pre, post, lunch, auction). A "closed"
- *   read from the hours is "stalled" when the price stopped before the close, or is a MIS price that missed it.
+ * A quote's state, `{ state, delayMinutes, stoppedAt }`. While the market is not trading it is the session itself,
+ * except that a "closed" read from the hours is "stalled" for a price that stopped before the close. "unconfirmed" is
+ * a real-time price whose session is unknown, or a Yahoo one still at the previous close after today's open.
  */
 export function freshness(quote, session, now) {
   if (session === "closed") {

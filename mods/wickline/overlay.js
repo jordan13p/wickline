@@ -6,10 +6,9 @@ import { mis } from "./providers/mis.js";
 import { withoutActivity } from "./quotes.js";
 
 /**
- * The overlay a row shows, `{ id, overlay }`, from a symbol's overlays keyed by provider id: the first in `order`
- * that is still live (at most LIVE_MAX_AGE_MS old), else the newest, a tie keeping the earlier id.
- * Null with none, or when none is live and the `base` quote is real time and no older than the newest: a stale
- * overlay never hides a fresher real-time price.
+ * The overlay a row shows, `{ id, overlay }`, from a symbol's overlays keyed by provider id. It is the first in
+ * `order` that is still live, else the newest, a tie keeping the earlier id. Null with none, or when none is live and
+ * the `base` quote is real time and no older than the newest: a stale overlay never hides a fresher real-time price.
  * While MIS flags the symbol as in a call auction (`flagged`), its held price is from before the auction, so it never
  * outranks another overlay of the same Taipei day, whatever their ages.
  */
@@ -30,19 +29,12 @@ export function pickOverlay(byProvider, order, now, base = null, flagged = false
 }
 
 /**
- * A real-time overlay's fields over the Yahoo base quote; works with no base yet.
- * - Name, currency and trading periods stay the base's. The overlay's name is kept as `localName`.
- * - The line is the overlay source's own `line` (`{ day, series, times }`) when it is from the overlay's trading day
- *   (`overlay.day`), ending at the shown price. That point's time is the trade time (else the quote's) in whole
- *   seconds, never before the line's last point. An own line without a time per value gives no times.
- * - Without an own line, the base's line and times stay, except under a price from another trading period
- *   (yesterday's line under today's first price) or over itself (base and overlay from one source): then no line.
- * - `chartSource`, `chartTimestamp` and `chartFetchedAt` describe the quote the line came from, so the line's state
- *   is judged by that quote.
- * - `cached` stays only when the price is the base's own. The base's cached line under another source's price is
- *   `chartCached` instead, and only when it has points, so a fresh overlay never reads as cached.
- * - The activity (ACTIVITY_FIELDS) is the price source's. An overlay without its own volume keeps a real-time base's
- *   (Finnhub's price beside Yahoo Finance's live volume) when that base is not cached and is from the same period.
+ * A real-time overlay's fields over the Yahoo base quote; works with no base yet. Name, currency and periods stay
+ * the base's, and the overlay's name is kept as `localName`. The line is the overlay source's own same-day line,
+ * ending at the shown price; without one, the base's. The `chart*` fields describe the quote the line came from, so
+ * the line's state is judged by that quote. A base's cached line under another source's price is `chartCached`, so a
+ * fresh overlay never reads as cached. The activity is the price source's, but an overlay without its own volume
+ * keeps a live, uncached base's from the same period (Finnhub's price beside Yahoo Finance's live volume).
  */
 export function mergeOverlay(base, overlay, line) {
   if (!overlay) return base;
