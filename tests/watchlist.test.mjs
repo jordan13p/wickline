@@ -6,7 +6,8 @@ import { yahoo, yahooUrl } from "../mods/wickline/providers/yahoo.js";
 import { finnhub } from "../mods/wickline/providers/finnhub.js";
 import { SECRET_KEY_FINNHUB } from "../mods/wickline/settings.js";
 import { binanceKlinesUrl, binanceUrl } from "../mods/wickline/providers/binance.js";
-import { Watchlist, WATCHLIST_KEY, mergeOverlay, pickOverlay, readPreferences } from "../mods/wickline/watchlist.js";
+import { mergeOverlay, pickOverlay } from "../mods/wickline/overlay.js";
+import { Watchlist, WATCHLIST_KEY, readPreferences } from "../mods/wickline/watchlist.js";
 import { t } from "../mods/wickline/i18n.js";
 import {
   LIVE_MAX_AGE_MS,

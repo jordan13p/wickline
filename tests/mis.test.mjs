@@ -6,7 +6,8 @@ import { USER_AGENT, priceLimit, withinLimits } from "../mods/wickline/quotes.js
 import { displayName } from "../mods/wickline/format.js";
 import { detailSource, freshness, msUntilStale } from "../mods/wickline/freshness.js";
 import { t } from "../mods/wickline/i18n.js";
-import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
+import { mergeOverlay } from "../mods/wickline/overlay.js";
+import { Watchlist } from "../mods/wickline/watchlist.js";
 import { advance, at, chart, chartSymbol, fakeHost, jsonFixture, start, stop } from "./helpers.mjs";
 import { MIS_BATCH, MIS_CONSENT_VERSION, MIS_URL, mis, misChannel } from "../mods/wickline/providers/mis.js";
 

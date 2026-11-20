@@ -33,7 +33,8 @@ import {
 } from "../mods/wickline/freshness.js";
 import { MINUTE_MS, NIGHT_SESSION, resolvedMarket, usOffsetMin } from "../mods/wickline/markets.js";
 import { closureOf, heldMarks, taipeiDay, taipeiMinute, twMarket, withClosure } from "../mods/wickline/calendar.js";
-import { Watchlist, mergeOverlay } from "../mods/wickline/watchlist.js";
+import { mergeOverlay } from "../mods/wickline/overlay.js";
+import { Watchlist } from "../mods/wickline/watchlist.js";
 import {
   chartGeometry,
   dayFor,
