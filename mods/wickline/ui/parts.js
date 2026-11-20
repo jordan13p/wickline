@@ -4,6 +4,7 @@ import { div, svg, PathBuilder, Background } from "gpui-kit";
 import { h_flex, v_flex, Checkbox, Switch } from "gpui-base";
 import { chartGeometry, chartLayout } from "../chart.js";
 import { failureNote } from "../format.js";
+import { GUTTER, RIGHT_INSET } from "../layout.js";
 import { SPIN_MS } from "../motion.js";
 
 // The soft fill under a line chart.
@@ -12,6 +13,9 @@ const AREA_OPACITY = 0.16;
 // Freshness states drawn with a hollow dot: the price may not be current.
 const HOLLOW = ["unconfirmed", "stalled", "delayed"];
 export const icon = (name) => `mods/wickline/icons/${name}.svg`;
+// Every region outside the list's rows: the left gutter, and the right inset that holds the × column and
+// the scrollbar lane, so all of them end on one edge.
+export const inset = (el) => el.pl(GUTTER).pr(RIGHT_INSET);
 
 // What `quote`'s chart draws (chart.js chartGeometry, laid out by chartLayout), or null when its box holds nothing.
 export const chartShape = (quote) => chartGeometry(quote.series, quote.previousClose, chartLayout(quote));
