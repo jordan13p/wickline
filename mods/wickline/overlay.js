@@ -3,7 +3,7 @@
 import { taipeiDay } from "./calendar.js";
 import { LIVE_MAX_AGE_MS, isRealtime } from "./freshness.js";
 import { mis } from "./providers/mis.js";
-import { withoutActivity } from "./quotes.js";
+import { changePercent, withoutActivity } from "./quotes.js";
 
 /**
  * The overlay a row shows, `{ id, overlay }`, from a symbol's overlays keyed by provider id. It is the first in
@@ -65,7 +65,7 @@ export function mergeOverlay(base, overlay, line) {
     ...(ownPrice && cached ? { cached } : {}),
     ...(!own && fallback?.cached && fallback.series?.length ? { chartCached: true } : {}),
     previousClose,
-    changePercent: previousClose > 0 ? ((overlay.price - previousClose) / previousClose) * 100 : null,
+    changePercent: changePercent(overlay.price, previousClose),
     name: base?.name ?? null,
     localName: overlay.name ?? null,
     // A price is never paired with another answer's limits.
