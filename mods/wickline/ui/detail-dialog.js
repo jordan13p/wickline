@@ -59,14 +59,14 @@ function bookBlock(view, t, q, shown, tx) {
 }
 
 // The chart's crosshair (parts.js chart): the line point nearest the pointer (view.chartPointer) of `shape`, its card
-// as of `now` (the detail's clock) and its place, the card's text at the detail's dim opacity when `dimmed`. A move
+// and its place, the card's text at the detail's dim opacity when `dimmed`. A move
 // redraws only when the nearest point or the box's width changes; a leave clears the pointer.
-function crosshairOption(view, t, q, shape, now, dimmed) {
+function crosshairOption(view, t, q, shape, dimmed) {
   const pointer = view.chartPointer;
   const at = pointer && crosshairAt(shape, q.times, pointer.share);
   let mark = null;
   if (at) {
-    const label = crosshairLabel(q, at.index, now, view.lang);
+    const label = crosshairLabel(q, at.index, view.lang);
     const changeColor = view.changeColor(t, label.percent);
     mark = {
       x: at.x, y: at.y, dotColor: changeColor, time: label.time, price: label.price, change: label.change, changeColor,
@@ -106,9 +106,9 @@ export function detailView(view, t) {
   const hours = sessionTimesParts(sessionTimes(q, now), view.lang, tx);
   const second = secondRow(q, view.wide, view.lang, tx);
   const amount = signed(q);
-  // An earlier day's line (before the open, a closed day) has its date just below the chart's left end, as a time axis
-  // starts; never over the line, and no row at all for today's.
-  const lineDay = lineDate(q, now, view.lang);
+  // A timed line has its date just below the chart's left end, as a time axis starts; never over the line, and no row
+  // at all without times.
+  const lineDay = lineDate(q, view.lang);
   const dated = (box) => (lineDay
     ? v_flex().w_full().gap(2).child(box).child(div().text_size(10.5).text_color(t.dim).child(lineDay))
     : box);
@@ -146,7 +146,7 @@ export function detailView(view, t) {
     // crosshair's card text dims with the detail, and over a cached line, which is not current.
     shape !== null && dated(chart(q, color, t, {
       width: "full", height: CHART_H, fill: true, dot: 6,
-      crosshair: traced ? crosshairOption(view, t, q, shape, now, dimmed || Boolean(q.chartCached)) : null,
+      crosshair: traced ? crosshairOption(view, t, q, shape, dimmed || Boolean(q.chartCached)) : null,
     })),
     isCryptoPair(q.symbol)
       ? h_flex().gap(12).child(stat("detail.open24h", q.open)).child(stat("detail.high24h", q.high))

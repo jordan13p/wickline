@@ -65,19 +65,17 @@ export function crosshairAt(geometry, times, xShare) {
 }
 
 /**
- * What the crosshair's card says of point `index` of `quote`'s line at `now`: `time`, its local time, dated when its
- * day is not `now`'s by the rows' day rule (dayFor), so yesterday's line shown before the open never reads as today's
- * ("10:32", "Nov 19 11:55"); `price` ("2,175.00"); `change`, its change against the previous close ("+0.23%"), and
- * `percent`, that change as a number, both null without a positive previous close.
+ * What the crosshair's card says of point `index` of `quote`'s line: `time`, its local date and time, always dated
+ * (a US line crosses midnight, so a bare time would read ambiguously): "11/20 10:32", "Nov 19 23:00"; `price`
+ * ("2,175.00"); `change`, its change against the previous close ("+0.23%"), and `percent`, that change as a number,
+ * both null without a positive previous close.
  */
-export function crosshairLabel(quote, index, now, lang) {
+export function crosshairLabel(quote, index, lang) {
   const time = quote.times[index];
   const value = quote.series[index];
-  const day = dayFor(quote);
-  const date = day(time) === day(now) ? "" : formatDate(time, lang);
   const percent = positive(quote.previousClose) ? (value - quote.previousClose) / quote.previousClose * 100 : null;
   const change = percent === null ? null : formatChange(percent);
-  return { time: stamp(date, time), price: number(quote, value), change, percent };
+  return { time: stamp(formatDate(time, lang), time), price: number(quote, value), change, percent };
 }
 
 /**
@@ -394,19 +392,15 @@ export function nextDayTurn(quote, now) {
 }
 
 /**
- * The date the detail writes on its chart when the line is from another day than `now`'s, by the rows' day rule
- * (dayFor), as before the open: "Nov 19" in English, "11/19" in the other languages. The line's day is its last
- * point's time, else its own quote's (`chartTimestamp`), else the quote's. "" with no line (fewer than two points),
- * for a 24-hour line (a pair's, or a Yahoo Finance cryptocurrency's: exchange `CCC`), or for a line from today. FX
- * keeps it: a weekend's line from Friday is an earlier day's.
+ * The date the detail writes under its chart's left end, like the start of a time axis: its first point's local date
+ * ("Nov 19" in English, "11/19" in the other languages), for every timed line, so the layout holds still from the
+ * open and a line across midnight (a US index) reads from its start. "" when the line has fewer than two points or
+ * not exactly one time per point, since its first point's day is then not known.
  */
-export function lineDate(quote, now, lang) {
+export function lineDate(quote, lang) {
   const series = Array.isArray(quote.series) ? quote.series : [];
-  if (series.length < 2 || isCryptoPair(quote.symbol) || quote.exchange === "CCC") return "";
   const timed = Array.isArray(quote.times) && quote.times.length === series.length;
-  const end = timed ? quote.times[series.length - 1] : quote.chartTimestamp ?? quote.timestamp;
-  const day = dayFor(quote);
-  return day(end) === day(now) ? "" : formatDate(end, lang);
+  return series.length >= 2 && timed ? formatDate(quote.times[0], lang) : "";
 }
 
 /** A local date as a row prints it: "Oct 31" in English, "10/31" in the other languages. */
