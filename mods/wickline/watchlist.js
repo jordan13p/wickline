@@ -997,17 +997,12 @@ export class Watchlist {
       state.linesAt = {};
     }
     // Only Finnhub's requests carry the key; no other source is ever handed it. The symbols Yahoo 奇摩股市 prices alone
-    // go to its requests only, never to config(), where a change would make sync() restart every round, and so does
-    // the previous trading day's close, which dates such a symbol's previous close before the open.
+    // go to its requests only, never to config(), where a change would make sync() restart every round.
     const asked =
       provider === finnhub
         ? { ...config, finnhubKey: this.finnhubKey }
         : provider === yahootw
-          ? {
-              ...config,
-              anyDay: symbols.filter((symbol) => this.soleSource(symbol, config)),
-              previousCloseAt: previousTwseClose(this.host.now(), (day) => this.holidays.days[day] ?? null),
-            }
+          ? { ...config, anyDay: symbols.filter((symbol) => this.soleSource(symbol, config)) }
           : config;
     const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
@@ -1169,10 +1164,9 @@ export class Watchlist {
       for (const symbol of request.symbols) if (result.names?.[symbol]) this.localNames[symbol] = result.names[symbol];
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
       for (const symbol of request.symbols) {
+        const overlay = result.quotes[symbol];
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         const had = this.overlays[symbol]?.[provider.id];
-        // A previous close stands in only for a symbol without a price: a held one keeps its own trade time.
-        const overlay = had && result.quotes[symbol]?.fromPreviousClose ? undefined : result.quotes[symbol];
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
         // Whether MIS's latest answer named it with no level, answer by answer.
         if (provider === mis) {
@@ -1186,6 +1180,18 @@ export class Watchlist {
           else delete this.ytwAuctionBooks[symbol];
         }
         if (this.soleSource(symbol) === provider) {
+          // Before the open, a symbol without a price yet takes its previous close as its quote, dated at the close of
+          // TWSE's previous trading day, so it reads closed on that day. A held price keeps its own trade time.
+          const close = !overlay && !had && result.previousCloses?.[symbol];
+          if (close) {
+            const at = previousTwseClose(now, (day) => this.holidays.days[day] ?? null);
+            this.setEntry(this.overlays, symbol, provider.id, {
+              ...close,
+              tradeTime: at,
+              timestamp: at,
+              day: taipeiDay(at),
+            });
+          }
           // A sole-source symbol has no base, so it keeps its last price and line, as a base quote does, and its row
           // says why. A failure is shown as itself, never as not found. Not found is this source's once it priced the
           // symbol, so the kept price reads cached, and always for a future, which Yahoo Finance never sees.
