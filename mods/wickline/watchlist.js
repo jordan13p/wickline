@@ -1183,10 +1183,10 @@ export class Watchlist {
         if (this.soleSource(symbol) === provider) {
           // Before the open, a symbol without a price yet takes its previous close as its quote, dated at the last
           // Taiwan close (previousCloseAt), so it reads closed on that day; each such answer dates it again. A held
-          // price keeps its own trade time.
-          const close = !overlay && (!had || had.fromPreviousClose) && result.previousCloses?.[symbol];
-          if (close) {
-            const at = this.previousCloseAt(now);
+          // price keeps its own trade time, unless it is older than that close.
+          const close = !overlay && result.previousCloses?.[symbol];
+          const at = close && this.previousCloseAt(now);
+          if (close && (!had || had.fromPreviousClose || (had.tradeTime ?? had.timestamp) < at)) {
             this.setEntry(this.overlays, symbol, provider.id, {
               ...close,
               tradeTime: at,
