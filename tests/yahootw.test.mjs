@@ -478,49 +478,46 @@ test("earlier-day rows keep their own time and leave feed time and noLive alone"
   assert.equal(night.noLive.code, "yahootw.noLiveRows");
 });
 
-test("before the open, a TW-only index's previous close is its quote, at the previous trading day's close", () => {
+test("before the open, a TW-only index's previous close comes beside its name, never as a price", () => {
   // As recorded for ^TWOII at 08:52: `preopen`, its previous close, and `-` for its price, trade time, open, high and
   // low. The earlier-day rows recast that way, on Tuesday 2026-11-10.
   const dash = { raw: "-", fmt: "-", sort: null };
-  const preopen = (overrides = {}) =>
-    ok(
-      EARLIER_ROWS.map((row) => ({
-        ...row,
-        marketStatus: "preopen",
-        price: dash,
-        regularMarketOpen: dash,
-        regularMarketDayHigh: dash,
-        regularMarketDayLow: dash,
-        regularMarketTime: "-",
-        regularMarketPreviousClose: row.price,
-        ...overrides,
-      })),
-    );
+  const preopenFields = (row) => ({
+    marketStatus: "preopen",
+    price: dash,
+    regularMarketOpen: dash,
+    regularMarketDayHigh: dash,
+    regularMarketDayLow: dash,
+    regularMarketTime: "-",
+    regularMarketPreviousClose: row.price,
+  });
+  const preopen = (overrides = {}) => ok(EARLIER_ROWS.map((row) => ({ ...row, ...preopenFields(row), ...overrides })));
   const now = at("2026-11-10T00:52:00Z");
-  const previousCloseAt = at("2026-11-09T05:30:00Z");
-  const decodeAt = (response, config = { anyDay: ["^TWOII"], previousCloseAt }) =>
-    yahootw.decode(yahootw.requests(["^TWOII", "^TWII"], config)[0], response, now);
-  const { quotes, errors, names, noLive } = decodeAt(preopen());
+  const decodeAt = (response, anyDay = ["^TWOII"]) =>
+    yahootw.decode(yahootw.requests(["^TWOII", "^TWII"], { anyDay })[0], response, now);
+  const answer = decodeAt(preopen());
+  // Nothing priced: no quote, no missing real-time price, no trade.
+  assert.deepEqual([answer.quotes, answer.errors, answer.noLive, answer.newestTrade], [{}, {}, undefined, undefined]);
+  assert.deepEqual(answer.names, { "^TWOII": "櫃檯指數", "^TWII": "加權指數" });
   // ^TWII is priced by Yahoo Finance as well: its row stays a name.
-  assert.deepEqual(Object.keys(quotes), ["^TWOII"]);
-  assert.deepEqual(names, { "^TWOII": "櫃檯指數", "^TWII": "加權指數" });
-  const index = quotes["^TWOII"];
+  assert.deepEqual(Object.keys(answer.previousCloses), ["^TWOII"]);
+  const close = answer.previousCloses["^TWOII"];
   assert.deepEqual(
-    [index.price, index.previousClose, index.open, index.high, index.low, index.exchange, index.currency],
-    [321.97, null, null, null, null, "TWO", "TWD"],
+    [close.source, close.name, close.price, close.previousClose, close.open, close.high, close.low],
+    ["yahootw", "櫃檯指數", 321.97, null, null, null, null],
   );
-  assert.deepEqual(
-    [index.timestamp, index.tradeTime, index.day],
-    [previousCloseAt, previousCloseAt, taipeiDay(previousCloseAt)],
+  assert.deepEqual([close.exchange, close.currency, close.fetchedAt, close.tradeTime], ["TWO", "TWD", now, undefined]);
+  // A `-` row out of the pre-open call auction, a delayed one, or one of a symbol others price gives none.
+  assert.equal(decodeAt(preopen({ marketStatus: "close" })).previousCloses, undefined);
+  assert.equal(decodeAt(preopen({ exchangeDataDelayedBy: 20 })).previousCloses, undefined);
+  assert.equal(decodeAt(preopen(), []).previousCloses, undefined);
+  // Nor a future's, whose rows keep their last trade.
+  const future = yahootw.decode(
+    yahootw.requests(["WTX&"], { anyDay: ["WTX&"] })[0],
+    ok(FUTURES_ROWS.filter((row) => row.symbol === "WTX&").map((row) => ({ ...row, ...preopenFields(row) }))),
+    FUT_NOW,
   );
-  assert.deepEqual(errors, {});
-  // A previous close is no real-time price.
-  assert.equal(noLive.code, "yahootw.noLiveRows");
-  // A `-` row out of the pre-open call auction, or a delayed one, only names it; so does any row without the time.
-  assert.deepEqual(decodeAt(preopen({ marketStatus: "close" })).quotes, {});
-  assert.deepEqual(decodeAt(preopen({ exchangeDataDelayedBy: 20 })).quotes, {});
-  assert.deepEqual(decodeAt(preopen(), { anyDay: ["^TWOII"] }).quotes, {});
-  assert.deepEqual(decodeAt(preopen(), { anyDay: [], previousCloseAt }).quotes, {});
+  assert.equal(future.previousCloses, undefined);
 });
 
 const FUTURES = ["WTX&", "WTX@", "WMT&", "WTF&", "WTE&"];
