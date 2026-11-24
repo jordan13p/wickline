@@ -1,7 +1,7 @@
 // node --test tests/  (calendar.js imports nothing from Herdr)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseHolidays, rocDay, taipeiDay } from "../mods/wickline/calendar.js";
+import { parseHolidays, previousTwseClose, rocDay, taipeiDay } from "../mods/wickline/calendar.js";
 import { closureOf } from "../mods/wickline/closures.js";
 import { HOLIDAYS_2026, at, listed2026 } from "./helpers.mjs";
 
@@ -9,6 +9,18 @@ test("ROC dates become Taipei day numbers", () => {
   assert.equal(rocDay("1151225"), taipeiDay(at("2026-12-25T02:00:00Z")));
   assert.equal(rocDay("1150101"), taipeiDay(at("2026-01-01T02:00:00Z")));
   for (const bad of ["115-12-25", "", null, "1151332", "11512"]) assert.equal(rocDay(bad), null, String(bad));
+});
+
+test("the previous TWSE close: 13:30 on the last weekday before today the schedule does not list", () => {
+  const none = () => null;
+  // Tuesday 08:52 → Monday; Monday → Friday.
+  assert.equal(previousTwseClose(at("2026-11-10T00:52:00Z"), listed2026), at("2026-11-09T05:30:00Z"));
+  assert.equal(previousTwseClose(at("2026-11-16T00:52:00Z"), listed2026), at("2026-11-13T05:30:00Z"));
+  // Monday 12/28 after 行憲紀念日 (Friday 12/25, listed): Thursday; without the schedule, the closed Friday.
+  assert.equal(previousTwseClose(at("2026-12-28T00:52:00Z"), listed2026), at("2026-12-24T05:30:00Z"));
+  assert.equal(previousTwseClose(at("2026-12-28T00:52:00Z"), none), at("2026-12-25T05:30:00Z"));
+  // The first trading day of 2027 without its schedule: Friday 1 January, always closed (the recipe's limit).
+  assert.equal(previousTwseClose(at("2027-01-04T00:52:00Z"), none), at("2027-01-01T05:30:00Z"));
 });
 
 test("the 2026 schedule: 27 rows, 18 closed weekdays; notices and weekend dates left out", () => {
