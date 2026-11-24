@@ -852,6 +852,21 @@ test("the detail's session times sit between the source lines and the times", ()
   assert.match(detail, /sessionTimesParts\(sessionTimes\(\w+,\w+\),view\.lang,\w+\)/);
 });
 
+// A wrapped size in the best-five ladder (`136,006` on two lines) pushes every row below it down. Both sides' sizes
+// keep to one line, and the bid sizes' fixed column fits `9,999,999`. The dialog imports gpui, so its width is read
+// from the source.
+test("the ladder's sizes never wrap and their column fits seven digits", () => {
+  const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
+  const width = Number(detail.match(/\bconst SIZE_W = (\d+);/)?.[1]);
+  assert.ok(width >= 66, `SIZE_W is ${width}`);
+  const side = flat(body(detail, "ladderSide"));
+  assert.match(side, /constsize=div\(\)[^;]*\.whitespace_nowrap\(\)/);
+  // The one size cell serves both sides: the bid's in the fixed column, the ask's after its price.
+  assert.match(side, /bid\?side\.child\(size\.w\(SIZE_W\)[^:]*:side\.child\(price\)\.child\(size\)/);
+  // The header's bid-size label takes the same column.
+  assert.match(flat(detail), /div\(\)\.w\(SIZE_W\)[^)]*\)\.child\(tx\("detail\.bidSize"\)\)/);
+});
+
 test("rows keep their own look: only the detail dims together", () => {
   const panel = panelCode();
   assert.match(panel, /\bpriceInk\(/);
