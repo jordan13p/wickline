@@ -150,8 +150,10 @@ function checkStatus(response) {
  * - `newestTrade`: per market clock, the newest accepted trade time, earlier days included, so a session without
  *   trades yet can be told apart.
  * - `auctionBook`: by symbol, the book of a stock in the opening auction; such a row is never a price.
+ * Before the open an `anyDay` index's previous close is its quote, timed `previousCloseAt` (the previous TWSE trading
+ * day's close, which the caller knows from the holiday schedule) and marked `fromPreviousClose`; none without it.
  */
-export function decodeStockList(symbols, response, now, anyDay = []) {
+export function decodeStockList(symbols, response, now, anyDay = [], previousCloseAt = null) {
   checkStatus(response);
   const body = parseJson(response.text, "yahootw.unreadable");
   if (!Array.isArray(body)) throw new QuoteError("yahootw.unreadable");
@@ -199,6 +201,37 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
     if (!price && !delayed && kindOf(symbol) === "stock" && row.marketStatus === "preopen") {
       const levels = book(row, false);
       if (levels && levels.bids.length + levels.asks.length > 0) auctionBook[symbol] = { ...levels, auction: true };
+    }
+    // Before the open (`preopen`) an index only this source prices comes with its previous close alone. With no other
+    // source, that close is its quote, at the previous TWSE trading day's close, so it reads closed on that day as a
+    // Yahoo Finance row does. A future's rows keep their last trade, so it never needs one.
+    const closeOnly =
+      !price && soleHere && !future && !delayed && row.marketStatus === "preopen" && previousCloseAt !== null
+        ? rawNumber(row.regularMarketPreviousClose)
+        : null;
+    if (closeOnly) {
+      anyPrice = true;
+      priced.push([
+        false,
+        {
+          symbol,
+          source: "yahootw",
+          name,
+          price: closeOnly,
+          previousClose: null,
+          open: null,
+          high: null,
+          low: null,
+          limitUp: null,
+          limitDown: null,
+          exchange: exchangeCode(row.exchange),
+          currency: currencyCode(row.currency),
+          tradeTime: previousCloseAt,
+          day: taipeiDay(previousCloseAt),
+          fetchedAt: now,
+          fromPreviousClose: true,
+        },
+      ]);
     }
     if (!price || !dayOk || delayed) continue;
     const limits = limitPair(rawNumber(row.limitUpPrice), rawNumber(row.limitDownPrice));
@@ -329,9 +362,11 @@ export const yahootw = {
   linesMs: (session) => (fastPace(session) ? 120_000 : 600_000),
   linesPerRound: 3,
   // The price batches, then a line request per symbol; the round picks the lines once the prices are in. A batch's
-  // sole-source symbols (`config.anyDay`) go with it as `anyDay`; see decodeStockList.
+  // sole-source symbols (`config.anyDay`) go with it as `anyDay`, and `config.previousCloseAt` with every batch; see
+  // decodeStockList.
   requests(symbols, config) {
     const anyDay = new Set(config?.anyDay ?? []);
+    const previousCloseAt = config?.previousCloseAt ?? null;
     const requests = [];
     for (let i = 0; i < symbols.length; i += YAHOOTW_BATCH) {
       const batch = symbols.slice(i, i + YAHOOTW_BATCH);
@@ -342,6 +377,7 @@ export const yahootw = {
         symbols: batch,
         kind: "quote",
         anyDay: batch.filter((symbol) => anyDay.has(symbol)),
+        previousCloseAt,
       });
     }
     for (const symbol of symbols) {
@@ -353,7 +389,7 @@ export const yahootw = {
   decode(request, response, now) {
     try {
       if (request.kind === "line") return decodeTick(request.symbols[0], response, now);
-      return decodeStockList(request.symbols, response, now, request.anyDay);
+      return decodeStockList(request.symbols, response, now, request.anyDay, request.previousCloseAt);
     } catch (error) {
       return failEach(request.symbols, error);
     }

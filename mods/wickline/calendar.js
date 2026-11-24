@@ -1,5 +1,5 @@
 // Days in Taipei: the calendar day, a future's trading day, and the days TWSE lists as closed.
-import { NIGHT_SESSION, TAIFEX_HOURS, kindOf } from "./markets.js";
+import { NIGHT_SESSION, TAIFEX_HOURS, TWSE_HOURS, kindOf } from "./markets.js";
 import { cleanText } from "./quotes.js";
 import { DAY_MS, MINUTE_MS, dayStart, localDay, tradesOn } from "./time.js";
 
@@ -46,6 +46,16 @@ export const taipeiMinute = (ms) =>
 export const taipeiAt = (day, minute) => dayStart(TAIFEX_HOURS.offsetMin, day) + minute * MINUTE_MS;
 /** The Taipei midnight after `now`, in ms. */
 export const nextTaipeiMidnight = (now) => taipeiAt(taipeiDay(now) + 1, 0);
+
+/**
+ * The close (13:30) of TWSE's last trading day before the Taipei date of `now`, in ms. `listed` gives a closed
+ * weekday's name, or null; without the schedule, a closed weekday is not known.
+ */
+export function previousTwseClose(now, listed) {
+  let day = taipeiDay(now) - 1;
+  while (!tradesOn(TWSE_HOURS, day) || listed(day)) day--;
+  return taipeiAt(day, TWSE_HOURS.to);
+}
 
 /** A ROC date ("1151225": year 115 + 1911, month, day) as a Taipei day number; null when malformed. */
 export function rocDay(value) {

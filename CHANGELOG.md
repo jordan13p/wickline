@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 
 ## [Unreleased]
 
+### Fixed
+
+- Before the open, a Taiwan index only Yahoo TW Stock prices, such as `^TWOII`, shows its previous close, closed on
+  the previous trading day, instead of waiting until 09:00 when Wickline starts or the index is added then.
+
 ## [0.9.0] - 2026-11-20
 
 ### Added

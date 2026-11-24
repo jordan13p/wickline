@@ -1,7 +1,15 @@
 // The watchlist and its refresh loops, one per provider. Herdr's APIs come in through `host` and each loop's `io`,
 // so tests drive it under Node with a fake clock and network.
 import { HEADERS, QuoteError, STARTER_SYMBOLS, normalizeSymbol, timedByTrade, withoutActivity } from "./quotes.js";
-import { HOLIDAYS_URL, listsYearOf, parseHolidays, taipeiDay, taipeiMinute, tradingDay } from "./calendar.js";
+import {
+  HOLIDAYS_URL,
+  listsYearOf,
+  parseHolidays,
+  previousTwseClose,
+  taipeiDay,
+  taipeiMinute,
+  tradingDay,
+} from "./calendar.js";
 import { closureOf, currentOpen, twMarket, withClosure } from "./closures.js";
 import {
   LIVE_MAX_AGE_MS,
@@ -989,12 +997,17 @@ export class Watchlist {
       state.linesAt = {};
     }
     // Only Finnhub's requests carry the key; no other source is ever handed it. The symbols Yahoo 奇摩股市 prices alone
-    // go to its requests only, never to config(), where a change would make sync() restart every round.
+    // go to its requests only, never to config(), where a change would make sync() restart every round, and so does
+    // the previous trading day's close, which dates such a symbol's previous close before the open.
     const asked =
       provider === finnhub
         ? { ...config, finnhubKey: this.finnhubKey }
         : provider === yahootw
-          ? { ...config, anyDay: symbols.filter((symbol) => this.soleSource(symbol, config)) }
+          ? {
+              ...config,
+              anyDay: symbols.filter((symbol) => this.soleSource(symbol, config)),
+              previousCloseAt: previousTwseClose(this.host.now(), (day) => this.holidays.days[day] ?? null),
+            }
           : config;
     const requests = provider.requests(symbols, asked);
     const quoteCount = requests.filter((request) => request.kind === "quote").length;
@@ -1156,9 +1169,10 @@ export class Watchlist {
       for (const symbol of request.symbols) if (result.names?.[symbol]) this.localNames[symbol] = result.names[symbol];
       // Only this answer's prices are laid over the base: a symbol without one shows the base at once.
       for (const symbol of request.symbols) {
-        const overlay = result.quotes[symbol];
         const error = result.errors[symbol] ? coded(result.errors[symbol]) : undefined;
         const had = this.overlays[symbol]?.[provider.id];
+        // A previous close stands in only for a symbol without a price: a held one keeps its own trade time.
+        const overlay = had && result.quotes[symbol]?.fromPreviousClose ? undefined : result.quotes[symbol];
         if (overlay) this.setEntry(this.overlays, symbol, provider.id, overlay);
         // Whether MIS's latest answer named it with no level, answer by answer.
         if (provider === mis) {
