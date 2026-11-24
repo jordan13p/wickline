@@ -1582,6 +1582,28 @@ test("before the open, a TW-only index's previous close takes the day another Ta
   );
 });
 
+test("before the open, a TW-only index's price older than its previous close gives way to that close", async () => {
+  // The copy last priced ^TWOII at Friday's close (hidden over the weekend, say); Tuesday's pre-open answer gives
+  // Monday's close, which is newer.
+  let preopen = false;
+  const from = taipei("08:14:00", "2026-11-10");
+  const friday = { "^TWOII": { regularMarketTime: "2026-11-06T05:31:00Z" } };
+  const host = twOnlyHost(["^TWOII"], {
+    yahootw: () => (preopen ? ok(PREOPEN_INDEX_ROWS) : stockList(0, friday, EARLIER_ROWS)),
+  });
+  await soleRun(
+    host,
+    async (w) => {
+      assert.equal(w.shown("^TWOII").timestamp, at("2026-11-06T05:31:00Z"));
+      preopen = true;
+      await advance(host, taipei("08:52:00", "2026-11-10"));
+      const shown = w.shown("^TWOII");
+      assert.deepEqual([shown.price, shown.timestamp], [321.97, taipei("13:30:00", "2026-11-09")]);
+    },
+    from,
+  );
+});
+
 test("before the open, a TW-only index priced earlier keeps that price and its own trade time", async () => {
   let preopen = false;
   const from = taipei("08:14:00", "2026-11-10");
