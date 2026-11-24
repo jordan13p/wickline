@@ -1559,6 +1559,29 @@ test("before the open, a TW-only index's previous close is dated on the last tra
   );
 });
 
+test("before the open, a TW-only index's previous close takes the day another Taiwan quote last traded", async () => {
+  // Monday 2026-12-28 without the holiday schedule: by the calendar alone it would be Friday 12/25 (行憲紀念日, closed),
+  // but Yahoo Finance's ^TWII last traded at Thursday's close. ^TWOII comes first, so its previous close may arrive
+  // before ^TWII's quote.
+  const from = taipei("08:52:00", "2026-12-28");
+  const host = twOnlyHost(["^TWOII", "^TWII"], {
+    yahootw: () => ok(PREOPEN_INDEX_ROWS),
+    yahoo: (symbol) =>
+      symbol === "^TWII" ? twYahoo(symbol, { exchangeName: "TAI", regularMarketTime: CLOSE_1224 / 1000 }) : NOT_FOUND,
+    line: offline,
+    holidays: () => NOT_FOUND,
+  });
+  await soleRun(
+    host,
+    async (w) => {
+      await advance(host, from + 30_000);
+      const quote = w.shown("^TWOII", from + 30_000);
+      assert.deepEqual([quote?.price, quote?.timestamp], [321.97, CLOSE_1224]);
+    },
+    from,
+  );
+});
+
 test("before the open, a TW-only index priced earlier keeps that price and its own trade time", async () => {
   let preopen = false;
   const from = taipei("08:14:00", "2026-11-10");
