@@ -853,18 +853,18 @@ test("the detail's session times sit between the source lines and the times", ()
 });
 
 // A wrapped size in the best-five ladder (`136,006` on two lines) pushes every row below it down. Both sides' sizes
-// keep to one line, and the bid sizes' fixed column fits `9,999,999`. The dialog imports gpui, so its width is read
-// from the source.
-test("the ladder's sizes never wrap and their column fits seven digits", () => {
+// keep to one line. The bid sizes' column keeps 44 px as a minimum, never a fixed width: a usual size keeps its
+// spacing from the price, and only a long one widens its own cell. The dialog imports gpui, so this reads the source.
+test("the ladder's sizes never wrap, and the bid size column is a 44 px minimum", () => {
   const detail = code(read(new URL("ui/detail-dialog.js", MOD)));
-  const width = Number(detail.match(/\bconst SIZE_W = (\d+);/)?.[1]);
-  assert.ok(width >= 66, `SIZE_W is ${width}`);
+  assert.match(detail, /\bconst SIZE_W = 44;/);
   const side = flat(body(detail, "ladderSide"));
   assert.match(side, /constsize=div\(\)[^;]*\.whitespace_nowrap\(\)/);
-  // The one size cell serves both sides: the bid's in the fixed column, the ask's after its price.
-  assert.match(side, /bid\?side\.child\(size\.w\(SIZE_W\)[^:]*:side\.child\(price\)\.child\(size\)/);
-  // The header's bid-size label takes the same column.
-  assert.match(flat(detail), /div\(\)\.w\(SIZE_W\)[^)]*\)\.child\(tx\("detail\.bidSize"\)\)/);
+  // The one size cell serves both sides: the bid's with the minimum, the ask's after its price.
+  assert.match(side, /bid\?side\.child\(size\.min_w\(SIZE_W\)[^:]*:side\.child\(price\)\.child\(size\)/);
+  // The header's bid-size label keeps the same minimum; nothing sets the column to a fixed width.
+  assert.match(flat(detail), /div\(\)\.min_w\(SIZE_W\)[^)]*\)\.child\(tx\("detail\.bidSize"\)\)/);
+  assert.doesNotMatch(detail, /\.w\(SIZE_W\)/);
 });
 
 test("rows keep their own look: only the detail dims together", () => {
