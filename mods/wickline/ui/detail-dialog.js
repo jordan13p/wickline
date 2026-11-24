@@ -45,8 +45,9 @@ import {
 const DIM_OPACITY = 0.5;
 // The detail's chart's height, px.
 const CHART_H = 140;
-// The ladder's bid sizes sit in a fixed column, so each bid price starts at the same place; it fits 9,999,999.
-const SIZE_W = 66;
+// The ladder's bid sizes keep at least this width, so each bid price starts at the same place; a longer size widens
+// only its own cell, as sizes never wrap.
+const SIZE_W = 44;
 
 // One side of a ladder row, in a 24 px band: the bid's size in its fixed column then its price toward the center, the
 // ask's price then its size. A price at the previous close (or without one) is plain `foreground`; others take the
@@ -60,7 +61,7 @@ function ladderSide(view, t, q, rung, bid) {
     .text_color(plain ? t.foreground : view.changeColor(t, rung.change))
     .child(rung.market ? view.tx("detail.marketOrder") : number(q, rung.price));
   const size = div().whitespace_nowrap().child(formatCount(rung.size));
-  return bid ? side.child(size.w(SIZE_W).text_right()).child(price) : side.child(price).child(size);
+  return bid ? side.child(size.min_w(SIZE_W).text_right()).child(price) : side.child(price).child(size);
 }
 
 // The right column's book: the ladder with its totals, their difference and ratio; or its title over one line
@@ -79,7 +80,7 @@ function bookBlock(view, t, q, shown, tx) {
     .border_color(t.border)
     .text_size(10.5)
     .text_color(t.dim)
-    .child(half(div().w(SIZE_W).text_right().child(tx("detail.bidSize")), div().child(tx("detail.bidPrice"))))
+    .child(half(div().min_w(SIZE_W).text_right().child(tx("detail.bidSize")), div().child(tx("detail.bidPrice"))))
     .child(half(div().child(tx("detail.askPrice")), div().child(tx("detail.askSize"))));
   const rows = ladder(shown.book, q.previousClose).map((row) =>
     h_flex()
