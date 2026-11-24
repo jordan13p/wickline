@@ -6,6 +6,7 @@ import {
   listsYearOf,
   parseHolidays,
   previousTwseClose,
+  taipeiAt,
   taipeiDay,
   taipeiMinute,
   tradingDay,
@@ -22,7 +23,7 @@ import {
   sessionOf,
   staleAt,
 } from "./freshness.js";
-import { isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
+import { TWSE_HOURS, isTaiwanForm, kindOf, marketOf, resolvedMarket } from "./markets.js";
 import { DAY_MS, HOUR_MS, MINUTE_MS } from "./time.js";
 import { mergeOverlay, pickOverlay } from "./overlay.js";
 import { binance } from "./providers/binance.js";
@@ -1180,16 +1181,18 @@ export class Watchlist {
           else delete this.ytwAuctionBooks[symbol];
         }
         if (this.soleSource(symbol) === provider) {
-          // Before the open, a symbol without a price yet takes its previous close as its quote, dated at the close of
-          // TWSE's previous trading day, so it reads closed on that day. A held price keeps its own trade time.
-          const close = !overlay && !had && result.previousCloses?.[symbol];
+          // Before the open, a symbol without a price yet takes its previous close as its quote, dated at the last
+          // Taiwan close (previousCloseAt), so it reads closed on that day; each such answer dates it again. A held
+          // price keeps its own trade time.
+          const close = !overlay && (!had || had.fromPreviousClose) && result.previousCloses?.[symbol];
           if (close) {
-            const at = previousTwseClose(now, (day) => this.holidays.days[day] ?? null);
+            const at = this.previousCloseAt(now);
             this.setEntry(this.overlays, symbol, provider.id, {
               ...close,
               tradeTime: at,
               timestamp: at,
               day: taipeiDay(at),
+              fromPreviousClose: true,
             });
           }
           // A sole-source symbol has no base, so it keeps its last price and line, as a base quote does, and its row
@@ -1253,6 +1256,21 @@ export class Watchlist {
       }
     }
     if (routes) this.wakeResolved(before);
+  }
+
+  /**
+   * The last Taiwan close before the Taipei date of `now`, for a previous close that comes without its time: 13:30 on
+   * the day of the newest earlier-day trade among the copy's Taiwan quotes (Yahoo Finance's, timed by the real last
+   * trades), else on TWSE's previous trading day by the holiday schedule (previousTwseClose).
+   */
+  previousCloseAt(now) {
+    const today = taipeiDay(now);
+    const days = Object.entries(this.quotes)
+      .filter(([symbol]) => this.marketFor(symbol) === "tw")
+      .map(([, quote]) => taipeiDay(quote.tradeTime ?? quote.timestamp))
+      .filter((day) => day < today);
+    if (days.length) return taipeiAt(Math.max(...days), TWSE_HOURS.to);
+    return previousTwseClose(now, (day) => this.holidays.days[day] ?? null);
   }
 
   /**
