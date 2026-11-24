@@ -1583,11 +1583,13 @@ test("before the open, a TW-only index's previous close takes the day another Ta
 });
 
 test("before the open, a TW-only index's price older than its previous close gives way to that close", async () => {
-  // The copy last priced ^TWOII at Friday's close (hidden over the weekend, say); Tuesday's pre-open answer gives
-  // Monday's close, which is newer.
+  // The copy last priced ^TWOII at Friday's close, 318.40 (hidden over the weekend, say); Tuesday's pre-open answer
+  // gives Monday's close, which is newer.
   let preopen = false;
   const from = taipei("08:14:00", "2026-11-10");
-  const friday = { "^TWOII": { regularMarketTime: "2026-11-06T05:31:00Z" } };
+  const friday = {
+    "^TWOII": { regularMarketTime: "2026-11-06T05:31:00Z", price: { raw: "318.40", fmt: "318.40", sort: 318.4 } },
+  };
   const host = twOnlyHost(["^TWOII"], {
     yahootw: () => (preopen ? ok(PREOPEN_INDEX_ROWS) : stockList(0, friday, EARLIER_ROWS)),
   });
@@ -1599,6 +1601,25 @@ test("before the open, a TW-only index's price older than its previous close giv
       await advance(host, taipei("08:52:00", "2026-11-10"));
       const shown = w.shown("^TWOII");
       assert.deepEqual([shown.price, shown.timestamp], [321.97, taipei("13:30:00", "2026-11-09")]);
+    },
+    from,
+  );
+});
+
+test("before the open, a TW-only index's held price equal to its previous close keeps its own trade time", async () => {
+  // Wednesday 2026-11-11 after a Tuesday closure the schedule does not list (a typhoon day, say), with no other Taiwan
+  // quote: the copy holds Monday's real 13:31 close, and the calendar would date the same close Tuesday 13:30.
+  let preopen = false;
+  const from = taipei("08:14:00", "2026-11-11");
+  const host = twOnlyHost(["^TWOII"], { yahootw: () => ok(preopen ? PREOPEN_INDEX_ROWS : EARLIER_ROWS) });
+  await soleRun(
+    host,
+    async (w) => {
+      assert.equal(w.shown("^TWOII").timestamp, CLOSE_0509);
+      preopen = true;
+      await advance(host, taipei("08:52:00", "2026-11-11"));
+      const shown = w.shown("^TWOII");
+      assert.deepEqual([shown.price, shown.timestamp, shown.previousClose], [321.97, CLOSE_0509, 304.02]);
     },
     from,
   );
