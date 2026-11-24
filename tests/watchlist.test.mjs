@@ -1581,6 +1581,30 @@ test("before the open, a TW-only index priced earlier keeps that price and its o
   );
 });
 
+test("after 09:00, an answer of `-` rows only is no missing real-time price, no answer and no trade", async () => {
+  // Yahoo 奇摩股市 still answers `preopen` past the open: the row keeps its previous close, the source shows no
+  // status line, and nothing counts towards a day without trades.
+  const from = taipei("08:59:00", "2026-11-10");
+  const host = twOnlyHost(["^TWOII"], {
+    yahootw: () => ok(PREOPEN_INDEX_ROWS),
+    line: (symbol) => sessionLine(symbol, "2026-11-10"),
+  });
+  await soleRun(
+    host,
+    async (w) => {
+      await advance(host, taipei("09:00:30", "2026-11-10"));
+      assert.equal(w.shown("^TWOII").price, 321.97);
+      assert.deepEqual(w.problems(), []);
+      const late = taipei("09:11:00", "2026-11-10");
+      await advance(host, late);
+      assert.deepEqual(w.problems(), []);
+      assert.deepEqual(w.notes(), []);
+      assert.equal(w.shown("^TWOII", late).closure, null);
+    },
+    from,
+  );
+});
+
 test("a ^TW symbol neither source knows says not found", async () => {
   await soleRun(twOnlyHost(["^TWZZ"]), async (w, host) => {
     assert.equal(w.errors["^TWZZ"].code, "yahoo.notFound");
