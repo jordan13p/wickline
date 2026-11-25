@@ -13,8 +13,8 @@ import {
   positiveOrNull,
   withinLimits,
 } from "../quotes.js";
-import { dayOf, futuresDay, taipeiDay } from "../calendar.js";
-import { fastPace, kindOf } from "../markets.js";
+import { dayOf, futuresDay, taipeiDay, taipeiMinute } from "../calendar.js";
+import { TWSE_HOURS, fastPace, kindOf } from "../markets.js";
 import { MINUTE_MS } from "../time.js";
 import { RATE_LIMIT_RETRY_MS, failEach, parseJson } from "./provider.js";
 import { period } from "./yahoo.js";
@@ -150,8 +150,9 @@ function checkStatus(response) {
  * - `newestTrade`: per market clock, the newest accepted trade time, earlier days included, so a session without
  *   trades yet can be told apart.
  * - `auctionBook`: by symbol, the book of a stock in the opening auction; such a row is never a price.
- * - `previousCloses`: by symbol, an `anyDay` index's previous close before the open (`preopen`, no price), as a quote
- *   without its time; never a price this source sent, so it counts nowhere here (Watchlist#apply dates it).
+ * - `previousCloses`: by symbol, an `anyDay` index's previous close from a row with no price, in the pre-open call
+ *   auction (`preopen`) or before 09:00 Taipei, as a quote without its time; never a price this source sent, so it
+ *   counts nowhere here (Watchlist#apply dates it).
  */
 export function decodeStockList(symbols, response, now, anyDay = []) {
   checkStatus(response);
@@ -169,6 +170,8 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
   const newestTrade = {};
   const auctionBook = {};
   const previousCloses = {};
+  // Before the open a row's previous close is the last Taiwan close; from 09:00 on it may be an older one.
+  const beforeOpen = taipeiMinute(now) < TWSE_HOURS.from;
   for (const row of body) {
     const symbol = typeof row?.symbol === "string" && wanted.has(row.symbol) ? row.symbol : null;
     if (!symbol) continue;
@@ -203,9 +206,11 @@ export function decodeStockList(symbols, response, now, anyDay = []) {
       const levels = book(row, false);
       if (levels && levels.bids.length + levels.asks.length > 0) auctionBook[symbol] = { ...levels, auction: true };
     }
-    // Before the open (`preopen`) an index only this source prices comes with its previous close alone.
+    // Before the open an index only this source prices comes with its previous close alone: `close` from its
+    // morning reset until 08:30, then `preopen`.
     const close = rawNumber(row.regularMarketPreviousClose);
-    if (!price && close && !delayed && soleHere && kindOf(symbol) === "index" && row.marketStatus === "preopen") {
+    const unopened = beforeOpen || row.marketStatus === "preopen";
+    if (!price && close && !delayed && soleHere && kindOf(symbol) === "index" && unopened) {
       previousCloses[symbol] = {
         symbol,
         source: "yahootw",
