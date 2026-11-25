@@ -1671,6 +1671,85 @@ test("after 09:00, an answer of `-` rows only is no missing real-time price, no 
   );
 });
 
+// Yahoo 奇摩股市 from its overnight reset (between 08:14 and 08:28) until 08:30, as seen at 08:28: every Taiwan row
+// `close`, with `-` for its price and trade time and its last close as its previous close.
+const RESET_INDEX_ROWS = PREOPEN_INDEX_ROWS.map((row) => ({ ...row, marketStatus: "close" }));
+
+test("from Yahoo's reset to 08:30, a TW-only index never priced reads its previous close as at 08:52", async () => {
+  const tx = say("en");
+  const read = async (from, rows) => {
+    let seen;
+    const host = twOnlyHost(["^TWOII"], {
+      yahootw: () => ok(rows),
+      line: (symbol) => sessionLine(symbol, "2026-11-10"),
+    });
+    await soleRun(
+      host,
+      (w) => {
+        const now = from + 5_000;
+        const quote = w.shown("^TWOII", now);
+        const fresh = quote && freshness(quote, sessionOf(quote, now), now);
+        seen = {
+          price: quote?.price,
+          timestamp: quote?.timestamp,
+          error: w.errors["^TWOII"],
+          problems: w.problems(),
+          state: fresh?.state,
+          label: quote && freshnessLabel(quote, fresh, now, "en", tx),
+        };
+      },
+      from,
+    );
+    return seen;
+  };
+  const preopen = await read(taipei("08:52:00", "2026-11-10"), PREOPEN_INDEX_ROWS);
+  const reset = await read(taipei("08:28:00", "2026-11-10"), RESET_INDEX_ROWS);
+  assert.deepEqual(reset, {
+    price: 321.97,
+    timestamp: taipei("13:30:00", "2026-11-09"),
+    error: undefined,
+    problems: [],
+    state: "closed",
+    label: preopen.label,
+  });
+  assert.deepEqual(reset, preopen);
+});
+
+test("from Yahoo's reset to 08:30, a TW-only index's mid-session price from the day before gives way to its close", async () => {
+  // A copy that missed Monday's close holds 293.12 from 11:32; at 08:28 Yahoo 奇摩股市 gives Monday's close.
+  let reset = false;
+  const from = taipei("08:14:00", "2026-11-10");
+  const midday = {
+    "^TWOII": { regularMarketTime: "2026-11-09T03:32:00Z", price: { raw: "293.12", fmt: "293.12", sort: 293.12 } },
+  };
+  const host = twOnlyHost(["^TWOII"], {
+    yahootw: () => (reset ? ok(RESET_INDEX_ROWS) : stockList(0, midday, EARLIER_ROWS)),
+  });
+  await soleRun(
+    host,
+    async (w) => {
+      assert.deepEqual([w.shown("^TWOII").price, w.shown("^TWOII").timestamp], [293.12, at("2026-11-09T03:32:00Z")]);
+      reset = true;
+      await advance(host, taipei("08:28:00", "2026-11-10"));
+      const shown = w.shown("^TWOII");
+      assert.deepEqual([shown.price, shown.timestamp], [321.97, taipei("13:30:00", "2026-11-09")]);
+    },
+    from,
+  );
+});
+
+test("after the open, or in the evening, a TW-only index's `-` row out of the call auction gives no quote", async () => {
+  // Its previous close may then be an older one, so dating it at the last Taiwan close would be wrong.
+  for (const time of ["10:00:00", "20:00:00"]) {
+    const from = taipei(time, "2026-11-10");
+    await soleRun(
+      twOnlyHost(["^TWOII"], { yahootw: () => ok(RESET_INDEX_ROWS) }),
+      (w) => assert.equal(w.shown("^TWOII", from + 5_000), undefined, time),
+      from,
+    );
+  }
+});
+
 test("a ^TW symbol neither source knows says not found", async () => {
   await soleRun(twOnlyHost(["^TWZZ"]), async (w, host) => {
     assert.equal(w.errors["^TWZZ"].code, "yahoo.notFound");

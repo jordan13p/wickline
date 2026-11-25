@@ -493,8 +493,8 @@ test("before the open, a TW-only index's previous close comes beside its name, n
   });
   const preopen = (overrides = {}) => ok(EARLIER_ROWS.map((row) => ({ ...row, ...preopenFields(row), ...overrides })));
   const now = at("2026-11-10T00:52:00Z");
-  const decodeAt = (response, anyDay = ["^TWOII"]) =>
-    yahootw.decode(yahootw.requests(["^TWOII", "^TWII"], { anyDay })[0], response, now);
+  const decodeAt = (response, anyDay = ["^TWOII"], when = now) =>
+    yahootw.decode(yahootw.requests(["^TWOII", "^TWII"], { anyDay })[0], response, when);
   const answer = decodeAt(preopen());
   // Nothing priced: no quote, no missing real-time price, no trade.
   assert.deepEqual([answer.quotes, answer.errors, answer.noLive, answer.newestTrade], [{}, {}, undefined, undefined]);
@@ -507,8 +507,15 @@ test("before the open, a TW-only index's previous close comes beside its name, n
     ["yahootw", "櫃檯指數", 321.97, null, null, null, null],
   );
   assert.deepEqual([close.exchange, close.currency, close.fetchedAt, close.tradeTime], ["TWO", "TWD", now, undefined]);
-  // A `-` row out of the pre-open call auction, a delayed one, or one of a symbol others price gives none.
-  assert.equal(decodeAt(preopen({ marketStatus: "close" })).previousCloses, undefined);
+  // From Yahoo's overnight reset to 08:30 the same `-` row comes as `close` (seen at 08:28): before the open, on any
+  // day, it gives the same previous close; after the open, or in the evening, a `-` row out of the pre-open call
+  // auction gives none, since its previous close may be an older one then.
+  const reset = preopen({ marketStatus: "close" });
+  for (const when of ["2026-11-10T00:28:00Z", "2026-11-10T00:59:59Z", "2026-11-14T00:00:00Z"])
+    assert.equal(decodeAt(reset, undefined, at(when)).previousCloses?.["^TWOII"]?.price, 321.97, when);
+  for (const when of ["2026-11-10T01:00:00Z", "2026-11-10T12:00:00Z", "2026-11-14T12:00:00Z"])
+    assert.equal(decodeAt(reset, undefined, at(when)).previousCloses, undefined, when);
+  // A delayed `-` row, or one of a symbol others price, gives none.
   assert.equal(decodeAt(preopen({ exchangeDataDelayedBy: 20 })).previousCloses, undefined);
   assert.equal(decodeAt(preopen(), []).previousCloses, undefined);
   // Nor a future's, whose rows keep their last trade.
