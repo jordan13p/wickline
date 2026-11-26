@@ -32,6 +32,8 @@ function rowData(view, t, now, symbol, source) {
     state: [shown.label, stale ? view.tx("quote.asOf", { date: stale }) : ""].filter(Boolean).join(" · "),
     dot: quote && dot(t, fresh.state),
     color: quote ? view.changeColor(t, quote.changePercent) : t.dim,
+    // A line's sides of its previous close (parts.js chart), by the color setting.
+    tones: { gain: view.changeColor(t, 1), loss: view.changeColor(t, -1) },
     // The price as both layouts draw it: lit at its limit (see limitMark), `dim` when cached.
     price: quote && priceBox(`bw-price-${symbol}`, number(quote), priceInk(t, quote), view.limitMark(t, quote, now)),
   };
@@ -264,7 +266,7 @@ export function sidebarRow(view, t, symbol, place, now, ghost) {
       )
       .child(
         row.quote
-          ? chart(row.quote, row.color, t, { width: lineW, height: LINES_H, fill: true, stroke: 1.5 })
+          ? chart(row.quote, row.color, t, { width: lineW, height: LINES_H, fill: true, stroke: 1.5, tones: row.tones })
           : div().flex_none().w(lineW).h(LINES_H),
       )
       .child(priceStack(view, t, row));
@@ -370,7 +372,8 @@ export function tableRow(view, t, symbol, place, columns, nameW, now, ghost) {
             .when(Boolean(row.dot), (el) => el.child(row.dot)),
         )
         .child(div().flex_1().min_w(0).text_size(11).text_color(t.dim).truncate().child(row.state)),
-    line: () => (quote ? chart(quote, color, t, { ...TABLE_SPARK, fill: true, stroke: 1.5 }) : cell("line")),
+    line: () =>
+      quote ? chart(quote, color, t, { ...TABLE_SPARK, fill: true, stroke: 1.5, tones: row.tones }) : cell("line"),
     price: () =>
       quote
         ? h_flex()

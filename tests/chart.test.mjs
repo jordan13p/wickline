@@ -22,6 +22,53 @@ test("a lone point is drawn only with a rule or a dot", () => {
   assert.deepEqual([dotted.reference, dotted.dot[0]], [null, 50]);
 });
 
+test("A line without a rule has no runs", () => {
+  assert.deepEqual(chartGeometry([10, 20], null).runs, []);
+  assert.deepEqual(chartGeometry([10, 20], 0).runs, []);
+});
+
+test("A line on one side is one run of that side", () => {
+  const above = chartGeometry([20, 25, 22], 15);
+  assert.deepEqual(above.runs, [{ side: "gain", points: above.points }]);
+  const below = chartGeometry([10, 12], 15);
+  assert.deepEqual(below.runs, [{ side: "loss", points: below.points }]);
+});
+
+test("A line that crosses its previous close splits where it crosses", () => {
+  const g = chartGeometry([10, 20], 15); // x 0, 100; crosses halfway
+  const cross = [50, g.reference];
+  assert.deepEqual(g.runs, [
+    { side: "loss", points: [g.points[0], cross] },
+    { side: "gain", points: [cross, g.points[1]] },
+  ]);
+  // The crossing follows the line's extent: a line over half the width crosses at a quarter.
+  assert.equal(chartGeometry([10, 20], 15, { extent: 0.5 }).runs[0].points[1][0], 25);
+});
+
+test("A point on the rule joins the side it came from", () => {
+  const back = chartGeometry([20, 15, 20], 15);
+  assert.deepEqual(back.runs, [{ side: "gain", points: back.points }]);
+  const through = chartGeometry([20, 15, 10], 15);
+  assert.deepEqual(through.runs, [
+    { side: "gain", points: [through.points[0], through.points[1]] },
+    { side: "loss", points: [through.points[1], through.points[2]] },
+  ]);
+  // A line that starts on the rule takes the side it goes to.
+  const start = chartGeometry([15, 15, 10], 15);
+  assert.deepEqual(start.runs, [{ side: "loss", points: start.points }]);
+  // A line wholly on the rule has no side.
+  const flat = chartGeometry([15, 15], 15);
+  assert.deepEqual(flat.runs, [{ side: "flat", points: flat.points }]);
+});
+
+test("Sides come from the prices, not the rounded positions", () => {
+  const g = chartGeometry([100.000001, 99.999999], 100);
+  assert.deepEqual(
+    g.runs.map((run) => run.side),
+    ["gain", "loss"],
+  );
+});
+
 test("crosshairAt picks the nearest drawn point, the later one on a tie", () => {
   const g = chartGeometry([10, 20, 15], 15); // x 0, 50, 100
   const at = (share) => crosshairAt(g, [1, 2, 3], share)?.index;

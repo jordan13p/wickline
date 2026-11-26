@@ -27,13 +27,16 @@ export const chartShape = (quote) => chartGeometry(quote.series, quote.previousC
 /**
  * The day's line, scaled to its box and reaching only as far as its trading day has run.
  * - The previous close is a dashed rule, drawn with any number of points.
+ * - With that rule and `tones` (`{ gain, loss }`), the line is drawn in `tones.gain` above the rule and `tones.loss`
+ *   below it, each side's area filled to the rule; one path per side, however often the line crosses. Without a rule
+ *   the line and its area (to the box's bottom) take `color`, as does a line wholly on the rule.
  * - A price past its line is a filled dot in `color`, `dot` px wide, never joined to the line.
  * - `stroke` defaults to 2 px with the area and 1.25 px without.
  * - `crosshair` (the detail's) follows the pointer: the box takes its `id`, hands `move` the pointer's x as a share
  *   of its width with that width, and calls `leave` when the pointer goes. Its `mark`, when set, draws a vertical
  *   line and a dot at a line point, and a card beside them placed by `spot` across and `level` down.
  */
-export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, crosshair }) {
+export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 : 1.25, dot = 4, tones, crosshair }) {
   const box = div().relative().flex_none().h(height);
   const sized = width === "full" ? box.w_full() : box.w(width);
   const g = chartShape(quote);
@@ -45,6 +48,29 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
     line = i ? line.line_to(`${x}%`, `${y}%`) : line.move_to(`${x}%`, `${y}%`);
   });
   const end = lined ? g.points[g.points.length - 1][0] : 0;
+  const sides = tones && g.runs.length ? g.runs : null;
+  const toneOf = (side) => (side === "gain" ? tones.gain : side === "loss" ? tones.loss : color);
+  // Each side as one path of its runs: the line through each run, the area from the rule along it and back.
+  const sideLayers = (side) => {
+    const parts = sides.filter((run) => run.side === side);
+    if (!parts.length) return [];
+    const rule = `${g.reference}%`;
+    let stroked = PathBuilder.stroke(stroke);
+    let filled = PathBuilder.fill();
+    for (const run of parts) {
+      run.points.forEach(([x, y], i) => {
+        stroked = i ? stroked.line_to(`${x}%`, `${y}%`) : stroked.move_to(`${x}%`, `${y}%`);
+      });
+      filled = filled.move_to(`${run.points[0][0]}%`, rule);
+      for (const [x, y] of run.points) filled = filled.line_to(`${x}%`, `${y}%`);
+      filled = filled.line_to(`${run.points[run.points.length - 1][0]}%`, rule).close();
+    }
+    const tone = toneOf(side);
+    return [
+      ...(fill ? [layer(filled.build(), Background.solid(tone).opacity(AREA_OPACITY))] : []),
+      layer(stroked.build(), tone),
+    ];
+  };
   const half = dot / 2;
   const mark = crosshair?.mark ?? null;
   return (
@@ -76,14 +102,15 @@ export function chart(quote, color, t, { width, height, fill, stroke = fill ? 2 
           ),
         ),
       )
-      .when(lined && Boolean(fill), (el) => {
+      .when(Boolean(sides), (el) => el.children([...sideLayers("gain"), ...sideLayers("loss"), ...sideLayers("flat")]))
+      .when(lined && !sides && Boolean(fill), (el) => {
         let area = PathBuilder.fill().move_to("0%", "100%");
         for (const [x, y] of g.points) area = area.line_to(`${x}%`, `${y}%`);
         return el.child(
           layer(area.line_to(`${end}%`, "100%").close().build(), Background.solid(color).opacity(AREA_OPACITY)),
         );
       })
-      .when(lined, (el) => el.child(layer(line.build(), color)))
+      .when(lined && !sides, (el) => el.child(layer(line.build(), color)))
       // Inset by half the dot across, so a dot at either end stays whole inside the box.
       .when(g.dot !== null, (el) =>
         el.child(

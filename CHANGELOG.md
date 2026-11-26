@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 
 ## [Unreleased]
 
+### Changed
+
+- A price line is drawn in the gain color above its previous close and the loss color below it, split where it
+  crosses, each side's fill reaching the previous close, in the list and the detail.
+
 ## [0.9.1] - 2026-11-25
 
 ### Fixed

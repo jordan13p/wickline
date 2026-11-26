@@ -11,6 +11,7 @@ import { tradesOn } from "./time.js";
  * The chart in its box, in % of the box, as `{ points, reference, dot }`; null when nothing would be drawn.
  * - `points`: the line through `series` as [x, y], spread over `extent` of the width (null for all of it).
  * - `reference`: the y of the previous close, when it is positive.
+ * - `runs`: the line cut at that rule into `{ side, points }` (see runs); none without a rule.
  * - `dot`: `{ x, price }` (x a share of the width) as [x, y], or null.
  * The y range holds all three. A line needs two points.
  */
@@ -39,11 +40,42 @@ export function chartGeometry(series, reference, { extent, dot } = {}) {
   const y = (value) => pct(1 - (value - min) / (max - min));
   const width = extent ?? 1;
   const last = points.length - 1;
+  const x = (index) => (last ? (index / last) * width : 0);
+  const drawn = points.map((value, index) => [pct(x(index)), y(value)]);
   return {
-    points: points.map((value, index) => [last ? pct((index / last) * width) : 0, y(value)]),
+    points: drawn,
     reference: rule === null ? null : y(rule),
+    runs: rule === null ? [] : runs(points, rule, drawn, (from, share) => [pct(x(from + share)), y(rule)]),
     dot: dot ? [pct(dot.x), y(dot.price)] : null,
   };
+}
+
+/**
+ * The line cut where it crosses `rule`, as `[{ side, points }]`: `gain` above the rule, `loss` below, `flat` for a
+ * line wholly on it. Sides come from the prices, so rounding never moves a point across the rule. A point on the rule
+ * stays with the side it came from (the side it goes to, at the start); a crossing between two points is placed on
+ * the rule by `crossing(index, share)`, `share` of the way from point `index` to the next.
+ */
+function runs(values, rule, drawn, crossing) {
+  const sideOf = (value) => Math.sign(value - rule);
+  let side = sideOf(values.find((value) => sideOf(value) !== 0) ?? rule);
+  const cut = [];
+  let run = [drawn[0]];
+  for (let i = 1; i < values.length; i++) {
+    const next = sideOf(values[i]);
+    if (next !== 0 && next !== side) {
+      const from = values[i - 1];
+      const edge = sideOf(from) === 0 ? drawn[i - 1] : crossing(i - 1, (rule - from) / (values[i] - from));
+      if (edge !== drawn[i - 1]) run.push(edge);
+      cut.push({ side, points: run });
+      run = [edge];
+      side = next;
+    }
+    run.push(drawn[i]);
+  }
+  cut.push({ side, points: run });
+  const name = { 1: "gain", "-1": "loss", 0: "flat" };
+  return cut.filter((part) => part.points.length > 1).map((part) => ({ side: name[part.side], points: part.points }));
 }
 
 // The crosshair card's size. The width is estimated from 6.5 px a character for the 11 px time, and 7.5 px for the

@@ -168,6 +168,7 @@ export function detailView(view, t) {
   // Never refetched: its row hands it newer quotes; a mark holds until its end or the next hand-over.
   const q = heldMarks(view.detail, now);
   const color = view.changeColor(t, q.changePercent);
+  const tones = { gain: view.changeColor(t, 1), loss: view.changeColor(t, -1) };
   const mark = view.limitMark(t, q, now);
   const session = sessionOf(q, now);
   const tx = (key, params) => view.tx(key, params);
@@ -269,6 +270,7 @@ export function detailView(view, t) {
           height: CHART_H,
           fill: true,
           dot: 6,
+          tones,
           crosshair: traced ? crosshairOption(view, t, q, shape, dimmed || Boolean(q.chartCached)) : null,
         }),
       ),
