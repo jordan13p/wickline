@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-26
+
 ### Changed
 
 - A price line is drawn in the gain color above its previous close and the loss color below it, split where it
@@ -164,7 +166,8 @@ versions follow [Semantic Versioning](https://semver.org/). Each version is date
   open with `ctrl-alt-b`.
 - A settings dialog, five interface languages, and red-up or green-up colors.
 
-[Unreleased]: https://github.com/jordan13p/wickline/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/jordan13p/wickline/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/jordan13p/wickline/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/jordan13p/wickline/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/jordan13p/wickline/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jordan13p/wickline/compare/v0.7.0...v0.8.0

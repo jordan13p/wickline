@@ -23,7 +23,7 @@ test("normalizes symbols", () => {
 });
 
 test("identity", () => {
-  assert.equal(USER_AGENT, "Wickline-Herdr/0.9.1");
+  assert.equal(USER_AGENT, "Wickline-Herdr/0.10.0");
 });
 
 test("a price is at a limit only when it equals its own source's limit", () => {

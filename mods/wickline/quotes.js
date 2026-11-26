@@ -1,6 +1,6 @@
 // Symbols, coded errors and what the quote sources share. The sources themselves live in providers/.
 
-const VERSION = "0.9.1";
+const VERSION = "0.10.0";
 export const USER_AGENT = `Wickline-Herdr/${VERSION}`;
 // Sent with every request.
 export const HEADERS = { "User-Agent": USER_AGENT, Accept: "application/json" };
